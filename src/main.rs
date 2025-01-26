@@ -350,11 +350,15 @@ fn intenal_compile(body:&[Instruction], current_context: &mut CompilerContext){
                 write("   cmp ax, 1\n");
                 write(&format!("   jne .L_E{}\n",current_context.logic_index));
                 intenal_compile(if_body, current_context);
+                if else_body.is_some(){
+                    write(&format!("   jmp .L_EE{}\n",current_context.logic_index + 1));
+                }
                 write(&format!(".L_E{}:\n",current_context.logic_index));
                 current_context.logic_index+=1;
                 if let Some(else_body) = else_body {
                     write("   ; else statement\n");
                     intenal_compile(else_body, current_context);
+                    write(&format!(".L_EE{}\n",current_context.logic_index));
                     current_context.logic_index+=1;
                 };
                 write("   ; end if statement\n");

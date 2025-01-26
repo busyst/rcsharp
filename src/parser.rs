@@ -62,7 +62,15 @@ pub fn parse(tokens: &[(Tokens,(u32,u32))]) -> Vec<Instruction> {
                 let toks = gather_until_zero(tokens,i,Tokens::LBrace,Tokens::RBrace,1);
                 let if_body = parse(&toks);
                 i += 1 + toks.len();
-                instructions.push(Instruction::IfElse { condition: expr_toks, if_body, else_body: None });
+                let else_body: Option<Vec<Instruction>> =
+                if i < tokens.len() && tokens[i].0 == Tokens::ElseKeyword {
+                    let toks = gather_until_zero(tokens,i + 2,Tokens::LBrace,Tokens::RBrace,1);
+                    i += 3 + toks.len();
+                    Some(parse(&toks))
+                }else{
+                    None
+                };
+                instructions.push(Instruction::IfElse { condition: expr_toks, if_body, else_body });
             }
             ((Tokens::CreateVariableKeyword,_),(Tokens::Name { name_string },_)) =>{
                 let toks = gather_until(tokens,i,Tokens::Semicolon);
