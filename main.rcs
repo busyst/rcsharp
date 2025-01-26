@@ -1,0 +1,15 @@
+fn main() {
+    let x: u16 = 1;
+    loop{
+        x += 1;
+        was_dead(x);
+        break;
+    }
+
+}
+fn was_dead(x:u16) -> u16{
+    if x == 2{
+        return x + 2;
+    }
+    return x;
+}
