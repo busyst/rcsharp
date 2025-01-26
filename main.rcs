@@ -3,13 +3,17 @@ fn main() {
     loop{
         x += 1;
         was_dead(x);
-        break;
+        if x == 2{
+            break;
+        }
     }
 
 }
 fn was_dead(x:u16) -> u16{
     if x == 2{
         return x + 2;
+    }else{
+        return x - 2;
     }
     return x;
 }
