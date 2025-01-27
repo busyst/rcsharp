@@ -62,14 +62,33 @@ pub fn parse(tokens: &[(Tokens,(u32,u32))]) -> Vec<Instruction> {
                 let toks = gather_until_zero(tokens,i,Tokens::LBrace,Tokens::RBrace,1);
                 let if_body = parse(&toks);
                 i += 1 + toks.len();
-                let else_body: Option<Vec<Instruction>> =
-                if i < tokens.len() && tokens[i].0 == Tokens::ElseKeyword {
-                    let toks = gather_until_zero(tokens,i + 2,Tokens::LBrace,Tokens::RBrace,1);
-                    i += 3 + toks.len();
-                    Some(parse(&toks))
-                }else{
-                    None
-                };
+                let mut eb_i = Vec::new();
+                while i < tokens.len() && tokens[i].0 == Tokens::ElseKeyword  {
+                    if i + 1 < tokens.len() && tokens[i + 1].0 == Tokens::IfKeyword {
+                        let expr_toks = gather_until(tokens,i + 2,Tokens::LBrace);
+                        i += expr_toks.len() + 3;
+                        let toks = gather_until_zero(tokens,i,Tokens::LBrace,Tokens::RBrace,1);
+                        i += 1 + toks.len();
+                        println!("{:?}",toks);
+                        eb_i.push((expr_toks, parse(&toks)));
+                    }else {
+                        let toks = gather_until_zero(tokens,i + 2,Tokens::LBrace,Tokens::RBrace,1);
+                        i += 3 + toks.len();
+                        eb_i.push((Vec::new(),parse(&toks)));
+                        break;
+                    }
+                }
+                
+                let mut else_body: Option<Vec<Instruction>> = None;
+                if eb_i.len() != 0 {
+                    for x in eb_i.into_iter().rev() {
+                        if x.0.len() == 0 {
+                            else_body = Some(x.1);
+                        }else {
+                            else_body = Some(vec![Instruction::IfElse { condition: x.0, if_body: x.1, else_body: else_body }]);
+                        }
+                    }
+                }
                 instructions.push(Instruction::IfElse { condition: expr_toks, if_body, else_body });
             }
             ((Tokens::CreateVariableKeyword,_),(Tokens::Name { name_string },_)) =>{
@@ -79,7 +98,7 @@ pub fn parse(tokens: &[(Tokens,(u32,u32))]) -> Vec<Instruction> {
                 let _type = get_type(&type_tokens);
                 
                 let expression = gather_until(&toks,4 + type_tokens.len(),Tokens::Semicolon);
-                instructions.push(Instruction::VariableDeclaration { name: name_string.to_string(), _type, expression: parse(&expression) });
+                instructions.push(Instruction::VariableDeclaration { name: name_string.to_string(), _type, expression });
                 i += toks.len() + 1;
             }
             ((Tokens::Name { name_string },_),(Tokens::LParen,_)) =>{

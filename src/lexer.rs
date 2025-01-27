@@ -84,7 +84,6 @@ pub fn lex(file_path: &str) -> Result<Vec<(Tokens,(u32,u32))>, String> {
     
     let mut vec: Vec<(Tokens,(u32,u32))> = vec![];
     while i < chars.len() {
-        println!("i{} {}",i,chars[i]);
         match chars[i] {
             '\0' => break,
             ' ' | '\t' | '\r' => { i += 1; }
