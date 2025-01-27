@@ -38,7 +38,7 @@ enum Instruction {
     Break,
     Continue,
 
-    VariableDeclaration { name: String, _type: RCSType, expression: Vec<Instruction> },
+    VariableDeclaration { name: String, _type: RCSType, expression: Vec<(Tokens,(u32,u32))> },
 }
 
 
@@ -231,20 +231,9 @@ fn intenal_compile(body:&[Instruction], current_context: &mut CompilerContext){
             Instruction::VariableDeclaration { name, _type, expression } =>{
                 current_context.local_variables.insert(name.to_string(), (_type.clone(),current_context.local_variables.values().last().and_then(|x| Some(x.1)).unwrap_or(0) + 2));
                 let this_var = &current_context.local_variables[name];
-                if expression.len() != 1 {
-                    continue;
-                }
-                if let Some(Instruction::Operation { operation }) = expression.first(){
-                    if operation.len() != 1 {
-                        expression_solver(operation,&current_context.local_variables);
-                        write(&format!("   mov WORD [bp - {}], ax ; VAR {}\n",this_var.1,name));
-                        continue;
-                    }
-                    if let Some((Tokens::Number { number_as_string },_)) = operation.first() {
-                        write(&format!("   mov ax, {}\n",number_as_string));
-                        write(&format!("   mov WORD [bp - {}], ax ; VAR {}\n",this_var.1,name));
-                    }
-                }
+                expression_solver(&expression,&current_context.local_variables);
+                write(&format!("   mov WORD [bp - {}], ax ; VAR {}\n",this_var.1,name));
+
             }
             Instruction::Loop { body } => {
                 loop_label = current_context.loop_index.clone();
@@ -289,13 +278,13 @@ fn intenal_compile(body:&[Instruction], current_context: &mut CompilerContext){
                     if last_arg_comma != arguments.len(){
                         args_vectors.push(arguments[last_arg_comma..arguments.len()].to_vec());
                     }
-                    let mut i = 0;
-                    for x in &args_vectors {
-                        expression_solver(x, &current_context.local_variables);
-                        write(&format!("   push ax ; prep arg {}\n",i));
-                        i+=1;
+                    if args_vectors.len() > 0{
+                        if args_vectors.len() != 1{
+                            todo!()
+                        }
+                        expression_solver(&args_vectors[0], &current_context.local_variables);
+                        write(&format!("   mov dx, ax ; load arg 0 to call {} \n",name));
                     }
-                    write(&format!("   pop dx ; load arg 0 to call {} \n",name));
                 }
                 write(&format!("   call {} \n",name));
             }
@@ -358,7 +347,7 @@ fn intenal_compile(body:&[Instruction], current_context: &mut CompilerContext){
                 if let Some(else_body) = else_body {
                     write("   ; else statement\n");
                     intenal_compile(else_body, current_context);
-                    write(&format!(".L_EE{}\n",current_context.logic_index));
+                    write(&format!(".L_EE{}:\n",current_context.logic_index));
                     current_context.logic_index+=1;
                 };
                 write("   ; end if statement\n");
@@ -371,11 +360,12 @@ fn intenal_compile(body:&[Instruction], current_context: &mut CompilerContext){
 }
 
 #[derive(Debug)]
-enum ExprType {
+pub enum ExprType {
     IntLiteral { num_as_string: String },
     Variable { name: String, size: usize, offset: usize },
     ArrayAccess { var_name: String, access_expression: Box<ExprType> },
     Operation { operation: String, left: Box<ExprType>, right: Option<Box<ExprType>> },
+    FunctionCall { name: String, args: Vec<ExprType> }, // New variant for function calls
 }
 fn generate_nasm(ast: &ExprType) -> String {
     let mut code = String::new();
@@ -385,9 +375,9 @@ fn generate_nasm(ast: &ExprType) -> String {
             // Load the integer literal into ax
             code.push_str(&format!("   mov ax, {}\n", num_as_string));
         }
-        ExprType::Variable { name, size: _, offset } => {
+        ExprType::Variable { name, size, offset } => {
             // Load the variable from the stack into ax
-            code.push_str(&format!("   mov ax, WORD [bp - {}] ; VAR {}\n", offset,name));
+            code.push_str(&format!("   mov ax, WORD [bp - {}] ; VAR {}\n", offset, name));
         }
         ExprType::ArrayAccess { var_name, access_expression } => {
             // Generate code for the array index expression
@@ -399,20 +389,24 @@ fn generate_nasm(ast: &ExprType) -> String {
             code.push_str("   mov ax, WORD [ax]\n");
         }
         ExprType::Operation { operation, left, right } => {
-            // Generate code for the left operand
-            code.push_str(&generate_nasm(left));
-            // Push ax onto the stack to save the left operand
-            code.push_str("   push ax\n");
             // Generate code for the right operand
             if let Some(right_expr) = right {
                 code.push_str(&generate_nasm(right_expr));
             }
+
+            // Push ax onto the stack to save the left operand
+            code.push_str("   push ax\n");
+
+            // Generate code for the left operand
+            code.push_str(&generate_nasm(left));
             // Pop the left operand into bx
             code.push_str("   pop bx\n");
             // Perform the operation
             match operation.as_str() {
                 "+" => code.push_str("   add ax, bx\n"),
-                "-" => code.push_str("   sub ax, bx\n"),
+                "-" => {
+                    code.push_str("   sub ax, bx\n");
+                },
                 "*" => code.push_str("   imul ax, bx\n"),
                 "/" => {
                     code.push_str("   cwd\n"); // Sign-extend ax into dx
@@ -456,10 +450,24 @@ fn generate_nasm(ast: &ExprType) -> String {
                 _ => panic!("Unsupported operation: {}", operation),
             }
         }
+        ExprType::FunctionCall { name, args } => {
+            if args.len() == 1{
+                code.push_str(&generate_nasm(&args[0]));
+                code.push_str("   mov dx, ax\n");
+            }else if args.len() != 0 {
+                todo!()
+            }
+            // Call the function
+            //code.push_str("   push dx\n");
+            code.push_str(&format!("   call {}\n", name));
+            // Clean up the stack after the function call (remove arguments)
+            //code.push_str(&format!("   add sp, {}\n", args.len() * 2)); // Assuming 2 bytes per argument
+        }
     }
 
     code
 }
+
 fn expression_solver(tokens: &[(Tokens, (u32, u32))], local_variables: &HashMap<String, (RCSType, usize)>) {
     // Parse the tokens into an ExprType AST
     let ast = parse_expression(tokens, local_variables);
@@ -470,10 +478,12 @@ fn expression_solver(tokens: &[(Tokens, (u32, u32))], local_variables: &HashMap<
 }
 
 fn parse_expression(tokens: &[(Tokens, (u32, u32))], local_variables: &HashMap<String, (RCSType, usize)>) -> ExprType {
+    println!("{:?}",tokens);
     let mut stack: Vec<ExprType> = Vec::new();
     let mut operators: Vec<Tokens> = Vec::new();
-
-    for (token, _) in tokens {
+    let mut i = 0;
+    while i < tokens.len() {
+        let token = &tokens[i].0;
         match token {
             Tokens::Number { number_as_string } => {
                 // Push an integer literal onto the stack
@@ -482,6 +492,48 @@ fn parse_expression(tokens: &[(Tokens, (u32, u32))], local_variables: &HashMap<S
                 });
             }
             Tokens::Name { name_string } => {
+                if i + 1 < tokens.len() && tokens[i + 1].0 == Tokens::LParen {
+                    let mut args = Vec::new();
+                    let mut depth = 0;
+                    let mut arg_start = i + 2;
+                    let mut arg_end = arg_start;
+                    
+                    // Parse arguments
+                    while arg_end < tokens.len() {
+                        match &tokens[arg_end].0 {
+                            Tokens::LParen => depth += 1,
+                            Tokens::RParen => {
+                                if depth == 0 {
+                                    if arg_end > arg_start {
+                                        // Parse the argument expression
+                                        let arg_tokens = &tokens[arg_start..arg_end];
+                                        args.push(parse_expression(arg_tokens, local_variables));
+                                    }
+                                    break;
+                                }
+                                depth -= 1;
+                            }
+                            Tokens::Comma => {
+                                if depth == 0 {
+                                    // Parse the argument expression
+                                    let arg_tokens = &tokens[arg_start..arg_end];
+                                    args.push(parse_expression(arg_tokens, local_variables));
+                                    arg_start = arg_end + 1;
+                                }
+                            }
+                            _ => {}
+                        }
+                        arg_end += 1;
+                    }
+                    
+                    stack.push(ExprType::FunctionCall {
+                        name: *name_string.clone(),
+                        args: args,
+                    });
+                    
+                    i = arg_end + 1;
+                    continue;
+                }
                 // Push a variable onto the stack
                 if let Some(&(_, offset)) = local_variables.get(name_string.as_str()) {
                     stack.push(ExprType::Variable {
@@ -548,6 +600,7 @@ fn parse_expression(tokens: &[(Tokens, (u32, u32))], local_variables: &HashMap<S
                 }
             }
         }
+        i += 1;
     }
 
     // Evaluate any remaining operators
@@ -628,6 +681,7 @@ fn compile(instructions: &[Instruction]){
                     write("   push bp\n");
                     write("   mov bp, sp\n");
                 }
+                write("   sub sp, 16\n"); // PLACE HOLDER PLS FIX PLS
                 let mut func_context = global_context.clone();
                 func_context.current_function_name = name.clone();
                 let mut offset = 0;

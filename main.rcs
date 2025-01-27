@@ -1,19 +1,11 @@
 fn main() {
-    let x: u16 = 1;
-    loop{
-        x += 1;
-        was_dead(x);
-        if x == 2{
-            break;
-        }
-    }
-
+    let x: u16 = factorial(5);
 }
-fn was_dead(x:u16) -> u16{
-    if x == 2{
-        return x + 2;
-    }else{
-        return x - 2;
+
+fn factorial(n: u16) -> u16 {
+    if n == 0 {
+        return 1;
+    } else {
+        return n * factorial(n - 1);
     }
-    return x;
 }
