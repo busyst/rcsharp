@@ -1,7 +1,24 @@
 fn main() {
-    let x: u16 = factorial(5);
-}
+    let x: u16 = factorial(3);
+    print_num(x);
 
+}
+fn print_num(n: u8){
+    if n < 10{
+        let ch: u8 = n + 48;
+        print_char(ch);
+    }else if n < 16{
+        let ch: u8 = n - 10 + 65;
+        print_char(ch);
+    }
+}
+fn print_char(n: u8){
+    asm!("
+        mov al, {n}
+        mov ah, 0x0e
+        int 0x10
+    ");
+}
 fn factorial(n: u16) -> u16 {
     if n == 0 {
         return 1;

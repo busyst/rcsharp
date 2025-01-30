@@ -1,4 +1,4 @@
-use crate::{get_type, lexer::Tokens, Instruction, RCSType};
+use crate::{get_type, tokens::Tokens, Instruction, RCSType};
 
 pub fn parse(tokens: &[(Tokens,(u32,u32))]) -> Vec<Instruction> {
     let mut instructions = vec![];
@@ -93,6 +93,9 @@ pub fn parse(tokens: &[(Tokens,(u32,u32))]) -> Vec<Instruction> {
             }
             ((Tokens::CreateVariableKeyword,_),(Tokens::Name { name_string },_)) =>{
                 let toks = gather_until(tokens,i,Tokens::Semicolon);
+                if toks.len() < 4 && toks[1].0 != Tokens::Colon{
+                    panic!("Wrong variable declaration. Use this pattern:\nlet x: u8 = 123;")
+                }
                 let type_tokens = gather_until(&toks,3,Tokens::Equal);
 
                 let _type = get_type(&type_tokens);
@@ -107,6 +110,11 @@ pub fn parse(tokens: &[(Tokens,(u32,u32))]) -> Vec<Instruction> {
                 i += toks.len() + 4;
                 instructions.push(Instruction::FunctionCall { name: name_string.to_string(), arguments: toks });
 
+            }
+            ((Tokens::Name { name_string },_),(Tokens::Exclamation,_)) =>{
+                let toks: Vec<(Tokens, (u32, u32))> = gather_until_zero(tokens,i + 3,Tokens::LParen,Tokens::RParen,1);
+                i += toks.len() + 5;
+                instructions.push(Instruction::MacroCall { name: name_string.to_string(), arguments: toks });
             }
             ((Tokens::ReturnKeyword,_),_) =>{
                 let expression: Vec<(Tokens, (u32, u32))> = gather_until(&tokens,i + 1,Tokens::Semicolon);
