@@ -1,55 +1,7 @@
 use std::{collections::HashMap, fs::File, io::Read};
 
+use crate::tokens::Tokens;
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum Tokens {
-    FnKeyword,
-    CreateVariableKeyword,
-    LoopKeyword,
-    IfKeyword,
-    ElseKeyword,
-    BreakKeyword,
-    ContinueKeyword,
-    ReturnKeyword,
-    String { string_content: Box<String> },
-    Name { name_string: Box<String> },
-    Number { number_as_string: Box<String> },
-
-    LParen,   // (
-    RParen,   // )
-    LBrace,    // {
-    RBrace,    // }
-    LSQBrace,  // [
-    RSQBrace,  // ]
-    Colon,     // :
-    Semicolon, // ;
-    Comma, // ,
-    Dot, // .
-
-    Equal, // =
-
-    ADD,   // +
-    SUB,   // -
-    MUL,   // *
-    DIV,   // *
-    MOD,   // %
-
-    ADDEqual, // +=
-    SUBEqual, // -=
-    MULEqual, // *=
-    DIVEqual, // /=
-    MODEqual, // %=
-
-    COMPEqual, // ==
-    COMPNOTEqual, // !=
-    COMPGreater, // >
-    COMPLess, // <
-    COMPEqualGreater, // >=
-    COMPEqualLess, // <=
-
-
-    Point, // ->
-}
 pub fn lex(file_path: &str) -> Result<Vec<(Tokens,(u32,u32))>, String> {
     let mut keyword = HashMap::new();
     keyword.insert("fn", Tokens::FnKeyword);
@@ -127,7 +79,7 @@ pub fn lex(file_path: &str) -> Result<Vec<(Tokens,(u32,u32))>, String> {
                     i += 1;
                     continue;
                 }
-                todo!()
+                vec.push((Tokens::Exclamation, ((i - 1 - line_index_start) as u32, line)));
                 //vec.push((Tokens::Equal, ((i - 1 - line_index_start) as u32, line)));
             }
             '+' => {
@@ -191,16 +143,15 @@ pub fn lex(file_path: &str) -> Result<Vec<(Tokens,(u32,u32))>, String> {
             }
             '"' => {
                 let mut string_content = Box::new(String::new());
-                i+=1;
                 loop {
-                    string_content.push(chars[i]);
+                    i+=1;
                     if i >= chars.len() {
                         break;
                     }else if chars[i] == '"' {
                         i+=1;
                         break;
                     }
-                    i+=1;
+                    string_content.push(chars[i]);
                 }
                 vec.push((Tokens::String { string_content }, ((i - 1 - line_index_start) as u32, line)));
             }

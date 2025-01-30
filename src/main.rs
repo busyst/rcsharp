@@ -1,9 +1,13 @@
 use std::{collections::HashMap, fs::File, io::{Seek, SeekFrom, Write}};
 
-use lexer::{lex, Tokens};
+use lexer::lex;
 use parser::parse;
+use tokens::Tokens;
+
 mod lexer;
+mod tokens;
 mod parser;
+
 fn main() {
     let x = lex("main.rcs").unwrap_or_else(|e| {
         eprintln!("Error during lexing: {}", e);
@@ -28,6 +32,7 @@ pub enum RCSType {
 enum Instruction {
     FunctionCreation { name: String, return_type: RCSType, arguments: Vec<(String,RCSType)>, body: Vec<Instruction>},
     FunctionCall { name: String, arguments: Vec<(Tokens, (u32, u32))>},
+    MacroCall { name: String, arguments: Vec<(Tokens, (u32, u32))>},
     //FunctionDeclaration { name: String, arguments: Vec<(Tokens,(u32,u32))>},
     IfElse { condition: Vec<(Tokens, (u32, u32))>, if_body: Vec<Instruction>, else_body: Option<Vec<Instruction>> },
     Return { value: Vec<(Tokens, (u32, u32))> },
@@ -205,7 +210,7 @@ fn get_type(type_tokens: &[(Tokens,(u32,u32))]) -> RCSType{
 
 
 fn clear(){
-    let f = File::options().read(true).write(true).open("a.asm").unwrap();
+    let f = File::options().read(true).write(true).create(true).open("a.asm").unwrap();
     f.set_len(0).unwrap();
 }
 fn write(string:&str){
@@ -219,7 +224,6 @@ struct CompilerContext{
     local_variables: HashMap<String, (RCSType, usize)>,
     loop_index: usize,
     logic_index: usize,
-
 }
 fn intenal_compile(body:&[Instruction], current_context: &mut CompilerContext){
     // Generate the loop label and increment the loop index
@@ -351,6 +355,35 @@ fn intenal_compile(body:&[Instruction], current_context: &mut CompilerContext){
                     current_context.logic_index+=1;
                 };
                 write("   ; end if statement\n");
+            }
+            Instruction::MacroCall{ name, arguments } =>{
+                
+                match name.as_str() {
+                    "asm" => {
+                        if let Some((Tokens::String { string_content },_)) = arguments.get(0) {
+                            let mut new_buff = String::new();
+                            let mut c = string_content.chars().into_iter();
+                            while let Some(char) = c.next() {
+                                let char = &char;
+                                if char == &'{' {
+                                    let mut var_name = String::new();
+                                    //c.next();
+                                    while let Some(c) = c.next() {
+                                        if c == '}'{
+                                            break;
+                                        }
+                                        var_name.push(c);
+                                    }
+                                    new_buff.push_str(&format!("[bp - {}]",current_context.local_variables[var_name.as_str()].1));
+                                    continue;
+                                }
+                                new_buff.push(char.clone());
+                            }
+                            write(new_buff.as_str());
+                        }
+                    }
+                    _ => {}
+                }
             }
             _ => {
                 
@@ -528,7 +561,7 @@ fn parse_expression(tokens: &[(Tokens, (u32, u32))], local_variables: &HashMap<S
                     
                     stack.push(ExprType::FunctionCall {
                         name: *name_string.clone(),
-                        args: args,
+                        args,
                     });
                     
                     i = arg_end + 1;
@@ -587,9 +620,9 @@ fn parse_expression(tokens: &[(Tokens, (u32, u32))], local_variables: &HashMap<S
             
             _ => {
                 // Handle operators
-                if is_operator(token) {
+                if token.is_operator() {
                     while let Some(top_op) = operators.last() {
-                        if is_operator(top_op) && precedence(top_op) >= precedence(token) {
+                        if top_op.is_operator() && top_op.precedence() >= token.precedence() {
                             let op = operators.pop().unwrap();
                             evaluate_operator(&mut stack, op);
                         } else {
@@ -612,36 +645,6 @@ fn parse_expression(tokens: &[(Tokens, (u32, u32))], local_variables: &HashMap<S
     stack.pop().expect("Invalid expression")
 }
 
-fn is_operator(token: &Tokens) -> bool {
-    matches!(
-        token,
-        Tokens::ADD
-            | Tokens::SUB
-            | Tokens::MUL
-            | Tokens::DIV
-            | Tokens::MOD
-            | Tokens::COMPEqual
-            | Tokens::COMPNOTEqual
-            | Tokens::COMPGreater
-            | Tokens::COMPLess
-            | Tokens::COMPEqualGreater
-            | Tokens::COMPEqualLess
-    )
-}
-
-fn precedence(token: &Tokens) -> u8 {
-    match token {
-        Tokens::MUL | Tokens::DIV | Tokens::MOD => 3,
-        Tokens::ADD | Tokens::SUB => 2,
-        Tokens::COMPEqual
-        | Tokens::COMPNOTEqual
-        | Tokens::COMPGreater
-        | Tokens::COMPLess
-        | Tokens::COMPEqualGreater
-        | Tokens::COMPEqualLess => 1,
-        _ => 0,
-    }
-}
 
 fn evaluate_operator(stack: &mut Vec<ExprType>, op: Tokens) {
     let right = stack.pop().expect("Missing operand");
@@ -704,9 +707,16 @@ fn compile(instructions: &[Instruction]){
                     write("   mov sp, bp\n");
                     write("   pop bp\n");
                     write("   ret\n\n");
+                }else {
+                    write("   cli\n");
+                    write("   hlt\n");
                 }
             },
             _ => todo!("{:?}",x),
         }
     }
+    // Only to test bootloader
+    write("times 510-($-$$) db 0 ; Pad the rest of the boot sector with zeros\n");
+    write("dw 0xAA55             ; Boot signature \n");
 }
+// nasm -f bin a.asm -o a.bin && qemu-system-x86_64 -fda a.bin
