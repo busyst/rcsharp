@@ -44,8 +44,8 @@ pub enum Tokens {
     COMPEqualGreater, // >=
     COMPEqualLess, // <=
 
-    Exclamation, // !
-    Point, // ->
+    ExclamationMark, // !
+    Pointer, // ->
 }
 impl Tokens {
     pub fn is_operator(&self) -> bool {
