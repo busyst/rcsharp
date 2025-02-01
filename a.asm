@@ -4,8 +4,6 @@ factorial:
    mov bp, sp
    sub sp, 16
    mov WORD [bp - 2], dx ; argument 1:n 
-   mov WORD [bp - 4], dx ; argument 2:x 
-   mov WORD [bp - 6], dx ; argument 3:y 
    ; if statement
    mov ax, 1
    push ax
@@ -21,16 +19,6 @@ factorial:
    jmp .L_EE1
 .L_E0:
    ; else statement
-   ; if statement
-   mov ax, 2
-   push ax
-   mov ax, WORD [bp - 4] ; VAR x
-   pop bx
-   cmp ax, bx
-   sete al
-   movzx ax, al
-   cmp ax, 1
-   jne .L_E1
    mov ax, 1
    push ax
    mov ax, WORD [bp - 2] ; VAR n
@@ -43,8 +31,6 @@ factorial:
    pop bx
    imul ax, bx
    jmp _exit_factorial
-.L_E1:
-   ; end if statement
 .L_EE1:
    ; end if statement
    _exit_factorial:
@@ -144,11 +130,11 @@ sum:
    setle al
    movzx ax, al
    cmp ax, 1
-   jne .L_E3
+   jne .L_E2
    mov ax, 0
    jmp _exit_sum
-   jmp .L_EE4
-.L_E3:
+   jmp .L_EE3
+.L_E2:
    ; else statement
    mov ax, 1
    push ax
@@ -162,7 +148,7 @@ sum:
    pop bx
    add ax, bx
    jmp _exit_sum
-.L_EE4:
+.L_EE3:
    ; end if statement
    _exit_sum:
    mov sp, bp

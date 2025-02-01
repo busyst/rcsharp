@@ -1,7 +1,7 @@
-fn factorial(n: (u16,[nigga]),x:u32,y:u64) -> u16 {
+fn factorial(n: u16) -> u16 {
     if n <= 1 {
         return 1;
-    } else if x == 2 {
+    } else{
         return n * factorial(n - 1);
     }
 }
