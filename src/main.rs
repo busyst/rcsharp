@@ -35,10 +35,9 @@ enum Instruction {
     MacroCall { name: String, arguments: Vec<(Tokens, (u32, u32))>},
     //FunctionDeclaration { name: String, arguments: Vec<(Tokens,(u32,u32))>},
     IfElse { condition: Vec<(Tokens, (u32, u32))>, if_body: Vec<Instruction>, else_body: Option<Vec<Instruction>> },
-    Return { value: Vec<(Tokens, (u32, u32))> },
+    Return { expression: Vec<(Tokens, (u32, u32))> },
 
     Operation { operation: Vec<(Tokens,(u32,u32))> },
-    //Label { operation: String },
     Loop { body: Vec<Instruction> },
     Break,
     Continue,
@@ -165,7 +164,6 @@ fn get_type(type_tokens: &[(Tokens,(u32,u32))]) -> RCSType{
     }
     else{
         let x = type_tokens.first().unwrap();
-        println!("{:?}",x);
         if type_tokens.len() == 1{
            if let Tokens::Name { name_string } = &x.0{
             _type = RCSType::Type(Box::new(*name_string.clone()));
@@ -252,7 +250,7 @@ fn intenal_compile(body:&[Instruction], current_context: &mut CompilerContext){
                 write(&format!("   jmp _Loop{}\n", loop_label));
                 write(&format!("_Loop{}_EXIT:\n", loop_label));
             }
-            Instruction::Return { value } =>{
+            Instruction::Return { expression: value } =>{
                 if value.len() != 0{
                     expression_solver(value, &current_context.local_variables);
                 }else {
@@ -341,17 +339,19 @@ fn intenal_compile(body:&[Instruction], current_context: &mut CompilerContext){
                 write("   ; if statement\n");
                 expression_solver(condition, &current_context.local_variables);
                 write("   cmp ax, 1\n");
-                write(&format!("   jne .L_E{}\n",current_context.logic_index));
+                let cli = current_context.logic_index;
+                write(&format!("   jne .L_E{}\n",cli));
                 intenal_compile(if_body, current_context);
                 if else_body.is_some(){
                     write(&format!("   jmp .L_EE{}\n",current_context.logic_index + 1));
                 }
-                write(&format!(".L_E{}:\n",current_context.logic_index));
+                write(&format!(".L_E{}:\n",cli));
                 current_context.logic_index+=1;
+                let li = current_context.logic_index;
                 if let Some(else_body) = else_body {
                     write("   ; else statement\n");
                     intenal_compile(else_body, current_context);
-                    write(&format!(".L_EE{}:\n",current_context.logic_index));
+                    write(&format!(".L_EE{}:\n",li));
                     current_context.logic_index+=1;
                 };
                 write("   ; end if statement\n");

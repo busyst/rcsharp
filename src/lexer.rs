@@ -79,7 +79,7 @@ pub fn lex(file_path: &str) -> Result<Vec<(Tokens,(u32,u32))>, String> {
                     i += 1;
                     continue;
                 }
-                vec.push((Tokens::Exclamation, ((i - 1 - line_index_start) as u32, line)));
+                vec.push((Tokens::ExclamationMark, ((i - 1 - line_index_start) as u32, line)));
                 //vec.push((Tokens::Equal, ((i - 1 - line_index_start) as u32, line)));
             }
             '+' => {
@@ -97,7 +97,7 @@ pub fn lex(file_path: &str) -> Result<Vec<(Tokens,(u32,u32))>, String> {
                     vec.push((Tokens::SUBEqual, ((i - 1 - line_index_start) as u32, line)));
                     i += 1;
                 } else if i < chars.len() && chars[i] == '>' {
-                    vec.push((Tokens::Point, ((i - 1 - line_index_start) as u32, line)));
+                    vec.push((Tokens::Pointer, ((i - 1 - line_index_start) as u32, line)));
                     i += 1;
                 } else {
                     vec.push((Tokens::SUB, ((i - 1 - line_index_start) as u32, line)));

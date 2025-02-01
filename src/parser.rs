@@ -1,4 +1,163 @@
 use crate::{get_type, tokens::Tokens, Instruction, RCSType};
+pub struct ParserFactory<'a> {
+    tokens: &'a [(Tokens, (u32, u32))],
+    index: usize,
+    offset: usize,
+}
+impl<'a> ParserFactory<'a> {
+    pub fn new(tokens: &'a [(Tokens, (u32, u32))]) -> Self {
+        Self { tokens, index: 0, offset: 0 }
+    }
+    fn next(&mut self) -> &mut Self {
+        if self.index + self.offset + 1 >= self.tokens.len() {
+            panic!("Unexpected end of tokens");
+        }
+        self.offset += 1;
+        self
+    }
+    
+    pub fn back(&mut self) -> &mut Self{
+        if self.offset.checked_sub(1).is_none() {
+            panic!("Attempted underflow");
+        }
+        self.offset -= 1;
+        self
+    }
+    pub fn expect(&mut self, expected: Tokens) -> &mut Self {
+        let pos = self.index + self.offset;
+        if pos >= self.tokens.len() {
+            panic!("Unexpected end of tokens, expected: {:?}", expected);
+        }
+        
+        if self.tokens[pos].0 != expected {
+            panic!("Expected {:?}, found {:?}", expected, self.tokens[pos]);
+        }
+        self
+    }
+    pub fn expect_name(&mut self, name: &mut String) -> &mut Self {
+        let pos = self.index + self.offset;
+        if pos >= self.tokens.len() {
+            panic!("Unexpected end of tokens, expected name token");
+        }
+        if let Tokens::Name { name_string } = &self.tokens[pos].0 {
+            name.clear();
+            name.push_str(&name_string);
+        }else {
+            panic!("Expected name, found {:?}", self.tokens[pos]);
+        }
+        self
+    }
+    pub fn if_token_then(&mut self, expected: Tokens, action: impl FnOnce(&mut Self)) -> &mut Self {
+        let pos = self.index + self.offset;
+        if pos >= self.tokens.len() {
+            panic!("Unexpected end of tokens, expected: {:?}", expected);
+        }
+    
+        // Check if the current token matches the expected token
+        if self.tokens[pos].0 == expected {
+            // If it matches, execute the provided action
+            action(self);
+        }
+    
+        // Return self for chaining
+        self
+    }
+    pub fn gather_with_expect(&mut self,expected_plus_token: Tokens,minus_token: Tokens, token_vec: &mut Vec<(Tokens,(u32,u32))>) -> &mut Self {
+        let mut score = 1;
+        self.expect(expected_plus_token.clone()).next();
+  
+        let mut i = self.index + self.offset;
+        while i < self.tokens.len() {
+            let current_token = &self.tokens[i];
+            match &current_token.0 {
+                _ if current_token.0 == expected_plus_token => {
+                    score += 1;
+                    token_vec.push(current_token.clone());
+                }
+                _ if current_token.0 == minus_token => {
+                    score -= 1;
+                    if score <= 0 {
+                        break;
+                    }
+                    token_vec.push(current_token.clone());
+                }
+                _ => {
+                    token_vec.push(current_token.clone());
+                }
+            }
+            i += 1;
+        }
+        self.offset = i - self.index + 1;
+        self
+    }
+    pub fn gather_with_expect_until(&mut self,until: Tokens, token_vec: &mut Vec<(Tokens,(u32,u32))>) -> &mut Self {
+        let mut i = self.index + self.offset;
+        while i < self.tokens.len() {
+            let current_token = &self.tokens[i];
+            match &current_token.0 {
+                _ if current_token.0 == until => {
+                    break;
+                }
+                _ => {
+                    token_vec.push(current_token.clone());
+                }
+            }
+            i += 1;
+        }
+        self.offset = i - self.index + 1;
+        self
+    }
+    pub fn gather_with_expect_until_array(&mut self,until: &[Tokens], token_vec: &mut Vec<(Tokens,(u32,u32))>) -> &mut Self {
+        let mut i = self.index + self.offset;
+        while i < self.tokens.len() {
+            let current_token = &self.tokens[i];
+            let mut _break = false;
+            for x in until {
+                if &current_token.0 == x{
+                    _break = true;
+                    break;
+                }
+            }
+            if _break{
+                break;
+            }
+            token_vec.push(current_token.clone());
+            i += 1;
+        }
+        self.offset = i - self.index + 1;
+        self
+    }
+    pub fn gather_with_expect_until_and_zero(&mut self,until: Tokens,expected_plus_token: Tokens,minus_token: Tokens, token_vec: &mut Vec<(Tokens,(u32,u32))>) -> &mut Self {
+        let mut score = 0;
+        
+        let mut i = self.index + self.offset;
+        while i < self.tokens.len() {
+            let current_token = &self.tokens[i];
+            match &current_token.0 {
+                _ if current_token.0 == expected_plus_token => {
+                    score += 1;
+                    token_vec.push(current_token.clone());
+                }
+                _ if current_token.0 == minus_token => {
+                    score -= 1;
+                    token_vec.push(current_token.clone());
+                }
+                _ => {
+                    if score ==0 && current_token.0 == until{
+                        break;
+                    }
+                    token_vec.push(current_token.clone());
+                }
+            }
+            i += 1;
+        }
+        self.offset = i - self.index + 1;
+        self
+    }
+    pub fn total_tokens(&self) -> usize{
+        self.offset
+    }
+}
 
 pub fn parse(tokens: &[(Tokens,(u32,u32))]) -> Vec<Instruction> {
     let mut instructions = vec![];
@@ -9,72 +168,78 @@ pub fn parse(tokens: &[(Tokens,(u32,u32))]) -> Vec<Instruction> {
         let (first_instruction,second_instruction) = (first_instruction.unwrap(),tokens.get(i+1).unwrap_or(&(Tokens::Semicolon,(0,0))));
         //debug_print(&tokens.split_at(i).1.iter().map(|s|s.clone()).collect::<Vec<_>>());
         match (first_instruction,second_instruction) {
-            ((Tokens::FnKeyword,_),(Tokens::Name { name_string },_)) =>{
-                println!("{}",name_string);
+            ((Tokens::FnKeyword,_),(Tokens::Name { name_string: _ },_)) =>{
+                let mut name = String::new();
+                let mut args_tokens = vec![];
+                let mut return_type_tokens = vec![];
+                let mut body = vec![];
+                let total = ParserFactory::new(tokens.split_at(i).1) // unoptimised for clarity reasons
+                .expect(Tokens::FnKeyword).next()
+                .expect_name(&mut name).next()
+                .gather_with_expect(Tokens::LParen, Tokens::RParen,&mut args_tokens)
+                .if_token_then(Tokens::Pointer, |x| {
+                    x.next();
+                    x.gather_with_expect_until(Tokens::LBrace, &mut return_type_tokens);
+                    x.back();
+                }).expect(Tokens::LBrace)
+                .gather_with_expect(Tokens::LBrace, Tokens::RBrace,&mut body)
+                .total_tokens();
                 let mut arguments = vec![];
-                let arguments_toks = gather_until_zero(tokens, i + 3, Tokens::LParen, Tokens::RParen, 1);
-                
-                println!("{:?}",arguments_toks);
-                let mut s = 0;
-                if arguments_toks.len()!= 0{
-                    loop {  
-                        if let (Tokens::Name { name_string },_) = &arguments_toks[s]{
-                            if let (Tokens::Colon,_) = &arguments_toks[s + 1]{
-                                let a= gather_until(&arguments_toks, s + 2, Tokens::Comma);
-                                let arg_type = get_type(&a);
-                                
-                                println!("{:?}",arg_type);
-                                arguments.push((name_string.to_string(),arg_type));
-                                s += a.len() + 2;
-                                if s >= arguments_toks.len(){
-                                    break;
-                                }
-                                continue;
-                            }
+                if args_tokens.len() != 0{
+                    let mut i = 0;
+                    loop {
+                        if i >= args_tokens.len(){
+                            break;
                         }
-                        panic!("{:?}",arguments_toks)
+                        let mut name = String::new();
+                        let mut type_tokens = vec![];
+                        i += ParserFactory::new(&args_tokens.split_at(i).1)
+                        .expect_name(&mut name).next()
+                        .expect(Tokens::Colon).next()
+                        .gather_with_expect_until_and_zero(Tokens::Comma, Tokens::LParen,Tokens::RParen, &mut type_tokens).total_tokens();
+                        arguments.push((name,get_type(&type_tokens)));
                     }
                 }
+                let return_type : RCSType = if return_type_tokens.len() == 0{
+                    RCSType::Void
+                }else{
+                    get_type(&return_type_tokens)
+                };
 
-                i += arguments_toks.len();
-                let return_type_toks = gather_until(tokens, i + 4, Tokens::LBrace);
-                let return_type : RCSType;
-                if return_type_toks.len() == 0{
-                    return_type = RCSType::Void;
-                }else {
-                    if return_type_toks[0].0 != Tokens::Point{
-                        panic!("Parser error: When declaring function with return value, use \"fn a() -> usize {{}}\" template")
-                    }
-                    return_type = get_type(&return_type_toks[1..return_type_toks.len()]);
-                }
-                i += return_type_toks.len();
-                let toks = gather_until_zero(tokens,i + 5,Tokens::LBrace,Tokens::RBrace,1);
-                i += toks.len() + 6;
-                println!("{:?}",toks);
-                let body = parse(&toks);
-                instructions.push(Instruction::FunctionCreation { name: name_string.to_string(), return_type, arguments, body });
+                let body = parse(&body);
+
+                i += total;
+                instructions.push(Instruction::FunctionCreation { name, return_type, arguments, body });
 
             }
             ((Tokens::IfKeyword,_),_) =>{
-                let expr_toks = gather_until(tokens,i + 1,Tokens::LBrace);
-                i += expr_toks.len() + 2;
-
-                let toks = gather_until_zero(tokens,i,Tokens::LBrace,Tokens::RBrace,1);
-                let if_body = parse(&toks);
-                i += 1 + toks.len();
+                let mut expr_toks = vec![];
+                let mut body_tokens = vec![];
+                i += ParserFactory::new(tokens.split_at(i).1)
+                .expect(Tokens::IfKeyword).next()
+                .gather_with_expect_until(Tokens::LBrace, &mut expr_toks).back()
+                .gather_with_expect(Tokens::LBrace, Tokens::RBrace, &mut body_tokens)
+                .total_tokens();
+                let if_body = parse(&body_tokens);
                 let mut eb_i = Vec::new();
                 while i < tokens.len() && tokens[i].0 == Tokens::ElseKeyword  {
                     if i + 1 < tokens.len() && tokens[i + 1].0 == Tokens::IfKeyword {
-                        let expr_toks = gather_until(tokens,i + 2,Tokens::LBrace);
-                        i += expr_toks.len() + 3;
-                        let toks = gather_until_zero(tokens,i,Tokens::LBrace,Tokens::RBrace,1);
-                        i += 1 + toks.len();
-                        println!("{:?}",toks);
-                        eb_i.push((expr_toks, parse(&toks)));
+                        let mut expr_toks = vec![];
+                        let mut body_toks = vec![];
+                        i += ParserFactory::new(tokens.split_at(i).1)
+                        .expect(Tokens::ElseKeyword).next()
+                        .expect(Tokens::IfKeyword).next()
+                        .gather_with_expect_until_and_zero(Tokens::LBrace, Tokens::LParen, Tokens::RParen, &mut expr_toks).back()
+                        .gather_with_expect(Tokens::LBrace, Tokens::RBrace, &mut body_toks)
+                        .total_tokens();
+                        eb_i.push((expr_toks, parse(&body_toks)));
                     }else {
-                        let toks = gather_until_zero(tokens,i + 2,Tokens::LBrace,Tokens::RBrace,1);
-                        i += 3 + toks.len();
-                        eb_i.push((Vec::new(),parse(&toks)));
+                        let mut body = vec![];
+                        i += ParserFactory::new(tokens.split_at(i).1)
+                        .expect(Tokens::ElseKeyword).next()
+                        .gather_with_expect(Tokens::LBrace, Tokens::RBrace, &mut body)
+                        .total_tokens();
+                        eb_i.push((Vec::new(),parse(&body)));
                         break;
                     }
                 }
@@ -91,109 +256,70 @@ pub fn parse(tokens: &[(Tokens,(u32,u32))]) -> Vec<Instruction> {
                 }
                 instructions.push(Instruction::IfElse { condition: expr_toks, if_body, else_body });
             }
-            ((Tokens::CreateVariableKeyword,_),(Tokens::Name { name_string },_)) =>{
-                let toks = gather_until(tokens,i,Tokens::Semicolon);
-                if toks.len() < 4 && toks[1].0 != Tokens::Colon{
-                    panic!("Wrong variable declaration. Use this pattern:\nlet x: u8 = 123;")
-                }
-                let type_tokens = gather_until(&toks,3,Tokens::Equal);
-
-                let _type = get_type(&type_tokens);
+            ((Tokens::CreateVariableKeyword,_),(Tokens::Name { name_string: _ },_)) =>{
                 
-                let expression = gather_until(&toks,4 + type_tokens.len(),Tokens::Semicolon);
-                instructions.push(Instruction::VariableDeclaration { name: name_string.to_string(), _type, expression });
-                i += toks.len() + 1;
+                let mut name = String::new();
+                let mut type_decl_tokens = vec![];
+                let mut expression = vec![];
+                i += ParserFactory::new(tokens.split_at(i).1)
+                .expect(Tokens::CreateVariableKeyword).next()
+                .expect_name(&mut name).next()
+                .expect(Tokens::Colon).next()
+                .gather_with_expect_until_array(&vec![Tokens::Equal,Tokens::Semicolon], &mut type_decl_tokens)
+                .gather_with_expect_until_and_zero(Tokens::Semicolon, Tokens::LParen, Tokens::RParen, &mut expression)
+                .total_tokens();
+                let _type = get_type(&type_decl_tokens);
+                instructions.push(Instruction::VariableDeclaration { name, _type, expression });
             }
-            ((Tokens::Name { name_string },_),(Tokens::LParen,_)) =>{
-                let toks: Vec<(Tokens, (u32, u32))> = gather_until_zero(tokens,i + 2,Tokens::LParen,Tokens::RParen,1);
-                println!("{:?}",toks);
-                i += toks.len() + 4;
-                instructions.push(Instruction::FunctionCall { name: name_string.to_string(), arguments: toks });
-
+            ((Tokens::Name { name_string: _ },_),(Tokens::LParen,_)) =>{
+                let mut name = String::new();
+                let mut arguments = vec![];
+                i += ParserFactory::new(tokens.split_at(i).1)
+                .expect_name(&mut name).next()
+                .gather_with_expect_until_and_zero(Tokens::Semicolon,Tokens::LParen, Tokens::RParen, &mut arguments)
+                .total_tokens();
+                instructions.push(Instruction::FunctionCall { name, arguments });
             }
-            ((Tokens::Name { name_string },_),(Tokens::Exclamation,_)) =>{
-                let toks: Vec<(Tokens, (u32, u32))> = gather_until_zero(tokens,i + 3,Tokens::LParen,Tokens::RParen,1);
-                i += toks.len() + 5;
-                instructions.push(Instruction::MacroCall { name: name_string.to_string(), arguments: toks });
+            ((Tokens::Name { name_string: _ },_),(Tokens::ExclamationMark,_)) =>{
+                let mut name = String::new();
+                let mut arguments = vec![];
+                i += ParserFactory::new(tokens.split_at(i).1)
+                .expect_name(&mut name).next()
+                .expect(Tokens::ExclamationMark).next()
+                .gather_with_expect_until_and_zero(Tokens::Semicolon,Tokens::LParen, Tokens::RParen, &mut arguments)
+                .total_tokens();
+                arguments.remove(arguments.len() - 1);
+                arguments.remove(0);
+                println!("{:?}",arguments);
+                instructions.push(Instruction::MacroCall { name, arguments });
             }
             ((Tokens::ReturnKeyword,_),_) =>{
-                let expression: Vec<(Tokens, (u32, u32))> = gather_until(&tokens,i + 1,Tokens::Semicolon);
-                println!("{:?}",expression);
-                i += expression.len() + 2;
-                instructions.push(Instruction::Return { value: expression });
+                let mut expression = vec![];
+                i += ParserFactory::new(tokens.split_at(i).1)
+                .expect(Tokens::ReturnKeyword).next()
+                .gather_with_expect_until_and_zero(Tokens::Semicolon,Tokens::LParen, Tokens::RParen, &mut expression)
+                .total_tokens();
+                instructions.push(Instruction::Return { expression });
             }
             ((Tokens::LoopKeyword,_),(Tokens::LBrace,_)) =>{
-                let toks = gather_until_zero(tokens,i + 2,Tokens::LBrace,Tokens::RBrace,1);
-                i += 3 + toks.len();
-                let body = parse(&toks);
+                let mut body_tokens = vec![];
+                i += ParserFactory::new(tokens.split_at(i).1)
+                .expect(Tokens::LoopKeyword).next()
+                .gather_with_expect(Tokens::LBrace, Tokens::RBrace, &mut body_tokens)
+                .total_tokens();
+                let body = parse(&body_tokens);
                 instructions.push(Instruction::Loop { body });
             }
             ((Tokens::BreakKeyword,_),x) => if x.0 != Tokens::Semicolon { panic!("Break should be followed by semicolon ';'") } else {instructions.push(Instruction::Break); i+=2;}
             ((Tokens::ContinueKeyword,_),x) => if x.0 != Tokens::Semicolon { panic!("Continue should be followed by semicolon ';'") } else {instructions.push(Instruction::Continue); i+=2;}
             _ => {
-                let toks = gather_until(tokens,i,Tokens::Semicolon);
-                i += toks.len() + 1;
-                if toks.len() == 0{
-                    println!("{:?}",first_instruction);
-                    println!("{:?}",second_instruction);
-                    panic!();
-                }
-                instructions.push(Instruction::Operation { operation: toks});
+                let mut expr_tokens = vec![];
+                i += ParserFactory::new(tokens.split_at(i).1)
+                .gather_with_expect_until_and_zero(Tokens::Semicolon,Tokens::LParen, Tokens::RParen, &mut expr_tokens)
+                .total_tokens();
+                instructions.push(Instruction::Operation { operation: expr_tokens });
             }
         }
     }
     return instructions;
-}
-
-
-
-fn gather_until(tokens: &[(Tokens,(u32,u32))], start_from: usize, until: Tokens,) -> Vec<(Tokens, (u32, u32))> { 
-    let mut x = vec![];
-
-    let mut i = start_from;
-    while i < tokens.len() {
-        let current_token = &tokens[i];
-        match &current_token.0 {
-            _ if current_token.0 == until => {
-                return x;
-            }
-            _ => {
-                x.push(current_token.clone());
-            }
-        }
-        i += 1;
-    }
-
-    x
-}
-fn gather_until_zero(tokens: &[(Tokens,(u32,u32))], start_from: usize, plus: Tokens, minus: Tokens, start_val: u32) -> Vec<(Tokens, (u32, u32))> { 
-    if start_val == 0 {
-        return vec![];
-    }
-    let mut u = start_val;
-    let mut x = vec![];
-
-    let mut i = start_from;
-    while i < tokens.len() {
-        let current_token = &tokens[i];
-        match &current_token.0 {
-            _ if current_token.0 == plus => {
-                u += 1;
-                x.push(current_token.clone());
-            }
-            _ if current_token.0 == minus => {
-                u -= 1;
-                if u <= 0 {
-                    return x;
-                }
-                x.push(current_token.clone());
-            }
-            _ => {
-                x.push(current_token.clone());
-            }
-        }
-        i += 1;
-    }
-
-    x
 }
