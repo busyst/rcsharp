@@ -59,6 +59,9 @@ pub fn lex(file_path: &str) -> Result<Vec<(Tokens,(u32,u32))>, String> {
                 if i < chars.len() && chars[i] == '=' {
                     vec.push((Tokens::COMPEqualGreater, ((i - 1 - line_index_start) as u32, line)));
                     i += 1;
+                }else if i < chars.len() && chars[i] == '>' {
+                    vec.push((Tokens::ShiftR, ((i - 1 - line_index_start) as u32, line)));
+                    i += 1;
                 }else {
                     vec.push((Tokens::COMPGreater, ((i - 1 - line_index_start) as u32, line)));
                 }
@@ -67,6 +70,9 @@ pub fn lex(file_path: &str) -> Result<Vec<(Tokens,(u32,u32))>, String> {
                 i += 1;
                 if i < chars.len() && chars[i] == '=' {
                     vec.push((Tokens::COMPEqualLess, ((i - 1 - line_index_start) as u32, line)));
+                    i += 1;
+                }else if i < chars.len() && chars[i] == '<' {
+                    vec.push((Tokens::ShiftL, ((i - 1 - line_index_start) as u32, line)));
                     i += 1;
                 }else {
                     vec.push((Tokens::COMPLess, ((i - 1 - line_index_start) as u32, line)));

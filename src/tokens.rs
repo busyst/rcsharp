@@ -28,8 +28,10 @@ pub enum Tokens {
     ADD,   // +
     SUB,   // -
     MUL,   // *
-    DIV,   // *
+    DIV,   // /
     MOD,   // %
+    ShiftR,   // >>
+    ShiftL,   // <<
 
     ADDEqual, // +=
     SUBEqual, // -=
@@ -47,6 +49,7 @@ pub enum Tokens {
     ExclamationMark, // !
     Pointer, // ->
 }
+
 impl Tokens {
     pub fn is_operator(&self) -> bool {
         matches!(
@@ -62,12 +65,15 @@ impl Tokens {
                 | Tokens::COMPLess
                 | Tokens::COMPEqualGreater
                 | Tokens::COMPEqualLess
+                | Tokens::ShiftR
+                | Tokens::ShiftL
         )
     }
+
     pub fn precedence(&self) -> u8 {
         match self {
             Tokens::MUL | Tokens::DIV | Tokens::MOD => 3,
-            Tokens::ADD | Tokens::SUB => 2,
+            Tokens::ADD | Tokens::SUB | Tokens::ShiftR | Tokens::ShiftL => 2,
             Tokens::COMPEqual
             | Tokens::COMPNOTEqual
             | Tokens::COMPGreater
