@@ -1,3 +1,31 @@
+fn main() {
+    let q: u16 = 128;
+    let x: [u8;8];
+    let e: u16 = 16;
+    x[0] = 1;
+    x[1] = 2;
+    x[2] = 3;
+    x[3] = 4;
+    x[4] = 5;
+    x[5] = 6;
+    x[6] = 7;
+    x[7] = 8;
+    let i: u16 = 0;
+    loop{
+        if i == 8{
+            break;
+        }
+        print_num(x[i]);
+        i += 1;
+    }
+    print_num(q);
+    print_num(e);
+
+
+}
+
+
+
 fn factorial(n: u16) -> u16 {
     if n <= 1 {
         return 1;
@@ -5,55 +33,43 @@ fn factorial(n: u16) -> u16 {
         return n * factorial(n - 1);
     }
 }
-
-
-fn main() {
-    let x: u16 = factorial(6);
-    x = 2;
-    x += 3;
-    print_num(x);
-    loop{
-        print_num(x);
-    }
-
+fn print_num_u16(n: u16){
+    print_num(n >> 8);
+    print_num(n);
+    print_char(10);
+    print_char(13);
 }
+
+
 fn print_num(n: u8){
-    asm!("
-        mov al, {n}
-        shr al, 4
-        add al, 48
+    asm!(
+        "mov al, {n}"
+        "shr al, 4"
+        "add al, 48"
 
-        cmp al, 58
-        jb I_L0
-        add al, 7
-        I_L0:
-        mov ah, 0x0e
-        int 0x10
+        "cmp al, 58"
+        "jb I_L0"
+        "add al, 7"
+        "I_L0:"
+        "mov ah, 0x0e"
+        "int 0x10"
 
-        mov al, {n}
-        and al, 0x0F
-        add al, 48
+        "mov al, {n}"
+        "and al, 0x0F"
+        "add al, 48"
 
-        cmp al, 58
-        jb I_L1
-        add al, 7
-        I_L1:
-        mov ah, 0x0e
-        int 0x10
-    ");
+        "cmp al, 58"
+        "jb I_L1"
+        "add al, 7"
+        "I_L1:"
+        "mov ah, 0x0e"
+        "int 0x10"
+    );
 }
 fn print_char(n: u8){
-    asm!("
-        mov al, {n}
-        mov ah, 0x0e
-        int 0x10
-    ");
-}
-
-fn sum(n: u16) -> u16 {
-    if n <= 0 {
-        return 0;
-    } else {
-        return n + sum(n - 1);
-    }
+    asm!(
+        "mov al, {n}"
+        "mov ah, 0x0e"
+        "int 0x10"
+    );
 }
