@@ -12,6 +12,7 @@ pub fn lex(file_path: &str) -> Result<Vec<(Tokens,(u32,u32))>, String> {
     keyword.insert("break", Tokens::BreakKeyword);
     keyword.insert("continue", Tokens::ContinueKeyword);
     keyword.insert("return", Tokens::ReturnKeyword);
+    keyword.insert("struct", Tokens::StructKeyword);
     
     let mut x = HashMap::new();
     x.insert('(', Tokens::LParen);

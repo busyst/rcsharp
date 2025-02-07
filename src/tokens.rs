@@ -1,6 +1,7 @@
 #[derive(Debug, Clone, PartialEq)]
 pub enum Tokens {
     FnKeyword,
+    StructKeyword,
     CreateVariableKeyword,
     LoopKeyword,
     IfKeyword,

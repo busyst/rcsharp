@@ -15,9 +15,9 @@ fn main() {
         eprintln!("Error during lexing: {}", e); 
         std::process::exit(1);
     });
-    File::options().read(false).write(true).create(true).open("lexer_output.txt").unwrap().write(format!("{:?}",x).as_bytes()).unwrap();
+    File::options().read(false).write(true).create(true).truncate(true).open("lexer_output.txt").unwrap().write(format!("{:?}",x).as_bytes()).unwrap();
     let y = parse(&x);
-    File::options().read(false).write(true).create(true).open("parser_output.txt").unwrap().write(format!("{:?}",y).as_bytes()).unwrap();
+    File::options().read(false).write(true).create(true).truncate(true).open("parser_output.txt").unwrap().write(format!("{:?}",y).as_bytes()).unwrap();
 
     clear();
     compile(&y);
@@ -31,24 +31,24 @@ fn main() {
 
 
 fn clear(){
-    let f = File::options().read(true).write(true).create(true).open("a.asm").unwrap();
+    let f = File::options().read(true).write(true).create(true).open("main.asm").unwrap();
     f.set_len(0).unwrap();
 }
 fn write(string:&str){
-    let mut f = File::options().read(true).write(true).open("a.asm").unwrap();
+    let mut f = File::options().read(true).write(true).open("main.asm").unwrap();
     f.seek(SeekFrom::End(0)).unwrap();
     f.write(string.as_bytes()).unwrap();
 }
-#[derive(Clone,Debug)]
+#[derive(Clone,Debug, PartialEq)]
 enum CompilerVariableTypeE {
     ValueType(usize),
     Pointer(Box<CompilerVariableTypeE>),
     Array((Box<CompilerVariableTypeE>,usize)),
-    Tuple(Vec<CompilerVariableTypeE>),
 }
-#[derive(Clone,Debug)]
+#[derive(Clone,Debug, PartialEq)]
 struct CompilerVariableType{
     _type: CompilerVariableTypeE,
+    members: Vec<(String,String,usize)>,
     
 }
 
@@ -59,7 +59,6 @@ impl CompilerVariableType {
                 CompilerVariableTypeE::ValueType(s) => *s,
                 CompilerVariableTypeE::Pointer(_) => 2,
                 CompilerVariableTypeE::Array(s) => get_size(&s.0) * s.1,
-                CompilerVariableTypeE::Tuple(s) => s.iter().map(|x| get_size(x)).sum(),
             };
         }
         return get_size(&self._type);
@@ -70,7 +69,6 @@ impl CompilerVariableType {
                 CompilerVariableTypeE::Array(s) => get_size_per_entry(&s.0),
                 CompilerVariableTypeE::ValueType(s) => *s,
                 CompilerVariableTypeE::Pointer(_) => 2,
-                CompilerVariableTypeE::Tuple(s) => s.iter().map(|x| get_size_per_entry(x)).sum(),
             };
         }
         return get_size_per_entry(&self._type);
@@ -97,7 +95,7 @@ fn get_cvt(x:&ParserVariableType,declared_types: &HashMap<String, CompilerVariab
     if let ParserVariableType::ArrayStack(x,s) = x{
         if let ParserVariableType::Type(x) = *x.clone(){
             if let Some(x) = declared_types.get(x.as_str()){
-                return CompilerVariableType{_type: CompilerVariableTypeE::Array((Box::new(x._type().clone()),*s))};
+                return CompilerVariableType{_type: CompilerVariableTypeE::Array((Box::new(x._type().clone()),*s)),members:Vec::new()};
             }
             todo!()
         }
@@ -110,15 +108,13 @@ fn intenal_compile(body:&[Instruction], current_context: &mut CompilerContext){
     // Generate the loop label and increment the loop index
     let mut loop_label = current_context.loop_index.clone();
     for x in body {
-        println!("--------");
-        println!("{:?}",x);
         match x {
             Instruction::VariableDeclaration { name, _type, expression } =>{
                 let cvt = get_cvt(_type,&current_context.declared_types);
                 current_context.local_variables.insert(name.to_string(), (cvt.clone(),current_context.local_variables.values().last().and_then(|x| Some(x.1)).unwrap_or(0) + cvt.size()));
+                println!("{expression:?}");
                 if expression.len() != 0 {
                     let this_var = &current_context.local_variables[name];
-                    println!("{:?}",expression);
                     expression_solver(&expression,&current_context.local_variables);
                     if this_var.0.size() == 2{
                         write(&format!("   mov WORD [bp - {}], ax ; VAR {}\n",this_var.1,name));
@@ -183,7 +179,10 @@ fn intenal_compile(body:&[Instruction], current_context: &mut CompilerContext){
             }
             Instruction::Operation { operation } =>{
                 if operation.len() > 2{
-                    let mut expr = Vec::new();
+                    let mut _array = false;
+                    let mut _struct = false;
+                    
+                    let mut expr = vec![];
                     let mut token_vec = vec![];
                     ParserFactory::new(&operation).gather_with_expect_until_with_zero_closure(&vec![Tokens::Equal,Tokens::ADDEqual,Tokens::SUBEqual,Tokens::MULEqual,Tokens::DIVEqual,Tokens::MODEqual],  &mut token_vec);
                     if let (Tokens::Name { name_string },_) = &operation[0]{
@@ -195,6 +194,13 @@ fn intenal_compile(body:&[Instruction], current_context: &mut CompilerContext){
                             for _ in 0..x {
                                 operation.remove(1);
                             }
+                            _array = true;
+                        }
+                        if operation[1].0 == Tokens::Dot{
+                            for _ in 0..token_vec.len() - 1 {
+                                operation.remove(1);
+                            }
+                            _struct = true;
                         }
                         if operation[1].0 == Tokens::ADDEqual{
                             operation[1].0 = Tokens::Equal;
@@ -233,7 +239,7 @@ fn intenal_compile(body:&[Instruction], current_context: &mut CompilerContext){
                         }
                         if operation[1].0 == Tokens::Equal{
                             let var = &current_context.local_variables[name_string.as_str()];
-                            if expr.len() != 0{
+                            if _array{
                                 let var_info = &current_context.local_variables[name_string.as_str()];
                                 let element_size = var_info.0.size_per_entry();
                                 let array_offset = var_info.1;
@@ -249,13 +255,28 @@ fn intenal_compile(body:&[Instruction], current_context: &mut CompilerContext){
                                     1 => write("   mov BYTE [bx], al\n"),
                                     _ => panic!("Unsupported array element size"),
                                 }
+                            }else if _struct {
+                                let var_info = &current_context.local_variables[name_string.as_str()];
+                                let mut q = vec![];
+                                for i in 2..token_vec.len() {
+                                    if token_vec[i].0 != Tokens::Dot{
+                                        if let Tokens::Name { name_string } = &token_vec[i].0{
+                                            q.push(name_string.to_string());
+                                        }
+                                    }
+                                }
+                                let mut x = var_info.0.members.iter().find(|x| x.0 == q[0]).unwrap();
+                                println!("{var_info:?}");
+                                println!("{q:?}");
+                                println!("{x:?}");
+                                let a = &current_context.declared_types[x.1.as_str()];
+                                println!("{a:?}");
+                                expression_solver(&operation[2..operation.len()], &current_context.local_variables);
+                                write_reuslt_into_var(a,var.1 - var.0.size() + x.2,name_string);
+
                             }else {
                                 expression_solver(&operation[2..operation.len()], &current_context.local_variables);
-                                if var.0.size_per_entry() == 2{
-                                    write(&format!("   mov WORD [bp - {}], ax ; VAR {}\n",var.1,name_string));
-                                }else  if var.0.size_per_entry() == 1{
-                                    write(&format!("   mov BYTE [bp - {}], al ; VAR {}\n",var.1,name_string));
-                                }
+                                write_reuslt_into_var(&var.0,var.1,name_string);
                             }
                         }
                     }
@@ -320,6 +341,15 @@ fn intenal_compile(body:&[Instruction], current_context: &mut CompilerContext){
                 
             },
         }
+    }
+}
+fn write_reuslt_into_var(var:&CompilerVariableType, offset:usize, name: &str){
+    if var.size_per_entry() == 2{
+        write(&format!("   mov WORD [bp - {}], ax ; VAR {}\n",offset,name));
+    }else  if var.size_per_entry() == 1{
+        write(&format!("   mov BYTE [bp - {}], al ; VAR {}\n",offset,name));
+    }else {
+        panic!("{:?}",var);
     }
 }
 
@@ -638,13 +668,37 @@ fn expression_solver(tokens: &[(Tokens, (u32, u32))], local_variables: &HashMap<
 
 fn compile(instructions: &[Instruction]){
     let mut basic_types:HashMap<String, CompilerVariableType> = HashMap::new();
-    basic_types.insert("u8".to_string(), CompilerVariableType { _type: CompilerVariableTypeE::ValueType(1) });
-    basic_types.insert("u16".to_string(), CompilerVariableType { _type: CompilerVariableTypeE::ValueType(2) });
-    basic_types.insert("u32".to_string(), CompilerVariableType { _type: CompilerVariableTypeE::ValueType(4) });
-    basic_types.insert("u64".to_string(), CompilerVariableType { _type: CompilerVariableTypeE::ValueType(8) });
-    
-    let mut global_context = CompilerContext{loop_index: 0, logic_index: 0,current_function_name: String::new(), declared_types: basic_types,local_variables: HashMap::new()};
+    basic_types.insert("u8".to_string(), CompilerVariableType { _type: CompilerVariableTypeE::ValueType(1), members: vec![] });
+    basic_types.insert("u16".to_string(), CompilerVariableType { _type: CompilerVariableTypeE::ValueType(2), members: vec![("lh".to_string(),"u8".to_string(),0),("uh".to_string(),"u8".to_string(),1)] });
+    basic_types.insert("u32".to_string(), CompilerVariableType { _type: CompilerVariableTypeE::ValueType(4), members: vec![] });
+    basic_types.insert("u64".to_string(), CompilerVariableType { _type: CompilerVariableTypeE::ValueType(8), members: vec![] });
+    //let mut declared_functions = HashMap::new();
+    //let mut declared_structs = HashMap::new();
+    let mut n_instructions = vec![];
     for x in instructions {
+        match x {
+            Instruction::StructDeclaration { name, fields } => {
+                let mut total_size = 0;
+                let mut offset = 0;
+                let mut members: Vec<(String, String, usize)> = vec![];
+                for x in fields {
+                    let _type: CompilerVariableType = get_cvt(&x.1, &basic_types);
+                    let a: (&String, &CompilerVariableType) = basic_types.iter().find(|y| {_type == *y.1}).unwrap();
+                    let ts: usize = _type.size();
+                    total_size += ts;
+                    members.push((x.0.to_string(),a.0.to_string(),offset));
+                    offset += ts;
+                }
+                basic_types.insert(name.to_string(), CompilerVariableType { _type: CompilerVariableTypeE::ValueType(total_size), members});
+                //basic_types.insert(name, CompilerVariableType {_type: })
+            }
+            _ => {n_instructions.push(x);},
+        }
+    }
+
+    println!("{:?}",n_instructions);
+    let mut global_context = CompilerContext{loop_index: 0, logic_index: 0,current_function_name: String::new(), declared_types: basic_types, local_variables: HashMap::new()};
+    for x in n_instructions {
         match x {
             Instruction::FunctionCreation { name, return_type, arguments, body } => {
                 // Function label
@@ -691,6 +745,7 @@ fn compile(instructions: &[Instruction]){
                     write("   hlt\n");
                 }
             },
+
             _ => todo!("{:?}",x),
         }
     }
