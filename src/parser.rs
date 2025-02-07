@@ -9,6 +9,31 @@ pub fn parse(tokens: &[(Tokens,(u32,u32))]) -> Vec<Instruction> {
         let (first_instruction,second_instruction) = (first_instruction.unwrap(),tokens.get(i+1).unwrap_or(&(Tokens::Semicolon,(0,0))));
         //debug_print(&tokens.split_at(i).1.iter().map(|s|s.clone()).collect::<Vec<_>>());
         match (first_instruction,second_instruction) {
+            ((Tokens::StructKeyword,_), (Tokens::Name { name_string: _ },_)) =>{
+                let mut struct_name = String::new();
+                let mut struct_body = vec![];
+                i += ParserFactory::new(tokens.split_at(i).1)
+                .expect(Tokens::StructKeyword).next()
+                .expect_name(&mut struct_name).next()
+                .gather_with_expect(Tokens::LBrace, Tokens::RBrace, &mut struct_body)
+                .total_tokens();
+                let mut fields = vec![];
+                let mut i = 0;
+                loop {
+                    let mut name = String::new();
+                    let mut type_tokens = vec![];
+                    i += ParserFactory::new(struct_body.split_at(i).1)
+                    .expect_name(&mut name).next()
+                    .expect(Tokens::Colon).next()
+                    .gather_with_expect_until_with_zero_closure(&vec![Tokens::Comma], &mut type_tokens)
+                    .total_tokens();
+                    fields.push((name,get_type(&type_tokens)));
+                    if i >= struct_body.len(){
+                        break;
+                    }
+                }
+                instructions.push(Instruction::StructDeclaration { name: struct_name, fields });
+            }
             ((Tokens::FnKeyword,_),(Tokens::Name { name_string: _ },_)) =>{
                 let mut name = String::new();
                 let mut args_tokens = vec![];
@@ -112,8 +137,6 @@ pub fn parse(tokens: &[(Tokens,(u32,u32))]) -> Vec<Instruction> {
                 if expression.first().and_then(|x| Some(x.0.clone())) == Some(Tokens::Equal){
                     expression.remove(0);
                 }
-                println!("{:?}",type_decl_tokens);
-                println!("{:?}",expression);
                 let _type = get_type(&type_decl_tokens);
                 instructions.push(Instruction::VariableDeclaration { name, _type, expression });
             }
@@ -136,7 +159,6 @@ pub fn parse(tokens: &[(Tokens,(u32,u32))]) -> Vec<Instruction> {
                 .total_tokens();
                 arguments.remove(arguments.len() - 1);
                 arguments.remove(0);
-                println!("{:?}",arguments);
                 instructions.push(Instruction::MacroCall { name, arguments });
             }
             ((Tokens::ReturnKeyword,_),_) =>{
@@ -187,12 +209,12 @@ impl<'a> ParserFactory<'a> {
     pub fn new(tokens: &'a [(Tokens, (u32, u32))]) -> Self {
         Self { tokens, index: 0, offset: 0 }
     }
-    pub fn peek(&self) -> &(Tokens, (u32, u32)) {
+    /*pub fn peek(&self) -> &(Tokens, (u32, u32)) {
         if self.index + self.offset >= self.tokens.len() {
             panic!("Unexpected end of tokens");
         }
         &self.tokens[self.index + self.offset]
-    }
+    }*/
     pub fn next(&mut self) -> &mut Self {
         if self.index + self.offset + 1 >= self.tokens.len() {
             panic!("Unexpected end of tokens");
@@ -318,7 +340,7 @@ impl<'a> ParserFactory<'a> {
         self.offset = i - self.index + 1;
         self
     }
-    pub fn gather_with_expect_until_array(&mut self,until: &[Tokens], token_vec: &mut Vec<(Tokens,(u32,u32))>) -> &mut Self {
+    /*pub fn gather_with_expect_until_array(&mut self,until: &[Tokens], token_vec: &mut Vec<(Tokens,(u32,u32))>) -> &mut Self {
         let mut i = self.index + self.offset;
         while i < self.tokens.len() {
             let current_token = &self.tokens[i];
@@ -337,7 +359,7 @@ impl<'a> ParserFactory<'a> {
         }
         self.offset = i - self.index + 1;
         self
-    }
+    }*/
     pub fn gather_with_expect_until_and_zero(&mut self,until: Tokens,expected_plus_token: Tokens,minus_token: Tokens, token_vec: &mut Vec<(Tokens,(u32,u32))>) -> &mut Self {
         let mut score = 0;
         
@@ -485,7 +507,6 @@ pub fn get_type(type_tokens: &[(Tokens,(u32,u32))]) -> ParserVariableType{
 
 
     let _type: ParserVariableType;
-    println!("{:?}",type_tokens);
     if type_tokens.first().is_none(){
         panic!("Type should be declarated!");
     }
