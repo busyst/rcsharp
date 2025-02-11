@@ -25,7 +25,6 @@ pub fn lex(file_path: &str) -> Result<Vec<(Tokens,(u32,u32))>, String> {
     x.insert(';', Tokens::Semicolon);
     x.insert(',', Tokens::Comma);
     x.insert('.', Tokens::Dot);
-    
     let mut str = String::new();
     let mut a = File::open(file_path).unwrap();
     a.read_to_string(&mut str).unwrap();

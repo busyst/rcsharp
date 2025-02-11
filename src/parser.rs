@@ -39,6 +39,7 @@ pub fn parse(tokens: &[(Tokens,(u32,u32))]) -> Vec<Instruction> {
                 let mut args_tokens = vec![];
                 let mut return_type_tokens = vec![];
                 let mut body = vec![];
+                
                 let total = ParserFactory::new(tokens.split_at(i).1) // unoptimised for clarity reasons
                 .expect(Tokens::FnKeyword).next()
                 .expect_name(&mut name).next()
@@ -145,8 +146,10 @@ pub fn parse(tokens: &[(Tokens,(u32,u32))]) -> Vec<Instruction> {
                 let mut arguments = vec![];
                 i += ParserFactory::new(tokens.split_at(i).1)
                 .expect_name(&mut name).next()
-                .gather_with_expect_until_and_zero(Tokens::Semicolon,Tokens::LParen, Tokens::RParen, &mut arguments)
+                .gather_with_expect(Tokens::LParen, Tokens::RParen, &mut arguments)
+                .expect(Tokens::Semicolon)
                 .total_tokens();
+                i += 1;
                 instructions.push(Instruction::FunctionCall { name, arguments });
             }
             ((Tokens::Name { name_string: _ },_),(Tokens::ExclamationMark,_)) =>{

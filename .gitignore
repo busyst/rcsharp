@@ -1,7 +1,6 @@
 /target
 
-./lexer_output.txt
-./parser_output.txt
-./a
-./a
-./output.bin
+lexer_output.txt
+parser_output.txt
+a
+output.bin
