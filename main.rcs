@@ -1,12 +1,55 @@
 struct Kek{
     body:u16,
-    abody:u8
+    abody:u16
+}
+struct Lol{
+    body:Kek,
+    a:u8,
+    abody:Kek,
 }
 fn main(){
-    let a: Kek;
-    let b: Kek;
-    b.body = 241;
-    b.abody = 123;
-    a.body = 1;
-    a.abody = 255;
+    let q: u16 = 5;
+    let x: Lol;
+    x.body.body = 1;
+    x.body.abody = 2;
+    x.a = 3;
+    x.abody.body = 4;
+    x.abody.abody = 5;
+    print_num(x.body.body);
+    print_num(x.body.abody);
+    print_num(x.a);
+    print_num(x.abody.body);
+    print_num(x.abody.abody);
+}
+fn print_num(n: u8){
+    asm!(
+        "mov al, {n}"
+        "shr al, 4"
+        "add al, 48"
+
+        "cmp al, 58"
+        "jb I_L0"
+        "add al, 7"
+        "I_L0:"
+        "mov ah, 0x0e"
+        "int 0x10"
+
+        "mov al, {n}"
+        "and al, 0x0F"
+        "add al, 48"
+
+        "cmp al, 58"
+        "jb I_L1"
+        "add al, 7"
+        "I_L1:"
+        "mov ah, 0x0e"
+        "int 0x10"
+    );
+}
+fn print_char(n: u8){
+    asm!(
+        "mov al, {n}"
+        "mov ah, 0x0e"
+        "int 0x10"
+    );
 }

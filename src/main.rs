@@ -1,7 +1,8 @@
-use std::{collections::HashMap, fs::File, io::{Seek, SeekFrom, Write}};
+use std::{collections::HashMap, fs::File, io::{Seek, SeekFrom, Write}, path::Path, process::Command};
 
 use instructions::Instruction;
 use lexer::lex;
+use ordered_hash_map::OrderedHashMap;
 use parser::{parse, ParserFactory, ParserVariableType};
 use tokens::Tokens;
 
@@ -9,9 +10,65 @@ mod lexer;
 mod tokens;
 mod instructions;
 mod parser;
+pub const debug: bool = true;
 
 fn main() {
-    let x = lex("main.rcs").unwrap_or_else(|e| {
+    if debug {
+        let tests = vec![
+            ("1_basics", "basic_test"),
+            ("2_arrays", "array_test"),
+            ("3_structs", "struct_test"),
+        ];
+        for (dir, name) in tests {
+            let path = format!("./tests/{}/{}.rsc", dir, name);
+            let asm_out = format!("./tests/{}/{}.asm", dir, name);
+            compile_file(&path, &asm_out);
+            test(&asm_out);
+        }
+    }
+    compile_file("./main.rcs","./main.asm");
+}
+fn test(file_path: &str) -> bool {
+    // Check if the file exists
+    if !Path::new(file_path).exists() {
+        eprintln!("Error: File '{}' does not exist.", file_path);
+        return false;
+    }
+
+    // Assemble the file using NASM
+    let output = Command::new("nasm")
+        .arg("-f") // Specify output format
+        .arg("bin") // 16-bit binary format
+        .arg("-o") // Output file
+        .arg("output.bin") // Temporary output file name
+        .arg(file_path) // Input file
+        .output()
+        .expect("Failed to execute NASM");
+
+    // Check if NASM succeeded
+    if !output.status.success() {
+        let error = String::from_utf8(output.stderr).expect("Invalid UTF-8");
+        eprintln!("NASM Error: {}", error);
+        return false;
+    }
+
+    // Check if the binary file was generated
+    if !Path::new("output.bin").exists() {
+        eprintln!("Error: Binary file was not generated.");
+        return false;
+    }
+
+    // If the binary was generated, delete it
+    if let Err(err) = std::fs::remove_file("output.bin") {
+        eprintln!("Error deleting binary file: {}", err);
+        return false;
+    }
+
+    println!("Test succeeded: Binary generated and deleted.");
+    true
+}
+fn compile_file(path: &str,output: &str){
+    let x = lex(std::fs::canonicalize(Path::new(path).to_str().unwrap()).unwrap().to_str().unwrap()).unwrap_or_else(|e| {
         eprintln!("Error during lexing: {}", e); 
         std::process::exit(1);
     });
@@ -21,14 +78,11 @@ fn main() {
 
     clear();
     compile(&y);
+    if output != "./main.asm"{
+        std::fs::copy(std::fs::canonicalize(Path::new("./main.asm").to_str().unwrap()).unwrap().to_str().unwrap(), Path::new(output).to_str().unwrap()).unwrap();
+        std::fs::remove_file(std::fs::canonicalize(Path::new("./main.asm").to_str().unwrap()).unwrap().to_str().unwrap()).unwrap();
+    }
 }
-
-
-
-
-
-
-
 
 fn clear(){
     let f = File::options().read(true).write(true).create(true).open("main.asm").unwrap();
@@ -40,47 +94,47 @@ fn write(string:&str){
     f.write(string.as_bytes()).unwrap();
 }
 #[derive(Clone,Debug, PartialEq)]
-enum CompilerVariableTypeE {
+enum CompilerVariableTypeEnum {
     ValueType(usize),
-    Pointer(Box<CompilerVariableTypeE>),
-    Array((Box<CompilerVariableTypeE>,usize)),
+    Pointer(Box<CompilerVariableTypeEnum>),
+    Array((Box<CompilerVariableTypeEnum>,usize)),
 }
 #[derive(Clone,Debug, PartialEq)]
 struct CompilerVariableType{
-    _type: CompilerVariableTypeE,
+    _type: CompilerVariableTypeEnum,
     members: Vec<(String,String,usize)>,
     
 }
 
 impl CompilerVariableType {
     fn size(&self) -> usize {
-        fn get_size(x: &CompilerVariableTypeE) -> usize{
+        fn get_size(x: &CompilerVariableTypeEnum) -> usize{
             return match x {
-                CompilerVariableTypeE::ValueType(s) => *s,
-                CompilerVariableTypeE::Pointer(_) => 2,
-                CompilerVariableTypeE::Array(s) => get_size(&s.0) * s.1,
+                CompilerVariableTypeEnum::ValueType(s) => *s,
+                CompilerVariableTypeEnum::Pointer(_) => 2,
+                CompilerVariableTypeEnum::Array(s) => get_size(&s.0) * s.1,
             };
         }
         return get_size(&self._type);
     }
     fn size_per_entry(&self) -> usize {
-        fn get_size_per_entry(x: &CompilerVariableTypeE) -> usize{
+        fn get_size_per_entry(x: &CompilerVariableTypeEnum) -> usize{
             return match x {
-                CompilerVariableTypeE::Array(s) => get_size_per_entry(&s.0),
-                CompilerVariableTypeE::ValueType(s) => *s,
-                CompilerVariableTypeE::Pointer(_) => 2,
+                CompilerVariableTypeEnum::Array(s) => get_size_per_entry(&s.0),
+                CompilerVariableTypeEnum::ValueType(s) => *s,
+                CompilerVariableTypeEnum::Pointer(_) => 2,
             };
         }
         return get_size_per_entry(&self._type);
     }
-    fn _type(&self) -> &CompilerVariableTypeE {
+    fn _type(&self) -> &CompilerVariableTypeEnum {
         &self._type
     }
 }
 #[derive(Clone)]
 struct CompilerContext{
     current_function_name: String,
-    local_variables: HashMap<String, (CompilerVariableType, usize)>,
+    local_variables: OrderedHashMap<String, (CompilerVariableType, usize)>,
     declared_types: HashMap<String, CompilerVariableType>,
     loop_index: usize,
     logic_index: usize,
@@ -95,13 +149,13 @@ fn get_cvt(x:&ParserVariableType,declared_types: &HashMap<String, CompilerVariab
     if let ParserVariableType::ArrayStack(x,s) = x{
         if let ParserVariableType::Type(x) = *x.clone(){
             if let Some(x) = declared_types.get(x.as_str()){
-                return CompilerVariableType{_type: CompilerVariableTypeE::Array((Box::new(x._type().clone()),*s)),members:Vec::new()};
+                return CompilerVariableType{_type: CompilerVariableTypeEnum::Array((Box::new(x._type().clone()),*s)),members:Vec::new()};
             }
             todo!()
         }
         todo!()
     }
-    println!("{:?}",x);
+    eprintln!("{:?}",x);
     todo!()
 }
 fn intenal_compile(body:&[Instruction], current_context: &mut CompilerContext){
@@ -112,10 +166,9 @@ fn intenal_compile(body:&[Instruction], current_context: &mut CompilerContext){
             Instruction::VariableDeclaration { name, _type, expression } =>{
                 let cvt = get_cvt(_type,&current_context.declared_types);
                 current_context.local_variables.insert(name.to_string(), (cvt.clone(),current_context.local_variables.values().last().and_then(|x| Some(x.1)).unwrap_or(0) + cvt.size()));
-                println!("{expression:?}");
                 if expression.len() != 0 {
                     let this_var = &current_context.local_variables[name];
-                    expression_solver(&expression,&current_context.local_variables);
+                    expression_solver(&expression,&current_context);
                     if this_var.0.size() == 2{
                         write(&format!("   mov WORD [bp - {}], ax ; VAR {}\n",this_var.1,name));
                     }else  if this_var.0.size() == 1{
@@ -139,7 +192,7 @@ fn intenal_compile(body:&[Instruction], current_context: &mut CompilerContext){
             }
             Instruction::Return { expression: value } =>{
                 if value.len() != 0{
-                    expression_solver(value, &current_context.local_variables);
+                    expression_solver(value, &current_context);
                 }else {
                     write("   xor ax,ax\n");
                 }
@@ -155,7 +208,7 @@ fn intenal_compile(body:&[Instruction], current_context: &mut CompilerContext){
                 write(&format!("   jmp _Loop{}\n", loop_label - 1));
             }
             Instruction::FunctionCall { name, arguments } => {
-                if arguments.len() !=0{
+                if arguments.len() !=0 {
                     let mut args_vectors = vec![];
                     let mut last_arg_comma = 0;
                     for i in 0..arguments.len() {
@@ -171,122 +224,109 @@ fn intenal_compile(body:&[Instruction], current_context: &mut CompilerContext){
                         if args_vectors.len() != 1{
                             todo!()
                         }
-                        expression_solver(&args_vectors[0], &current_context.local_variables);
+                        expression_solver(&args_vectors[0], &current_context);
                         write(&format!("   mov dx, ax ; load arg 0 to call {} \n",name));
                     }
                 }
                 write(&format!("   call {} \n",name));
             }
             Instruction::Operation { operation } =>{
-                if operation.len() > 2{
-                    let mut _array = false;
-                    let mut _struct = false;
+                if operation.len() <= 2{
+                    panic!("{:?}",operation);
+                }
+                let mut _array = false;
+                let mut _struct = false;
+                let qwer = vec![Tokens::Equal,Tokens::ADDEqual,Tokens::SUBEqual,Tokens::MULEqual,Tokens::DIVEqual,Tokens::MODEqual];
+
+                let mut expr = vec![];
+                let mut token_vec = vec![];
+                ParserFactory::new(&operation).gather_with_expect_until_with_zero_closure(&qwer,  &mut token_vec);
+                if let (Tokens::Name { name_string },_) = &operation[0]{
+                    let mut operation = operation.clone();
+                    if operation[1].0 == Tokens::LSQBrace{
+                        let x = ParserFactory::new(operation.split_at(1).1)
+                        .gather_with_expect(Tokens::LSQBrace, Tokens::RSQBrace, &mut expr)
+                        .total_tokens();
+                        for _ in 0..x {
+                            operation.remove(1);
+                        }
+                        _array = true;
+                    }
+                    if operation[1].0 == Tokens::Dot{
+                        for _ in 0..token_vec.len() - 1 {
+                            operation.remove(1);
+                        }
+                        _struct = true;
+                    }
                     
-                    let mut expr = vec![];
-                    let mut token_vec = vec![];
-                    ParserFactory::new(&operation).gather_with_expect_until_with_zero_closure(&vec![Tokens::Equal,Tokens::ADDEqual,Tokens::SUBEqual,Tokens::MULEqual,Tokens::DIVEqual,Tokens::MODEqual],  &mut token_vec);
-                    if let (Tokens::Name { name_string },_) = &operation[0]{
-                        let mut operation = operation.clone();
-                        if operation[1].0 == Tokens::LSQBrace{
-                            let x = ParserFactory::new(operation.split_at(1).1)
-                            .gather_with_expect(Tokens::LSQBrace, Tokens::RSQBrace, &mut expr)
-                            .total_tokens();
-                            for _ in 0..x {
-                                operation.remove(1);
-                            }
-                            _array = true;
-                        }
-                        if operation[1].0 == Tokens::Dot{
-                            for _ in 0..token_vec.len() - 1 {
-                                operation.remove(1);
-                            }
-                            _struct = true;
-                        }
-                        if operation[1].0 == Tokens::ADDEqual{
+                    for i in 1..qwer.len() {
+                        if operation[1].0 == qwer[i]{
+                            let rewq = vec![Tokens::ADD,Tokens::SUB,Tokens::MUL,Tokens::DIV,Tokens::MOD];
                             operation[1].0 = Tokens::Equal;
                             for x in token_vec.iter().rev() {
                                 operation.insert(2, x.clone());
                             }
-                            println!("{:?}",operation);
-                            operation.insert(token_vec.len() + 2, (Tokens::ADD,(0,0)));
+                            operation.insert(token_vec.len() + 2, (rewq[i - 1].clone(),(0,0)));
                             operation.insert(token_vec.len() + 3, (Tokens::LParen,(0,0)));
                             operation.push((Tokens::RParen,(0,0)));
-                            println!("{:?}",operation);
-                        }else if operation[1].0 == Tokens::SUBEqual{
-                            operation[1].0 = Tokens::Equal;
-                            operation.insert(2, (Tokens::Name { name_string: name_string.clone() },(0,0)));
-                            operation.insert(3, (Tokens::SUB,(0,0)));
-                            operation.insert(4, (Tokens::LParen,(0,0)));
-                            operation.push((Tokens::RParen,(0,0)));
-                        }else if operation[1].0 == Tokens::MULEqual{
-                            operation[1].0 = Tokens::Equal;
-                            operation.insert(2, (Tokens::Name { name_string: name_string.clone() },(0,0)));
-                            operation.insert(3, (Tokens::MUL,(0,0)));
-                            operation.insert(4, (Tokens::LParen,(0,0)));
-                            operation.push((Tokens::RParen,(0,0)));
-                        }else if operation[1].0 == Tokens::DIVEqual{
-                            operation[1].0 = Tokens::Equal;
-                            operation.insert(2, (Tokens::Name { name_string: name_string.clone() },(0,0)));
-                            operation.insert(3, (Tokens::DIV,(0,0)));
-                            operation.insert(4, (Tokens::LParen,(0,0)));
-                            operation.push((Tokens::RParen,(0,0)));
-                        }else if operation[1].0 == Tokens::MODEqual{
-                            operation[1].0 = Tokens::Equal;
-                            operation.insert(2, (Tokens::Name { name_string: name_string.clone() },(0,0)));
-                            operation.insert(3, (Tokens::MOD,(0,0)));
-                            operation.insert(4, (Tokens::LParen,(0,0)));
-                            operation.push((Tokens::RParen,(0,0)));
-                        }
-                        if operation[1].0 == Tokens::Equal{
-                            let var = &current_context.local_variables[name_string.as_str()];
-                            if _array{
-                                let var_info = &current_context.local_variables[name_string.as_str()];
-                                let element_size = var_info.0.size_per_entry();
-                                let array_offset = var_info.1;
-                                expression_solver(&expr, &current_context.local_variables); // AX == result
-                                write(&format!("   imul ax, {}\n", element_size));
-                                write("   mov bx, bp\n");
-                                write(&format!("   sub bx, {}\n",array_offset));
-                                write("   add bx, ax\n");
-                                write("   push bx\n");
-                                expression_solver(&operation[2..operation.len()], &current_context.local_variables);
-                                write("   pop bx\n");
-                                match element_size {
-                                    1 => write("   mov BYTE [bx], al\n"),
-                                    _ => panic!("Unsupported array element size"),
-                                }
-                            }else if _struct {
-                                let var_info = &current_context.local_variables[name_string.as_str()];
-                                let mut q = vec![];
-                                for i in 2..token_vec.len() {
-                                    if token_vec[i].0 != Tokens::Dot{
-                                        if let Tokens::Name { name_string } = &token_vec[i].0{
-                                            q.push(name_string.to_string());
-                                        }
-                                    }
-                                }
-                                let mut x = var_info.0.members.iter().find(|x| x.0 == q[0]).unwrap();
-                                println!("{var_info:?}");
-                                println!("{q:?}");
-                                println!("{x:?}");
-                                let a = &current_context.declared_types[x.1.as_str()];
-                                println!("{a:?}");
-                                expression_solver(&operation[2..operation.len()], &current_context.local_variables);
-                                write_reuslt_into_var(a,var.1 - var.0.size() + x.2,name_string);
-
-                            }else {
-                                expression_solver(&operation[2..operation.len()], &current_context.local_variables);
-                                write_reuslt_into_var(&var.0,var.1,name_string);
-                            }
+                            break;
                         }
                     }
-                }else {
-                    panic!("{:?}",operation);
+                    
+                    if operation[1].0 == Tokens::Equal{
+                        let var = &current_context.local_variables[name_string.as_str()];
+                        if _array{
+                            let var_info = &current_context.local_variables[name_string.as_str()];
+                            let element_size = var_info.0.size_per_entry();
+                            let array_offset = var_info.1;
+                            expression_solver(&expr, &current_context); // AX == result
+                            write(&format!("   imul ax, {}\n", element_size));
+                            write("   mov bx, bp\n");
+                            write(&format!("   sub bx, {}\n",array_offset));
+                            write("   add bx, ax\n");
+                            write("   push bx\n");
+                            expression_solver(&operation[2..operation.len()], &current_context);
+                            write("   pop bx\n");
+                            match element_size {
+                                2 => write("   mov WORD [bx], ax\n"),
+                                1 => write("   mov BYTE [bx], al\n"),
+                                _ => panic!("Unsupported array element size"),
+                            }
+                        }else if _struct {
+                            let var_info = &current_context.local_variables[name_string.as_str()];
+                            let mut q = vec![];
+                            for i in 2..token_vec.len() {
+                                if token_vec[i].0 != Tokens::Dot{
+                                    if let Tokens::Name { name_string } = &token_vec[i].0{
+                                        q.push(name_string.to_string());
+                                    }
+                                }
+                            }
+
+                            let mut x = var_info.0.members.iter().find(|x| x.0 == q[0]).unwrap();
+                            let mut a = &current_context.declared_types[x.1.as_str()];
+                            let mut offset = 0;
+                            offset += x.2;
+                            for i in 1..q.len() {
+                                x = a.members.iter().find(|x| x.0.as_str() == q[i]).unwrap();
+                                a = &current_context.declared_types[x.1.as_str()];
+                                offset += x.2;
+                            }
+                            offset += a.size();
+                            expression_solver(&operation[2..operation.len()], &current_context);
+                            write_reuslt_into_var(a,var.1 - var.0.size() + offset,name_string);
+
+                        }else {
+                            expression_solver(&operation[2..operation.len()], &current_context);
+                            write_reuslt_into_var(&var.0,var.1,name_string);
+                        }
+                    }
                 }
+                
             }
             Instruction::IfElse { condition, if_body, else_body } =>{
                 write("   ; if statement\n");
-                expression_solver(condition, &current_context.local_variables);
+                expression_solver(condition, &current_context);
                 write("   cmp ax, 1\n");
                 let cli = current_context.logic_index;
                 write(&format!("   jne .L_E{}\n",cli));
@@ -324,7 +364,7 @@ fn intenal_compile(body:&[Instruction], current_context: &mut CompilerContext){
                                             }
                                             var_name.push(c);
                                         }
-                                        new_buff.push_str(&format!("[bp - {}]",current_context.local_variables[var_name.as_str()].1));
+                                        new_buff.push_str(&format!("[bp - {}]",current_context.local_variables[var_name.as_str()].1 + current_context.local_variables[var_name.as_str()].0.size()));
                                         continue;
                                     }
                                     new_buff.push(char.clone());
@@ -362,8 +402,8 @@ pub enum ExprType {
     FunctionCall { name: String, args: Vec<ExprType> }, // New variant for function calls
 }
 
-fn expression_solver(tokens: &[(Tokens, (u32, u32))], local_variables: &HashMap<String, (CompilerVariableType, usize)>) {
-    fn generate_nasm(ast: &ExprType,local_variables: &HashMap<String, (CompilerVariableType, usize)>) -> String {
+fn expression_solver(tokens: &[(Tokens, (u32, u32))], current_context: &CompilerContext) {
+    fn generate_nasm(ast: &ExprType,local_variables: &OrderedHashMap<String, (CompilerVariableType, usize)>) -> String {
         let mut code = String::new();
     
         match ast {
@@ -490,7 +530,7 @@ fn expression_solver(tokens: &[(Tokens, (u32, u32))], local_variables: &HashMap<
     
         code
     }
-    fn parse_expression(tokens: &[(Tokens, (u32, u32))], local_variables: &HashMap<String, (CompilerVariableType, usize)>) -> ExprType {
+    fn parse_expression(tokens: &[(Tokens, (u32, u32))], current_context: &CompilerContext) -> ExprType {
         fn evaluate_operator(stack: &mut Vec<ExprType>, op: Tokens) {
             let right = stack.pop().expect("Missing operand");
             let left = stack.pop().expect("Missing operand");
@@ -548,7 +588,7 @@ fn expression_solver(tokens: &[(Tokens, (u32, u32))], local_variables: &HashMap<
                                         if arg_end > arg_start {
                                             // Parse the argument expression
                                             let arg_tokens = &tokens[arg_start..arg_end];
-                                            args.push(parse_expression(arg_tokens, local_variables));
+                                            args.push(parse_expression(arg_tokens, current_context));
                                         }
                                         break;
                                     }
@@ -558,7 +598,7 @@ fn expression_solver(tokens: &[(Tokens, (u32, u32))], local_variables: &HashMap<
                                     if depth == 0 {
                                         // Parse the argument expression
                                         let arg_tokens = &tokens[arg_start..arg_end];
-                                        args.push(parse_expression(arg_tokens, local_variables));
+                                        args.push(parse_expression(arg_tokens, current_context));
                                         arg_start = arg_end + 1;
                                     }
                                 }
@@ -575,13 +615,42 @@ fn expression_solver(tokens: &[(Tokens, (u32, u32))], local_variables: &HashMap<
                         i = arg_end + 1;
                         continue;
                     }
-                    if i + 1 < tokens.len() && tokens[i + 1].0 == Tokens::LSQBrace {
-
-
-
+                    else if i + 1 < tokens.len() && tokens[i + 1].0 == Tokens::Dot {
+                        let var_info = &current_context.local_variables[name_string.as_str()];
+                        let mut q = vec![];
+                        for i in i + 2..tokens.len() {
+                            if let Tokens::Name { name_string } = &tokens[i].0{
+                                q.push(name_string.to_string());
+                            }else if i % 2 == 1 {
+                                if Tokens::Dot != tokens[i].0{
+                                    break;
+                                }
+                            }
+                        }
+                        println!("{q:?}");
+                        let mut offset = var_info.1 - var_info.0.size();
+                        let mut x = var_info.0.members.iter().find(|x| x.0 == q[0]).unwrap();
+                        let mut a = &current_context.declared_types[x.1.as_str()];
+                        offset += x.2;
+                        for i in 1..q.len() {
+                            x = a.members.iter().find(|x| x.0.as_str() == q[i]).unwrap();
+                            a = &current_context.declared_types[x.1.as_str()];
+                            offset += x.2;
+                        }
+                        offset += a.size();
+                        println!("{offset:?}");
+                        println!("{a:?}");
+                        println!("{var_info:?}");
+                        stack.push(ExprType::Variable {
+                            name: name_string.to_string(),
+                            size: a.size(), 
+                            offset,
+                        });
+                        i += 2 * q.len() + 1;
+                        continue;
                     }
                     // Push a variable onto the stack
-                    if let Some((_type, offset)) = &local_variables.get(name_string.as_str()) {
+                    if let Some((_type, offset)) = &current_context.local_variables.get(name_string.as_str()) {
                         stack.push(ExprType::Variable {
                             name: name_string.to_string(),
                             size: _type.size(), 
@@ -659,19 +728,16 @@ fn expression_solver(tokens: &[(Tokens, (u32, u32))], local_variables: &HashMap<
     }
     
     // Parse the tokens into an ExprType AST
-    let ast = parse_expression(tokens, local_variables);
-
-    // Print the AST for debugging
-    println!("{:?}", ast);
-    write(&generate_nasm(&ast,local_variables));
+    let ast = parse_expression(tokens, current_context);
+    write(&generate_nasm(&ast,&current_context.local_variables));
 }
 
 fn compile(instructions: &[Instruction]){
     let mut basic_types:HashMap<String, CompilerVariableType> = HashMap::new();
-    basic_types.insert("u8".to_string(), CompilerVariableType { _type: CompilerVariableTypeE::ValueType(1), members: vec![] });
-    basic_types.insert("u16".to_string(), CompilerVariableType { _type: CompilerVariableTypeE::ValueType(2), members: vec![("lh".to_string(),"u8".to_string(),0),("uh".to_string(),"u8".to_string(),1)] });
-    basic_types.insert("u32".to_string(), CompilerVariableType { _type: CompilerVariableTypeE::ValueType(4), members: vec![] });
-    basic_types.insert("u64".to_string(), CompilerVariableType { _type: CompilerVariableTypeE::ValueType(8), members: vec![] });
+    basic_types.insert("u8".to_string(), CompilerVariableType { _type: CompilerVariableTypeEnum::ValueType(1), members: vec![] });
+    basic_types.insert("u16".to_string(), CompilerVariableType { _type: CompilerVariableTypeEnum::ValueType(2), members: vec![("lh".to_string(),"u8".to_string(),0),("uh".to_string(),"u8".to_string(),1)] });
+    basic_types.insert("u32".to_string(), CompilerVariableType { _type: CompilerVariableTypeEnum::ValueType(4), members: vec![] });
+    basic_types.insert("u64".to_string(), CompilerVariableType { _type: CompilerVariableTypeEnum::ValueType(8), members: vec![] });
     //let mut declared_functions = HashMap::new();
     //let mut declared_structs = HashMap::new();
     let mut n_instructions = vec![];
@@ -683,21 +749,19 @@ fn compile(instructions: &[Instruction]){
                 let mut members: Vec<(String, String, usize)> = vec![];
                 for x in fields {
                     let _type: CompilerVariableType = get_cvt(&x.1, &basic_types);
-                    let a: (&String, &CompilerVariableType) = basic_types.iter().find(|y| {_type == *y.1}).unwrap();
-                    let ts: usize = _type.size();
-                    total_size += ts;
-                    members.push((x.0.to_string(),a.0.to_string(),offset));
-                    offset += ts;
+                    let found_type: (&String, &CompilerVariableType) = basic_types.iter().find(|y| {_type == *y.1}).unwrap();
+                    total_size += found_type.1.size();
+                    members.push((x.0.to_string(),found_type.0.to_string(),offset));
+                    offset += found_type.1.size();
                 }
-                basic_types.insert(name.to_string(), CompilerVariableType { _type: CompilerVariableTypeE::ValueType(total_size), members});
+                println!("{:?}",members);
+                basic_types.insert(name.to_string(), CompilerVariableType { _type: CompilerVariableTypeEnum::ValueType(total_size), members});
                 //basic_types.insert(name, CompilerVariableType {_type: })
             }
             _ => {n_instructions.push(x);},
         }
     }
-
-    println!("{:?}",n_instructions);
-    let mut global_context = CompilerContext{loop_index: 0, logic_index: 0,current_function_name: String::new(), declared_types: basic_types, local_variables: HashMap::new()};
+    let mut global_context = CompilerContext{loop_index: 0, logic_index: 0,current_function_name: String::new(), declared_types: basic_types, local_variables: OrderedHashMap::new()};
     for x in n_instructions {
         match x {
             Instruction::FunctionCreation { name, return_type, arguments, body } => {
@@ -714,19 +778,19 @@ fn compile(instructions: &[Instruction]){
                 let mut func_context = global_context.clone();
                 func_context.current_function_name = name.clone();
                 let mut offset = 0;
-                let mut arg_num = 0;
-                for arg in arguments {
-                    let cvt = get_cvt(&arg.1, &global_context.declared_types);
-                    offset += cvt.size(); // use RCSTYPE,
-                    if cvt.size() == 2{
-                        write(&format!("   mov WORD [bp - {}], dx ; VAR argument N{}: {}\n",offset,arg_num,arg.0));
-                    }else  if cvt.size() == 1{
-                        write(&format!("   mov BYTE [bp - {}], dl ; VAR argument N{}: {}\n",offset,arg_num,arg.0));
+                if arguments.len() != 0{
+                    if arguments.len() >= 1{
+                        let arg = &arguments[0];
+                        let cvt = get_cvt(&arg.1, &global_context.declared_types);
+                        func_context.local_variables.insert(arg.0.to_string(), (get_cvt(&arg.1,&global_context.declared_types),offset));
+                        offset += cvt.size();
+                        match cvt.size() {
+                            2 => {write(&format!("   mov WORD [bp - {}], dx ; VAR argument N{}: {}\n",offset,0,arg.0));}
+                            1 => {write(&format!("   mov BYTE [bp - {}], dl ; VAR argument N{}: {}\n",offset,0,arg.0));}
+                            _ => {panic!("")}
+                        }
                     }
-                    func_context.local_variables.insert(arg.0.to_string(), (get_cvt(&arg.1,&global_context.declared_types),offset));
-                    arg_num += 1;
                 }
-                //println!("{:?}",func_context.local_variables);
 
                 intenal_compile(&body, &mut func_context);
                 global_context.loop_index = func_context.loop_index;
