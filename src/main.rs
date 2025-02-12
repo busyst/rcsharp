@@ -10,10 +10,10 @@ mod lexer;
 mod tokens;
 mod instructions;
 mod parser;
-pub const debug: bool = true;
+pub const DEBUG: bool = true;
 
 fn main() {
-    if debug {
+    if DEBUG {
         let tests = vec![
             ("1_basics", "basic_test"),
             ("2_arrays", "array_test"),
@@ -627,7 +627,7 @@ fn expression_solver(tokens: &[(Tokens, (u32, u32))], current_context: &Compiler
                                 }
                             }
                         }
-                        println!("{q:?}");
+                        //println!("{q:?}");
                         let mut offset = var_info.1 - var_info.0.size();
                         let mut x = var_info.0.members.iter().find(|x| x.0 == q[0]).unwrap();
                         let mut a = &current_context.declared_types[x.1.as_str()];
@@ -638,9 +638,6 @@ fn expression_solver(tokens: &[(Tokens, (u32, u32))], current_context: &Compiler
                             offset += x.2;
                         }
                         offset += a.size();
-                        println!("{offset:?}");
-                        println!("{a:?}");
-                        println!("{var_info:?}");
                         stack.push(ExprType::Variable {
                             name: name_string.to_string(),
                             size: a.size(), 
@@ -754,7 +751,7 @@ fn compile(instructions: &[Instruction]){
                     members.push((x.0.to_string(),found_type.0.to_string(),offset));
                     offset += found_type.1.size();
                 }
-                println!("{:?}",members);
+                //println!("{:?}",members);
                 basic_types.insert(name.to_string(), CompilerVariableType { _type: CompilerVariableTypeEnum::ValueType(total_size), members});
                 //basic_types.insert(name, CompilerVariableType {_type: })
             }

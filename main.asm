@@ -2,43 +2,29 @@
 main:
    mov bp, sp
    sub sp, 16
-   mov ax, 5
-   mov WORD [bp - 2], ax ; VAR q
    mov ax, 1
-   mov WORD [bp - 4], ax ; VAR x
-   mov ax, 2
-   mov WORD [bp - 6], ax ; VAR x
-   mov ax, 3
-   mov BYTE [bp - 7], al ; VAR x
-   mov ax, 4
-   mov WORD [bp - 9], ax ; VAR x
-   mov ax, 5
    mov WORD [bp - 11], ax ; VAR x
-   mov ax, WORD [bp - 9] ; VAR x
-   push ax
-   mov ax, WORD [bp - 4] ; VAR x
-   pop bx
-   add ax, bx
-   mov WORD [bp - 4], ax ; VAR x
-   movzx ax, BYTE [bp - 7] ; VAR x
-   push ax
-   mov ax, WORD [bp - 6] ; VAR x
-   pop bx
-   add ax, bx
-   mov WORD [bp - 6], ax ; VAR x
-   mov ax, WORD [bp - 4] ; VAR x
-   mov dx, ax ; load arg 0 to call print_num 
-   call print_num 
-   mov ax, WORD [bp - 6] ; VAR x
-   mov dx, ax ; load arg 0 to call print_num 
-   call print_num 
-   movzx ax, BYTE [bp - 7] ; VAR x
-   mov dx, ax ; load arg 0 to call print_num 
-   call print_num 
-   mov ax, WORD [bp - 9] ; VAR x
-   mov dx, ax ; load arg 0 to call print_num 
-   call print_num 
+   mov ax, 2
+   mov WORD [bp - 13], ax ; VAR x
+   mov ax, 3
+   mov BYTE [bp - 14], al ; VAR x
+   mov ax, 4
+   mov WORD [bp - 16], ax ; VAR x
+   mov ax, 5
+   mov WORD [bp - 18], ax ; VAR x
    mov ax, WORD [bp - 11] ; VAR x
+   mov dx, ax ; load arg 0 to call print_num 
+   call print_num 
+   mov ax, WORD [bp - 13] ; VAR x
+   mov dx, ax ; load arg 0 to call print_num 
+   call print_num 
+   movzx ax, BYTE [bp - 14] ; VAR x
+   mov dx, ax ; load arg 0 to call print_num 
+   call print_num 
+   mov ax, WORD [bp - 16] ; VAR x
+   mov dx, ax ; load arg 0 to call print_num 
+   call print_num 
+   mov ax, WORD [bp - 18] ; VAR x
    mov dx, ax ; load arg 0 to call print_num 
    call print_num 
    xor ax, ax
