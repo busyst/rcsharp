@@ -25,6 +25,7 @@ pub fn lex(file_path: &str) -> Result<Vec<(Tokens,(u32,u32))>, String> {
     x.insert(';', Tokens::Semicolon);
     x.insert(',', Tokens::Comma);
     x.insert('.', Tokens::Dot);
+    x.insert('#', Tokens::Hint);
     let mut str = String::new();
     let mut a = File::open(file_path).unwrap();
     a.read_to_string(&mut str).unwrap();
@@ -148,7 +149,7 @@ pub fn lex(file_path: &str) -> Result<Vec<(Tokens,(u32,u32))>, String> {
                 }
             }
             '"' => {
-                let mut string_content = Box::new(String::new());
+                let mut string_content = String::new();
                 loop {
                     i+=1;
                     if i >= chars.len() {
@@ -167,38 +168,38 @@ pub fn lex(file_path: &str) -> Result<Vec<(Tokens,(u32,u32))>, String> {
                     i += 1;
                 } else if c.is_alphabetic() {
                     let start_pos = i - line_index_start;
-                    let mut word = String::new();
-                    word.push(c);
+                    let mut name_string = String::new();
+                    name_string.push(c);
                     i += 1;
                     
                     while i < chars.len() && (chars[i].is_alphanumeric() || chars[i] == '_') {
-                        word.push(chars[i]);
+                        name_string.push(chars[i]);
                         i += 1;
                     }
-                    if let Some(token) = keyword.get(word.as_str()) {
+                    if let Some(token) = keyword.get(name_string.as_str()) {
                         vec.push((token.clone(), (start_pos as u32, line)));
                     } else {
-                        vec.push((Tokens::Name { name_string: Box::new(word) }, (start_pos as u32, line)));
+                        vec.push((Tokens::Name { name_string }, (start_pos as u32, line)));
                     }
                 } else if c.is_numeric() || (c == '0' && i + 1 < chars.len() && (chars[i + 1] == 'x' || chars[i + 1] == 'b')) {
                     let start_pos = i - line_index_start;
-                    let mut number = String::new();
-                    number.push(c);
+                    let mut number_as_string = String::new();
+                    number_as_string.push(c);
                     i += 1;
                     
                     // If we encounter a '0' followed by 'x' or 'b', handle hexadecimal or binary numbers
                     if c == '0' && (chars[i] == 'x' || chars[i] == 'b') {
-                        number.push(chars[i]);
+                        number_as_string.push(chars[i]);
                         i += 1;
                 
                         // Now, collect the actual digits for the number (hex or binary)
                         while i < chars.len() {
                             if chars[i].is_digit(16) || (chars[i] == 'a' || chars[i] == 'A' || chars[i] == 'f' || chars[i] == 'F') {
                                 // For hex values, we allow 0-9, a-f, A-F
-                                number.push(chars[i]);
+                                number_as_string.push(chars[i]);
                             } else if chars[i].is_digit(2) {
                                 // For binary, we only allow 0 or 1
-                                number.push(chars[i]);
+                                number_as_string.push(chars[i]);
                             } else {
                                 break;
                             }
@@ -208,7 +209,7 @@ pub fn lex(file_path: &str) -> Result<Vec<(Tokens,(u32,u32))>, String> {
                         // Normal number parsing (just for numbers not starting with '0x' or '0b')
                         while i < chars.len() {
                             if chars[i].is_numeric() && !chars[i].is_whitespace() {
-                                number.push(chars[i]);
+                                number_as_string.push(chars[i]);
                             } else {
                                 break;
                             }
@@ -216,9 +217,9 @@ pub fn lex(file_path: &str) -> Result<Vec<(Tokens,(u32,u32))>, String> {
                         }
                     }
                 
-                    vec.push((Tokens::Number { number_as_string: Box::new(number) }, (start_pos as u32, line)));
+                    vec.push((Tokens::Number { number_as_string }, (start_pos as u32, line)));
                 } else {
-                    todo!()
+                    todo!("char '{}' '{}' was not expected",chars[i],chars[i] as u32);
                 }
             }
         }

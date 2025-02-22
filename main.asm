@@ -1,41 +1,61 @@
-
+   global main
 main:
-   mov bp, sp
-   sub sp, 16
-   mov ax, 1
-   mov WORD [bp - 11], ax ; VAR x
-   mov ax, 2
-   mov WORD [bp - 13], ax ; VAR x
-   mov ax, 3
-   mov BYTE [bp - 14], al ; VAR x
-   mov ax, 4
-   mov WORD [bp - 16], ax ; VAR x
-   mov ax, 5
-   mov WORD [bp - 18], ax ; VAR x
-   mov ax, WORD [bp - 11] ; VAR x
-   mov dx, ax ; load arg 0 to call print_num 
-   call print_num 
-   mov ax, WORD [bp - 13] ; VAR x
-   mov dx, ax ; load arg 0 to call print_num 
-   call print_num 
-   movzx ax, BYTE [bp - 14] ; VAR x
-   mov dx, ax ; load arg 0 to call print_num 
-   call print_num 
-   mov ax, WORD [bp - 16] ; VAR x
-   mov dx, ax ; load arg 0 to call print_num 
-   call print_num 
-   mov ax, WORD [bp - 18] ; VAR x
-   mov dx, ax ; load arg 0 to call print_num 
-   call print_num 
-   xor ax, ax
-   cli
-   hlt
-
-print_num:
    push bp
    mov bp, sp
    sub sp, 16
-   mov BYTE [bp - 1], dl ; VAR argument N0: n
+   ;Array x access
+   mov ax, WORD 0
+   mov bx, bp
+   add bx, 1
+   sub bx, 8
+   add bx, ax
+   ;Array x index calculation
+   mov ax, WORD 255
+   mov BYTE [bx], al
+   mov ax, WORD 4
+   ;assign to variable 'q'
+   mov WORD [bp - 10], ax
+   mov ax, WORD 10
+   ;assign to variable 'q'
+   mov WORD [bp - 12], ax
+   ;load value from struct q
+   mov ax, WORD [bp - 10]
+   mov dx, ax
+   call print_num
+   ;load value from struct q
+   mov ax, WORD [bp - 12]
+   mov dx, ax
+   call print_num
+   mov ax, WORD 4
+   push ax
+   ;load value from struct q
+   mov ax, WORD [bp - 10]
+   pop bx
+   sub ax, bx
+   mov bx, bp
+   add bx, 1
+   sub bx, 8
+   add bx, ax
+   movzx ax, BYTE [bx]
+   mov dx, ax
+   call print_num
+   ;load value from struct q
+   mov ax, WORD [bp - 10]
+   mov dx, ax
+   call print_num
+   ;load value from struct q
+   mov ax, WORD [bp - 12]
+   mov dx, ax
+   call print_num
+   xor ax, ax
+.exit_main:
+   cli
+   hlt
+print_num:
+   push bp
+   mov bp, sp
+   sub sp, 1
+   mov BYTE [bp - 1], dl
    mov al, [bp - 1]
    shr al, 4
    add al, 48
@@ -55,25 +75,20 @@ print_num:
    mov ah, 0x0e
    int 0x10
    xor ax, ax
-   _exit_print_num:
+.exit_print_num:
    mov sp, bp
    pop bp
    ret
-
-
 print_char:
    push bp
    mov bp, sp
-   sub sp, 16
-   mov BYTE [bp - 1], dl ; VAR argument N0: n
+   sub sp, 1
+   mov BYTE [bp - 1], dl
    mov al, [bp - 1]
    mov ah, 0x0e
    int 0x10
    xor ax, ax
-   _exit_print_char:
+.exit_print_char:
    mov sp, bp
    pop bp
    ret
-
-times 510 - ($ - $$) db 0
-dw 0xAA55

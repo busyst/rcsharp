@@ -1,4 +1,4 @@
-use crate::{tokens::Tokens, Instruction};
+use crate::{tokens::Tokens, type_parsers::get_type, Instruction};
 
 pub fn parse(tokens: &[(Tokens,(u32,u32))]) -> Vec<Instruction> {
     let mut instructions = vec![];
@@ -9,6 +9,26 @@ pub fn parse(tokens: &[(Tokens,(u32,u32))]) -> Vec<Instruction> {
         let (first_instruction,second_instruction) = (first_instruction.unwrap(),tokens.get(i+1).unwrap_or(&(Tokens::Semicolon,(0,0))));
         //debug_print(&tokens.split_at(i).1.iter().map(|s|s.clone()).collect::<Vec<_>>());
         match (first_instruction,second_instruction) {
+            ((Tokens::Hint,_),_) =>{
+                let mut insides = vec![];
+                i += ParserFactory::new(tokens.split_at(i).1)
+                .expect(Tokens::Hint).next()
+                .gather_with_expect(Tokens::LSQBrace, Tokens::RSQBrace, &mut insides)
+                .total_tokens();
+
+                if let (Tokens::Name { name_string },_) = &insides[0] {
+                    //let mut arguments = vec![];
+                    let mut args = vec![];
+                    ParserFactory::new(&insides).next()
+                    .gather_with_expect(Tokens::LParen, Tokens::RParen, &mut args);
+                    println!("{args:?}");
+                    if args.len() != 1{
+                        panic!("fix");
+                    }
+                    instructions.push(Instruction::CompilerHint { name: name_string.to_string(), arguments: args });
+                }
+
+            }
             ((Tokens::StructKeyword,_), (Tokens::Name { name_string: _ },_)) =>{
                 let mut struct_name = String::new();
                 let mut struct_body = vec![];
@@ -135,11 +155,15 @@ pub fn parse(tokens: &[(Tokens,(u32,u32))]) -> Vec<Instruction> {
                 .gather_with_expect_until_with_zero_closure(&vec![Tokens::Equal,Tokens::Semicolon],&mut type_decl_tokens).back()
                 .gather_with_expect_until(Tokens::Semicolon, &mut expression)
                 .total_tokens();
+
                 if expression.first().and_then(|x| Some(x.0.clone())) == Some(Tokens::Equal){
-                    expression.remove(0);
+                    expression.insert(0, (Tokens::Name { name_string: name.clone() },(0,0)));
                 }
                 let _type = get_type(&type_decl_tokens);
-                instructions.push(Instruction::VariableDeclaration { name, _type, expression });
+                instructions.push(Instruction::VariableDeclaration { name, _type });
+                if expression.len() != 0 {
+                    instructions.push(Instruction::Operation { operation: expression });
+                }
             }
             ((Tokens::Name { name_string: _ },_),(Tokens::LParen,_)) =>{
                 let mut name = String::new();
@@ -170,7 +194,12 @@ pub fn parse(tokens: &[(Tokens,(u32,u32))]) -> Vec<Instruction> {
                 .expect(Tokens::ReturnKeyword).next()
                 .gather_with_expect_until_and_zero(Tokens::Semicolon,Tokens::LParen, Tokens::RParen, &mut expression)
                 .total_tokens();
-                instructions.push(Instruction::Return { expression });
+                let expression = if expression.len() != 0{
+                    Some(expression)
+                }else{
+                    None
+                };
+                instructions.push(Instruction::Return { expression  });
             }
             ((Tokens::LoopKeyword,_),(Tokens::LBrace,_)) =>{
                 let mut body_tokens = vec![];
@@ -198,7 +227,7 @@ pub fn parse(tokens: &[(Tokens,(u32,u32))]) -> Vec<Instruction> {
 #[derive(Debug, Clone, PartialEq)]
 pub enum ParserVariableType {
     Void,
-    Type(Box<String>),
+    Type(String),
     ArrayPointer(Box<ParserVariableType>),
     ArrayStack(Box<ParserVariableType>,usize),
     Tuple(Vec<ParserVariableType>),
@@ -396,168 +425,4 @@ impl<'a> ParserFactory<'a> {
 }
 
 
-
-pub fn get_type(type_tokens: &[(Tokens,(u32,u32))]) -> ParserVariableType{
-    // Helper function to parse more complex inner types
-    fn parse_complex_type(tokens: &[(Tokens, (u32, u32))]) -> ParserVariableType {
-        // Simple type case
-        if tokens.len() == 1 {
-            if let Tokens::Name { name_string } = &tokens[0].0 {
-                return ParserVariableType::Type(Box::new(*name_string.clone()));
-            }
-        }
-
-        // Handle array type
-        if let Some((Tokens::LSQBrace, _)) = tokens.first() {
-            let inner_tokens = &tokens[1..tokens.len()-1];
-            return ParserVariableType::ArrayPointer(Box::new(parse_complex_type(inner_tokens)));
-        }
-
-        // Handle tuple type
-        if let Some((Tokens::LParen, _)) = tokens.first() {
-            let inner_tokens = &tokens[1..tokens.len()-1];
-            let mut tuple_types = Vec::new();
-            let mut current_type = Vec::new();
-
-            for token in inner_tokens {
-                match token.0 {
-                    Tokens::Comma => {
-                        // Complete current type and add to tuple types
-                        if !current_type.is_empty() {
-                            tuple_types.push(parse_complex_type(&current_type));
-                            current_type.clear();
-                        }
-                    },
-                    _ => current_type.push(token.clone())
-                }
-            }
-
-            // Add last type if exists
-            if !current_type.is_empty() {
-                tuple_types.push(parse_complex_type(&current_type));
-            }
-
-            return ParserVariableType::Tuple(tuple_types);
-        }
-
-        // Nested complex types
-        if tokens.len() > 1 {
-            // Check for nested array or tuple
-            match &tokens[0].0 {
-                Tokens::Name { name_string } if **name_string == "array" => {
-                    // Handle array type declaration
-                    let inner_tokens = &tokens[1..];
-                    return ParserVariableType::ArrayPointer(Box::new(parse_complex_type(inner_tokens)));
-                },
-                Tokens::Name { name_string } if **name_string == "tuple" => {
-                    // Handle tuple type declaration
-                    let inner_tokens = &tokens[1..];
-                    let mut tuple_types = Vec::new();
-                    let mut current_type = Vec::new();
-
-                    for token in inner_tokens {
-                        match token.0 {
-                            Tokens::Comma => {
-                                if !current_type.is_empty() {
-                                    tuple_types.push(parse_complex_type(&current_type));
-                                    current_type.clear();
-                                }
-                            },
-                            _ => current_type.push(token.clone())
-                        }
-                    }
-
-                    // Add last type if exists
-                    if !current_type.is_empty() {
-                        tuple_types.push(parse_complex_type(&current_type));
-                    }
-
-                    return ParserVariableType::Tuple(tuple_types);
-                },
-                _ => {}
-            }
-        }
-
-        // Fallback for unrecognized type patterns
-        panic!("Complex type parsing failed: {:?}", tokens);
-    }
-
-    // Helper function to parse tuple types
-    fn parse_tuple_types(tokens: &[(Tokens, (u32, u32))]) -> Vec<ParserVariableType> {
-        let mut types = Vec::new();
-        let mut current_type = Vec::new();
-
-        for token in tokens {
-            match token.0 {
-                Tokens::Comma => {
-                    // Complete current type and add to types
-                    if !current_type.is_empty() {
-                        types.push(parse_complex_type(&current_type));
-                        current_type.clear();
-                    }
-                },
-                _ => current_type.push(token.clone())
-            }
-        }
-
-        // Add last type if exists
-        if !current_type.is_empty() {
-            types.push(parse_complex_type(&current_type));
-        }
-
-        types
-    }
-
-
-    let _type: ParserVariableType;
-    if type_tokens.first().is_none(){
-        panic!("Type should be declarated!");
-    }
-    else{
-        let x = type_tokens.first().unwrap();
-        if type_tokens.len() == 1{
-           if let Tokens::Name { name_string } = &x.0{
-            _type = ParserVariableType::Type(Box::new(*name_string.clone()));
-           }else {
-            panic!("Type was not specified! Fix that! Around {:?}",type_tokens[0].1);
-           }
-        }else if let Tokens::LSQBrace = &x.0  {
-            let inner_tokens = &type_tokens[1..type_tokens.len()-1];
-            if inner_tokens.is_empty() {
-                panic!("Empty array type");
-            }
-            if inner_tokens.len() == 3{
-                if let (Tokens::Name { name_string },_) = &inner_tokens[0]{
-                    if let (Tokens::Number { number_as_string },_) = &inner_tokens[2]{
-                        return ParserVariableType::ArrayStack(Box::new(ParserVariableType::Type(name_string.clone())), number_as_string.to_string().parse::<usize>().unwrap());
-                    }
-                }
-            }
-            let inner_type = if inner_tokens.len() == 1 {
-                if let Tokens::Name { name_string } = &inner_tokens[0].0 {
-                    ParserVariableType::Type(Box::new(*name_string.clone()))
-                } else {
-                    panic!("Invalid array inner type")
-                }
-            } else {
-                // More complex inner type (like tuple)
-                parse_complex_type(inner_tokens)
-            };
-            _type = ParserVariableType::ArrayPointer(Box::new(inner_type));
-        }else if let Tokens::LParen = &x.0  {
-            let inner_tokens = &type_tokens[1..type_tokens.len()-1];
-            if inner_tokens.is_empty() {
-                panic!("Empty tuple type");
-            }
-            // Parse tuple inner types
-            let tuple_types = parse_tuple_types(inner_tokens);
-            _type = ParserVariableType::Tuple(tuple_types);
-        }
-        else {
-            panic!("");
-        }
-        
-    }
-    _type
-}
 

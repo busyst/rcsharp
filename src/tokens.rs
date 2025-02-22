@@ -9,9 +9,9 @@ pub enum Tokens {
     BreakKeyword,
     ContinueKeyword,
     ReturnKeyword,
-    String { string_content: Box<String> },
-    Name { name_string: Box<String> },
-    Number { number_as_string: Box<String> },
+    String { string_content: String },
+    Name { name_string: String },
+    Number { number_as_string: String },
 
     LParen,   // (
     RParen,   // )
@@ -49,6 +49,7 @@ pub enum Tokens {
 
     ExclamationMark, // !
     Pointer, // ->
+    Hint, // #
 }
 
 impl Tokens {

@@ -30,28 +30,29 @@ fn arythm4(a: u8){
 fn arythm5(a: u8) -> u8{
     return a;
 }
+
 fn print_num(n: u8){
-    asm!("
-        mov al, {n}
-        shr al, 4
-        add al, 48
+    asm!(
+        "mov al, {n}"
+        "shr al, 4"
+        "add al, 48"
 
-        cmp al, 58
-        jb I_L0
-        add al, 7
-        I_L0:
-        mov ah, 0x0e
-        int 0x10
+        "cmp al, 58"
+        "jb I_L0"
+        "add al, 7"
+        "I_L0:"
+        "mov ah, 0x0e"
+        "int 0x10"
 
-        mov al, {n}
-        and al, 0x0F
-        add al, 48
+        "mov al, {n}"
+        "and al, 0x0F"
+        "add al, 48"
 
-        cmp al, 58
-        jb I_L1
-        add al, 7
-        I_L1:
-        mov ah, 0x0e
-        int 0x10
-    ");
+        "cmp al, 58"
+        "jb I_L1"
+        "add al, 7"
+        "I_L1:"
+        "mov ah, 0x0e"
+        "int 0x10"
+    );
 }
