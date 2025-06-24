@@ -1,790 +1,442 @@
 use std::{collections::{HashMap, HashSet}, fs::File, io::Write};
-use crate::{instructions::Instruction, parser::{ParserFactory, ParserVariableType}, tokens::Tokens, type_parsers::{get_cvt, CompilerVariableType, CompilerVariableTypeEnum}};
-use ordered_hash_map::OrderedHashMap;
-#[allow(dead_code)]
-#[derive(Debug,Clone)]
-pub enum ASMConvEnum {
-    Label(String),
-    Push(String),
-    Pop(String),
-    Mov(String,String),
-    MovToAlpha(String),
-    MovFromAlpha(String),
-    CMP(String,String),
-    SOP(String,String),
-    BOP(String,String,String),
-    ASMINSERT(String),
-    JMP(String),
-    JNE(String),
-    JE(String),
-    CALL(String),
-    OP(String),
-    Comment(String),
-}
 
-pub fn clear(){
-    let f = File::options().read(true).write(true).create(true).open("main.asm").unwrap();
-    f.set_len(0).unwrap();
-}
-
-#[derive(Clone)]
-pub struct CompilerContext{
-    asm: Vec<ASMConvEnum>,
-    current_function_name: String,
-    local_variables: OrderedHashMap<String, (CompilerVariableType, usize)>,
-    declared_types: HashMap<String, CompilerVariableType>,
-    loop_index: usize,
-    logic_index: usize,
-
-    stack_offset: usize,
-}
-impl CompilerContext {
-    pub fn get_variable_or_panic(&self, name: &str) -> &(CompilerVariableType, usize){
-        if let Some(x) = self.local_variables.get(name) {
-            return x;
+use crate::{expression_compiler::{compile_expression_rec, var_cast, TypedValue}, expression_parser::{Expr, UnaryOp}, parser::{ParserType, Stmt}};
+macro_rules! extract {
+    ($e:expr, $p:path) => {
+        match $e {
+            $p(value) => Some(value),
+            _ => None,
         }
-        panic!("Value {name} not found in this context!");
-    }
-    pub fn get_type_or_panic(&self, name: &str) -> &CompilerVariableType{
-        if let Some(x) = self.declared_types.get(name) {
-            return x;
-        }
-        panic!("Type {name} not found in this context!");
-    }
-    pub fn get_type(&self, name: &str) -> Option<&CompilerVariableType>{
-        self.declared_types.get(name)
-    }
-    pub fn get_variable(&self, name: &str) -> Option<&(CompilerVariableType, usize)>{
-        self.local_variables.get(name)
-    }
-    pub fn add_variable(&mut self, name: String, var: CompilerVariableType) -> usize{
-        if self.local_variables.contains_key(&name){
-            panic!("Variable \"{}\" is already used in current context. TODO: problem with compiler",name);
-        }
-        self.stack_offset += &var.size();
-        self.local_variables.insert(name, (var, self.stack_offset.clone()));
-        self.stack_offset
-    }
-    pub fn add_asm(&mut self, asm: ASMConvEnum){
-        self.asm.push(asm);
-    }
+    };
 }
+// This function handles expressions that can appear as statements, like assignments.
+pub fn compile_statement_expression(t: &Expr, state: &mut CompilerState) -> Result<TypedValue, String> {
+    match t {
+        Expr::Assign(left, right) => {
+            // Compile the right-hand side first.
+            // We don't know the exact type of the LHS yet, so we compile RHS without a hint.
+            let rhs_val = compile_expression_rec(right, None, state)?;
 
-fn internal_compile(body:&[Instruction], mut current_context: &mut CompilerContext){
-    // Generate the loop label and increment the loop index
-    let mut loop_label = current_context.loop_index.clone();
-    for x in body {
-        match x {
-            Instruction::VariableDeclaration { name, _type } =>{
-                current_context.add_variable(name.to_string(), get_cvt(_type,&current_context));
-            }
-            Instruction::Loop { body } => {
-                loop_label = current_context.loop_index.clone();
-                // Generate the loop label and increment the loop index
-                current_context.add_asm(ASMConvEnum::Label(format!(".{}.Loop{}",current_context.current_function_name, loop_label)));
-                current_context.loop_index += 1;
-
-                // Compile the body of the loop
-                internal_compile(body, current_context);
-
-                // After the loop body, generate jump and exit labels
-                current_context.add_asm(ASMConvEnum::JMP(format!(".{}.Loop{}",current_context.current_function_name, loop_label)));
-                current_context.add_asm(ASMConvEnum::Label(format!(".{}.Loop{}_EXIT",current_context.current_function_name, loop_label)));
-            }
-            Instruction::Return { expression: value } =>{
-                if let Some(value) = value{
-                    expression_solver(value, &mut current_context);
+            // Now, handle the left-hand side. It must be a valid "l-value".
+            match &**left {
+                Expr::Name(name) => {
+                    // Case 1: Simple variable assignment: `x = ...`
+                    let var_info = state.find_variable(name)?.clone();
+                    let final_rhs_val = var_cast(rhs_val, &var_info.ty, state)?;
+                    let var_type_str = CompilerState::get_type_string(&var_info.ty);
+                    state.push_str(&format!("store {} %tmp{}, {}* %{}\n", var_type_str, final_rhs_val.index, var_type_str, var_info.llvm_name));
+                    Ok(final_rhs_val)
                 }
-                current_context.add_asm(ASMConvEnum::JMP(format!(".exit_{}",current_context.current_function_name)));
-            }
-            Instruction::Break => {
-                // Generate jump to exit the current loop
-                current_context.add_asm(ASMConvEnum::JMP(format!(".{}.Loop{}_EXIT",current_context.current_function_name, loop_label - 1)));
-            }
-            Instruction::Continue => {
-                // Generate jump to continue the current loop
-                current_context.add_asm(ASMConvEnum::JMP(format!(".{}.Loop{}",current_context.current_function_name, loop_label - 1)));
-            }
-            Instruction::FunctionCall { name, arguments } => {
-                if arguments.len() !=0 {
-                    let mut args_vectors = vec![];
-                    let mut last_arg_comma = 0;
-                    for i in 0..arguments.len() {
-                        if arguments[i].0 == Tokens::Comma{
-                            args_vectors.push(arguments[last_arg_comma..i].to_vec());
-                            last_arg_comma = i + 1;
-                        }
-                    }
-                    if last_arg_comma != arguments.len(){
-                        args_vectors.push(arguments[last_arg_comma..arguments.len()].to_vec());
-                    }
-                    if args_vectors.len() > 0{
-                        if args_vectors.len() != 1{
-                            todo!()
-                        }
-                        expression_solver(&args_vectors[0], &mut current_context);
-                        current_context.add_asm(ASMConvEnum::Mov("dx".to_string(),"ax".to_string()));
-                    }
-                }
-                current_context.add_asm(ASMConvEnum::CALL(name.to_string()));
-            }
-            Instruction::Operation { operation } =>{
-                if operation.len() <= 2{
-                    panic!("{:?}",operation);
-                }
-                let mut _array = false;
-                let mut _struct = false;
-                let qwer = vec![Tokens::Equal,Tokens::ADDEqual,Tokens::SUBEqual,Tokens::MULEqual,Tokens::DIVEqual,Tokens::MODEqual];
+                Expr::UnaryOp(UnaryOp::Deref, ptr_expr) => {
+                    // Case 2: Pointer dereference assignment: `*p = ...`
+                    let ptr_val = compile_expression_rec(ptr_expr, None, state)?;
+                    let value_type = if let ParserType::Ref(inner) = &ptr_val.ty {
+                        *inner.clone()
+                    } else {
+                        return Err(format!("Cannot assign to a dereferenced non-pointer of type {:?}", ptr_val.ty));
+                    };
 
-                let mut expr = vec![];
-                let mut token_vec = vec![];
-                ParserFactory::new(&operation).gather_with_expect_until_with_zero_closure(&qwer,  &mut token_vec);
-                if let (Tokens::Name { name_string },_) = &operation[0]{
-                    let mut operation = operation.clone();
-                    if operation[1].0 == Tokens::LSQBrace{
-                        let x = ParserFactory::new(operation.split_at(1).1)
-                        .gather_with_expect(Tokens::LSQBrace, Tokens::RSQBrace, &mut expr)
-                        .total_tokens();
-                        for _ in 0..x {
-                            operation.remove(1);
-                        }
-                        _array = true;
-                    }
-                    if operation[1].0 == Tokens::Dot{
-                        for _ in 0..token_vec.len() - 1 {
-                            operation.remove(1);
-                        }
-                        _struct = true;
-                    }
+                    let final_rhs_val = var_cast(rhs_val, &value_type, state)?;
+                    let value_type_str = CompilerState::get_type_string(&value_type);
+                    let ptr_type_str = CompilerState::get_type_string(&ptr_val.ty);
+                    state.push_str(&format!("store {} %tmp{}, {} %tmp{}\n", value_type_str, final_rhs_val.index, ptr_type_str, ptr_val.index));
+                    Ok(final_rhs_val)
+                }
+                Expr::Index(base_expr, index_expr) => {
+                    // Case 3: Pointer/Array index assignment: `ptr[idx] = ...`
+                    let base_ptr_val = compile_expression_rec(base_expr, None, state)?;
+                    let element_type = if let ParserType::Ref(inner) = &base_ptr_val.ty {
+                        *inner.clone()
+                    } else {
+                        return Err(format!("Cannot index a non-pointer type: {:?}", base_ptr_val.ty));
+                    };
+
+                    let index_val = compile_expression_rec(index_expr, Some(&ParserType::Named("i64".into())), state)?;
+
+                    // Generate getelementptr to find the address of the element
+                    let mi = state.get_temp_variable_index();
+                    let element_type_str = CompilerState::get_type_string(&element_type);
+                    let ptr_type_str = CompilerState::get_type_string(&base_ptr_val.ty);
+                    let index_type_str = CompilerState::get_type_string(&index_val.ty);
+
+                    state.push_str(&format!(
+                        "%tmp{} = getelementptr inbounds {}, {} %tmp{}, {} %tmp{}\n",
+                        mi, element_type_str, ptr_type_str, base_ptr_val.index, index_type_str, index_val.index
+                    ));
                     
-                    for i in 1..qwer.len() {
-                        if operation[1].0 == qwer[i]{
-                            let rewq = vec![Tokens::ADD,Tokens::SUB,Tokens::MUL,Tokens::DIV,Tokens::MOD];
-                            operation[1].0 = Tokens::Equal;
-                            for x in token_vec.iter().rev() {
-                                operation.insert(2, x.clone());
-                            }
-                            operation.insert(token_vec.len() + 2, (rewq[i - 1].clone(),(0,0)));
-                            operation.insert(token_vec.len() + 3, (Tokens::LParen,(0,0)));
-                            operation.push((Tokens::RParen,(0,0)));
-                            break;
-                        }
-                    }
-                    
-                    if operation[1].0 == Tokens::Equal{
-                        let var = current_context.get_variable_or_panic(name_string).clone();
-                        if _array {
-                            let element_size = var.0.size_per_entry();
-                            let array_offset = var.1;
-                            current_context.add_asm(ASMConvEnum::Comment(format!("Array {name_string} access")));
-                            // Calculate index and scale it
-                            expression_solver(&expr, &mut current_context); // Result in AX
-                            if element_size != 1 {
-                                current_context.add_asm(ASMConvEnum::BOP("imul".to_string(), "ax".to_string(), element_size.to_string()));
-                            }
+                    let element_ptr = TypedValue { index: mi, ty: base_ptr_val.ty.clone() };
 
-                            // Compute element address
-                            current_context.add_asm(ASMConvEnum::Mov("bx".to_string(), "bp".to_string()));
-                            current_context.add_asm(ASMConvEnum::BOP("add".to_string(), "bx".to_string(), element_size.to_string()));
-                            current_context.add_asm(ASMConvEnum::BOP("sub".to_string(), "bx".to_string(), array_offset.to_string()));
-                            current_context.add_asm(ASMConvEnum::BOP("add".to_string(), "bx".to_string(), "ax".to_string()));
-                            // Evaluate value to store
-                            current_context.add_asm(ASMConvEnum::Comment(format!("Array {name_string} index calculation")));
-
-                            expression_solver(&operation[2..operation.len()], &mut current_context);
-                            // Store based on element size
-                            match element_size {
-                                1 => current_context.add_asm(ASMConvEnum::Mov("BYTE [bx]".to_string(), "al".to_string())),
-                                2 => current_context.add_asm(ASMConvEnum::Mov("WORD [bx]".to_string(), "ax".to_string())),
-                                _ => panic!("Unsupported array element size"),
-                            }
-                        }else if _struct {
-                            let mut q = vec![];
-                            for i in 2..token_vec.len() {
-                                if token_vec[i].0 != Tokens::Dot{
-                                    if let Tokens::Name { name_string } = &token_vec[i].0{
-                                        q.push(name_string.to_string());
-                                    }
-                                }
-                            }
-
-                            let mut x = var.0.find_member(&q[0]);
-                            let mut a = &current_context.declared_types[x.1.as_str()];
-                            let mut offset = 0;
-                            offset += x.2;
-                            for i in 1..q.len() {
-                                x = a.find_member(&q[i]);
-                                a = &current_context.declared_types[x.1.as_str()];
-                                offset += x.2;
-                            }
-                            offset += a.size();
-                            let a = a.clone();
-                            expression_solver(&operation[2..operation.len()], &mut current_context);
-                            write_result_into_var(&a,var.1 - var.0.size() + offset,name_string,&mut current_context.asm);
-                            
-                        }else {
-                            expression_solver(&operation[2..operation.len()], &mut current_context);
-                            let var = var.clone();
-                            write_result_into_var(&var.0,var.1,name_string,&mut current_context.asm);
-                        }
-                    }
+                    // Cast RHS to the element's type and store it at the calculated address
+                    let final_rhs_val = var_cast(rhs_val, &element_type, state)?;
+                    state.push_str(&format!("store {} %tmp{}, {} %tmp{}\n", element_type_str, final_rhs_val.index, ptr_type_str, element_ptr.index));
+                    Ok(final_rhs_val)
                 }
-                
+                _ => Err(format!("Assignment target must be a variable, dereferenced pointer, or array index. Found {:?}", left)),
             }
-            Instruction::IfElse { condition, if_body, else_body } =>{
-                current_context.add_asm(ASMConvEnum::Comment("if statement".to_string()));
-                expression_solver(condition, &mut current_context);
-                current_context.add_asm(ASMConvEnum::CMP("ax".to_string(),1.to_string()));
-                let cli = current_context.logic_index;
-                current_context.add_asm(ASMConvEnum::JNE(format!(".{}.L_E{}",current_context.current_function_name,cli)));
-                internal_compile(if_body, current_context);
-                if else_body.is_some(){
-                    current_context.add_asm(ASMConvEnum::JMP(format!(".{}.L_EE{}",current_context.current_function_name,current_context.logic_index + 1)));
+        }
+        // For other expressions, just compile them recursively.
+        _ => compile_expression_rec(t, None, state),
+    }
+}
+pub fn compile_body(s: &Stmt, state: &mut CompilerState) -> Result<(), String> {
+    // This function is now fully recursive and handles any statement type directly.
+    match s {
+        Stmt::Block(stmts) => {
+            // If the statement is a block, compile each statement inside it recursively.
+            for stmt in stmts {
+                compile_body(stmt, state)?;
+            }
+        }
+        Stmt::Return(maybe_expr) => {
+            let (func_return_type, _) = state.current_function.as_ref()
+                .ok_or("Cannot use 'return' outside of a function.")?
+                .clone();
+
+            if let Some(expr) = maybe_expr {
+                 if func_return_type == ParserType::Named("void".to_string()) {
+                    return Err("Cannot return a value from a void function.".to_string());
                 }
-                current_context.add_asm(ASMConvEnum::Label(format!(".{}.L_E{}",current_context.current_function_name,cli)));
-                current_context.logic_index+=1;
-                let li = current_context.logic_index;
-                if let Some(else_body) = else_body {
-                    current_context.add_asm(ASMConvEnum::Comment("else statement".to_string()));
-                    internal_compile(else_body, current_context);
-                    current_context.add_asm(ASMConvEnum::Label(format!(".{}.L_EE{}",current_context.current_function_name,li)));
-                    current_context.logic_index+=1;
+                let ret_val = compile_statement_expression(expr, state)?;
+                let final_ret_val = if ret_val.ty != func_return_type {
+                    var_cast(ret_val, &func_return_type, state)?
+                } else {
+                    ret_val
                 };
-                current_context.add_asm(ASMConvEnum::Comment("end if statement".to_string()));
-
-            }
-            Instruction::MacroCall{ name, arguments } =>{
-                match name.as_str() {
-                    "asm" => {
-                        for x in arguments {
-                            let mut new_buff = String::new();
-                            if let Tokens::String { string_content } = &x.0{
-                                let mut c = string_content.chars().into_iter();
-                                while let Some(char) = c.next() {
-                                    let char = &char;
-                                    if char == &'{' {
-                                        let mut var_name = String::new();
-                                        //c.next();
-                                        while let Some(c) = c.next() {
-                                            if c == '}'{
-                                                break;
-                                            }
-                                            var_name.push(c);
-                                        }
-                                        let var = current_context.get_variable_or_panic(var_name.as_str());
-                                        new_buff.push_str(&format!("[bp - {}]",var.1 + var.0.size()));
-                                        continue;
-                                    }
-                                    new_buff.push(char.clone());
-                                }
-                                current_context.add_asm(ASMConvEnum::ASMINSERT(new_buff.to_string()));
-                            }
-                        }
-                    }
-                    _ => {}
+                let ret_type_str = CompilerState::get_type_string(&func_return_type);
+                state.push_str(&format!("ret {} %tmp{}\n", ret_type_str, final_ret_val.index));
+            } else {
+                if func_return_type != ParserType::Named("void".to_string()) {
+                    return Err(format!("Function must return a value of type {:?}, but returned void.", func_return_type));
                 }
+                state.push_str("ret void\n");
             }
-            _ => {},
         }
+        Stmt::Let(name, typ) => {
+            state.insert_variable(name.clone(), typ.clone(), name.clone());
+            let type_str = CompilerState::get_type_string(typ);
+            state.push_str(&format!("%{} = alloca {}\n", name, type_str));
+        }
+        Stmt::Expr(expr) => {
+            // The result of a standalone expression is discarded.
+            let _ = compile_statement_expression(expr, state)?;
+        }
+        Stmt::Break => {
+            let break_label = state.loop_context.last()
+                .ok_or("'break' used outside of a loop.")?
+                .1.clone();
+            state.push_str(&format!("br label %{}\n", break_label));
+        }
+        Stmt::Continue => {
+            let continue_label = state.loop_context.last()
+                .ok_or("'continue' used outside of a loop.")?
+                .0.clone();
+            state.push_str(&format!("br label %{}\n", continue_label));
+        }
+        Stmt::If(condition, then_block, else_block) => {
+            let mut cond_val = compile_expression_rec(condition, None, state)?;
+            
+            if cond_val.ty != ParserType::Named("i1".to_string()) {
+                let cond_type_str = CompilerState::get_type_string(&cond_val.ty);
+                let new_mi = state.get_temp_variable_index();
+                state.push_str(&format!("%tmp{} = icmp ne {} %tmp{}, 0\n", new_mi, cond_type_str, cond_val.index));
+                cond_val = TypedValue { index: new_mi, ty: ParserType::Named("i1".to_string()) };
+            }
+
+            let then_label = state.get_unique_label("if.then");
+            let else_label = state.get_unique_label("if.else");
+            let end_label = state.get_unique_label("if.end");
+
+            let false_target = if else_block.is_some() { &else_label } else { &end_label };
+            
+            state.push_str(&format!("br i1 %tmp{}, label %{}, label %{}\n", cond_val.index, then_label, false_target));
+
+            // Compile the 'then' block.
+            state.push_str(&format!("{}:\n", then_label));
+            compile_body(then_block, state)?;
+            state.push_str(&format!("br label %{}\n", end_label));
+
+            // Compile 'else' block if it exists.
+            if let Some(else_b) = else_block {
+                state.push_str(&format!("{}:\n", else_label));
+                // This recursive call now works correctly for both `else {..}` and `else if ..`
+                compile_body(else_b, state)?;
+                state.push_str(&format!("br label %{}\n", end_label));
+            }
+
+            state.push_str(&format!("{}:\n", end_label));
+        }
+        Stmt::Loop(body) => {
+            let loop_header_label = state.get_unique_label("loop.header");
+            let loop_body_label = state.get_unique_label("loop.body");
+            let loop_end_label = state.get_unique_label("loop.end");
+
+            state.loop_context.push((loop_header_label.clone(), loop_end_label.clone()));
+
+            state.push_str(&format!("br label %{}\n", loop_header_label));
+            
+            state.push_str(&format!("{}:\n", loop_header_label));
+            state.push_str(&format!("br label %{}\n", loop_body_label));
+            
+            state.push_str(&format!("{}:\n", loop_body_label));
+            compile_body(body, state)?;
+            state.push_str(&format!("br label %{}\n", loop_header_label));
+
+            state.push_str(&format!("{}:\n", loop_end_label));
+
+            state.loop_context.pop();
+        }
+        // These are handled before function compilation starts.
+        // We add them here for completeness, though they shouldn't be reached inside a function body.
+        Stmt::Hint(_, _) => return Err("Hints are not allowed inside function bodies.".to_string()),
+        Stmt::Function(_, _, _, _) => return Err("Nested functions are not supported.".to_string()),
     }
+    Ok(())
 }
-fn write_result_into_var(var:&CompilerVariableType, offset:usize, name: &str, asm_instrs: &mut Vec<ASMConvEnum>){
-    asm_instrs.push(ASMConvEnum::Comment(format!("assign to variable '{}'",name)));
-    if var.size_per_entry() == 2 {
-        asm_instrs.push(ASMConvEnum::MovFromAlpha(format!("WORD [bp - {}]",offset)));
-    }else if var.size_per_entry() == 1 {
-        asm_instrs.push(ASMConvEnum::MovFromAlpha(format!("BYTE [bp - {}]",offset)));
-    }else {
-        panic!("{:?}",var);
+pub fn compile_function(
+    name: &String,
+    arguments: &[(String, ParserType)],
+    return_type: &ParserType,
+    body: &Stmt,
+    state: &mut CompilerState,
+) -> Result<(), String> {
+    let type_str = CompilerState::get_type_string(return_type);
+    
+    // argument list for the function signature
+    let args_str: String = arguments
+        .iter()
+        .map(|(arg_name, ty)| {
+            format!("{} %{}", CompilerState::get_type_string(ty), arg_name)
+        })
+        .collect::<Vec<String>>()
+        .join(", ");
+    
+    state.push_str(&format!("define {} @{}({}) {{\n", type_str, name, args_str));
+    state.push_str("entry:\n");
+
+    for (arg_name, arg_type) in arguments {
+        let arg_type_str = CompilerState::get_type_string(arg_type);
+    
+        let ptr_name = format!("{}.addr", arg_name);
+        state.push_str(&format!("%{} = alloca {}, align 4\n", ptr_name, arg_type_str));
+        state.push_str(&format!("store {} %{}, {}* %{}\n", arg_type_str, arg_name, arg_type_str, ptr_name));
+
+        state.insert_variable(arg_name.clone(), arg_type.clone(), ptr_name);
     }
+
+    compile_body(body, state)?;
+    
+    // Ensure termination
+    if !state.direct_output.trim_end().ends_with("}") {
+        if return_type == &ParserType::Named("void".to_string()) {
+            state.push_str("ret void\n");
+        } else {
+            state.push_str("unreachable\n");
+        }
+    }
+    state.push_str("}\n");
+    Ok(())
 }
+pub fn rcsharp_compile_to_file(x: &[Stmt]) -> Result<(), String> {
+    let direct_output = rcsharp_compile(x)?;
+    let mut file = File::create("output.ll").map_err(|e| e.to_string())?;
+    file.write_all(direct_output.as_bytes()).map_err(|e| e.to_string())?;
 
-fn expression_solver(tokens: &[(Tokens, (u32, u32))], current_context: &mut CompilerContext) {
-    #[derive(Debug)]
-    enum ExprType {
-        IntLiteral { num_as_string: String },
-        Variable { name: String },
-        StructMemberAccess { var_name: String, size: usize, offset: usize },
-        ArrayAccess { var_name: String, access_expression: Box<ExprType> },
-        Operation { operation: String, left: Box<ExprType>, right: Option<Box<ExprType>> },
-        FunctionCall { name: String, args: Vec<ExprType> }, // New variant for function calls
-    }
-
-    fn generate_nasm(ast: &ExprType,current_context: &mut CompilerContext) {
-        match ast {
-            ExprType::IntLiteral { num_as_string } => {
-                // Load the integer literal into ax
-                current_context.add_asm(ASMConvEnum::MovToAlpha(format!("WORD {}",num_as_string)));
-            }
-            ExprType::Variable { name } => {
-                let var_info = &current_context.get_variable_or_panic(name);
-                match var_info.0._type() {
-                    CompilerVariableTypeEnum::ValueType(1) => current_context.add_asm(ASMConvEnum::MovToAlpha(format!("BYTE [bp - {}]",var_info.1))),
-                    CompilerVariableTypeEnum::ValueType(2) => current_context.add_asm(ASMConvEnum::MovToAlpha(format!("WORD [bp - {}]",var_info.1))),
-                    _ => todo!()
-                }
-            }
-            ExprType::StructMemberAccess { var_name, size, offset } => {
-                current_context.add_asm(ASMConvEnum::Comment(format!("load value from struct {var_name}")));
-                match size {
-                    1 => current_context.add_asm(ASMConvEnum::MovToAlpha(format!("BYTE [bp - {}]",offset))),
-                    2 => current_context.add_asm(ASMConvEnum::MovToAlpha(format!("WORD [bp - {}]",offset))),
-                    _ => todo!()
-                }
-            }
-            ExprType::ArrayAccess { var_name, access_expression } => {
-                // Get array metadata
-                let var_info = &current_context.get_variable_or_panic(var_name);
-                let element_size = var_info.0.size_per_entry();
-                let array_offset = var_info.1;
-
-                // Calculate index and scale it
-                generate_nasm(access_expression, current_context); // Result in AX
-                if element_size != 1 {
-                    current_context.add_asm(ASMConvEnum::BOP("imul".to_string(), "ax".to_string(), element_size.to_string()));
-                }
-
-                // Compute element address
-                current_context.add_asm(ASMConvEnum::Mov("bx".to_string(), "bp".to_string()));
-                current_context.add_asm(ASMConvEnum::BOP("add".to_string(), "bx".to_string(), element_size.to_string()));
-                current_context.add_asm(ASMConvEnum::BOP("sub".to_string(), "bx".to_string(), array_offset.to_string()));
-                current_context.add_asm(ASMConvEnum::BOP("add".to_string(), "bx".to_string(), "ax".to_string()));
-
-                // Load based on element size
-                match element_size {
-                    1 => current_context.add_asm(ASMConvEnum::MovToAlpha("BYTE [bx]".to_string())),
-                    2 => current_context.add_asm(ASMConvEnum::MovToAlpha("WORD [bx]".to_string())),
-                    _ => panic!("Unsupported array element size"),
-                }
-            }
-            ExprType::Operation { operation, left, right } => {
-                // Generate code for the right operand
-                if let Some(right_expr) = right {
-                    generate_nasm(right_expr,current_context);
-                }
-    
-                // Push ax onto the stack to save the left operand
-                current_context.add_asm(ASMConvEnum::Push("ax".to_string()));
-                // Generate code for the left operand
-                generate_nasm(left,current_context);
-                // Pop the left operand into bx
-                current_context.add_asm(ASMConvEnum::Pop("bx".to_string()));
-                // Perform the operation
-                match operation.as_str() {
-                    "+" => current_context.add_asm(ASMConvEnum::BOP("add".to_string(),"ax".to_string(), "bx".to_string())),
-                    "-" => current_context.add_asm(ASMConvEnum::BOP("sub".to_string(),"ax".to_string(), "bx".to_string())),
-                    "*" => current_context.add_asm(ASMConvEnum::BOP("imul".to_string(),"ax".to_string(), "bx".to_string())),
-                    "/" => {
-                        current_context.add_asm(ASMConvEnum::OP("cwd".to_string())); // Sign-extend ax into dx
-                        current_context.add_asm(ASMConvEnum::SOP("idiv".to_string(),"bx".to_string())); // Divide ax by bx
-                    }
-                    "%" => {
-                        current_context.add_asm(ASMConvEnum::OP("cwd".to_string())); // Sign-extend ax into dx
-                        current_context.add_asm(ASMConvEnum::SOP("idiv".to_string(),"bx".to_string())); // Divide ax by bx
-                        current_context.add_asm(ASMConvEnum::Mov("ax".to_string(),"dx".to_string()));
-                    }
-                    "==" => {
-                        current_context.add_asm(ASMConvEnum::BOP("cmp".to_string(),"ax".to_string(), "bx".to_string()));
-                        current_context.add_asm(ASMConvEnum::SOP("sete".to_string(),"al".to_string())); // Set al to 1 if equal, else 0
-                        current_context.add_asm(ASMConvEnum::ASMINSERT("movzx ax, al".to_string())); // Zero-extend al to ax
-                    }
-                    "!=" => {
-                        current_context.add_asm(ASMConvEnum::BOP("cmp".to_string(),"ax".to_string(), "bx".to_string()));
-                        current_context.add_asm(ASMConvEnum::SOP("setne".to_string(),"al".to_string())); // Set al to 1 if not equal, else 0
-                        current_context.add_asm(ASMConvEnum::ASMINSERT("movzx ax, al".to_string())); // Zero-extend al to ax
-                    }
-                    ">" => {
-                        current_context.add_asm(ASMConvEnum::BOP("cmp".to_string(),"ax".to_string(), "bx".to_string()));
-                        current_context.add_asm(ASMConvEnum::SOP("setg".to_string(),"al".to_string())); // Set al to 1 if greater, else 0
-                        current_context.add_asm(ASMConvEnum::ASMINSERT("movzx ax, al".to_string())); // Zero-extend al to ax
-                    }
-                    "<" => {
-                        current_context.add_asm(ASMConvEnum::BOP("cmp".to_string(),"ax".to_string(), "bx".to_string()));
-                        current_context.add_asm(ASMConvEnum::SOP("setl".to_string(),"al".to_string())); // Set al to 1 if less, else 0
-                        current_context.add_asm(ASMConvEnum::ASMINSERT("movzx ax, al".to_string())); // Zero-extend al to ax
-                    }
-                    ">=" => {
-                        current_context.add_asm(ASMConvEnum::BOP("cmp".to_string(),"ax".to_string(), "bx".to_string()));
-                        current_context.add_asm(ASMConvEnum::SOP("setge".to_string(),"al".to_string())); // Set al to 1 if greater or equal, else 0
-                        current_context.add_asm(ASMConvEnum::ASMINSERT("movzx ax, al".to_string())); // Zero-extend al to ax
-                    }
-                    "<=" => {
-                        current_context.add_asm(ASMConvEnum::BOP("cmp".to_string(),"ax".to_string(), "bx".to_string()));
-                        current_context.add_asm(ASMConvEnum::SOP("setle".to_string(),"al".to_string())); // Set al to 1 if less or equal, else 0
-                        current_context.add_asm(ASMConvEnum::ASMINSERT("movzx ax, al".to_string())); // Zero-extend al to ax
-                    }
-                    "<<" => {
-                        current_context.add_asm(ASMConvEnum::Mov("cx".to_string(), "bx".to_string()));
-                        current_context.add_asm(ASMConvEnum::BOP("shl".to_string(),"ax".to_string(), "cl".to_string()));
-                    }
-                    // The shift right operation is already correct
-                    ">>" => {
-                        current_context.add_asm(ASMConvEnum::Mov("cx".to_string(), "bx".to_string()));
-                        current_context.add_asm(ASMConvEnum::BOP("shr".to_string(),"ax".to_string(), "cl".to_string()));
-                    }
-                    _ => panic!("Unsupported operation: {}", operation),
-                }
-            }
-            ExprType::FunctionCall { name, args } => {
-                if args.len() == 1{
-                    generate_nasm(&args[0],current_context);
-                    current_context.add_asm(ASMConvEnum::Mov("dx".to_string(), "ax".to_string()));
-                }else if args.len() != 0 {
-                    todo!()
-                }
-                // Call the function
-                //code.push_str("   push dx\n");
-                current_context.add_asm(ASMConvEnum::CALL(name.to_string()));
-                // Clean up the stack after the function call (remove arguments)
-                //code.push_str(&format!("   add sp, {}\n", args.len() * 2)); // Assuming 2 bytes per argument
-            }
-        }
-    }
-    fn parse_expression(tokens: &[(Tokens, (u32, u32))], current_context: &mut CompilerContext) -> ExprType {
-        fn evaluate_operator(stack: &mut Vec<ExprType>, op: Tokens) {
-            let right = stack.pop().expect("Missing operand");
-            let left = stack.pop().expect("Missing operand");
-        
-            let operation = match op {
-                Tokens::ADD => "+",
-                Tokens::SUB => "-",
-                Tokens::MUL => "*",
-                Tokens::DIV => "/",
-                Tokens::MOD => "%",
-                Tokens::COMPEqual => "==",
-                Tokens::COMPNOTEqual => "!=",
-                Tokens::COMPGreater => ">",
-                Tokens::COMPLess => "<",
-                Tokens::COMPEqualGreater => ">=",
-                Tokens::COMPEqualLess => "<=",
-                Tokens::ShiftL => "<<",
-                Tokens::ShiftR => ">>",
-                _ => panic!("Unsupported operator: {:?}", op),
-            };
-        
-            stack.push(ExprType::Operation {
-                operation: operation.to_string(),
-                left: Box::new(left),
-                right: Some(Box::new(right)),
-            });
-        }
-        
-        
-        let mut stack: Vec<ExprType> = Vec::new();
-        let mut operators: Vec<Tokens> = Vec::new();
-        let mut i = 0;
-        while i < tokens.len() {
-            let token = &tokens[i].0;
-            match token {
-                Tokens::Number { number_as_string } => {
-                    // Push an integer literal onto the stack
-                    stack.push(ExprType::IntLiteral {
-                        num_as_string: number_as_string.to_string(),
-                    });
-                }
-                Tokens::Name { name_string } => {
-                    if i + 1 < tokens.len() && tokens[i + 1].0 == Tokens::LParen {
-                        let mut args = Vec::new();
-                        let mut depth = 0;
-                        let mut arg_start = i + 2;
-                        let mut arg_end = arg_start;
-                        
-                        // Parse arguments
-                        while arg_end < tokens.len() {
-                            match &tokens[arg_end].0 {
-                                Tokens::LParen => depth += 1,
-                                Tokens::RParen => {
-                                    if depth == 0 {
-                                        if arg_end > arg_start {
-                                            // Parse the argument expression
-                                            let arg_tokens = &tokens[arg_start..arg_end];
-                                            args.push(parse_expression(arg_tokens, current_context));
-                                        }
-                                        break;
-                                    }
-                                    depth -= 1;
-                                }
-                                Tokens::Comma => {
-                                    if depth == 0 {
-                                        // Parse the argument expression
-                                        let arg_tokens = &tokens[arg_start..arg_end];
-                                        args.push(parse_expression(arg_tokens, current_context));
-                                        arg_start = arg_end + 1;
-                                    }
-                                }
-                                _ => {}
-                            }
-                            arg_end += 1;
-                        }
-                        
-                        stack.push(ExprType::FunctionCall {
-                            name: name_string.clone(),
-                            args,
-                        });
-                        
-                        i = arg_end + 1;
-                        continue;
-                    }
-                    else if i + 1 < tokens.len() && tokens[i + 1].0 == Tokens::Dot {
-                        let var_info = &current_context.get_variable_or_panic(name_string);
-                        let mut q = vec![];
-                        for i in i + 2..tokens.len() {
-                            if let Tokens::Name { name_string } = &tokens[i].0{
-                                q.push(name_string.to_string());
-                            }else if i % 2 == 1 {
-                                if Tokens::Dot != tokens[i].0{
-                                    break;
-                                }
-                            }
-                        }
-                        //println!("{q:?}");
-                        let mut offset = var_info.1 - var_info.0.size();
-                        let mut x = var_info.0.find_member(&q[0]);
-                        let mut a = &current_context.declared_types[x.1.as_str()];
-                        offset += x.2;
-                        for i in 1..q.len() {
-                            x = a.find_member(&q[i]);
-                            a = &current_context.declared_types[x.1.as_str()];
-                            offset += x.2;
-                        }
-                        offset += a.size();
-                        stack.push(ExprType::StructMemberAccess {
-                            var_name: name_string.to_string(),
-                            offset,
-                            size: a.size()
-                        });
-                        i += 2 * q.len() + 1;
-                        continue;
-                    }
-                    // Push a variable onto the stack
-                    
-                    if let Some((_type, _)) = &current_context.get_variable(name_string) {
-                        stack.push(ExprType::Variable {
-                            name: name_string.to_string(),
-                        });
-                    } else {
-                        panic!("Undefined variable: {}\nExpression: {:?}", name_string, tokens);
-                    }
-                }
-                Tokens::LParen => {
-                    // Push a left parenthesis onto the operators stack
-                    operators.push(Tokens::LParen);
-                }
-                Tokens::RParen => {
-                    // Evaluate all operators until a left parenthesis is encountered
-                    while let Some(op) = operators.pop() {
-                        if op == Tokens::LParen {
-                            break;
-                        }
-                        evaluate_operator(&mut stack, op);
-                    }
-                }
-                Tokens::LSQBrace => {
-                    // Handle array access
-                    operators.push(Tokens::LSQBrace);
-                }
-                Tokens::RSQBrace => {
-                    // Evaluate the array access expression
-                    while let Some(op) = operators.pop() {
-                        if op == Tokens::LSQBrace {
-                            break;
-                        }
-                        evaluate_operator(&mut stack, op);
-                    }
-                    // Pop the array access expression and the variable name
-                    if let Some(access_expr) = stack.pop() {
-                        if let ExprType::Variable { name } = stack.pop().unwrap() {
-                            stack.push(ExprType::ArrayAccess {
-                                var_name: name,
-                                access_expression: Box::new(access_expr),
-                            });
-                        } else {
-                            panic!("Invalid array access");
-                        }
-                    } else {
-                        panic!("Invalid array access");
-                    }
-                }
-                
-                _ => {
-                    // Handle operators
-                    if token.is_operator() {
-                        while let Some(top_op) = operators.last() {
-                            if top_op.is_operator() && top_op.precedence() >= token.precedence() {
-                                let op = operators.pop().unwrap();
-                                evaluate_operator(&mut stack, op);
-                            } else {
-                                break;
-                            }
-                        }
-                        operators.push(token.clone());
-                    }
-                }
-            }
-            i += 1;
-        }
-    
-        // Evaluate any remaining operators
-        while let Some(op) = operators.pop() {
-            evaluate_operator(&mut stack, op);
-        }
-    
-        // The final result should be on the stack
-        stack.pop().expect("Invalid expression")
-    }
-    
-    // Parse the tokens into an ExprType AST
-    let ast = parse_expression(tokens,current_context);
-    generate_nasm(&ast,current_context);
+    Ok(())
 }
 
-pub fn compile(instructions: &[Instruction]){
-    let mut basic_types:HashMap<String, CompilerVariableType> = HashMap::new();
-    basic_types.insert("u8".to_string(), CompilerVariableType::new(CompilerVariableTypeEnum::ValueType(1), vec![]));
-    basic_types.insert("u16".to_string(), CompilerVariableType::new(CompilerVariableTypeEnum::ValueType(2), vec![("lh".to_string(),"u8".to_string(),0),("uh".to_string(),"u8".to_string(),1)] ));
-    basic_types.insert("u32".to_string(), CompilerVariableType::new(CompilerVariableTypeEnum::ValueType(4), vec![]));
-    basic_types.insert("u64".to_string(), CompilerVariableType::new(CompilerVariableTypeEnum::ValueType(8), vec![]));
-    let mut global_context = CompilerContext{loop_index: 0, asm: Vec::new(), logic_index: 0,current_function_name: String::new(), declared_types: basic_types, local_variables: OrderedHashMap::new(), stack_offset: 0};
-    //let mut declared_functions = HashMap::new();
-    //let mut declared_structs = HashMap::new();
-    let mut n_instructions = vec![];
-    for x in instructions {
-        match x {
-            Instruction::StructDeclaration { name, fields } => {
-                let mut total_size = 0;
-                let mut offset = 0;
-                let mut members: Vec<(String, String, usize)> = vec![];
-                for x in fields {
-                    let _type: CompilerVariableType = get_cvt(&x.1, &global_context);
-                    let found_type: (&String, &CompilerVariableType) = global_context.declared_types.iter().find(|y| {_type == *y.1}).unwrap();
-                    total_size += found_type.1.size();
-                    members.push((x.0.to_string(),found_type.0.to_string(),offset));
-                    offset += found_type.1.size();
+pub fn rcsharp_compile(x: &[Stmt]) -> Result<String, String> {
+    let mut aux_state = CompilerState::new();
+    let mut main_index = None;
+    let mut skip_next_function = false;
+    let mut funcs = vec![];
+    for i in 0..x.len() {
+        let stmt = &x[i];
+        match stmt {
+            Stmt::Function(name, args,return_type , _) => {
+                if skip_next_function {
+                    skip_next_function = false;
+                    continue;
                 }
-                global_context.declared_types.insert(name.to_string(), CompilerVariableType::new(CompilerVariableTypeEnum::ValueType(total_size), members));
-            }
-            _ => {n_instructions.push(x);},
-        }
-    }
-    
-    for x in n_instructions {
-        match x {
-            Instruction::CompilerHint { name, arguments } =>{
-                match name.as_str() {
-                    "global" =>{
-                        for x in arguments {
-                            if let (Tokens::Name { name_string },_) = x {
-                                global_context.add_asm(ASMConvEnum::ASMINSERT(format!("global {}", name_string)));
-                            }
-                        }
-                    },
-                    _ => {}
-                }
-            }
-            Instruction::FunctionCreation { name, return_type, arguments, body } => {
-                let mut func_context = CompilerContext{asm:Vec::new(),current_function_name: name.clone(),declared_types: global_context.declared_types.clone(), local_variables:global_context.local_variables.clone(),logic_index:global_context.logic_index,loop_index:global_context.loop_index,stack_offset:global_context.stack_offset};
-                // Function label
-                global_context.add_asm(ASMConvEnum::Label(name.to_string()));
-                global_context.add_asm(ASMConvEnum::Push(format!("bp")));
-                global_context.add_asm(ASMConvEnum::Mov(format!("bp"),format!("sp")));
-                let a = func_context.asm.len();
-                
-                func_context.current_function_name = name.clone();
-                let mut offset = 0;
-                if arguments.len() != 0{
-                    if arguments.len() >= 1{
-                        let arg = &arguments[0];
-                        let cvt = get_cvt(&arg.1, &global_context);
-                        func_context.local_variables.insert(arg.0.to_string(), (get_cvt(&arg.1,&global_context),offset));
-                        offset += cvt.size();
-                        match cvt.size() {
-                            2 => {func_context.asm.push(ASMConvEnum::Mov(format!("WORD [bp - {offset}]"),"dx".to_string()));}
-                            1 => {func_context.asm.push(ASMConvEnum::Mov(format!("BYTE [bp - {offset}]"),"dl".to_string()));}
-                            _ => {panic!("")}
-                        }
-                    }
-                }
-
-                internal_compile(&body, &mut func_context);
-                let var_offset = func_context.local_variables.iter().last().map_or(0, |x| x.1.1 + x.1.0.size());
-                //println!("{}",var_offset);
-                func_context.asm.insert(a,ASMConvEnum::BOP("sub".to_string(),"sp".to_string(),var_offset.to_string()));
-                global_context.loop_index = func_context.loop_index;
-                global_context.logic_index = func_context.logic_index;
-                if return_type == &ParserVariableType::Void{
-                    func_context.asm.push(ASMConvEnum::BOP("xor".to_string(),"ax".to_string(),"ax".to_string()));
-                }
-                func_context.asm.push(ASMConvEnum::Label(format!(".exit_{}", name)));
-                // Function prologue
-                if name == "main"{
-                    func_context.asm.push(ASMConvEnum::OP(format!("cli")));
-                    func_context.asm.push(ASMConvEnum::OP(format!("hlt")));
+                aux_state.local_functions.insert(name.clone(), (return_type.clone(),args.iter().map(|x| x.1.clone()).collect()));
+                if name == "main" && args.len() == 0 {
+                    main_index = Some(i);
                 }else {
-                    func_context.asm.push(ASMConvEnum::Mov(format!("sp"),format!("bp")));
-                    func_context.asm.push(ASMConvEnum::Pop(format!("bp")));
-                    func_context.asm.push(ASMConvEnum::OP(format!("ret")));
+                    funcs.push(i);
                 }
-                for i in func_context.asm {
-                    global_context.add_asm(i);
+                println!("Function {:?} Argumets: {:?} Return Type: {:?}", name, args, return_type);
+            }
+            Stmt::Hint(name, args) =>{
+                match name.as_str() {
+                    "DllImport" =>{
+                        #[allow(unused)]
+                        let path = extract!(&args[0], Expr::StringConst).unwrap();
+                        let next_function = &x[i..].iter().find(|x| matches!(x, Stmt::Function(_,_,_,_))).expect("Function affected by this hint was not found");
+                        if let Stmt::Function(name, args, return_type, _) = next_function {
+                            aux_state.local_functions.insert(name.clone(), (return_type.clone(),args.iter().map(|x| x.1.clone()).collect()));
+                            aux_state.push_str(&format!("declare dllimport "));
+                            // Push return type and function name
+                            aux_state.push_type(return_type);
+                            aux_state.push_str(&format!(" @{}(", name));
+                            for i in 0..args.len() {
+                                let arg = &args[i];
+                                aux_state.push_type(&arg.1);
+                                if i != args.len() - 1 {
+                                    aux_state.push_str(",");
+                                }
+                            }
+                            aux_state.push_str(")\n");
+                            aux_state.extern_functions.insert(name.clone());
+                            skip_next_function = true;
+                        }
+                    }
+                    _ => todo!()
                 }
+            }
+            _ => {}
+        }
+    }
+    if main_index.is_none() {
+        return Err(format!("Main function was not found"));
+    }
+    let main_index = main_index.unwrap();
+    let main = &x[main_index];
+    let mut main_state = CompilerState::new();
+    main_state.extern_functions = aux_state.extern_functions;
+    main_state.local_functions = aux_state.local_functions;
+    main_state.local_variables = aux_state.local_variables;
+    main_state.push_str(&aux_state.direct_output);
+    match main {
+        Stmt::Function(n, a, rt, bdy) => {
+            main_state.current_function = Some((rt.clone(),a.clone()));
+            compile_function(n, &a,rt,&bdy, &mut main_state)?;
+        }
+        _ => panic!()
+    }
+    for idx in &funcs {
+        match &x[*idx] {
+            Stmt::Function(n, a, rt, bdy) => {
+                let mut current_state = main_state.clone(); 
+                current_state.local_variables.clear(); // Clear for each function!
+                current_state.current_function = Some((rt.clone(),a.clone()));
+                current_state.temp_variable_index = 0;
+                current_state.direct_output.clear();
                 
-
-            },
-
-            _ => todo!("{:?}",x),
-        }
-        println!("{:?}",global_context.asm);
-        let mut labels = HashMap::new(); 
-        let mut used_labels = HashSet::new(); 
-        for i in 0..global_context.asm.len() {
-            let x = &global_context.asm[i];
-            match x {
-                ASMConvEnum::Label(x) => {labels.insert(x,i);},
-                ASMConvEnum::JMP(x) => {used_labels.insert(x);},
-                ASMConvEnum::JE(x) => {used_labels.insert(x);},
-                ASMConvEnum::JNE(x) => {used_labels.insert(x);},
-                ASMConvEnum::CALL(x) => {used_labels.insert(x);},
-                _ => {}
+                compile_function(n, a, rt, bdy, &mut current_state)?;
+                main_state.const_strings = current_state.const_strings;
+                main_state.direct_output.push_str(&current_state.direct_output);
             }
+            _ => panic!()
         }
-        println!("{labels:?}");
-        println!("{used_labels:?}");
-        let mut fs = File::create("./main.asm").unwrap();
-        for x in &global_context.asm {
-            match x {
-                ASMConvEnum::Label(x) => _ = fs.write(format!("{}:\n",x).as_bytes()).unwrap(),
-                ASMConvEnum::Comment(x) => _ = fs.write(format!("   ;{}\n",x).as_bytes()).unwrap(),
-                ASMConvEnum::Mov(x,y) => _ = fs.write(format!("   mov {}, {}\n",x,y).as_bytes()).unwrap(),
-                ASMConvEnum::OP(x) => _ = fs.write(format!("   {}\n",x).as_bytes()).unwrap(),
-                ASMConvEnum::Pop(x) => _ = fs.write(format!("   pop {}\n",x).as_bytes()).unwrap(),
-                ASMConvEnum::Push(x) => _ = fs.write(format!("   push {}\n",x).as_bytes()).unwrap(),
-                ASMConvEnum::JMP(x) => _ = fs.write(format!("   jmp {}\n",x).as_bytes()).unwrap(),
-                ASMConvEnum::JNE(x) => _ = fs.write(format!("   jne {}\n",x).as_bytes()).unwrap(),
-                ASMConvEnum::JE(x) => _ = fs.write(format!("   je {}\n",x).as_bytes()).unwrap(),
-                ASMConvEnum::CALL(x) => _ = fs.write(format!("   call {}\n",x).as_bytes()).unwrap(), 
-                ASMConvEnum::ASMINSERT(x) => _ = fs.write(format!("   {}\n",x).as_bytes()).unwrap(), 
-                ASMConvEnum::BOP(op,x,y) => _ = fs.write(format!("   {op} {x}, {y}\n").as_bytes()).unwrap(),
-                ASMConvEnum::SOP(op,x) => _ = fs.write(format!("   {op} {x}\n").as_bytes()).unwrap(),
-                ASMConvEnum::CMP(x,y) => _ = fs.write(format!("   cmp {x},{y}\n").as_bytes()).unwrap(),
-                ASMConvEnum::MovFromAlpha(x) =>{
-                    if x.starts_with("WORD") {
-                        fs.write(format!("   mov {}, ax\n",x).as_bytes()).unwrap();
-                    }else if x.starts_with("BYTE") {
-                        fs.write(format!("   mov {}, al\n",x).as_bytes()).unwrap();
-                    }else {
-                        panic!("You moron")
-                    }
-                }
-                ASMConvEnum::MovToAlpha(x) =>{
-                    if x.starts_with("WORD") {
-                        fs.write(format!("   mov ax, {}\n",x).as_bytes()).unwrap();
-                    }else if x.starts_with("BYTE") {
-                        fs.write(format!("   movzx ax, {}\n",x).as_bytes()).unwrap();
-                    }else {
-                        panic!("You moron {}",x);
-                    }
-                }
-            }
+    }
+    // Add string constants to the end of the file.
+    let const_strings = main_state.const_strings.clone();
+    for (i, s) in const_strings.iter().enumerate() {
+        // Calculate length from the raw string bytes + null terminator.
+        let len_with_null = s.as_bytes().len() + 1;
+        
+        // Escape special characters only for printing inside the c"..." literal.
+        let c_str = s.replace('\\', "\\5C")
+                       .replace('"', "\\22")
+                       .replace('\n', "\\0A")
+                       .replace('\r', "\\0D");
+                       
+        main_state.push_str(&format!(
+            "@.str{} = private unnamed_addr constant [{} x i8] c\"{}\\00\", align 1\n",
+            i, len_with_null, c_str
+        ));
+    }
+
+    Ok(main_state.direct_output)
+}
+#[derive(Debug, Clone)]
+pub struct VariableInfo {
+    pub ty: ParserType,
+    pub llvm_name: String, // The name of the LLVM pointer (%var.addr)
+}
+
+#[derive(Debug, Clone)]
+pub struct CompilerState {
+    const_strings: Vec<String>,
+    local_functions: HashMap<String, (ParserType, Vec<ParserType>)>,
+    local_variables: HashMap<String, VariableInfo>,
+    extern_functions: HashSet<String>,
+    current_function: Option<(ParserType, Vec<(String, ParserType)>)>,
+    temp_variable_index: usize,
+    label_index: usize,
+    loop_context: Vec<(String, String)>,
+    direct_output: String,
+}
+impl CompilerState {
+    pub fn new() -> Self {
+        Self {
+            const_strings: Vec::new(),
+            local_functions: HashMap::new(),
+            local_variables: HashMap::new(),
+            extern_functions: HashSet::new(),
+            current_function: None,
+            temp_variable_index: 0,
+            direct_output: String::new(),
+            label_index: 0,
+            loop_context: vec![]
         }
+    }
+    
+    pub fn get_temp_variable_index(&mut self) -> usize {
+        let index = self.temp_variable_index;
+        self.temp_variable_index += 1;
+        index
+    }
+    pub fn get_unique_label(&mut self, name: &  str) -> String {
+        let index = self.label_index;
+        self.label_index += 1;
+        format!("{}.{}", name, index)
+    }
+    pub fn is_extern_function(&self, name: &String) -> bool {
+        self.extern_functions.contains(name)
+    }
+    pub fn add_constant_string(&mut self, s: String) -> (usize, usize) {
+        // The length is ALWAYS the raw byte length + 1 for the null terminator.
+        let len_with_null = s.as_bytes().len() + 1;
+
+        // Check if the raw string already exists to avoid duplicates.
+        if let Some(pos) = self.const_strings.iter().position(|cs| *cs == s) {
+            // If it exists, return its index and the correctly calculated length.
+            return (pos, len_with_null);
+        }
+
+        // If new, store the raw string and return its new index and length.
+        self.const_strings.push(s);
+        (self.const_strings.len() - 1, len_with_null)
+    }
+
+    pub fn push_str(&mut self, s: &str) {
+        self.direct_output.push_str(s);
+    }
+    
+    pub fn push_type(&mut self, _type: &ParserType) {
+        self.push_str(&Self::get_type_string(_type));
+    }
+
+    pub fn get_type_string(_type: &ParserType) -> String {
+        match _type {
+            ParserType::Named(x) => x.clone(),
+            ParserType::Ref(inner) => format!("{}*", Self::get_type_string(inner)),
+        }
+    }
+    
+    pub fn find_variable(&self, name: &String) -> Result<&VariableInfo, String> {
+        self.local_variables
+            .get(name)
+            .ok_or_else(|| format!("Variable \"{}\" was not found in the current scope.", name))
+    }
+    
+    pub fn find_function(&self, name: &String) -> Result<&(ParserType, Vec<ParserType>), String> {
+        self.local_functions
+            .get(name)
+            .ok_or_else(|| format!("Function \"{}\" was not found.", name))
+    }
+    
+    pub fn insert_variable(&mut self, source_name: String, ty: ParserType, llvm_name: String) {
+        self.local_variables.insert(source_name, VariableInfo { ty, llvm_name });
     }
 }
