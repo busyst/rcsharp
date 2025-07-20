@@ -1,31 +1,41 @@
 use logos::{Logos, Lexer as LogosLexer, Span};
 use std::fmt;
-
-// --- Step 1: Define structs for location and error reporting ---
-
-/// Represents a location in the source code (1-based).
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct Location {
     pub row: u32,
     pub col: u32,
 }
 
-/// A token bundled with its location information.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TokenData {
     pub token: Token,
-    /// The byte range in the source string.
     pub span: Span,
-    /// The starting location (row, col) of the token.
     pub loc: Location,
 }
 
-/// An error that occurred during lexing.
+impl TokenData {
+    pub fn expect_name_token(&self) -> Result<String, String>{
+        if let Token::Name(str) = &self.token{
+            return Ok(str.to_string());
+        }
+        Err(format!("Expected name token, found {:?} at {:?}", self.token, self.loc))
+    }
+    pub fn expect(&self, expected: &Token) -> Result<(), String>{
+        if self.token != *expected {
+            return Err(format!("Expcted {:?}, got {:?}", expected, self.token)); 
+        }
+        Ok(())
+    }
+    pub fn expect_or(&self, expected: &[Token]) -> Result<(), String>{
+        if !expected.iter().any(|x| *x == self.token) {
+            return Err(format!("Expcted {:?}, got {:?}", expected, self.token)); 
+        }
+        Ok(())
+    }
+}
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LexingError {
-    /// The byte range of the invalid token.
     pub span: Span,
-    /// The location (row, col) where the error occurred.
     pub loc: Location,
 }
 
@@ -40,12 +50,8 @@ impl fmt::Display for LexingError {
 }
 impl std::error::Error for LexingError {}
 
-
-// --- Step 2: Modify the Token enum ---
-// We remove the `#[logos(skip...)]` attributes and add variants for whitespace and comments.
 #[derive(Logos, Debug, Clone, PartialEq, Eq)]
 pub enum Token {
-    // --- SKIPPABLE TOKENS (now explicit) ---
     #[regex(r"[ \t\f]+")]
     Whitespace,
 
@@ -58,7 +64,6 @@ pub enum Token {
     #[regex(r"/\*([^*]|\*[^/])*\*/")]
     BlockComment,
 
-    // --- ORIGINAL TOKENS (unchanged) ---
     #[token("(")] LParen,
     #[token(")")] RParen,
     #[token("{")] LBrace,
@@ -96,7 +101,7 @@ pub enum Token {
     #[token(">>")] BinaryShiftR,
 
     #[token("fn")] KeywordFunction,
-    #[token("let")] KeywordVariable,
+    #[token("let")] KeywordVariableDeclaration,
     #[token("as")] KeywordAs,
     #[token("if")] KeywordIf,
     #[token("else")] KeywordElse,
@@ -105,10 +110,11 @@ pub enum Token {
     #[token("break")] KeywordBreak,
     #[token("continue")] KeywordContinue,
     #[token("return")] KeywordReturn,
+    #[token("this")] KeywordThis,
     UnaryOpMark,
     DummyToken,
-
-    #[regex(r"[a-zA-Z_][a-zA-Z0-9_]*", |lex| lex.slice().to_string().into_boxed_str())]
+    IndexToken,
+    #[regex(r"[a-zA-Z_]\w*", |lex| lex.slice().to_string().into_boxed_str())]
     Name(Box<str>),
     #[regex(r"\d+", |lex| lex.slice().to_string().into_boxed_str())]
     Integer(Box<str>),

@@ -1,25 +1,58 @@
-use crate::{expression_parser::{parse_expression, Expr}, token::{Token, TokenData}};
-
-
+use crate::{expression_parser::{parse_expression, Expr}, sub_parsers::{parse_function, parse_hint}, token::{Token, TokenData}};
 #[derive(Debug, Clone, PartialEq)]
 pub enum Stmt {
-    Hint(String, Vec<Expr>),
-    Expr(Expr),
-    Let(String, ParserType),
-    Return(Option<Expr>),
-    Block(Vec<Stmt>),
-    If(Expr, Box<Stmt>, Option<Box<Stmt>>),
-    Loop(Box<Stmt>),
-    Break,
-    Continue,
-    Function(String, Vec<(String, ParserType)>, ParserType, Box<Stmt>),
+    Hint(String, Vec<Expr>), // #[...]
+    Expr(Expr), // a = 1 + b
+    Let(String, ParserType), // let x : ...
+    Return(Option<Expr>), // return 0
+    Block(Vec<Stmt>), // { ... }
+    If(Expr, Box<Stmt>, Option<Box<Stmt>>), // if 1 == 1 {} `else `if` {}`
+    Loop(Box<Stmt>), // loop { ... }
+    Break, // break
+    Continue, // continue
+    DirectInsertion(String), // continue
+    Function(String, Vec<(String, ParserType)>, ParserType, Box<Stmt>), // fn foo(bar: i8, ...) { ... }
+    Struct(String, Vec<(String, ParserType)>), // struct foo { bar : i8, ... }
 }
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParserType {
     Named(String),
     Ref(Box<ParserType>),
 }
-
+impl ParserType {
+    pub fn to_string(&self) -> String{
+        let mut output = String::new();
+        match self {
+            ParserType::Named(x) => output.push_str(x),
+            ParserType::Ref(x) => {output.push_str(&x.to_string()); output.push('*');},
+        }
+        return output;
+    }
+    pub fn to_string_core(&self) -> String{
+        let mut output = String::new();
+        match self {
+            ParserType::Named(x) => output.push_str(x),
+            ParserType::Ref(x) => {return x.to_string();},
+        }
+        return output;
+    }
+    pub fn is_pointer(&self) -> bool{
+        match self {
+            ParserType::Named(_) => false,
+            ParserType::Ref(_) => true,
+        }
+    }
+    pub fn dereference_once(&self) -> ParserType{
+        match self {
+            ParserType::Named(_) => panic!("ParserType is Named {:?} that is not dereferencable", self),
+            ParserType::Ref(x) => return *x.clone(),
+        }
+    }
+    pub fn reference_once(&self) -> ParserType{
+        ParserType::Ref(Box::new(self.clone()))
+    }
+}
 fn capture_until_tokens<'a>(tokens: &'a [TokenData], delimiters: &[Token]) -> &'a [TokenData] {
     if let Some(pos) = tokens.iter().position(|td| delimiters.contains(&td.token)) {
         &tokens[..pos]
@@ -27,8 +60,14 @@ fn capture_until_tokens<'a>(tokens: &'a [TokenData], delimiters: &[Token]) -> &'
         &[]
     }
 }
-
-fn capture_until_token_or_end<'a>(tokens: &'a [TokenData], delimiter: &Token) -> &'a [TokenData] {
+pub fn capture_until_tokens_or_end<'a>(tokens: &'a [TokenData], delimiters: &[Token]) -> &'a [TokenData] {
+    if let Some(pos) = tokens.iter().position(|td| delimiters.contains(&td.token)) {
+        &tokens[..pos]
+    } else {
+        tokens
+    }
+}
+pub fn capture_until_token_or_end<'a>(tokens: &'a [TokenData], delimiter: &Token) -> &'a [TokenData] {
     if let Some(pos) = tokens.iter().position(|td| &td.token == delimiter) {
         &tokens[..pos]
     } else {
@@ -102,13 +141,12 @@ pub fn capture_delimiters<'a>(
     ))
 }
 
-fn concatenate_slices<T: Clone>(a: &[T], b: &[T]) -> Vec<T> {
+pub fn concatenate_slices<T: Clone>(a: &[T], b: &[T]) -> Vec<T> {
     let mut result = Vec::with_capacity(a.len() + b.len());
     result.extend_from_slice(a);
     result.extend_from_slice(b);
     result
 }
-
 
 /// Parses a type
 pub fn parse_type(tokens: &[TokenData]) -> Result<ParserType, String> {
@@ -148,7 +186,7 @@ fn parse_statement(tokens: &[TokenData]) -> Result<(Vec<Stmt>, usize), String> {
     }
     let current_token_data = &tokens[0];
     match &tokens[0].token {
-        Token::KeywordVariable => {
+        Token::KeywordVariableDeclaration => {
             let mut stmts = Vec::new();
             let mut offset = 1;
 
@@ -161,11 +199,11 @@ fn parse_statement(tokens: &[TokenData]) -> Result<(Vec<Stmt>, usize), String> {
             offset += 1;
 
             let colon_token = tokens.get(offset).ok_or(format!("Expected ':' after variable name '{}'", name))?;
-            expect(colon_token, &Token::Colon)?;
+            colon_token.expect(&Token::Colon)?;
             offset += 1;
 
             let remaining_tokens = tokens.get(offset..).ok_or("Unexpected end of input after ':'")?;
-            let type_tokens = capture_until_tokens(remaining_tokens, &[Token::Equal, Token::SemiColon]);
+            let type_tokens = capture_until_tokens_or_end(remaining_tokens, &[Token::Equal, Token::SemiColon]);
             if type_tokens.is_empty() {
                 return Err(format!("Expected type definition after ':' at {:?}", colon_token.loc));
             }
@@ -195,7 +233,7 @@ fn parse_statement(tokens: &[TokenData]) -> Result<(Vec<Stmt>, usize), String> {
             }
 
             let semicolon_token = tokens.get(offset).ok_or("Expected ';' at end of statement")?;
-            expect(semicolon_token, &Token::SemiColon)?;
+            semicolon_token.expect(&Token::SemiColon)?;
             offset += 1;
             Ok((stmts, offset))
         }
@@ -247,17 +285,17 @@ fn parse_statement(tokens: &[TokenData]) -> Result<(Vec<Stmt>, usize), String> {
             
             let offset = 1 + expr_tokens.len();
             let semi_colon_token = tokens.get(offset).ok_or("Expected ';' at the end of the return statement.")?;
-            expect(semi_colon_token, &Token::SemiColon)?;
+            semi_colon_token.expect(&Token::SemiColon)?;
             Ok((vec![return_stmt], offset + 1))
         }
         Token::KeywordBreak => {
             let semi_colon_token = tokens.get(1).ok_or_else(|| format!("Expected ';' after 'break' at {:?}", current_token_data.loc))?;
-            expect(semi_colon_token, &Token::SemiColon)?;
+            semi_colon_token.expect(&Token::SemiColon)?;
             Ok((vec![Stmt::Break], 2))
         }
         Token::KeywordContinue => {
             let semi_colon_token = tokens.get(1).ok_or_else(|| format!("Expected ';' after 'continue' at {:?}", current_token_data.loc))?;
-            expect(semi_colon_token, &Token::SemiColon)?;
+            semi_colon_token.expect(&Token::SemiColon)?;
             Ok((vec![Stmt::Continue], 2))
         }
         Token::LBrace => {
@@ -273,12 +311,12 @@ fn parse_statement(tokens: &[TokenData]) -> Result<(Vec<Stmt>, usize), String> {
         _ => {
             let expr_tokens = capture_until_token_or_end(tokens, &Token::SemiColon);
             
-            if expr_tokens.is_empty() {
+            /*if expr_tokens.is_empty() { // it is imposible isnt it?
                 if current_token_data.token == Token::SemiColon {
                     return Ok((vec![], 1));
                 }
                 return Err(format!("Internal parser error: failed to parse expression at {:?}", current_token_data.loc));
-            }
+            }*/
             
             let expr_stmt = Stmt::Expr(parse_expression(expr_tokens)?);
             let mut offset = expr_tokens.len();
@@ -306,141 +344,36 @@ pub fn internal_rcsharp(x: &[TokenData]) -> Result<Vec<Stmt>, String>{
     }
     Ok(o)
 }
-
-
-pub fn expect(token: &TokenData, expected: &Token) -> Result<(), String>{
-    if token.token != *expected {
-       return Err(format!("Expcted {:?}, got {:?}", expected, token)); 
+fn parse_struct(tokens: &[TokenData], statements: &mut Vec<Stmt>) -> Result<usize, String> {
+    let struct_name = tokens.get(1).ok_or(format!("Expected struct name token after struct keyword {:?}", tokens[0].loc))?.expect_name_token()?;
+    let fields_tokens = capture_delimiters(&tokens[2..], Token::LBrace, Token::RBrace)?;
+    let fields = fields_tokens.split(|x| x.token == Token::Comma).filter(|x| x.len() != 0);
+    let mut struct_fields = vec![];
+    println!("Struct {} at {:?}", struct_name,  tokens[0].loc);
+    for field in fields {
+        let name = field.first().unwrap().expect_name_token()?;
+        field.get(1).ok_or("Expected \':\' after name of field")?.expect(&Token::Colon)?;
+        let field_type = parse_type(&field[2..])?;
+        println!("  {:?} : {:?}", name, field_type);
+        struct_fields.push((name,field_type));
     }
-    Ok(())
-}
-pub fn expect_or(token: &TokenData, expected: &[Token]) -> Result<(), String>{
-    if !expected.iter().any(|x| *x == token.token) {
-       return Err(format!("Expcted {:?}, got {:?}", expected, token)); 
-    }
-    Ok(())
-}
-
-fn parse_arguments(tokens: &[TokenData]) -> Result<Vec<(String, ParserType)>, String> {
-    let mut args = vec![];
-    for arg_tokens in tokens.split(|x| x.token == Token::Comma) {
-        if arg_tokens.is_empty() {
-            continue;
-        }
-        let mut parts = arg_tokens.split(|x| x.token == Token::Colon);
-
-        let name_part = parts.next().ok_or_else(|| "Expected argument name.".to_string())?;
-        if name_part.len() != 1 {
-            return Err(format!("Expected a single token for argument name, found {:?}", name_part));
-        }
-        let name = if let Token::Name(name) = &name_part[0].token {
-            name.to_string()
-        } else {
-            return Err(format!("Expected a name for an argument, got {:?} at {:?}", name_part[0].token, name_part[0].loc));
-        };
-
-        let type_part = parts.next().ok_or_else(|| format!("Expected type for argument '{}'", name))?;
-        if type_part.is_empty() {
-            return Err(format!("Expected type for argument '{}' but found none.", name));
-        }
-        let arg_type = parse_type(type_part)?;
-
-        args.push((name, arg_type));
-    }
-    Ok(args)
+    statements.push(Stmt::Struct(struct_name, struct_fields));
+    return Ok(fields_tokens.len() + 4);
 }
 
-/// Parses a hint attribute (e.g. `#[DllImport(\"user32\")]`)
-fn parse_hint(tokens: &[TokenData], statements: &mut Vec<Stmt>) -> Result<usize, String> {
-    let mut offset = 1; // Past '#'
-    let lsq_brace = tokens.get(offset).ok_or("Expected '[' after '#'")?;
-    expect(lsq_brace, &Token::LSquareBrace)?;
-
-    let hint_slice = tokens.get(offset..).ok_or("Unexpected end of input during hint parsing")?;
-    let captured_square_braces = capture_delimiters(hint_slice, Token::LSquareBrace, Token::RSquareBrace)?;
-    offset += captured_square_braces.len() + 2;
-
-    if captured_square_braces.is_empty() {
-        return Err(format!("Hint at {:?} is empty", tokens[0].loc));
-    }
-
-    for hint in captured_square_braces.split(|x| x.token == Token::Comma) {
-        if hint.is_empty() { continue; }
-
-        if let Token::Name(name) = &hint[0].token {
-            let mut args = vec![];
-            if hint.get(1).map_or(false, |tok| tok.token == Token::LParen) {
-                let paren_slice = hint.get(1..).ok_or("Internal hint parsing error")?;
-                let captured_in_parens = capture_delimiters(paren_slice, Token::LParen, Token::RParen)?;
-                for arg in captured_in_parens.split(|x| x.token == Token::Comma) {
-                    if !arg.is_empty() {
-                         args.push(parse_expression(arg)?);
-                    }
-                }
-            }
-            statements.push(Stmt::Hint(name.to_string(), args));
-        } else {
-            return Err(format!("Expected a name for a hint, but got {:?} at {:?}", hint[0].token, hint[0].loc));
-        }
-    }
-    Ok(offset)
-}
-
-/// Parses a function definition
-fn parse_function(tokens: &[TokenData], statements: &mut Vec<Stmt>) -> Result<usize, String> {
-    let mut offset = 1;
-    let name = if let Some(Token::Name(name)) = tokens.get(offset).map(|td| &td.token) {
-        name.to_string()
-    } else {
-        return Err(format!("Expected function name after 'fn' keyword at {:?}", tokens[0].loc));
-    };
-    offset += 1;
-
-    let arg_slice = tokens.get(offset..).ok_or("Unexpected end of input after function name")?;
-    let captured_argument_tokens = capture_delimiters(arg_slice, Token::LParen, Token::RParen)?;
-    let arguments = parse_arguments(captured_argument_tokens)?;
-    offset += captured_argument_tokens.len() + 2;
-
-    let (return_type, return_type_len) = if let Some(tok) = tokens.get(offset) {
-        if tok.token == Token::Colon {
-            let type_slice = tokens.get(offset + 1..).ok_or("Unexpected end of input after ':' for return type")?;
-            let type_tokens = capture_until_tokens(type_slice, &[Token::LBrace, Token::SemiColon]);
-            if type_tokens.is_empty() { return Err(format!("Expected return type after ':' at {:?}", tok.loc)); }
-            (parse_type(type_tokens)?, type_tokens.len() + 1)
-        } else {
-            (ParserType::Named("void".to_string()), 0)
-        }
-    } else {
-        (ParserType::Named("void".to_string()), 0)
-    };
-    offset += return_type_len;
-    
-    let body_start_token = tokens.get(offset).ok_or("Expected function body or ';' after function signature")?;
-    expect_or(body_start_token, &[Token::LBrace, Token::SemiColon])?;
-
-    let (body_stmts, body_len) = if body_start_token.token == Token::LBrace {
-        let body_slice = tokens.get(offset..).ok_or("Unexpected end of input when parsing function body")?;
-        let body_tokens = capture_delimiters(body_slice, Token::LBrace, Token::RBrace)?;
-        (internal_rcsharp(body_tokens)?, body_tokens.len() + 2)
-    } else {
-        (Vec::new(), 1)
-    };
-    offset += body_len;
-
-    statements.push(Stmt::Function(name, arguments, return_type, Box::new(Stmt::Block(body_stmts))));
-    Ok(offset)
-}
-
-pub fn rcsharp(x: &[TokenData]) -> Result<Vec<Stmt>, String> {
+pub fn rcsharp_parser(x: &[TokenData]) -> Result<Vec<Stmt>, String> {
     let mut o = vec![];
     let mut i: usize = 0;
-    while i < x.len() {
+    while i < x.len() { // General parsing
         match &x[i].token {
-            Token::Hint => {
+            Token::Hint => { // #[...]
                 i += parse_hint(&x[i..], &mut o)?;
             }
-            Token::KeywordFunction => {
+            Token::KeywordFunction => { // fn foo(...){...}
                 i += parse_function(&x[i..], &mut o)?;
+            }
+            Token::KeywordStruct => { // struct bar{a:i8,...}
+                i += parse_struct(&x[i..], &mut o)?;
             }
             _ => {
                 return Err(format!(

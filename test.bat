@@ -1,26 +1,50 @@
 @echo off
-:: batch comment
-cargo build
-cargo run
+:: Build and run Rust project
+cargo build || (
+    echo Error: cargo build failed
+    exit /b %errorlevel%
+)
 
-if %errorlevel% neq 0 (
+cargo run || (
     echo Error: cargo run failed
     exit /b %errorlevel%
 )
-:: opt -O3 output.ll -o optimized_output.ll
-llc -filetype=obj output.ll -o output.obj
 
-if %errorlevel% neq 0 (
-    echo Error: Failed to compile
+:: Compile LLVM IR to object file
+llc -filetype=obj output.ll -o output.obj || (
+    echo Error: Failed to compile LLVM IR
     exit /b %errorlevel%
 )
-lld-link "C:\Program Files (x86)\Windows Kits\10\Lib\10.0.26100.0\um\x64\user32.lib" "C:\Program Files (x86)\Windows Kits\10\Lib\10.0.26100.0\um\x64\kernel32.Lib" /subsystem:console /entry:main output.obj /out:output.exe
+
+:: Read libraries from include.txt if it exists
+set Libs=
+if exist ./.code_snippets/readyLibs/include.txt (
+    for /f "usebackq delims=" %%x in ("./.code_snippets/readyLibs/include.txt") do set "Libs=%%x"
+)
+:: Link the object file
+if not "%Libs%"=="" (
+    echo libs included: %Libs%
+    lld-link %Libs% /subsystem:console /entry:main output.obj /out:output.exe
+) else (
+    lld-link /subsystem:console /entry:main output.obj /out:output.exe
+)
+
 if %errorlevel% neq 0 (
     echo Error: Failed to link
     exit /b %errorlevel%
 )
-output.exe
-echo %errorlevel%
 
-del output.obj
-del output.exe
+:: Run the executable and check for specific error
+output.exe
+set run_error=%errorlevel%
+echo Exit code: %run_error%
+
+if %run_error% equ -1073741819 (
+    echo Access violation error detected
+)
+
+:: Cleanup
+if exist output.obj del output.obj
+if exist output.exe del output.exe
+
+exit /b %run_error%

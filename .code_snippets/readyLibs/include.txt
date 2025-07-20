@@ -1,0 +1,1 @@
+.code_snippets\readyLibs\kernel32.Lib .code_snippets\readyLibs\User32.Lib

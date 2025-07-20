@@ -1,30 +1,36 @@
 use crate::{parser::{capture_delimiters, ParserType}, token::{Token, TokenData}};
+
 #[derive(Debug, Clone, PartialEq, Eq)] 
 pub enum Expr {
     Integer(String),
     Name(String),
+
     BinaryOp(Box<Expr>, BinaryOp, Box<Expr>),
-    Assign(Box<Expr>, Box<Expr>),
     UnaryOp(UnaryOp, Box<Expr>),
+    Assign(Box<Expr>, Box<Expr>),
+    
     Cast(Box<Expr>, ParserType),
-    CharConst(String),
+    Member(Box<Expr>, String), 
     StringConst(String),
     Call(Box<Expr>, Vec<Expr>),
     Index(Box<Expr>, Box<Expr>),
 }
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BinaryOp {
     Add, Subtract, Multiply, Divide, Modulo,
     Equal, NotEqual, Less, LessEqual, Greater, GreaterEqual,
     And, Or, BitAnd, BitOr, BitXor, ShiftLeft, ShiftRight,
 }
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UnaryOp { // Prefix
     Negate, Not, Deref, Ref,
 }
+
 pub fn precedence(x: &Token) -> usize {
     match x {
-        Token::Dot => 15,
+        Token::Dot => 15, // Correctly high precedence for member access
 
         Token::KeywordAs => 14,
         
@@ -68,6 +74,7 @@ pub fn parse_type_expression(exp: &Expr) -> ParserType{
         _ => panic!("Expresion {:?} was not expected during parsing of type", exp),
     }
 }
+
 pub fn parse_expression(x: &[TokenData]) ->  Result<Expr, String>{
     if x.is_empty() {
         return Err(format!("Expresion length is 0"));
@@ -100,7 +107,7 @@ pub fn parse_expression(x: &[TokenData]) ->  Result<Expr, String>{
                     return Err("Mismatched ']' bracket.".to_string());
                 }
                 // Push a Dot token to act as the "index" operator in our RPN.
-                output.push(&Token::Dot);
+                output.push(&Token::IndexToken);
             }
             Token::Integer(_) => output.push(current_token),
             Token::Name(name) => {
@@ -124,25 +131,37 @@ pub fn parse_expression(x: &[TokenData]) ->  Result<Expr, String>{
             },
             _=> {
                 if precedence(current_token) > 0 {
-                    // Check if operator is unary (e.g., "-x", "*x", "&x")
+                    // Check if operator is unary (e.g., "-x", "*x", "&x").
                     let mut is_unary = false;
-                    let prev_token = x.get(i.wrapping_sub(1)).map(|td| &td.token);
-                    if i == 0 || prev_token.map_or(false, |t| *t == Token::LParen || *t == Token::LSquareBrace || precedence(t) > 0) {
-                        is_unary = true;
+
+                    if matches!(current_token, Token::Minus | Token::Multiply | Token::BinaryAnd | Token::LogicNot) {
+                        let prev_token = x.get(i.wrapping_sub(1)).map(|td| &td.token);
+                        if i == 0 || prev_token.map_or(false, |t| *t == Token::LParen || *t == Token::LSquareBrace || precedence(t) > 0) {
+                            is_unary = true;
+                        }
                     }
                     
                     if is_unary {
                         stack.push(&Token::UnaryOpMark);
                     }
                     let current_prio = precedence(current_token);
+
+                    let is_current_right_assoc = *current_token == Token::Equal;
+
                     while let Some(top) = stack.last() {
                         if **top == Token::LParen || **top == Token::LSquareBrace {
                             break;
                         }
-                        let top_prio = precedence(&top);
+                        
+                        let top_prio = precedence(top);
                         if top_prio > 0 {
-                            if current_prio <= top_prio {
-                                output.push(stack.pop().unwrap());
+                            if (!is_current_right_assoc && current_prio <= top_prio) || (is_current_right_assoc && current_prio < top_prio) {
+                                let op = stack.pop().unwrap();
+                                output.push(op);
+                                
+                                if let Some(&&Token::UnaryOpMark) = stack.last() {
+                                    output.push(stack.pop().unwrap());
+                                }
                             } else {
                                 break;
                             }
@@ -166,7 +185,7 @@ pub fn parse_expression(x: &[TokenData]) ->  Result<Expr, String>{
         match t {
             Token::Name(x) => return Ok(Expr::Name(x.to_string())),
             Token::Integer(x) => return Ok(Expr::Integer(x.to_string())),
-            Token::Char(x) => return Ok(Expr::CharConst(x.to_string())),
+            Token::Char(x) => return Ok(Expr::Integer((x.chars().nth(0).unwrap() as u64).to_string())),
             Token::String(x) => return Ok(Expr::StringConst(x.to_string())),
             Token::DummyToken => { return Ok(aux[0].1.clone());}
             _ => todo!("This expresion is not covered by your license: {:?}", t)
@@ -189,7 +208,7 @@ pub fn parse_expression(x: &[TokenData]) ->  Result<Expr, String>{
             Token::Name(name) => return Ok(Expr::Name(name.to_string())),
             Token::Integer(val) => return Ok(Expr::Integer(val.to_string())),
             Token::String(str) => return Ok(Expr::StringConst(str.to_string())),
-            Token::Char(c) => return Ok(Expr::CharConst(c.to_string())),
+            Token::Char(c) => return Ok(Expr::Integer((c.chars().nth(0).unwrap() as u64).to_string())),
             Token::DummyToken => {
                 for (pos, expr) in aux {
                     if *pos == *absolute_operation_index_in_output_vector {
@@ -221,37 +240,41 @@ pub fn parse_expression(x: &[TokenData]) ->  Result<Expr, String>{
         }
         *absolute_operation_index_in_output_vector -= 1;
         let left_op = rec_tree_builder(x, aux, absolute_operation_index_in_output_vector)?;
-            let binary_expr = match op {
-                Token::Plus => Expr::BinaryOp(Box::new(left_op), BinaryOp::Add, Box::new(right_op)),
-                Token::Minus => Expr::BinaryOp(Box::new(left_op), BinaryOp::Subtract, Box::new(right_op)),
-                Token::Multiply => Expr::BinaryOp(Box::new(left_op), BinaryOp::Multiply, Box::new(right_op)),
-                Token::Divide => Expr::BinaryOp(Box::new(left_op), BinaryOp::Divide, Box::new(right_op)),
-                Token::Modulo => Expr::BinaryOp(Box::new(left_op), BinaryOp::Modulo, Box::new(right_op)),
-                Token::LogicEqual => Expr::BinaryOp(Box::new(left_op), BinaryOp::Equal, Box::new(right_op)),
-                Token::LogicNotEqual => Expr::BinaryOp(Box::new(left_op), BinaryOp::NotEqual, Box::new(right_op)),
-                Token::LogicLessEqual => Expr::BinaryOp(Box::new(left_op), BinaryOp::LessEqual, Box::new(right_op)),
-                Token::LogicLess => Expr::BinaryOp(Box::new(left_op), BinaryOp::Less, Box::new(right_op)),
-                Token::LogicGreaterEqual => Expr::BinaryOp(Box::new(left_op), BinaryOp::GreaterEqual, Box::new(right_op)),
-                Token::LogicGreater => Expr::BinaryOp(Box::new(left_op), BinaryOp::Greater, Box::new(right_op)),
-                Token::LogicAnd => Expr::BinaryOp(Box::new(left_op), BinaryOp::And, Box::new(right_op)),
-                Token::LogicOr => Expr::BinaryOp(Box::new(left_op), BinaryOp::Or, Box::new(right_op)),
-                Token::BinaryAnd => Expr::BinaryOp(Box::new(left_op), BinaryOp::BitAnd, Box::new(right_op)),
-                Token::BinaryOr => Expr::BinaryOp(Box::new(left_op), BinaryOp::BitOr, Box::new(right_op)),
-                Token::BinaryXor => Expr::BinaryOp(Box::new(left_op), BinaryOp::BitXor, Box::new(right_op)),
-                Token::BinaryShiftL => Expr::BinaryOp(Box::new(left_op), BinaryOp::ShiftLeft, Box::new(right_op)),
-                Token::BinaryShiftR => Expr::BinaryOp(Box::new(left_op), BinaryOp::ShiftRight, Box::new(right_op)),
-                Token::Equal => Expr::Assign(Box::new(left_op), Box::new(right_op)),
+        
+        let binary_expr = match op {
+            Token::Plus => Expr::BinaryOp(Box::new(left_op), BinaryOp::Add, Box::new(right_op)),
+            Token::Minus => Expr::BinaryOp(Box::new(left_op), BinaryOp::Subtract, Box::new(right_op)),
+            Token::Multiply => Expr::BinaryOp(Box::new(left_op), BinaryOp::Multiply, Box::new(right_op)),
+            Token::Divide => Expr::BinaryOp(Box::new(left_op), BinaryOp::Divide, Box::new(right_op)),
+            Token::Modulo => Expr::BinaryOp(Box::new(left_op), BinaryOp::Modulo, Box::new(right_op)),
+            Token::LogicEqual => Expr::BinaryOp(Box::new(left_op), BinaryOp::Equal, Box::new(right_op)),
+            Token::LogicNotEqual => Expr::BinaryOp(Box::new(left_op), BinaryOp::NotEqual, Box::new(right_op)),
+            Token::LogicLessEqual => Expr::BinaryOp(Box::new(left_op), BinaryOp::LessEqual, Box::new(right_op)),
+            Token::LogicLess => Expr::BinaryOp(Box::new(left_op), BinaryOp::Less, Box::new(right_op)),
+            Token::LogicGreaterEqual => Expr::BinaryOp(Box::new(left_op), BinaryOp::GreaterEqual, Box::new(right_op)),
+            Token::LogicGreater => Expr::BinaryOp(Box::new(left_op), BinaryOp::Greater, Box::new(right_op)),
+            Token::LogicAnd => Expr::BinaryOp(Box::new(left_op), BinaryOp::And, Box::new(right_op)),
+            Token::LogicOr => Expr::BinaryOp(Box::new(left_op), BinaryOp::Or, Box::new(right_op)),
+            Token::BinaryAnd => Expr::BinaryOp(Box::new(left_op), BinaryOp::BitAnd, Box::new(right_op)),
+            Token::BinaryOr => Expr::BinaryOp(Box::new(left_op), BinaryOp::BitOr, Box::new(right_op)),
+            Token::BinaryXor => Expr::BinaryOp(Box::new(left_op), BinaryOp::BitXor, Box::new(right_op)),
+            Token::BinaryShiftL => Expr::BinaryOp(Box::new(left_op), BinaryOp::ShiftLeft, Box::new(right_op)),
+            Token::BinaryShiftR => Expr::BinaryOp(Box::new(left_op), BinaryOp::ShiftRight, Box::new(right_op)),
+            Token::Equal => Expr::Assign(Box::new(left_op), Box::new(right_op)),
+            Token::KeywordAs => Expr::Cast(Box::new(left_op), parse_type_expression(&right_op)),
+            Token::IndexToken => Expr::Index(Box::new(left_op), Box::new(right_op)),
+            Token::Dot => {
+                if let Expr::Name(member_name) = right_op {
+                    Expr::Member(Box::new(left_op), member_name)
+                } else {
+                    return Err(format!("Expected a member name after '.', but found expression {:?}", right_op));
+                }
+            },
 
-                Token::KeywordAs => Expr::Cast(Box::new(left_op), parse_type_expression(&right_op)),
-                
-                // Repurposed Dot token to mean "Index"
-                Token::Dot => Expr::Index(Box::new(left_op), Box::new(right_op)),
-
-                _ => return Err(format!("Unsupported binary operator: {:?}", op)),
+            _ => return Err(format!("Unsupported binary operator: {:?}", op)),
         };
         
         return Ok(binary_expr);
-
     }
     let mut i = output.len() - 1;
     let x = rec_tree_builder(&output, &aux, &mut i)?;
