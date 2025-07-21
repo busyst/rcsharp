@@ -17,20 +17,15 @@ fn main() -> Result<(), String> {
         fn GetProcessHeap(): &i32;
         #[DllImport("kernel32.dll")]
         fn HeapAlloc(hHeap: &i32, dwFlags: i32, dwBytes: i64): &i8;
-
-        /*fn malloc_zero(size:i32) : &i8{
-            let process_heap: &i32 = GetProcessHeap();
-            let buffer: &i8 = HeapAlloc(process_heap, 8, size);
-            return buffer;
-        }*/
-        fn main(): i64 {
-            let x1 : u32 = 1235 as u32;
-            let x2 : u32 = 1235 as u32;
-            let y1 : &i64 = (&x1) as &i64;
-            let y2 : &i64 = (&x2) as &i64;
-            let z1 : i64 = y1 as i64;
-            let z2 : i64 = y2 as i64;
-            return z1;
+        fn malloc(size:i64) : &i8{
+            return HeapAlloc(GetProcessHeap(), 0 as i32, size);
+        }
+        fn malloc_zero(size:i64) : &i8{
+            return HeapAlloc(GetProcessHeap(), 8 as i32, size);
+        }
+        fn main(): i32 {
+            let x: &i8 = malloc_zero(1);
+            return (*x) as i32;
         }
     "#;
     let mut tokens = Vec::new();

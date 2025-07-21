@@ -37,8 +37,11 @@ pub fn explicit_cast(value: &CompiledTempValue, to: &ParserType, state: &mut Com
             return Ok(CompiledTempValue { index: utvc, value_type: to.clone() });
         }
         (ParserType::Ref(_),ParserType::Ref(_)) => {
-            return Ok(CompiledTempValue { index: value.index, value_type: to.clone() });
+            let utvc = state.aquire_unique_temp_value_counter();
+            state.output.push_str(&format!("    %tmp{} = bitcast {} %tmp{} to {}\n",utvc,value.value_type.to_string(),value.index, to.to_string()));
+            return Ok(CompiledTempValue { index: utvc, value_type: to.clone() });
         }
+        _ => {todo!()}
     }
 }
 pub fn implisit_cast(value: &CompiledTempValue, to: &ParserType, state: &mut CompilerState) -> Result<CompiledTempValue, String>{
@@ -60,12 +63,21 @@ pub fn compile_rvalue(right: &Expr, expected_type: Option<&ParserType>, state: &
         }
         Expr::Name(name) =>{
             let utvc = state.aquire_unique_temp_value_counter();
-            let var = state.get_variable_type(&name)?;
-            let var_actual_type = var.parser_type.clone();
-            let var_repr_type = var.underlying_representation.clone();
+            if let Ok(var) = state.get_variable_type(&name) {
+                let var_actual_type = var.parser_type.clone();
+                let var_repr_type = var.underlying_representation.clone();
 
-            state.output.push_str(&format!("    %tmp{} = load {}, {}* %{}\n", utvc, var_repr_type.to_string(), var_repr_type.to_string(), name));
-            return Ok(CompiledTempValue{index: utvc, value_type: var_actual_type.clone()});
+                state.output.push_str(&format!("    %tmp{} = load {}, {}* %{}\n", utvc, var_repr_type.to_string(), var_repr_type.to_string(), name));
+                return Ok(CompiledTempValue{index: utvc, value_type: var_actual_type.clone()});   
+            }
+            if let Ok(var) = state.get_argument_type(&name) {
+                let var_actual_type = var.parser_type.clone();
+                let var_repr_type = var.underlying_representation.clone();
+
+                state.output.push_str(&format!("    %tmp{} = load {}, {}* %{}.addr\n", utvc, var_repr_type.to_string(), var_repr_type.to_string(), name));
+                return Ok(CompiledTempValue{index: utvc, value_type: var_actual_type.clone()});   
+            }
+            return Err(format!("Variable {} was not found un current context", name));
         }
         Expr::Cast(expression, desired_type) =>{
             let result = compile_rvalue(expression, Some(desired_type), state)?;
@@ -98,6 +110,28 @@ pub fn compile_rvalue(right: &Expr, expected_type: Option<&ParserType>, state: &
                 _ => todo!()
             }
         }
+        Expr::Call(left, args) =>{
+            let call_address = compile_lvalue(left, state)?;
+            if let ParserType::Fucntion(return_type, args_type) = call_address.value_type {
+                if args_type.len() != args.len() {
+                    return Err(format!("Amount of arguments given, does not respond with the amount required"));
+                }
+                let mut comps = vec![];
+                for i in 0..args.len() {
+                    let arg = &args[i];
+                    let mut x = compile_rvalue(arg, Some(&args_type[i]),state)?;
+                    if x.value_type != args_type[i] {
+                        x = implisit_cast(&x, &args_type[i], state)?;
+                    }
+                    comps.push(x);
+                }
+                let args = comps.iter().map(|x| format!("{} %tmp{}",x.value_type.to_string(), x.index)).collect::<Vec<_>>().join(",");
+                let utvc = state.aquire_unique_temp_value_counter();
+                state.output.push_str(&format!("    %tmp{} = call {} %tmp{}({})\n",utvc, return_type.to_string(), call_address.index, args));
+                return Ok(CompiledTempValue{index: utvc, value_type: *return_type}); 
+            }
+            return Err(format!("Tried to call non-function type"));
+        }
         _ => todo!()
     }
 }
@@ -105,25 +139,52 @@ fn compile_lvalue(left: &Expr, state: &mut CompilerState) -> Result<CompiledTemp
     let utvc = state.aquire_unique_temp_value_counter();
     match left {
         Expr::Name(name) => {
-            let var = state.get_variable_type(&name)?;
-            let var_actual_type = var.parser_type.clone();
-            let var_repr_type = var.underlying_representation.clone();
+            if let Ok(var) = state.get_variable_type(&name) {
+                let var_actual_type = var.parser_type.clone();
+                let var_repr_type = var.underlying_representation.clone();
 
-            state.output.push_str(&format!("    %tmp{} = getelementptr {}, {}* %{}\n", utvc, var_repr_type.to_string(), var_repr_type.to_string(), name));
-            return Ok(CompiledTempValue{index: utvc, value_type: var_actual_type});
+                state.output.push_str(&format!("    %tmp{} = getelementptr {}, {}* %{}\n", utvc, var_repr_type.to_string(), var_repr_type.to_string(), name));
+                return Ok(CompiledTempValue{index: utvc, value_type: var_actual_type});
+            }
+            if let Ok(var) = state.get_argument_type(&name) {
+                let var_actual_type = var.parser_type.clone();
+                let var_repr_type = var.underlying_representation.clone();
+
+                state.output.push_str(&format!("    %tmp{} = getelementptr {}, {}* %{}.addr\n", utvc, var_repr_type.to_string(), var_repr_type.to_string(), name));
+                return Ok(CompiledTempValue{index: utvc, value_type: var_actual_type});
+            }
+            if let Ok(func) = state.get_function(&name) {
+                let name = &func.name;
+                let args = &func.args;
+                let args_string = args.iter().map(|x| x.1.to_string()).collect::<Vec<_>>().join(",");
+                let return_type = func.return_type.clone();
+                let args_copy = args.iter().map(|x|x.1.clone()).collect::<Vec<_>>();
+                state.output.push_str(&format!("    %tmp{} = bitcast {}({})* @{} to ptr\n", utvc, return_type.to_string(), args_string, name));
+                return Ok(CompiledTempValue{index: utvc, value_type: ParserType::Fucntion(Box::new(return_type), args_copy)});
+            }
+            return Err(format!("Name \"{}\" does not respond to function name or variable name in current context",name));
         }
-        _ => {}
+        Expr::UnaryOp(op, expr) =>{
+            match op {
+                UnaryOp::Deref =>{
+                    let pointer_val = compile_rvalue(expr, None, state)?;
+                    if !pointer_val.value_type.is_pointer() {
+                        return Err(format!("Cannot dereference a non-pointer type: {:?}", pointer_val.value_type));
+                    }
+                    let lvalue_type = pointer_val.value_type.dereference_once();
+                    return Ok(CompiledTempValue{index: pointer_val.index, value_type: lvalue_type});
+                }
+                _ => todo!()
+            }
+        }
+        _ => todo!()
     }
-    todo!("{:?}",left);
 }
 pub fn compile_expression(expression: &Expr, expected_type: Option<&ParserType>, state: &mut CompilerState) -> Result<CompiledTempValue, String> {
     println!("{:?}", expression);
     match expression {
-        Expr::Integer(_) =>{
-            return compile_rvalue(expression, expected_type, state);
-        }
-        Expr::Name(_) =>{
-            return compile_rvalue(expression, expected_type, state);
+        Expr::UnaryOp(_, _) | Expr::Name(_) | Expr::Integer(_) | Expr::Call(_, _) =>{
+            return compile_rvalue(&expression, None, state);
         }
         Expr::Assign(left, right) => {
             let l = compile_lvalue(&left, state)?;
@@ -143,9 +204,6 @@ pub fn compile_expression(expression: &Expr, expected_type: Option<&ParserType>,
                 return Ok(result);
             }
             return explicit_cast(&result, desired_type, state);
-        }
-        Expr::UnaryOp(_, _) =>{
-            return compile_rvalue(&expression, None, state);
         }
         _ => {}
     }

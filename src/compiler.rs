@@ -8,9 +8,8 @@ pub fn rcsharp_compile_to_file(x: &[Stmt]) -> Result<(), String> {
 
     Ok(())
 }
-
 #[derive(Debug, Clone)]
-pub struct Function {name:String, args: Vec<(String, ParserType)>, return_type: ParserType, body: Stmt, attribs: Vec<(String, Vec<Expr>)>}
+pub struct Function {pub name:String,pub args: Vec<(String, ParserType)>,pub return_type: ParserType,pub body: Stmt,pub attribs: Vec<(String, Vec<Expr>)>}
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub struct Struct {name:String, fields: Vec<(String, ParserType)>, attribs: Vec<(String, Vec<Expr>)>}
@@ -57,7 +56,6 @@ pub fn rcsharp_compile(x: &[Stmt]) -> Result<String, String> {
     }
     compile_attributes(&mut main_state)?;
     compile_functions(&mut main_state)?;
-    println!("{:?}", main_state);
     Ok(main_state.output)
 }
 pub fn populate_default_types(state: &mut CompilerState) -> Result<(), String> {
@@ -200,7 +198,9 @@ pub fn compile_attributes(state :&mut CompilerState) -> Result<(), String>{
                 }
             }
             state.output.push_str(&format!("declare dllimport {} @{}({})\n", func_return_type_string, function.name, args_string));
+            state.declared_functions.push(function.clone());
         }else {
+            state.declared_functions.push(function.clone());
             funcs.push(function.clone());
         }
     }
@@ -222,6 +222,12 @@ pub fn compile_functions(state :&mut CompilerState) -> Result<(), String>{
         state.current_function = Some(i);
         state.current_variable_stack.clear();
         state.temp_value_counter = 0;
+        for arg in &function.args {
+            let val_type = state.get_compiler_type_from_parser(&arg.1)?;
+            state.output.push_str(&format!("    %{}.addr = alloca {}\n", arg.0, val_type.underlying_representation.to_string()));
+            state.output.push_str(&format!("    store {} %{}, {}* %{}.addr\n", val_type.underlying_representation.to_string(), arg.0, val_type.underlying_representation.to_string(), arg.0));
+            state.current_function_arguments.insert(arg.0.clone(), val_type);
+        }
         compile_statement(&function.body.clone(), state).map_err(|x| format!("while compiling function {}\n\r{}",function_name,x))?;
 
         state.output.push_str(&format!("\n    unreachable\n}}\n"));
@@ -262,10 +268,13 @@ pub struct CompilerType { pub parser_type: ParserType, pub underlying_representa
 pub struct CompilerState{
     pub output: String,
     pub functions: Vec<Function>,
+    pub declared_functions: Vec<Function>,
     pub structs: Vec<Struct>,
     pub implemented_types: HashMap<String, CompilerType>,
+
     current_function: Option<usize>,
     current_variable_stack: HashMap<String, CompilerType>,
+    pub current_function_arguments: HashMap<String, CompilerType>,
     temp_value_counter: usize
 }
 impl CompilerState {
@@ -293,6 +302,15 @@ impl CompilerState {
         }
         Err(format!("Tried to get variable \"{}\" outside of function", name))
     }
+    pub fn get_argument_type(&self, name: &str) -> Result<&CompilerType,String>{
+        if self.current_function.is_some() {
+            if self.current_function_arguments.contains_key(name) {
+                return Ok(&self.current_function_arguments[name]);
+            }
+            return Err(format!("Argument \"{}\" was not found inside function \"{}\"",name, self.current_function_name()?));
+        }
+        Err(format!("Tried to get argument \"{}\" outside of function", name))
+    }
     pub fn get_compiler_type_from_parser(&self, parser_type: &ParserType) -> Result<CompilerType,String>{
         if let Some(x) = self.implemented_types.get(&parser_type.to_string_core()) {
             let mut pt = x.clone();
@@ -312,5 +330,11 @@ impl CompilerState {
             return Ok(pt);
         }
         Err(format!("Implementation of \"{}\" was not found in current context", parser_type.to_string_core()))
+    }
+    pub fn get_function(&self, name: &str) -> Result<&Function,String>{
+        if let Some(f) = self.declared_functions.iter().find(|x| x.name == name){
+            return Ok(f);
+        }
+        Err(format!("Function \"{}\" was not found in current context", name))
     }
 }

@@ -22,7 +22,6 @@ pub enum BinaryOp {
     Equal, NotEqual, Less, LessEqual, Greater, GreaterEqual,
     And, Or, BitAnd, BitOr, BitXor, ShiftLeft, ShiftRight,
 }
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UnaryOp { // Prefix
     Negate, Not, Deref, Ref,
