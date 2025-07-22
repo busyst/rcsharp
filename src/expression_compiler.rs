@@ -1,4 +1,4 @@
-use crate::{compiler::CompilerState, expression_parser::{Expr, UnaryOp}, parser::{ParserType, Stmt}};
+use crate::{compiler::CompilerState, expression_parser::{BinaryOp, Expr, UnaryOp}, parser::{ParserType, Stmt}};
 #[derive(Debug, Clone)]
 pub struct CompiledTempValue{pub index:usize, pub value_type: ParserType}
 pub fn explicit_cast(value: &CompiledTempValue, to: &ParserType, state: &mut CompilerState) -> Result<CompiledTempValue, String>{
@@ -44,8 +44,7 @@ pub fn explicit_cast(value: &CompiledTempValue, to: &ParserType, state: &mut Com
         _ => {todo!()}
     }
 }
-pub fn implisit_cast(value: &CompiledTempValue, to: &ParserType, state: &mut CompilerState) -> Result<CompiledTempValue, String>{
-
+pub fn implisit_cast(value: &CompiledTempValue, to: &ParserType, _state: &mut CompilerState) -> Result<CompiledTempValue, String>{
     match (&value.value_type, to) {
         _ => return Err(format!("Unable to implisitly cast from \"{:?}\" to \"{:?}\"", &value.value_type, to))
     }
@@ -86,8 +85,90 @@ pub fn compile_rvalue(right: &Expr, expected_type: Option<&ParserType>, state: &
             }
             return explicit_cast(&result, desired_type, state);
         }
+        Expr::BinaryOp(left, op, right) => {
+            let l = compile_rvalue(&left, None, state)?;
+            let mut r = compile_rvalue(&right, None, state)?;
+            if l.value_type.is_integer() && r.value_type.is_integer() && l.value_type != r.value_type {
+                r = implisit_cast(&r, &l.value_type, state)?;
+            }
+            if l.value_type != r.value_type {
+                return Err(format!("Binary operator '{:?}' cannot be applied to mismatched types '{}' and '{}'",op,l.value_type.to_string(),r.value_type.to_string()));
+            }
+            if l.value_type == r.value_type {
+                if l.value_type.is_integer() {
+
+                    let utvc = state.aquire_unique_temp_value_counter();
+                    let llvm_type = state.get_compiler_type_from_parser(&l.value_type)?.underlying_representation.to_string();
+                    
+                    let is_signed = l.value_type.is_signed_integer();
+
+                    let llvm_op = match op {
+                        BinaryOp::Add => "add",
+                        BinaryOp::Subtract => "sub",
+                        BinaryOp::Multiply => "mul",
+                        BinaryOp::Divide => if is_signed { "sdiv" } else { "udiv" },
+                        BinaryOp::Modulo => if is_signed { "srem" } else { "urem" },
+
+                        BinaryOp::Equal => "icmp eq",
+                        BinaryOp::NotEqual => "icmp ne",
+                        BinaryOp::Less => if is_signed { "icmp slt" } else { "icmp ult" },
+                        BinaryOp::LessEqual => if is_signed { "icmp sle" } else { "icmp ule" },
+                        BinaryOp::Greater => if is_signed { "icmp sgt" } else { "icmp ugt" },
+                        BinaryOp::GreaterEqual => if is_signed { "icmp sge" } else { "icmp uge" },
+
+                        BinaryOp::BitAnd => "and",
+                        BinaryOp::BitOr => "or",
+                        BinaryOp::BitXor => "xor",
+
+                        BinaryOp::ShiftLeft => "shl",
+                        BinaryOp::ShiftRight => if is_signed { "ashr" } else { "lshr" },
+
+                        BinaryOp::And => "and",
+                        BinaryOp::Or => "or",
+                    };
+
+                    state.output.push_str(&format!("    %tmp{} = {} {} %tmp{}, %tmp{}\n",utvc, llvm_op, llvm_type, l.index, r.index));
+                    let result_type = if llvm_op.starts_with("icmp") {
+                        ParserType::Named("bool".to_string())
+                    } else {
+                        l.value_type.clone()
+                    };
+                    return Ok(CompiledTempValue { index: utvc, value_type: result_type });
+                }
+                return Err(format!("Binary operator \"{:?}\" was not implemted for types \"{}\"", op, l.value_type.to_string()));
+            }
+            return Err(format!("Binary operator \"{:?}\" cannot be applied to types \"{}\" and \"{}\"",op, l.value_type.to_string(), r.value_type.to_string()));
+        }
         Expr::UnaryOp(op, expr) =>{
             match op {
+                UnaryOp::Not => {
+                    let value = compile_rvalue(expr, None, state)?;
+                    let utvc = state.aquire_unique_temp_value_counter();
+                    if value.value_type.to_string() == "bool" {
+                        state.output.push_str(&format!("    %tmp{} = xor i1 %tmp{}, 1\n", utvc, value.index));
+                        return Ok(CompiledTempValue { index: utvc, value_type: value.value_type });
+                    }
+                    if value.value_type.is_integer() {
+                    let llvm_type = state.get_compiler_type_from_parser(&value.value_type)?.underlying_representation.to_string();
+                        state.output.push_str(&format!("    %tmp{} = xor {} %tmp{}, -1\n",utvc, llvm_type, value.index));
+                        return Ok(CompiledTempValue { index: utvc, value_type: value.value_type });
+                    }
+                    return Err(format!("Unary NOT '!' operator cannot be applied to type '{}'.",value.value_type.to_string()));
+                }
+                UnaryOp::Negate => {
+                    let value = compile_rvalue(expr, None, state)?;
+                    let utvc = state.aquire_unique_temp_value_counter();
+                    if value.value_type.is_signed_integer() {
+                        let llvm_type = state.get_compiler_type_from_parser(&value.value_type)?.underlying_representation.to_string();
+                        // In LLVM, integer negation is performed by subtracting from 0.
+                        state.output.push_str(&format!( "    %tmp{} = sub {} 0, %tmp{}\n",utvc, llvm_type, value.index));
+                        return Ok(CompiledTempValue { index: utvc, value_type: value.value_type });
+                    }
+                    if value.value_type.is_unsigned_integer() {
+                        return Err(format!("Unary negation '-' cannot be applied to unsigned integer type '{}'. Cast to a signed integer first.",value.value_type.to_string()));
+                    }
+                    return Err(format!("Unary negation '-' cannot be applied to type '{}'.",value.value_type.to_string()));
+                }
                 UnaryOp::Deref =>{
                     let value = compile_rvalue(expr, expected_type, state)?;
                     let value_type = &value.value_type;
@@ -181,9 +262,9 @@ fn compile_lvalue(left: &Expr, state: &mut CompilerState) -> Result<CompiledTemp
     }
 }
 pub fn compile_expression(expression: &Expr, expected_type: Option<&ParserType>, state: &mut CompilerState) -> Result<CompiledTempValue, String> {
-    println!("{:?}", expression);
+    println!("Expression {:?}", expression);
     match expression {
-        Expr::UnaryOp(_, _) | Expr::Name(_) | Expr::Integer(_) | Expr::Call(_, _) =>{
+        Expr::UnaryOp(_, _) | Expr::Name(_) | Expr::Integer(_) | Expr::Call(_, _) | Expr::BinaryOp(_, _, _) =>{
             return compile_rvalue(&expression, None, state);
         }
         Expr::Assign(left, right) => {

@@ -16,13 +16,13 @@ pub enum Expr {
     Index(Box<Expr>, Box<Expr>),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum BinaryOp {
     Add, Subtract, Multiply, Divide, Modulo,
     Equal, NotEqual, Less, LessEqual, Greater, GreaterEqual,
     And, Or, BitAnd, BitOr, BitXor, ShiftLeft, ShiftRight,
 }
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum UnaryOp { // Prefix
     Negate, Not, Deref, Ref,
 }
@@ -32,6 +32,8 @@ pub fn precedence(x: &Token) -> usize {
         Token::Dot => 15, // Correctly high precedence for member access
 
         Token::KeywordAs => 14,
+
+        Token::LogicNot => 13,
         
         Token::Multiply => 13,
         Token::Divide => 13,
@@ -191,6 +193,7 @@ pub fn parse_expression(x: &[TokenData]) ->  Result<Expr, String>{
         }
     }
     fn rec_tree_builder(x: &[&Token], aux: &Vec<(usize, Expr)>, absolute_operation_index_in_output_vector: &mut usize) -> Result<Expr, String> {
+        println!("{:?}", x);
         if *absolute_operation_index_in_output_vector >= x.len() {
             return Err("Index out of bounds".to_string());
         }

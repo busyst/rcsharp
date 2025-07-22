@@ -22,7 +22,49 @@ pub enum ParserType {
     // return type, arguments
     Fucntion(Box<ParserType>,Vec<ParserType>),
 }
+#[allow(dead_code)]
 impl ParserType {
+    pub fn is_simple_type(&self) -> bool {
+        if let ParserType::Named(name) = self {
+            matches!(name.as_str(),
+                "bool" |
+                "i8" | "u8" | "i16" | "u16" | "i32" | "u32" | "i64" | "u64" |
+                "f32" | "f64"
+            )
+        } else {
+            false
+        }
+    }
+
+    pub fn is_integer(&self) -> bool {
+        if let ParserType::Named(name) = self {
+            matches!(name.as_str(), "i8" | "u8" | "i16" | "u16" | "i32" | "u32" | "i64" | "u64")
+        } else {
+            false
+        }
+    }
+    pub fn is_unsigned_integer(&self) -> bool {
+        if let ParserType::Named(name) = self {
+            matches!(name.as_str(), "u8" | "u16" | "u32" | "u64" )
+        } else {
+            false
+        }
+    }
+    
+    pub fn is_signed_integer(&self) -> bool {
+        if let ParserType::Named(name) = self {
+            matches!(name.as_str(), "i8" | "i16" | "i32" | "i64" )
+        } else {
+            false
+        }
+    }
+    pub fn is_float(&self) -> bool {
+        if let ParserType::Named(name) = self {
+            matches!(name.as_str(), "f32" | "f64")
+        } else {
+            false
+        }
+    }
     pub fn to_string(&self) -> String{
         let mut output = String::new();
         match self {

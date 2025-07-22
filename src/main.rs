@@ -17,6 +17,7 @@ fn main() -> Result<(), String> {
         fn GetProcessHeap(): &i32;
         #[DllImport("kernel32.dll")]
         fn HeapAlloc(hHeap: &i32, dwFlags: i32, dwBytes: i64): &i8;
+        
         fn malloc(size:i64) : &i8{
             return HeapAlloc(GetProcessHeap(), 0 as i32, size);
         }
@@ -24,8 +25,8 @@ fn main() -> Result<(), String> {
             return HeapAlloc(GetProcessHeap(), 8 as i32, size);
         }
         fn main(): i32 {
-            let x: &i8 = malloc_zero(1);
-            return (*x) as i32;
+            let x: i32 = 0 as i32;
+            return x;
         }
     "#;
     let mut tokens = Vec::new();

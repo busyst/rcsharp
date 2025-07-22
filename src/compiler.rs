@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{expression_compiler::compile_expression, expression_parser::Expr, parser::{ParserType, Stmt}};
+use crate::{expression_compiler::compile_expression, expression_parser::{BinaryOp, Expr}, parser::{ParserType, Stmt}};
 pub fn rcsharp_compile_to_file(x: &[Stmt]) -> Result<(), String> {
     let direct_output = rcsharp_compile(x)?;
     let mut file = std::fs::File::create("output.ll").map_err(|e| e.to_string())?;
@@ -68,6 +68,7 @@ pub fn populate_default_types(state: &mut CompilerState) -> Result<(), String> {
                     parser_type: ParserType::Named(format!($name)),
                     underlying_representation: ParserType::Named(format!($llvm_type)),
                     explicit_casts: $casts,
+                    binary_operations: HashMap::new(),
                 },
             );
         };
@@ -211,6 +212,7 @@ pub fn compile_functions(state :&mut CompilerState) -> Result<(), String>{
     for i in 0..state.functions.len() {
         let function = &state.functions[i];
         let function_name = function.name.clone();
+        let function_return_type = state.get_compiler_type_from_parser(&function.return_type)?.underlying_representation;
         let mut args_string = String::new();
         for i in 0..function.args.len() {
             args_string.push_str(&format!("{} %{}",function.args[i].1.to_string(), function.args[i].0));
@@ -218,7 +220,7 @@ pub fn compile_functions(state :&mut CompilerState) -> Result<(), String>{
                 args_string.push_str(&", ");
             }
         }
-        state.output.push_str(&format!("\ndefine {} @{}({}){{\n", function.return_type.to_string(), function_name, args_string));
+        state.output.push_str(&format!("\ndefine {} @{}({}){{\n", function_return_type.to_string(), function_name, args_string));
         state.current_function = Some(i);
         state.current_variable_stack.clear();
         state.temp_value_counter = 0;
@@ -250,11 +252,12 @@ pub fn compile_statement(statement: &Stmt,state :&mut CompilerState) -> Result<(
         Stmt::Return(expression) =>{
             if let Some(expression) = expression {
                 let expected_type = state.current_function_return_type()?;
+                let function_return_type = state.get_compiler_type_from_parser(&expected_type)?.underlying_representation;
                 let tmp_idx = compile_expression(expression, Some(&expected_type), state)?;
                 if tmp_idx.value_type != expected_type {
-                    return Err(format!("Result type \"{}\" of expresion is not equal to return type \"{}\" of function \"{}\"", tmp_idx.value_type.to_string(), expected_type.to_string(), state.current_function_name()?));
+                    return Err(format!("Result type \"{}\" of expresion is not equal to return type \"{}\" of function \"{}\"", tmp_idx.value_type.to_string(), function_return_type.to_string(), state.current_function_name()?));
                 }
-                state.output.push_str(&format!("    ret {} %tmp{}\n", expected_type.to_string(), tmp_idx.index));
+                state.output.push_str(&format!("    ret {} %tmp{}\n", function_return_type.to_string(), tmp_idx.index));
             }
         }
         Stmt::Hint(_,_) | Stmt::Function(_, _, _, _) | Stmt::Struct(_, _)  => return Err(format!("Statement {:?} was not expected in current context", statement)),
@@ -263,7 +266,7 @@ pub fn compile_statement(statement: &Stmt,state :&mut CompilerState) -> Result<(
     Ok(())
 }
 #[derive(Debug, Clone)]
-pub struct CompilerType { pub parser_type: ParserType, pub underlying_representation: ParserType, pub explicit_casts: HashMap<String, Stmt>}
+pub struct CompilerType { pub parser_type: ParserType, pub underlying_representation: ParserType, pub explicit_casts: HashMap<String, Stmt>, pub binary_operations: HashMap<BinaryOp, HashMap<String, String>>, }
 #[derive(Debug, Default)]
 pub struct CompilerState{
     pub output: String,

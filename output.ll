@@ -33,16 +33,13 @@ define i8* @malloc_zero(i64 %size){
 }
 
 define i32 @main(){
-    %x = alloca i8*
-    %tmp0 = getelementptr i8*, i8** %x
-    %tmp1 = bitcast i8*(i64)* @malloc_zero to ptr
-    %tmp2 = add i64 1, 0
-    %tmp3 = call i8* %tmp1(i64 %tmp2)
-    store i8* %tmp3, i8** %tmp0
-    %tmp4 = load i8*, i8** %x
-    %tmp5 = load i8, i8* %tmp4
-    %tmp6 = sext i8 %tmp5 to i32
-    ret i32 %tmp6
+    %x = alloca i32
+    %tmp0 = getelementptr i32, i32* %x
+    %tmp1 = add i64 0, 0
+    %tmp2 = trunc i64 %tmp1 to i32
+    store i32 %tmp2, i32* %tmp0
+    %tmp3 = load i32, i32* %x
+    ret i32 %tmp3
 
     unreachable
 }
