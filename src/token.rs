@@ -52,7 +52,7 @@ impl std::error::Error for LexingError {}
 
 #[derive(Logos, Debug, Clone, PartialEq, Eq)]
 pub enum Token {
-    #[regex(r"[ \t\f]+")]
+    #[regex(r"[ \t\f\r]+")]
     Whitespace,
 
     #[token("\n")]

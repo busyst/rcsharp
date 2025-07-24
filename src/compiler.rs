@@ -8,6 +8,7 @@ pub fn rcsharp_compile_to_file(x: &[Stmt]) -> Result<(), String> {
 
     Ok(())
 }
+
 #[derive(Debug, Clone)]
 pub struct Function {pub name:String,pub args: Vec<(String, ParserType)>,pub return_type: ParserType,pub body: Stmt,pub attribs: Vec<(String, Vec<Expr>)>}
 #[derive(Debug, Clone)]
@@ -22,8 +23,6 @@ pub fn rcsharp_compile(x: &[Stmt]) -> Result<String, String> {
         match statement {
             Stmt::Hint(_, _) => {}
             Stmt::Function(n, a, r, b) => {
-                println!("{:?}",n);
-                println!("{:?}",&x[0..i]);
                 let mut atribs_len= 0;
                 for i in (0..i).rev() {
                     if matches!(&x[i], Stmt::Hint(_, _)) {
@@ -33,12 +32,9 @@ pub fn rcsharp_compile(x: &[Stmt]) -> Result<String, String> {
                     }
                 }
                 let attribs = x[i-atribs_len..i].iter().map(|x| {if let Stmt::Hint(x, y) = x {return (x.clone(),y.clone());} else {panic!()}} ).collect::<Vec<_>>();
-                println!("{:?}",atribs_len);
                 main_state.functions.push(Function{name:n.clone(), args: a.clone(), return_type: r.clone(), body: *b.clone(), attribs});
             },
             Stmt::Struct(n, a) => {
-                println!("{:?}",n);
-                println!("{:?}",&x[0..i]);
                 let mut atribs_len= 0;
                 for i in (0..i).rev() {
                     if matches!(&x[i], Stmt::Hint(_, _)) {
@@ -48,16 +44,17 @@ pub fn rcsharp_compile(x: &[Stmt]) -> Result<String, String> {
                     }
                 }
                 let attribs = x[i-atribs_len..i].iter().map(|x| {if let Stmt::Hint(x, y) = x {return (x.clone(),y.clone());} else {panic!()}} ).collect::<Vec<_>>();
-                println!("{:?}",atribs_len);
                 main_state.structs.push(Struct{name: n.clone(), fields: a.clone(), attribs});
             },
             _ => {return Err(format!("Unexpected statement {:?}", statement));}
         }
     }
     compile_attributes(&mut main_state)?;
+    compile_structs(&mut main_state)?;
     compile_functions(&mut main_state)?;
     Ok(main_state.output)
 }
+
 pub fn populate_default_types(state: &mut CompilerState) -> Result<(), String> {
     // Was AI assisted
     macro_rules! define_type {
@@ -68,7 +65,7 @@ pub fn populate_default_types(state: &mut CompilerState) -> Result<(), String> {
                     parser_type: ParserType::Named(format!($name)),
                     underlying_representation: ParserType::Named(format!($llvm_type)),
                     explicit_casts: $casts,
-                    binary_operations: HashMap::new(),
+                    _binary_operations: HashMap::new(),
                 },
             );
         };
@@ -183,6 +180,7 @@ pub fn populate_default_types(state: &mut CompilerState) -> Result<(), String> {
     u64_casts.insert(format!("i64"),  Stmt::DirectInsertion(format!("    %tmp{{o}} = bitcast i64 %tmp{{v}} to i64\n")));
     define_type!(state, "u64", "i64", u64_casts);
 
+    define_type!(state, "void", "void", HashMap::new());
     Ok(())
 }
 pub fn compile_attributes(state :&mut CompilerState) -> Result<(), String>{
@@ -208,6 +206,20 @@ pub fn compile_attributes(state :&mut CompilerState) -> Result<(), String>{
     state.functions = funcs;
     Ok(())
 }
+fn compile_structs(main_state: &mut CompilerState) -> Result<(), String> {
+    for parsed_struct in &main_state.structs {
+        let name = &parsed_struct.name;
+        let fields = &parsed_struct.fields;
+        let struct_pt = ParserType::Structure(fields.iter().map(|x|x.1.clone()).collect::<Vec<_>>());
+
+        main_state.implemented_types.insert(name.clone(), CompilerType { parser_type: struct_pt, underlying_representation: ParserType::Named(format!("%struct.{}", name.clone())), explicit_casts: HashMap::new(), _binary_operations: HashMap::new() });
+        let fields = fields.iter().map(|x| main_state.get_compiler_type_from_parser(&x.1).unwrap().underlying_representation.to_string())
+        .collect::<Vec<_>>().join(",");
+        main_state.output.push_str(&format!("%struct.{} = type {{{}}}\n", name, fields));
+    }
+
+    Ok(())
+}
 pub fn compile_functions(state :&mut CompilerState) -> Result<(), String>{
     for i in 0..state.functions.len() {
         let function = &state.functions[i];
@@ -231,7 +243,9 @@ pub fn compile_functions(state :&mut CompilerState) -> Result<(), String>{
             state.current_function_arguments.insert(arg.0.clone(), val_type);
         }
         compile_statement(&function.body.clone(), state).map_err(|x| format!("while compiling function {}\n\r{}",function_name,x))?;
-
+        if function_return_type.to_string() == "void" {
+            state.output.push_str(&format!("    ret void\n"));
+        }
         state.output.push_str(&format!("\n    unreachable\n}}\n"));
     }
     Ok(())
@@ -252,12 +266,12 @@ pub fn compile_statement(statement: &Stmt,state :&mut CompilerState) -> Result<(
         Stmt::Return(expression) =>{
             if let Some(expression) = expression {
                 let expected_type = state.current_function_return_type()?;
-                let function_return_type = state.get_compiler_type_from_parser(&expected_type)?.underlying_representation;
+                let function_actual_return_type = state.get_compiler_type_from_parser(&expected_type)?.underlying_representation;
                 let tmp_idx = compile_expression(expression, Some(&expected_type), state)?;
                 if tmp_idx.value_type != expected_type {
-                    return Err(format!("Result type \"{}\" of expresion is not equal to return type \"{}\" of function \"{}\"", tmp_idx.value_type.to_string(), function_return_type.to_string(), state.current_function_name()?));
+                    return Err(format!("Result type \"{}\" of expresion is not equal to return type \"{}\" of function \"{}\"", tmp_idx.value_type.to_string(), function_actual_return_type.to_string(), state.current_function_name()?));
                 }
-                state.output.push_str(&format!("    ret {} %tmp{}\n", function_return_type.to_string(), tmp_idx.index));
+                state.output.push_str(&format!("    ret {} %tmp{}\n", function_actual_return_type.to_string(), tmp_idx.index));
             }
         }
         Stmt::Hint(_,_) | Stmt::Function(_, _, _, _) | Stmt::Struct(_, _)  => return Err(format!("Statement {:?} was not expected in current context", statement)),
@@ -266,7 +280,37 @@ pub fn compile_statement(statement: &Stmt,state :&mut CompilerState) -> Result<(
     Ok(())
 }
 #[derive(Debug, Clone)]
-pub struct CompilerType { pub parser_type: ParserType, pub underlying_representation: ParserType, pub explicit_casts: HashMap<String, Stmt>, pub binary_operations: HashMap<BinaryOp, HashMap<String, String>>, }
+pub struct CompilerType { pub parser_type: ParserType, pub underlying_representation: ParserType, pub explicit_casts: HashMap<String, Stmt>, pub _binary_operations: HashMap<BinaryOp, HashMap<String, String>>, }
+impl CompilerType { 
+    pub fn sizeof(&self, state :&mut CompilerState) -> u32 { 
+        match &self.underlying_representation {
+            ParserType::Named(x) => {
+                match x.as_str() {
+                    "i8" => 1, 
+                    "i16" => 2, 
+                    "i32" => 4, 
+                    "i64" => 8,
+                    
+                    "f32" => 4, 
+                    "f64" => 8,
+                    _ => {
+                        if let Some(t) = x.split(|x| x == '.').nth(1) {
+                            if state.implemented_types.contains_key(t) {
+                                if let ParserType::Structure(f) = &state.implemented_types[t].parser_type.clone() {
+                                    return f.iter().map(|x| state.get_compiler_type_from_parser(x).unwrap().sizeof(state)).sum();
+                                }
+                            }
+
+                        }
+                        todo!("{:?}", x)
+                    }
+                }
+            }
+            ParserType::Ref(_) => 8,
+            _ => todo!("{:?}", self.underlying_representation)
+        }
+    } 
+}
 #[derive(Debug, Default)]
 pub struct CompilerState{
     pub output: String,

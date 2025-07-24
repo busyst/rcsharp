@@ -1,11 +1,11 @@
 @echo off
 :: Build and run Rust project
-cargo build || (
+cargo build -q || (
     echo Error: cargo build failed
     exit /b %errorlevel%
 )
 
-cargo run || (
+cargo run -q || (
     echo Error: cargo run failed
     exit /b %errorlevel%
 )

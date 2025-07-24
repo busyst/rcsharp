@@ -1,7 +1,7 @@
+
+/*
 use std::{path, process::Command};
-
-
-pub fn generate_lib_with_dlltool(dll_path: &str, lib_path: &str) -> Result<(), anyhow::Error> {
+pub fn generate_lib_with_dlltool(dll_path: &str, lib_path: &str) -> Result<(), String> {
     let name = path::Path::new(dll_path).file_stem().unwrap().to_str().unwrap().to_string() + ".def";
     // 3. Call llvm-dlltool to generate the .lib file
     // You might need to specify the full path to llvm-dlltool.exe
@@ -10,7 +10,7 @@ pub fn generate_lib_with_dlltool(dll_path: &str, lib_path: &str) -> Result<(), a
     .arg(dll_path)
     .output()?;
         if !output.status.success() {
-        return Err(anyhow::anyhow!(
+        return Err(for!(
             "gendef failed: {}",
             String::from_utf8_lossy(&output.stderr)
         ));
@@ -38,3 +38,5 @@ pub fn generate_lib_with_dlltool(dll_path: &str, lib_path: &str) -> Result<(), a
     println!("Successfully generated {:?}", lib_path);
     Ok(())
 }
+
+*/

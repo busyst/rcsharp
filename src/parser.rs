@@ -21,6 +21,8 @@ pub enum ParserType {
     Ref(Box<ParserType>),
     // return type, arguments
     Fucntion(Box<ParserType>,Vec<ParserType>),
+    // Fields
+    Structure(Vec<ParserType>),
 }
 #[allow(dead_code)]
 impl ParserType {
@@ -71,6 +73,7 @@ impl ParserType {
             ParserType::Named(x) => output.push_str(x),
             ParserType::Ref(x) => {output.push_str(&x.to_string()); output.push('*');},
             ParserType::Fucntion(_, _) => {todo!()},
+            ParserType::Structure(_) => {todo!()},
         }
         return output;
     }
@@ -80,6 +83,7 @@ impl ParserType {
             ParserType::Named(x) => output.push_str(x),
             ParserType::Ref(x) => {return x.to_string();},
             ParserType::Fucntion(_, _) => {todo!()},
+            ParserType::Structure(_) => {todo!()},
         }
         return output;
     }
@@ -88,6 +92,7 @@ impl ParserType {
             ParserType::Named(_) => false,
             ParserType::Ref(_) => true,
             ParserType::Fucntion(_, _) => {todo!()},
+            ParserType::Structure(_) => {todo!()},
         }
     }
     pub fn dereference_once(&self) -> ParserType{
@@ -95,6 +100,7 @@ impl ParserType {
             ParserType::Named(_) => panic!("ParserType is Named {:?} that is not dereferencable", self),
             ParserType::Ref(x) => return *x.clone(),
             ParserType::Fucntion(_, _) => {todo!()},
+            ParserType::Structure(_) => {todo!()},
         }
     }
     pub fn reference_once(&self) -> ParserType{

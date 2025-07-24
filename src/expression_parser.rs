@@ -193,7 +193,6 @@ pub fn parse_expression(x: &[TokenData]) ->  Result<Expr, String>{
         }
     }
     fn rec_tree_builder(x: &[&Token], aux: &Vec<(usize, Expr)>, absolute_operation_index_in_output_vector: &mut usize) -> Result<Expr, String> {
-        println!("{:?}", x);
         if *absolute_operation_index_in_output_vector >= x.len() {
             return Err("Index out of bounds".to_string());
         }

@@ -65,7 +65,7 @@ mod compiler_tests {
         fn main(): i32 {
             let var: i32;
             let ptr: &i32 = &var;
-            return 0;
+            return 0 as i32;
         }";
         let llvm_ir = compile_source_to_string(source).unwrap();
 
@@ -83,7 +83,7 @@ mod compiler_tests {
 
         fn main(): i32 {
             do_nothing();
-            return 0;
+            return 0 as i32;
         }";
         let llvm_ir = compile_source_to_string(source).unwrap();
         
@@ -105,15 +105,14 @@ mod compiler_tests {
         }";
         let llvm_ir = compile_source_to_string(source).unwrap();
 
-        // Check for the correct function signature of 'add'. The arguments are allocated on the stack.
         assert!(llvm_ir.contains("define i32 @add(i32 %a, i32 %b)"));
-        // Check main function
+
         assert!(llvm_ir.contains("define i32 @main()"));
-        // Check that temporaries are created for the literal arguments 10 and 20
+
         assert!(llvm_ir.contains("add i32 10, 0"));
         assert!(llvm_ir.contains("add i32 20, 0"));
-        // Check that the call uses the temporaries
-        assert!(llvm_ir.contains("call i32 @add(i32 %tmp"));
+
+        assert!(llvm_ir.contains("call i32 %tmp0(i32 %tmp"));
     }
 
     #[test]

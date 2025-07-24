@@ -3,8 +3,7 @@ name = "rcsharp"
 version = "0.1.0"
 edition = "2021"
 
+
 [dependencies]
-anyhow = "1.0.98"
-chrono = "0.4.41"
-goblin = "0.9.3"
 logos = "0.15.0"
+
