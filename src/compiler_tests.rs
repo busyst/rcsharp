@@ -1,3 +1,4 @@
+// Deprecated and AI assisted
 #[cfg(test)]
 mod compiler_tests {
     use crate::compiler::rcsharp_compile;
@@ -65,7 +66,7 @@ mod compiler_tests {
         fn main(): i32 {
             let var: i32;
             let ptr: &i32 = &var;
-            return 0 as i32;
+            return 0;
         }";
         let llvm_ir = compile_source_to_string(source).unwrap();
 
@@ -90,7 +91,8 @@ mod compiler_tests {
         assert!(llvm_ir.contains("define void @do_nothing()"));
         assert!(llvm_ir.contains("define i32 @main()"));
         // The call itself is direct, no temporaries needed for a void call with no args.
-        assert!(llvm_ir.contains("call void @do_nothing()"));
+        assert!(llvm_ir.contains("%tmp0 = bitcast void()* @do_nothing to ptr"));
+        assert!(llvm_ir.contains("call void %tmp0()"));
     }
 
     #[test]
@@ -150,7 +152,7 @@ mod compiler_tests {
         let llvm_ir = compile_source_to_string(source).unwrap();
 
         // The assertion is still correct, as the parser translates `&i8` to the LLVM type `i8*`
-        let expected_decl = "declare dllimport i32 @MessageBoxA(i32,i8*,i8*,i32)";
+        let expected_decl = "declare dllimport i32 @MessageBoxA(i32, i8*, i8*, i32)";
         assert!(llvm_ir.contains(expected_decl));
         
         // Ensure the function body was NOT generated

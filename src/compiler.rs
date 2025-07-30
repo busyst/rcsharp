@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{expression_compiler::compile_expression, expression_parser::{BinaryOp, Expr}, parser::{ParserType, Stmt}};
+use crate::{expression_compiler::{compile_expression, implisit_cast}, expression_parser::{BinaryOp, Expr}, parser::{ParserType, Stmt}};
 pub fn rcsharp_compile_to_file(x: &[Stmt]) -> Result<(), String> {
     let direct_output = rcsharp_compile(x)?;
     let mut file = std::fs::File::create("output.ll").map_err(|e| e.to_string())?;
@@ -63,14 +63,14 @@ pub fn populate_default_types(state: &mut CompilerState) -> Result<(), String> {
                 format!($name),
                 CompilerType {
                     parser_type: ParserType::Named(format!($name)),
-                    underlying_representation: ParserType::Named(format!($llvm_type)),
+                    llvm_representation: ParserType::Named(format!($llvm_type)),
+                    struct_representation: ParserType::Structure(format!($llvm_type),vec![]),
                     explicit_casts: $casts,
                     _binary_operations: HashMap::new(),
                 },
             );
         };
     }
-
     // === bool ===
     let mut bool_casts = HashMap::new();
     bool_casts.insert(format!("i8"),  Stmt::DirectInsertion(format!("    %tmp{{o}} = zext i1 %tmp{{v}} to i8\n")));
@@ -87,7 +87,6 @@ pub fn populate_default_types(state: &mut CompilerState) -> Result<(), String> {
     let mut i8_casts = HashMap::new();
     i8_casts.insert(format!("bool"), Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i8 %tmp{{v}} to i1\n")));
     i8_casts.insert(format!("u8"),   Stmt::DirectInsertion(format!("    %tmp{{o}} = bitcast i8 %tmp{{v}} to i8\n")));
-    // Up-casting from a signed type uses sext
     i8_casts.insert(format!("i16"), Stmt::DirectInsertion(format!("    %tmp{{o}} = sext i8 %tmp{{v}} to i16\n")));
     i8_casts.insert(format!("u16"), Stmt::DirectInsertion(format!("    %tmp{{o}} = sext i8 %tmp{{v}} to i16\n")));
     i8_casts.insert(format!("i32"), Stmt::DirectInsertion(format!("    %tmp{{o}} = sext i8 %tmp{{v}} to i32\n")));
@@ -210,36 +209,45 @@ fn compile_structs(main_state: &mut CompilerState) -> Result<(), String> {
     for parsed_struct in &main_state.structs {
         let name = &parsed_struct.name;
         let fields = &parsed_struct.fields;
-        let struct_pt = ParserType::Structure(fields.iter().map(|x|x.1.clone()).collect::<Vec<_>>());
+        let struct_pt = ParserType::Structure(name.clone(),fields.iter().map(|x|x.clone()).collect::<Vec<_>>());
 
-        main_state.implemented_types.insert(name.clone(), CompilerType { parser_type: struct_pt, underlying_representation: ParserType::Named(format!("%struct.{}", name.clone())), explicit_casts: HashMap::new(), _binary_operations: HashMap::new() });
-        let fields = fields.iter().map(|x| main_state.get_compiler_type_from_parser(&x.1).unwrap().underlying_representation.to_string())
+        main_state.implemented_types.insert(name.clone(), CompilerType { 
+            parser_type: ParserType::Named(name.clone()),
+            llvm_representation: ParserType::Named(format!("%struct.{}", name.clone())), 
+            struct_representation : struct_pt,
+            explicit_casts: HashMap::new(), _binary_operations: HashMap::new() 
+        });
+    }
+    for parsed_struct in &main_state.structs {
+        let name = &parsed_struct.name;
+        let fields = &parsed_struct.fields;
+        let fields = fields.iter().map(|x| main_state.get_compiler_type_from_parser(&x.1).unwrap().llvm_representation.to_string())
         .collect::<Vec<_>>().join(",");
         main_state.output.push_str(&format!("%struct.{} = type {{{}}}\n", name, fields));
     }
-
     Ok(())
 }
 pub fn compile_functions(state :&mut CompilerState) -> Result<(), String>{
     for i in 0..state.functions.len() {
         let function = &state.functions[i];
         let function_name = function.name.clone();
-        let function_return_type = state.get_compiler_type_from_parser(&function.return_type)?.underlying_representation;
-        let mut args_string = String::new();
-        for i in 0..function.args.len() {
-            args_string.push_str(&format!("{} %{}",function.args[i].1.to_string(), function.args[i].0));
-            if i + 1 != function.args.len() {
-                args_string.push_str(&", ");
-            }
+        let function_return_type = state.get_compiler_type_from_parser(&function.return_type)?.llvm_representation;
+        let mut arg_parts = Vec::new();
+        for (arg_name, arg_type) in &function.args {
+            let compiler_type = state.get_compiler_type_from_parser(arg_type)?;
+            let type_string = compiler_type.llvm_representation.to_string();
+            let formatted_arg = format!("{} %{}", type_string, arg_name);
+            arg_parts.push(formatted_arg);
         }
+        let args_string = arg_parts.join(", ");
         state.output.push_str(&format!("\ndefine {} @{}({}){{\n", function_return_type.to_string(), function_name, args_string));
         state.current_function = Some(i);
         state.current_variable_stack.clear();
         state.temp_value_counter = 0;
         for arg in &function.args {
             let val_type = state.get_compiler_type_from_parser(&arg.1)?;
-            state.output.push_str(&format!("    %{}.addr = alloca {}\n", arg.0, val_type.underlying_representation.to_string()));
-            state.output.push_str(&format!("    store {} %{}, {}* %{}.addr\n", val_type.underlying_representation.to_string(), arg.0, val_type.underlying_representation.to_string(), arg.0));
+            state.output.push_str(&format!("    %{}.addr = alloca {}\n", arg.0, val_type.llvm_representation.to_string()));
+            state.output.push_str(&format!("    store {} %{}, {}* %{}.addr\n", val_type.llvm_representation.to_string(), arg.0, val_type.llvm_representation.to_string(), arg.0));
             state.current_function_arguments.insert(arg.0.clone(), val_type);
         }
         compile_statement(&function.body.clone(), state).map_err(|x| format!("while compiling function {}\n\r{}",function_name,x))?;
@@ -259,31 +267,68 @@ pub fn compile_statement(statement: &Stmt,state :&mut CompilerState) -> Result<(
         }
         Stmt::Let(name, var_type) => {
             let comp_type = state.get_compiler_type_from_parser(var_type)?;
-            state.output.push_str(&format!("    %{} = alloca {}\n", name, comp_type.underlying_representation.to_string()));
+            state.output.push_str(&format!("    %{} = alloca {}\n", name, comp_type.llvm_representation.to_string()));
             state.current_variable_stack.insert(name.clone(), comp_type);
         }
         Stmt::Expr(expression) => { compile_expression(expression, None, state).map_err(|x| format!("while compiling expression {:?}\n\r{}",expression,x))?; }
         Stmt::Return(expression) =>{
             if let Some(expression) = expression {
                 let expected_type = state.current_function_return_type()?;
-                let function_actual_return_type = state.get_compiler_type_from_parser(&expected_type)?.underlying_representation;
+                let function_actual_return_type = state.get_compiler_type_from_parser(&expected_type)?.llvm_representation;
                 let tmp_idx = compile_expression(expression, Some(&expected_type), state)?;
                 if tmp_idx.value_type != expected_type {
-                    return Err(format!("Result type \"{}\" of expresion is not equal to return type \"{}\" of function \"{}\"", tmp_idx.value_type.to_string(), function_actual_return_type.to_string(), state.current_function_name()?));
+                    return Err(format!("Result type \"{:?}\" of expresion is not equal to return type \"{:?}\" of function \"{}\"", tmp_idx.value_type, function_actual_return_type, state.current_function_name()?));
                 }
                 state.output.push_str(&format!("    ret {} %tmp{}\n", function_actual_return_type.to_string(), tmp_idx.index));
+            }else {
+                let expected_type = state.current_function_return_type()?;
+                if expected_type != ParserType::Named(format!("void")) {
+                    return Err(format!("Returning empty expression in non void function"));
+                }
+                state.output.push_str(&format!("    ret void\n"));
             }
         }
+        Stmt::Continue => {state.output.push_str(&format!("    br label %loop_body{}\n", state.current_logic_counter_function.unwrap()));}
+        Stmt::Break => {state.output.push_str(&format!("    br label %loop_body{}_exit\n", state.current_logic_counter_function.unwrap()));}
+        Stmt::If(condition, then_stmt, else_stmt) => {
+            let mut cond_val = compile_expression(condition, None, state)?;
+            let logic_u = state.aquire_unique_logic_counter();
+            if cond_val.value_type != ParserType::Named(format!("bool")) {
+                cond_val = implisit_cast(&cond_val, &ParserType::Named(format!("bool")), state)?
+            }
+            state.output.push_str(&format!("    br i1 %tmp{}, label %then{}, label %else{}\n", cond_val.index, logic_u, logic_u));
+            state.output.push_str(&format!("then{}:\n", logic_u));
+            compile_statement(&then_stmt, state)?;
+            state.output.push_str(&format!("    br label %after_else{}\n", logic_u));
+            state.output.push_str(&format!("else{}:\n", logic_u));
+            if let Some(stmt) = else_stmt {
+                compile_statement(&stmt, state)?;
+            }
+            state.output.push_str(&format!("    br label %after_else{}\n", logic_u));
+            state.output.push_str(&format!("after_else{}:\n", logic_u));
+        }
+        Stmt::Loop(statement) =>{
+            let lc = state.aquire_unique_logic_counter();
+            
+            state.output.push_str(&format!("br label %loop_body{}\n", lc));
+            state.output.push_str(&format!("loop_body{}:\n", lc));
+
+            state.current_logic_counter_function = Some(lc);
+            compile_statement(statement, state)?;
+            state.current_logic_counter_function = None;
+            state.output.push_str(&format!("    br label %loop_body{}\n", lc));
+            state.output.push_str(&format!("loop_body{}_exit:\n", lc));
+        }
         Stmt::Hint(_,_) | Stmt::Function(_, _, _, _) | Stmt::Struct(_, _)  => return Err(format!("Statement {:?} was not expected in current context", statement)),
-        _ => {},
+        _ => panic!("{:?}", statement),
     }
     Ok(())
 }
 #[derive(Debug, Clone)]
-pub struct CompilerType { pub parser_type: ParserType, pub underlying_representation: ParserType, pub explicit_casts: HashMap<String, Stmt>, pub _binary_operations: HashMap<BinaryOp, HashMap<String, String>>, }
+pub struct CompilerType { pub parser_type: ParserType, pub llvm_representation: ParserType, pub struct_representation: ParserType, pub explicit_casts: HashMap<String, Stmt>,  pub _binary_operations: HashMap<BinaryOp, HashMap<String, String>>, }
 impl CompilerType { 
     pub fn sizeof(&self, state :&mut CompilerState) -> u32 { 
-        match &self.underlying_representation {
+        match &self.llvm_representation {
             ParserType::Named(x) => {
                 match x.as_str() {
                     "i8" => 1, 
@@ -296,8 +341,8 @@ impl CompilerType {
                     _ => {
                         if let Some(t) = x.split(|x| x == '.').nth(1) {
                             if state.implemented_types.contains_key(t) {
-                                if let ParserType::Structure(f) = &state.implemented_types[t].parser_type.clone() {
-                                    return f.iter().map(|x| state.get_compiler_type_from_parser(x).unwrap().sizeof(state)).sum();
+                                if let ParserType::Structure(_, f) = &state.implemented_types[t].struct_representation.clone() {
+                                    return f.iter().map(|x| state.get_compiler_type_from_parser(&x.1).unwrap().sizeof(state)).sum();
                                 }
                             }
 
@@ -307,7 +352,7 @@ impl CompilerType {
                 }
             }
             ParserType::Ref(_) => 8,
-            _ => todo!("{:?}", self.underlying_representation)
+            _ => todo!("{:?}", self.llvm_representation)
         }
     } 
 }
@@ -320,9 +365,11 @@ pub struct CompilerState{
     pub implemented_types: HashMap<String, CompilerType>,
 
     current_function: Option<usize>,
+    current_logic_counter_function: Option<usize>,
     current_variable_stack: HashMap<String, CompilerType>,
     pub current_function_arguments: HashMap<String, CompilerType>,
-    temp_value_counter: usize
+    temp_value_counter: usize,
+    logic_counter: usize,
 }
 impl CompilerState {
     pub fn current_function_return_type(&self) -> Result<ParserType,String>{
@@ -339,7 +386,10 @@ impl CompilerState {
         self.temp_value_counter += 1;
         self.temp_value_counter - 1
     }
-    
+    pub fn aquire_unique_logic_counter(&mut self) -> usize{
+        self.logic_counter += 1;
+        self.logic_counter - 1
+    }
     pub fn get_variable_type(&self, name: &str) -> Result<&CompilerType,String>{
         if self.current_function.is_some() {
             if self.current_variable_stack.contains_key(name) {
@@ -361,7 +411,7 @@ impl CompilerState {
     pub fn get_compiler_type_from_parser(&self, parser_type: &ParserType) -> Result<CompilerType,String>{
         if let Some(x) = self.implemented_types.get(&parser_type.to_string_core()) {
             let mut pt = x.clone();
-            let mut underlying_representation = pt.underlying_representation.clone();
+            let mut underlying_representation = pt.llvm_representation.clone();
             let mut pv = parser_type.clone();
             loop {
                 if let ParserType::Ref(r) = pv {
@@ -372,7 +422,7 @@ impl CompilerState {
                 break;
             }
             pt.parser_type = parser_type.clone();
-            pt.underlying_representation = underlying_representation;
+            pt.llvm_representation = underlying_representation;
             // if given parser type is ref, than add ref to compiler type
             return Ok(pt);
         }

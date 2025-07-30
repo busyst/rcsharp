@@ -21,9 +21,12 @@ fn main() -> Result<(), String> {
             Err(err) => {eprintln!("ERROR: {} | Span: {:?} | Slice: {:?}", err,err.span,&src[err.span.clone()]); exit(-1)},
         }
     ).collect::<Vec<_>>();
-
-    let y = rcsharp_parser(&tokens)?;
-    
+    let y = rcsharp_parser(&tokens);
+    if let Err(err) = y {
+        eprintln!("{}",err);
+        return Err(format!(""));
+    };
+    let y = y.unwrap();
     if let Err(err) = rcsharp_compile_to_file(&y) {
         eprintln!("{}",err);
         return Err(format!(""));

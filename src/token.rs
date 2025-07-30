@@ -1,5 +1,6 @@
 use logos::{Logos, Lexer as LogosLexer, Span};
 use std::fmt;
+// AI assisted, somehow works. Further improvements needed.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct Location {
     pub row: u32,
@@ -111,9 +112,8 @@ pub enum Token {
     #[token("continue")] KeywordContinue,
     #[token("return")] KeywordReturn,
     #[token("this")] KeywordThis,
-    UnaryOpMark,
+    #[token("operator")] KeywordOperator,
     DummyToken,
-    IndexToken,
     #[regex(r"[a-zA-Z_]\w*", |lex| lex.slice().to_string().into_boxed_str())]
     Name(Box<str>),
     #[regex(r"\d+", |lex| lex.slice().to_string().into_boxed_str())]
@@ -137,53 +137,41 @@ impl<'source> Lexer<'source> {
             loc: Location { row: 1, col: 1 },
         }
     }
-
-    /// Helper function to advance the location based on the token's text.
     fn advance_loc(&mut self, slice: &str) {
         let newlines = slice.bytes().filter(|&b| b == b'\n').count();
         if newlines > 0 {
             self.loc.row += newlines as u32;
-            // The new column is the number of chars after the last newline.
-            let last_newline = slice.rfind('\n').unwrap(); // Safe due to check above
+            let last_newline = slice.rfind('\n').unwrap();
             self.loc.col = slice[last_newline + 1..].chars().count() as u32 + 1;
         } else {
-            // No newlines, just advance the column by the number of chars.
             self.loc.col += slice.chars().count() as u32;
         }
     }
 }
 
-// --- Step 4: Implement the Iterator trait for our Lexer ---
 impl<'source> Iterator for Lexer<'source> {
     type Item = Result<TokenData, LexingError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            // Get the next token from logos, or None if we're at the end.
             let token_result = self.logos.next()?;
             let span = self.logos.span();
             let slice = self.logos.slice();
 
-            // The location of the *current* token is what we have *before* advancing.
             let start_loc = self.loc;
 
-            // Now, advance our internal location counter for the *next* token.
             self.advance_loc(slice);
 
             match token_result {
-                // On error, create our custom error type with location info.
                 Err(_) => {
                     let err = LexingError { span, loc: start_loc };
                     return Some(Err(err));
                 }
                 
-                // For tokens we want to skip, we just loop again.
-                // The location has been advanced, so we're ready for the next one.
                 Ok(Token::Whitespace) | Ok(Token::Newline) | Ok(Token::LineComment) | Ok(Token::BlockComment) => {
                     continue;
                 }
                 
-                // This is a "real" token, so we bundle it and return.
                 Ok(token) => {
                     return Some(Ok(TokenData {
                         token,
@@ -197,7 +185,6 @@ impl<'source> Iterator for Lexer<'source> {
 }
 fn unescape_string(lex: &mut logos::Lexer<Token>) -> Box<str> {
     let slice = lex.slice();
-    // Slice off the surrounding quotes, which the regex guarantees are present.
     let content = &slice[1..slice.len() - 1];
 
     let mut unescaped = String::with_capacity(content.len());
@@ -205,21 +192,16 @@ fn unescape_string(lex: &mut logos::Lexer<Token>) -> Box<str> {
 
     while let Some(c) = chars.next() {
         if c == '\\' {
-            // It's an escape sequence. Look at the next character.
             match chars.next() {
                 Some('n') => unescaped.push('\n'),
                 Some('t') => unescaped.push('\t'),
                 Some('r') => unescaped.push('\r'),
                 Some('\\') => unescaped.push('\\'),
                 Some('"') => unescaped.push('"'),
-                // For any other character following a backslash,
-                // we just push that character.
                 Some(other) => unescaped.push(other),
-                // This case handles a dangling backslash at the end of the string.
                 None => break,
             }
         } else {
-            // It's a regular character.
             unescaped.push(c);
         }
     }

@@ -1,20 +1,69 @@
-fn __chkstk() : void{ /*I dont get it*/}
+fn __chkstk() : void{ /*I dont get it, more research needed*/}
 #[DllImport("kernel32.dll")]
 fn GetProcessHeap(): &i32;
 #[DllImport("kernel32.dll")]
 fn HeapAlloc(hHeap: &i32, dwFlags: i32, dwBytes: i64): &i8;
+/*
 struct vec2{
     x:u32,
     y:u32,
 }
+fn operator+(left : &vec2, right : &vec2) : vec2{
+    let q : vec2;
+    q.x = (*left).x + (*right).x;
+    q.y = (*left).y + (*right).y;
+    return q;
+}
+fn zero(val : &vec2) : void{
+    (*val).x = 0 as u32;
+    (*val).y = 0 as u32;
+}
+*/
 fn malloc(size:i64) : &i8{
     return HeapAlloc(GetProcessHeap(), 0 as i32, size);
 }
-fn malloc_zero(size:i64) : &i8{
-    return HeapAlloc(GetProcessHeap(), 8 as i32, size);
+
+struct List{
+    head: &ListNode,
+    foot: &ListNode,
+    length: u32,
+}
+struct ListNode{
+    next_node: &ListNode,
+    data: &i8,
+}
+fn new_list(list: &List){
+    (*list).head = 0 as &ListNode;
+    (*list).foot = 0 as &ListNode;
+    (*list).length = 0 as u32;
+}
+fn new_list_node(list: &ListNode){
+    (*list).next_node = 0 as &ListNode;
+    (*list).data = 0 as &i8;
+}
+fn extend(list: &List, data: &i8){
+    if (*list).head == 0 as &ListNode{
+        (*list).head = malloc(sizeof(ListNode)) as &ListNode;
+        new_list_node((*list).head);
+        (*list).head.data = data;
+
+        (*list).foot = (*list).head;
+        (*list).length = 1;
+        return;
+    }
+    let nln : &ListNode = malloc(sizeof(ListNode)) as &ListNode;
+    new_list_node(nln);
+    (*nln).data = data;
+    (*list).foot.next_node = nln;
+    
+    (*list).foot = (*list).foot.next_node;
+    (*list).length = (*list).length + 1 as u32;
 }
 fn main(): i32 {
-    let x: &vec2 = ((stalloc(sizeof(vec2))) as &vec2);
-    let y: vec2 = *x;
-    return 0;
+    let list : List;
+    new_list(&list);
+    extend(&list, 1 as &i8);
+    extend(&list, 2 as &i8);
+    extend(&list, 3 as &i8);
+    return (list.length) as i32;
 }

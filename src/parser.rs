@@ -22,7 +22,7 @@ pub enum ParserType {
     // return type, arguments
     Fucntion(Box<ParserType>,Vec<ParserType>),
     // Fields
-    Structure(Vec<ParserType>),
+    Structure(String,Vec<(String,ParserType)>),
 }
 #[allow(dead_code)]
 impl ParserType {
@@ -67,13 +67,20 @@ impl ParserType {
             false
         }
     }
+    pub fn is_void(&self) -> bool {
+        if let ParserType::Named(name) = self {
+            matches!(name.as_str(), "void")
+        } else {
+            false
+        }
+    }
     pub fn to_string(&self) -> String{
         let mut output = String::new();
         match self {
             ParserType::Named(x) => output.push_str(x),
             ParserType::Ref(x) => {output.push_str(&x.to_string()); output.push('*');},
             ParserType::Fucntion(_, _) => {todo!()},
-            ParserType::Structure(_) => {todo!()},
+            ParserType::Structure(name, _) => {output.push_str(&format!("%struct.{}", name));},
         }
         return output;
     }
@@ -81,9 +88,9 @@ impl ParserType {
         let mut output = String::new();
         match self {
             ParserType::Named(x) => output.push_str(x),
-            ParserType::Ref(x) => {return x.to_string();},
+            ParserType::Ref(x) => {return x.to_string_core();},
             ParserType::Fucntion(_, _) => {todo!()},
-            ParserType::Structure(_) => {todo!()},
+            ParserType::Structure(name, _) => {output.push_str(&name);},
         }
         return output;
     }
@@ -92,7 +99,7 @@ impl ParserType {
             ParserType::Named(_) => false,
             ParserType::Ref(_) => true,
             ParserType::Fucntion(_, _) => {todo!()},
-            ParserType::Structure(_) => {todo!()},
+            ParserType::Structure(_, _) => {todo!()},
         }
     }
     pub fn dereference_once(&self) -> ParserType{
@@ -100,7 +107,7 @@ impl ParserType {
             ParserType::Named(_) => panic!("ParserType is Named {:?} that is not dereferencable", self),
             ParserType::Ref(x) => return *x.clone(),
             ParserType::Fucntion(_, _) => {todo!()},
-            ParserType::Structure(_) => {todo!()},
+            ParserType::Structure(_, _) => {todo!()},
         }
     }
     pub fn reference_once(&self) -> ParserType{

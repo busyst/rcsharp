@@ -10,8 +10,8 @@ pub fn type_from_expression(x: &Expr) -> Result<ParserType, String>{
 pub fn explicit_cast(value: &CompiledTempValue, to: &ParserType, state: &mut CompilerState) -> Result<CompiledTempValue, String>{
     let ltype = state.get_compiler_type_from_parser(&value.value_type)?;
     let rtype = state.get_compiler_type_from_parser(&to)?;
-    let ltype_true_string = ltype.underlying_representation.to_string();
-    let rtype_true_string = rtype.underlying_representation.to_string();
+    let ltype_true_string = ltype.llvm_representation.to_string();
+    let rtype_true_string = rtype.llvm_representation.to_string();
     match (&value.value_type, to) {
         (ParserType::Named(_), ParserType::Named(_)) => {
             let utvc = state.aquire_unique_temp_value_counter();
@@ -44,17 +44,17 @@ pub fn explicit_cast(value: &CompiledTempValue, to: &ParserType, state: &mut Com
             return Ok(CompiledTempValue { index: utvc, value_type: to.clone() });
         }
         (ParserType::Ref(_),ParserType::Named(_)) => {
-            if !ltype.parser_type.is_integer() {
-                return Err(format!("Cannot convert from pointer to non-integer type"));
+            if !rtype.parser_type.is_integer() { 
+                return Err(format!("Cannot convert from pointer to non-integer type '{}'", to.to_string()));
             }
             let utvc = state.aquire_unique_temp_value_counter();
             state.output.push_str(&format!("    %tmp{} = ptrtoint {} %tmp{} to {}\n",utvc, ltype_true_string, value.index.to_string(), rtype_true_string));
-            return Ok(CompiledTempValue { index: utvc, value_type: to.clone() });
+            return Ok(CompiledTempValue { index: utvc, value_type: rtype.parser_type });
         }
         (ParserType::Ref(_),ParserType::Ref(_)) => {
             let utvc = state.aquire_unique_temp_value_counter();
             state.output.push_str(&format!("    %tmp{} = bitcast {} %tmp{} to {}\n",utvc, ltype_true_string, value.index, rtype_true_string));
-            return Ok(CompiledTempValue { index: utvc, value_type: to.clone() });
+            return Ok(CompiledTempValue { index: utvc, value_type: rtype.parser_type });
         }
         _ => {todo!()}
     }
@@ -71,7 +71,7 @@ pub fn compile_rvalue(right: &Expr, expected_type: Option<&ParserType>, state: &
             if let Some(x) = expected_type {
                 if x.is_integer() {
                     let q = state.get_compiler_type_from_parser(x).unwrap();
-                    state.output.push_str(&format!("    %tmp{} = add {} {}, 0\n", utvc, q.underlying_representation.to_string(), num));
+                    state.output.push_str(&format!("    %tmp{} = add {} {}, 0\n", utvc, q.llvm_representation.to_string(), num));
                     return Ok(CompiledTempValue{index: utvc, value_type: x.clone()});
                 }
             }
@@ -82,14 +82,14 @@ pub fn compile_rvalue(right: &Expr, expected_type: Option<&ParserType>, state: &
             let utvc = state.aquire_unique_temp_value_counter();
             if let Ok(var) = state.get_variable_type(&name) {
                 let var_actual_type = var.parser_type.clone();
-                let var_repr_type = var.underlying_representation.clone();
+                let var_repr_type = var.llvm_representation.clone();
 
                 state.output.push_str(&format!("    %tmp{} = load {}, {}* %{}\n", utvc, var_repr_type.to_string(), var_repr_type.to_string(), name));
                 return Ok(CompiledTempValue{index: utvc, value_type: var_actual_type.clone()});   
             }
             if let Ok(var) = state.get_argument_type(&name) {
                 let var_actual_type = var.parser_type.clone();
-                let var_repr_type = var.underlying_representation.clone();
+                let var_repr_type = var.llvm_representation.clone();
 
                 state.output.push_str(&format!("    %tmp{} = load {}, {}* %{}.addr\n", utvc, var_repr_type.to_string(), var_repr_type.to_string(), name));
                 return Ok(CompiledTempValue{index: utvc, value_type: var_actual_type.clone()});   
@@ -107,7 +107,7 @@ pub fn compile_rvalue(right: &Expr, expected_type: Option<&ParserType>, state: &
             let l = compile_rvalue(&left, None, state)?;
             let mut r = compile_rvalue(&right, None, state)?;
             if l.value_type.is_integer() && r.value_type.is_integer() && l.value_type != r.value_type {
-                r = implisit_cast(&r, &l.value_type, state)?;
+                r = implisit_cast(&r, &l.value_type, state).map_err(|x| format!("while compiling binary expression !{:?}! !{:?}! !{:?}\n{}", left, op, right, x))?;
             }
             if l.value_type != r.value_type {
                 return Err(format!("Binary operator '{:?}' cannot be applied to mismatched types '{}' and '{}'",op,l.value_type.to_string(),r.value_type.to_string()));
@@ -116,7 +116,7 @@ pub fn compile_rvalue(right: &Expr, expected_type: Option<&ParserType>, state: &
                 if l.value_type.is_integer() {
 
                     let utvc = state.aquire_unique_temp_value_counter();
-                    let llvm_type = state.get_compiler_type_from_parser(&l.value_type)?.underlying_representation.to_string();
+                    let llvm_type = state.get_compiler_type_from_parser(&l.value_type)?.llvm_representation.to_string();
                     
                     let is_signed = l.value_type.is_signed_integer();
 
@@ -153,6 +153,16 @@ pub fn compile_rvalue(right: &Expr, expected_type: Option<&ParserType>, state: &
                     };
                     return Ok(CompiledTempValue { index: utvc, value_type: result_type });
                 }
+                if l.value_type.is_pointer() {
+                    let utvc = state.aquire_unique_temp_value_counter();
+                    let llvm_op = match op {
+                        BinaryOp::Equal => "icmp eq",
+                        BinaryOp::NotEqual => "icmp ne",
+                        _ => panic!("Operation \"{:?}\" is not permited on pointers", op)
+                    };
+                    state.output.push_str(&format!("    %tmp{} = {} ptr %tmp{}, %tmp{}\n",utvc, llvm_op, l.index, r.index));
+                    return Ok(CompiledTempValue { index: utvc, value_type: ParserType::Named("bool".to_string()) });
+                }
                 return Err(format!("Binary operator \"{:?}\" was not implemted for types \"{}\"", op, l.value_type.to_string()));
             }
             return Err(format!("Binary operator \"{:?}\" cannot be applied to types \"{}\" and \"{}\"",op, l.value_type.to_string(), r.value_type.to_string()));
@@ -167,9 +177,9 @@ pub fn compile_rvalue(right: &Expr, expected_type: Option<&ParserType>, state: &
                         return Ok(CompiledTempValue { index: utvc, value_type: value.value_type });
                     }
                     if value.value_type.is_integer() {
-                    let llvm_type = state.get_compiler_type_from_parser(&value.value_type)?.underlying_representation.to_string();
-                        state.output.push_str(&format!("    %tmp{} = xor {} %tmp{}, -1\n",utvc, llvm_type, value.index));
-                        return Ok(CompiledTempValue { index: utvc, value_type: value.value_type });
+                        let llvm_type = state.get_compiler_type_from_parser(&value.value_type)?.llvm_representation.to_string();
+                        state.output.push_str(&format!("    %tmp{} = icmp eq {} %tmp{}, 0\n", utvc, llvm_type, value.index));
+                        return Ok(CompiledTempValue { index: utvc, value_type: ParserType::Named("bool".to_string()) });
                     }
                     return Err(format!("Unary NOT '!' operator cannot be applied to type '{}'.",value.value_type.to_string()));
                 }
@@ -177,7 +187,7 @@ pub fn compile_rvalue(right: &Expr, expected_type: Option<&ParserType>, state: &
                     let value = compile_rvalue(expr, None, state)?;
                     let utvc = state.aquire_unique_temp_value_counter();
                     if value.value_type.is_signed_integer() {
-                        let llvm_type = state.get_compiler_type_from_parser(&value.value_type)?.underlying_representation.to_string();
+                        let llvm_type = state.get_compiler_type_from_parser(&value.value_type)?.llvm_representation.to_string();
                         // In LLVM, integer negation is performed by subtracting from 0.
                         state.output.push_str(&format!( "    %tmp{} = sub {} 0, %tmp{}\n",utvc, llvm_type, value.index));
                         return Ok(CompiledTempValue { index: utvc, value_type: value.value_type });
@@ -194,7 +204,7 @@ pub fn compile_rvalue(right: &Expr, expected_type: Option<&ParserType>, state: &
                         return Err(format!("Tried to dereference non pointer value {:?}", &value));
                     }
                     let value_deref_type = value.value_type.dereference_once();
-                    let underlying_type_representation= state.get_compiler_type_from_parser(&value_deref_type)?.underlying_representation.to_string();
+                    let underlying_type_representation= state.get_compiler_type_from_parser(&value_deref_type)?.llvm_representation.to_string();
                     let utvc = state.aquire_unique_temp_value_counter();
                     state.output.push_str(&format!("    %tmp{} = load {}, {}* %tmp{}\n",utvc, underlying_type_representation, underlying_type_representation, value.index));
                     return Ok(CompiledTempValue{index: utvc, value_type: value_deref_type});
@@ -210,14 +220,13 @@ pub fn compile_rvalue(right: &Expr, expected_type: Option<&ParserType>, state: &
             }
         }
         Expr::Call(left, args) =>{
-            //println!("{:?}",left);
             if Expr::Name(format!("sizeof")) == **left {
                 let size = if args.len() == 1 { state.get_compiler_type_from_parser(&type_from_expression(&args[0])?)?.sizeof(state) } else { return Err(format!("Only 1 argument is allowed. Example: sizeof(&i32);"));};
                 let utvc = state.aquire_unique_temp_value_counter();
                 if let Some(x) = expected_type {
                     if x.is_integer() {
                         let q = state.get_compiler_type_from_parser(x).unwrap();
-                        state.output.push_str(&format!("    %tmp{} = add {} {}, 0\n", utvc, q.underlying_representation.to_string(), size));
+                        state.output.push_str(&format!("    %tmp{} = add {} {}, 0\n", utvc, q.llvm_representation.to_string(), size));
                         return Ok(CompiledTempValue{index: utvc, value_type: x.clone()});
                     }
                 }
@@ -234,6 +243,7 @@ pub fn compile_rvalue(right: &Expr, expected_type: Option<&ParserType>, state: &
             }
             let call_address = compile_lvalue(left, state)?;
             if let ParserType::Fucntion(return_type, args_type) = call_address.value_type {
+                let return_type = state.get_compiler_type_from_parser(&return_type)?;
                 if args_type.len() != args.len() {
                     return Err(format!("Amount of arguments given, does not respond with the amount required"));
                 }
@@ -242,16 +252,34 @@ pub fn compile_rvalue(right: &Expr, expected_type: Option<&ParserType>, state: &
                     let arg = &args[i];
                     let mut x = compile_rvalue(arg, Some(&args_type[i]),state)?;
                     if x.value_type != args_type[i] {
-                        x = implisit_cast(&x, &args_type[i], state)?;
+                        x = implisit_cast(&x, &args_type[i], state).map_err(|x| format!("while calling function !{:?}!\n{}", left, x))?;
                     }
                     comps.push(x);
                 }
-                let args = comps.iter().map(|x| format!("{} %tmp{}",x.value_type.to_string(), x.index)).collect::<Vec<_>>().join(",");
-                let utvc = state.aquire_unique_temp_value_counter();
-                state.output.push_str(&format!("    %tmp{} = call {} %tmp{}({})\n",utvc, return_type.to_string(), call_address.index, args));
-                return Ok(CompiledTempValue{index: utvc, value_type: *return_type}); 
+                let mut arg_parts = Vec::new();
+                for x in comps {
+                    let compiler_type = state.get_compiler_type_from_parser(&x.value_type)?;
+                    let type_string = compiler_type.llvm_representation.to_string();
+                    let formatted_arg = format!("{} %tmp{}", type_string, x.index);
+                    arg_parts.push(formatted_arg);
+                }
+                let args_string = arg_parts.join(",");
+                if !return_type.parser_type.is_void() {
+                    let utvc = state.aquire_unique_temp_value_counter();
+                    state.output.push_str(&format!("    %tmp{} = call {} %tmp{}({})\n",utvc, return_type.llvm_representation.to_string(), call_address.index, args_string));
+                    return Ok(CompiledTempValue{index: utvc, value_type: return_type.parser_type}); 
+                }
+                state.output.push_str(&format!("    call void %tmp{}({})\n", call_address.index, args_string));
+                return Ok(CompiledTempValue{index: 0, value_type: return_type.parser_type});
             }
             return Err(format!("Tried to call non-function type"));
+        }
+        Expr::Member(x, y) =>{
+            let member_lvalue = compile_lvalue(&Expr::Member(x.clone(), y.clone()), state)?;
+            let utvc = state.aquire_unique_temp_value_counter();
+            let member_type_repr = state.get_compiler_type_from_parser(&member_lvalue.value_type)?.llvm_representation.to_string();
+            state.output.push_str(&format!("    %tmp{} = load {}, {}* %tmp{}\n",utvc, member_type_repr, member_type_repr, member_lvalue.index));
+            return Ok(CompiledTempValue { index: utvc, value_type: member_lvalue.value_type });
         }
         _ => todo!("{:?}", right)
     }
@@ -262,26 +290,33 @@ fn compile_lvalue(left: &Expr, state: &mut CompilerState) -> Result<CompiledTemp
         Expr::Name(name) => {
             if let Ok(var) = state.get_variable_type(&name) {
                 let var_actual_type = var.parser_type.clone();
-                let var_repr_type = var.underlying_representation.clone();
+                let var_repr_type = var.llvm_representation.clone();
 
-                state.output.push_str(&format!("    %tmp{} = getelementptr {}, {}* %{}\n", utvc, var_repr_type.to_string(), var_repr_type.to_string(), name));
+                state.output.push_str(&format!("    %tmp{} = getelementptr inbounds {}, {}* %{}, i32 0\n", utvc, var_repr_type.to_string(), var_repr_type.to_string(), name));
                 return Ok(CompiledTempValue{index: utvc, value_type: var_actual_type});
             }
             if let Ok(var) = state.get_argument_type(&name) {
                 let var_actual_type = var.parser_type.clone();
-                let var_repr_type = var.underlying_representation.clone();
+                let var_repr_type = var.llvm_representation.clone();
 
-                state.output.push_str(&format!("    %tmp{} = getelementptr {}, {}* %{}.addr\n", utvc, var_repr_type.to_string(), var_repr_type.to_string(), name));
+                state.output.push_str(&format!("    %tmp{} = getelementptr inbounds {}, {}* %{}.addr, i32 0\n", utvc, var_repr_type.to_string(), var_repr_type.to_string(), name));
                 return Ok(CompiledTempValue{index: utvc, value_type: var_actual_type});
             }
             if let Ok(func) = state.get_function(&name) {
                 let name = &func.name;
                 let args = &func.args;
-                let args_string = args.iter().map(|x| x.1.to_string()).collect::<Vec<_>>().join(",");
-                let return_type = func.return_type.clone();
+                let return_type = state.get_compiler_type_from_parser(&func.return_type)?;
+                let mut arg_parts = Vec::new();
+                for (_, arg_type) in args {
+                    let compiler_type = state.get_compiler_type_from_parser(arg_type)?;
+                    let type_string = compiler_type.llvm_representation.to_string();
+                    let formatted_arg = format!("{}", type_string);
+                    arg_parts.push(formatted_arg);
+                }
+                let args_string = arg_parts.join(",");
                 let args_copy = args.iter().map(|x|x.1.clone()).collect::<Vec<_>>();
-                state.output.push_str(&format!("    %tmp{} = bitcast {}({})* @{} to ptr\n", utvc, return_type.to_string(), args_string, name));
-                return Ok(CompiledTempValue{index: utvc, value_type: ParserType::Fucntion(Box::new(return_type), args_copy)});
+                state.output.push_str(&format!("    %tmp{} = bitcast {}({})* @{} to ptr\n", utvc, return_type.llvm_representation.to_string(), args_string, name));
+                return Ok(CompiledTempValue{index: utvc, value_type: ParserType::Fucntion(Box::new(return_type.parser_type), args_copy)});
             }
             return Err(format!("Name \"{}\" does not respond to function name or variable name in current context",name));
         }
@@ -298,24 +333,39 @@ fn compile_lvalue(left: &Expr, state: &mut CompilerState) -> Result<CompiledTemp
                 _ => todo!()
             }
         }
+        Expr::Member(x, y) =>{
+            let l = compile_lvalue(x, state)?;
+            let var_type = state.get_compiler_type_from_parser(&l.value_type)?;
+            if let ParserType::Structure(_, args) = var_type.struct_representation {
+                let index = args.iter().position(|x| x.0 == *y).ok_or(format!("Member \"{}\" was not found inside structure \"{}\"", y, var_type.parser_type.to_string()))?;
+                let mut offset = 0;
+                for i in 0..index {
+                    let arg_size = state.get_compiler_type_from_parser(&args[i].1)?.sizeof(state);
+                    offset += arg_size;
+                }
+                state.output.push_str(&format!("    %tmp{} = getelementptr i8, {} %tmp{}, i64 {}\n",utvc, "ptr", l.index, offset));
+                return Ok(CompiledTempValue { index: utvc, value_type: args[index].1.clone() });
+            }
+            todo!()
+        }
         _ => todo!()
     }
 }
 pub fn compile_expression(expression: &Expr, expected_type: Option<&ParserType>, state: &mut CompilerState) -> Result<CompiledTempValue, String> {
     //println!("Expression {:?}", expression);
     match expression {
-        Expr::UnaryOp(_, _) | Expr::Name(_) | Expr::Integer(_) | Expr::Call(_, _) | Expr::BinaryOp(_, _, _) =>{
+        Expr::UnaryOp(_, _) | Expr::Name(_) | Expr::Integer(_) | Expr::Call(_, _) | Expr::BinaryOp(_, _, _) | Expr::Member(_, _) =>{
             return compile_rvalue(&expression, expected_type, state);
         }
         Expr::Assign(left, right) => {
             let l = compile_lvalue(&left, state)?;
-            let mut r = compile_rvalue(&right, expected_type, state)?;
+            let mut r = compile_rvalue(&right, Some(&l.value_type), state)?;
             let val_type =  &l.value_type;
             if val_type != &r.value_type {
-                r = implisit_cast(&r, &l.value_type, state)?;
+                r = implisit_cast(&r, &l.value_type, state).map_err(|x| format!("while assigning !{:?}! !EQUAL! !{:?}\n{}", left, right, x))?;
             }
             let l_ut = state.get_compiler_type_from_parser(&l.value_type)?;
-            state.output.push_str(&format!("    store {} %tmp{}, {}* %tmp{}\n",l_ut.underlying_representation.to_string(),r.index, l_ut.underlying_representation.to_string(), l.index));
+            state.output.push_str(&format!("    store {} %tmp{}, {}* %tmp{}\n",l_ut.llvm_representation.to_string(),r.index, l_ut.llvm_representation.to_string(), l.index));
             
             return Ok(r.clone());
         }

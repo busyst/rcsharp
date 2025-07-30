@@ -1,4 +1,4 @@
-use crate::{parser::{capture_delimiters, ParserType}, token::{Token, TokenData}};
+use crate::{parser::ParserType, token::{Location, Token, TokenData}};
 
 #[derive(Debug, Clone, PartialEq, Eq)] 
 pub enum Expr {
@@ -26,258 +26,226 @@ pub enum BinaryOp {
 pub enum UnaryOp { // Prefix
     Negate, Not, Deref, Ref,
 }
-
-pub fn precedence(x: &Token) -> usize {
-    match x {
-        Token::Dot => 15, // Correctly high precedence for member access
-
-        Token::KeywordAs => 14,
-
-        Token::LogicNot => 13,
-        
-        Token::Multiply => 13,
-        Token::Divide => 13,
-        Token::Modulo => 13,
-        
-        Token::Plus => 12,
-        Token::Minus => 12,
-        
-        Token::BinaryShiftL => 11,
-        Token::BinaryShiftR => 11,
-        
-        Token::BinaryAnd => 8,
-        
-        Token::BinaryXor => 7,
-        
-        Token::BinaryOr => 6,
-        
-        Token::LogicLess => 9,
-        Token::LogicLessEqual => 9,
-        Token::LogicGreater => 9,
-        Token::LogicGreaterEqual => 9,
-        
-        Token::LogicEqual => 8,
-        Token::LogicNotEqual => 8,
-        
-        Token::LogicAnd => 5,
-        
-        Token::LogicOr => 4,
-        
+fn get_precedence(token: &Token) -> u8 {
+    match token {
         Token::Equal => 1,
-        
+        Token::LogicOr => 2,
+        Token::LogicAnd => 3,
+        Token::BinaryOr => 4,
+        Token::BinaryXor => 5,
+        Token::BinaryAnd => 6,
+        Token::LogicEqual | Token::LogicNotEqual => 7,
+        Token::LogicLess | Token::LogicLessEqual | Token::LogicGreater | Token::LogicGreaterEqual => 8,
+
+        Token::BinaryShiftL | Token::BinaryShiftR => 9,
+        Token::Plus | Token::Minus => 10,
+        Token::Multiply | Token::Divide | Token::Modulo => 11,
+        Token::KeywordAs => 12,
+        Token::LogicNot | Token::BinaryNot => 13,
+        Token::LParen | Token::LSquareBrace | Token::Dot => 14,
         _ => 0,
     }
 }
-pub fn parse_type_expression(exp: &Expr) -> ParserType{
-    match exp {
-        Expr::Name(x) => return ParserType::Named(x.to_string()),
-        Expr::UnaryOp(UnaryOp::Ref, exp) => return ParserType::Ref(Box::new(parse_type_expression(exp))),
-        _ => panic!("Expresion {:?} was not expected during parsing of type", exp),
+
+
+pub fn parse_expression(tokens: &[TokenData]) -> Result<Expr, String>{
+    if tokens.len() == 0 {
+        return Err(format!("Tried to parse empty token slice"));
     }
+    let mut parser = Parser::new(tokens);
+    let expr = parser.parse_expression()?;
+    if !parser.is_at_end() {
+        return Err(format!("Parser did not consume all tokens. Remainder starts at: {:?}", parser.peek()));
+    }
+
+    Ok(expr)
 }
-
-pub fn parse_expression(x: &[TokenData]) ->  Result<Expr, String>{
-    if x.is_empty() {
-        return Err(format!("Expresion length is 0"));
+pub struct Parser<'a> {
+    tokens: &'a [TokenData],
+    cursor: usize,
+}
+impl<'a> Parser<'a> {
+    pub fn new(tokens: &'a [TokenData]) -> Self {
+        Self { tokens, cursor: 0 }
     }
-    let mut output: Vec<&Token> = vec![];
-    let mut stack: Vec<&Token> = vec![];
-    let mut aux: Vec<(usize, Expr)> = vec![];
-    let mut i = 0;
-    while i < x.len() {
-        let current_token = &x[i].token;
-        let next_token = x.get(i + 1).map(|x| &x.token).unwrap_or(&Token::KeywordStruct);
-        match current_token {
-            Token::LParen => { stack.push(current_token);}
-            Token::LSquareBrace => { stack.push(current_token);}
-            Token::RParen => {
-                while let Some(last) = stack.last() {
-                    if **last == Token::LParen {
-                        break;
-                    }
-                    output.push(stack.pop().unwrap());
-                }
-                stack.pop();
-            }
-            Token::RSquareBrace => {
-                while let Some(last) = stack.last() {
-                    if **last == Token::LSquareBrace { break; }
-                    output.push(stack.pop().unwrap());
-                }
-                if stack.pop().is_none() {
-                    return Err("Mismatched ']' bracket.".to_string());
-                }
-                // Push a Dot token to act as the "index" operator in our RPN.
-                output.push(&Token::IndexToken);
-            }
-            Token::Integer(_) => output.push(current_token),
-            Token::Name(name) => {
-                if *next_token == Token::LParen { // x(...
-                    let arguments_tokens = capture_delimiters(&x[i + 1..], Token::LParen, Token::RParen)?;
-                    let mut args = vec![];
-                    if !arguments_tokens.is_empty() {
-                        for arg_tokens in arguments_tokens.split(|x| x.token == Token::Comma) {
-                            match parse_expression(arg_tokens) {
-                                Ok(x) => args.push(x),
-                                Err(x) => return Err(format!("Error while parsing argument tokens {:?} : {}", arg_tokens.iter().collect::<Vec<_>>(), x)),
-                            }
-                        }
-                    }
-                    aux.push((output.len(), Expr::Call(Box::new(Expr::Name(name.to_string())), args)));
-                    output.push(&Token::DummyToken);
-                    i += arguments_tokens.len() + 2; // +2 for parens, not 3
-                    continue;
-                }
-                output.push(current_token)
-            },
-            _=> {
-                if precedence(current_token) > 0 {
-                    // Check if operator is unary (e.g., "-x", "*x", "&x").
-                    let mut is_unary = false;
-
-                    if matches!(current_token, Token::Minus | Token::Multiply | Token::BinaryAnd | Token::LogicNot) {
-                        let prev_token = x.get(i.wrapping_sub(1)).map(|td| &td.token);
-                        if i == 0 || prev_token.map_or(false, |t| *t == Token::LParen || *t == Token::LSquareBrace || precedence(t) > 0) {
-                            is_unary = true;
-                        }
-                    }
-                    
-                    if is_unary {
-                        stack.push(&Token::UnaryOpMark);
-                    }
-                    let current_prio = precedence(current_token);
-
-                    let is_current_right_assoc = *current_token == Token::Equal;
-
-                    while let Some(top) = stack.last() {
-                        if **top == Token::LParen || **top == Token::LSquareBrace {
-                            break;
-                        }
-                        
-                        let top_prio = precedence(top);
-                        if top_prio > 0 {
-                            if (!is_current_right_assoc && current_prio <= top_prio) || (is_current_right_assoc && current_prio < top_prio) {
-                                let op = stack.pop().unwrap();
-                                output.push(op);
-                                
-                                if let Some(&&Token::UnaryOpMark) = stack.last() {
-                                    output.push(stack.pop().unwrap());
-                                }
-                            } else {
-                                break;
-                            }
-                        } else {
-                            break;
-                        }
-                    }
-                    stack.push(current_token);
-                } else {
-                    output.push(current_token);
-                }
-            }
+    pub fn is_at_end(&self) -> bool {
+        self.cursor >= self.tokens.len()
+    }
+    pub fn peek(&self) -> &TokenData {
+        const DUMMY_EOF: TokenData = TokenData { 
+            token: Token::DummyToken,
+            span: 0..0, 
+            loc: Location { row: 0, col: 0 } 
+        };
+        self.tokens.get(self.cursor).unwrap_or(&DUMMY_EOF)
+    }
+    pub fn advance(&mut self) -> &TokenData {
+        if !self.is_at_end() {
+            self.cursor += 1;
         }
-        i+=1;
+        &self.tokens[self.cursor - 1]
     }
-    while let Some(op) = stack.pop() {
-        output.push(op);
+    pub fn consume(&mut self, expected: &Token) -> Result<&TokenData, String> {
+        let token_data = self.peek();
+        if &token_data.token != expected {
+            return Err(format!("Expected token {:?}, but found {:?}", expected, token_data));
+        }
+        Ok(self.advance())
     }
-    if output.len() == 1 {
-        let t = output[0];
-        match t {
-            Token::Name(x) => return Ok(Expr::Name(x.to_string())),
-            Token::Integer(x) => return Ok(Expr::Integer(x.to_string())),
-            Token::Char(x) => return Ok(Expr::Integer((x.chars().nth(0).unwrap() as u64).to_string())),
-            Token::String(x) => return Ok(Expr::StringConst(x.to_string())),
-            Token::DummyToken => { return Ok(aux[0].1.clone());}
-            _ => todo!("This expresion is not covered by your license: {:?}", t)
+    pub fn parse_expression(&mut self) -> Result<Expr, String> {
+        self.parse_expression_with_precedence(0)
+    }
+    fn parse_expression_with_precedence(&mut self, min_precedence: u8) -> Result<Expr, String> {
+        let mut left = self.parse_prefix()?;
+
+        while !self.is_at_end() && min_precedence < get_precedence(&self.peek().token) {
+            left = self.parse_infix(left)?;
+        }
+
+        Ok(left)
+    }
+    fn parse_prefix(&mut self) -> Result<Expr, String> {
+        let token_data = self.advance();
+        match &token_data.token {
+            Token::Integer(val) => Ok(Expr::Integer(val.to_string())),
+            Token::String(val) => Ok(Expr::StringConst(val.to_string())),
+            Token::Name(name) => Ok(Expr::Name(name.to_string())),
+
+            Token::LParen => {
+                let expr = self.parse_expression_with_precedence(0)?;
+                self.consume(&Token::RParen)?;
+                Ok(expr)
+            }
+
+            // Unary Operators
+            Token::Minus => self.parse_unary(UnaryOp::Negate),
+            Token::LogicNot => self.parse_unary(UnaryOp::Not),
+            Token::Multiply => self.parse_unary(UnaryOp::Deref),
+            Token::BinaryAnd => self.parse_unary(UnaryOp::Ref),
+
+            _ => Err(format!("Unexpected token in prefix position: {:?}", token_data)),
         }
     }
-    fn rec_tree_builder(x: &[&Token], aux: &Vec<(usize, Expr)>, absolute_operation_index_in_output_vector: &mut usize) -> Result<Expr, String> {
-        if *absolute_operation_index_in_output_vector >= x.len() {
-            return Err("Index out of bounds".to_string());
-        }
-        let mut unary = false;
-        if *x[*absolute_operation_index_in_output_vector] == Token::UnaryOpMark {
-            unary = true;
-            if *absolute_operation_index_in_output_vector == 0 {
-                return Err("Unexpected unary operator at start".to_string());
-            }
-            *absolute_operation_index_in_output_vector -= 1;
-        }
-        let op = x[*absolute_operation_index_in_output_vector];
-        match op {
-            Token::Name(name) => return Ok(Expr::Name(name.to_string())),
-            Token::Integer(val) => return Ok(Expr::Integer(val.to_string())),
-            Token::String(str) => return Ok(Expr::StringConst(str.to_string())),
-            Token::Char(c) => return Ok(Expr::Integer((c.chars().nth(0).unwrap() as u64).to_string())),
-            Token::DummyToken => {
-                for (pos, expr) in aux {
-                    if *pos == *absolute_operation_index_in_output_vector {
-                        return Ok(expr.clone());
-                    }
-                }
-                return Err("DummyToken without corresponding function call".to_string());
-            }
-            _ => {}
-        }
-        if precedence(op) == 0 {
-            panic!("Unexpected token in RPN stream: {:?}", op);
-        }
-        if *absolute_operation_index_in_output_vector == 0 {
-            return Err("Not enough operands for operator".to_string());
-        }
-        *absolute_operation_index_in_output_vector -= 1;
-        let right_op = rec_tree_builder(x, aux, absolute_operation_index_in_output_vector)?;
-        if unary {
-            // Handle unary operators
-            let unary_op = match op {
-                Token::Minus => UnaryOp::Negate,
-                Token::Multiply => UnaryOp::Deref,
-                Token::BinaryAnd => UnaryOp::Ref,
-                Token::LogicNot => UnaryOp::Not,
-                _ => return Err(format!("Unsupported unary operator: {:?}", op)),
-            };
-            return Ok(Expr::UnaryOp(unary_op, Box::new(right_op)));
-        }
-        *absolute_operation_index_in_output_vector -= 1;
-        let left_op = rec_tree_builder(x, aux, absolute_operation_index_in_output_vector)?;
-        
-        let binary_expr = match op {
-            Token::Plus => Expr::BinaryOp(Box::new(left_op), BinaryOp::Add, Box::new(right_op)),
-            Token::Minus => Expr::BinaryOp(Box::new(left_op), BinaryOp::Subtract, Box::new(right_op)),
-            Token::Multiply => Expr::BinaryOp(Box::new(left_op), BinaryOp::Multiply, Box::new(right_op)),
-            Token::Divide => Expr::BinaryOp(Box::new(left_op), BinaryOp::Divide, Box::new(right_op)),
-            Token::Modulo => Expr::BinaryOp(Box::new(left_op), BinaryOp::Modulo, Box::new(right_op)),
-            Token::LogicEqual => Expr::BinaryOp(Box::new(left_op), BinaryOp::Equal, Box::new(right_op)),
-            Token::LogicNotEqual => Expr::BinaryOp(Box::new(left_op), BinaryOp::NotEqual, Box::new(right_op)),
-            Token::LogicLessEqual => Expr::BinaryOp(Box::new(left_op), BinaryOp::LessEqual, Box::new(right_op)),
-            Token::LogicLess => Expr::BinaryOp(Box::new(left_op), BinaryOp::Less, Box::new(right_op)),
-            Token::LogicGreaterEqual => Expr::BinaryOp(Box::new(left_op), BinaryOp::GreaterEqual, Box::new(right_op)),
-            Token::LogicGreater => Expr::BinaryOp(Box::new(left_op), BinaryOp::Greater, Box::new(right_op)),
-            Token::LogicAnd => Expr::BinaryOp(Box::new(left_op), BinaryOp::And, Box::new(right_op)),
-            Token::LogicOr => Expr::BinaryOp(Box::new(left_op), BinaryOp::Or, Box::new(right_op)),
-            Token::BinaryAnd => Expr::BinaryOp(Box::new(left_op), BinaryOp::BitAnd, Box::new(right_op)),
-            Token::BinaryOr => Expr::BinaryOp(Box::new(left_op), BinaryOp::BitOr, Box::new(right_op)),
-            Token::BinaryXor => Expr::BinaryOp(Box::new(left_op), BinaryOp::BitXor, Box::new(right_op)),
-            Token::BinaryShiftL => Expr::BinaryOp(Box::new(left_op), BinaryOp::ShiftLeft, Box::new(right_op)),
-            Token::BinaryShiftR => Expr::BinaryOp(Box::new(left_op), BinaryOp::ShiftRight, Box::new(right_op)),
-            Token::Equal => Expr::Assign(Box::new(left_op), Box::new(right_op)),
-            Token::KeywordAs => Expr::Cast(Box::new(left_op), parse_type_expression(&right_op)),
-            Token::IndexToken => Expr::Index(Box::new(left_op), Box::new(right_op)),
-            Token::Dot => {
-                if let Expr::Name(member_name) = right_op {
-                    Expr::Member(Box::new(left_op), member_name)
-                } else {
-                    return Err(format!("Expected a member name after '.', but found expression {:?}", right_op));
-                }
-            },
+    fn parse_unary(&mut self, op: UnaryOp) -> Result<Expr, String> {
+        let precedence = 13;
+        let right = self.parse_expression_with_precedence(precedence)?;
+        Ok(Expr::UnaryOp(op, Box::new(right)))
+    }
+    fn parse_infix(&mut self, left: Expr) -> Result<Expr, String> {
+        let token = &self.peek().token.clone();
+        match token {
+            // Binary
+            Token::Plus | Token::Minus | Token::Multiply | Token::Divide | Token::Modulo |
+            Token::LogicEqual | Token::LogicNotEqual | Token::LogicLess | Token::LogicLessEqual |
+            Token::LogicGreater | Token::LogicGreaterEqual | Token::LogicAnd | Token::LogicOr |
+            Token::BinaryAnd | Token::BinaryOr | Token::BinaryXor | Token::BinaryShiftL | Token::BinaryShiftR |
+            Token::Equal => self.parse_binary(left),
+            
+            // Call: expr(`
+            Token::LParen => self.parse_call(left),
 
-            _ => return Err(format!("Unsupported binary operator: {:?}", op)),
+            // Index: expr[
+            Token::LSquareBrace => self.parse_index(left),
+            
+            // Member Access: expr.member...
+            Token::Dot => self.parse_member_access(left),
+
+            // Cast: expr as Type
+            Token::KeywordAs => self.parse_cast(left),
+
+            _ => Err(format!("Unexpected token in infix position: {:?}", token)),
+        }
+    }
+    fn parse_binary(&mut self, left: Expr) -> Result<Expr, String> {
+        let op_token = self.advance();
+        let precedence = get_precedence(&op_token.token);
+
+        let op = match op_token.token {
+            Token::Plus => BinaryOp::Add,
+            Token::Minus => BinaryOp::Subtract,
+            Token::Multiply => BinaryOp::Multiply,
+            Token::Divide => BinaryOp::Divide,
+            Token::Modulo => BinaryOp::Modulo,
+            Token::LogicEqual => BinaryOp::Equal,
+            Token::LogicNotEqual => BinaryOp::NotEqual,
+            Token::LogicLess => BinaryOp::Less,
+            Token::LogicLessEqual => BinaryOp::LessEqual,
+            Token::LogicGreater => BinaryOp::Greater,
+            Token::LogicGreaterEqual => BinaryOp::GreaterEqual,
+            Token::LogicAnd => BinaryOp::And,
+            Token::LogicOr => BinaryOp::Or,
+            Token::BinaryAnd => BinaryOp::BitAnd,
+            Token::BinaryOr => BinaryOp::BitOr,
+            Token::BinaryXor => BinaryOp::BitXor,
+            Token::BinaryShiftL => BinaryOp::ShiftLeft,
+            Token::BinaryShiftR => BinaryOp::ShiftRight,
+
+            Token::Equal => {
+                let right = self.parse_expression_with_precedence(precedence)?;
+                return Ok(Expr::Assign(Box::new(left), Box::new(right)));
+            }
+            _ => panic!("{:?} is not valid binary operator", op_token),
         };
         
-        return Ok(binary_expr);
+        let right = self.parse_expression_with_precedence(precedence)?;
+        Ok(Expr::BinaryOp(Box::new(left), op, Box::new(right)))
     }
-    let mut i = output.len() - 1;
-    let x = rec_tree_builder(&output, &aux, &mut i)?;
-    return Ok(x);
+
+    fn parse_call(&mut self, callee: Expr) -> Result<Expr, String> {
+        self.advance(); 
+        
+        let mut args = Vec::new();
+        if self.peek().token != Token::RParen {
+            loop {
+                args.push(self.parse_expression()?);
+                if self.peek().token != Token::Comma {
+                    break;
+                }
+                self.advance();
+            }
+        }
+
+        self.consume(&Token::RParen)?;
+        Ok(Expr::Call(Box::new(callee), args))
+    }
+    fn parse_index(&mut self, left: Expr) -> Result<Expr, String> {
+    self.consume(&Token::LSquareBrace)?;
+
+    let index_expr = self.parse_expression_with_precedence(0)?;
+
+    self.consume(&Token::RSquareBrace)?;
+
+    Ok(Expr::Index(Box::new(left), Box::new(index_expr)))
+}
+fn parse_member_access(&mut self, left: Expr) -> Result<Expr, String> {
+    self.consume(&Token::Dot)?;
+
+    let member_name = self.advance().expect_name_token()?;
+
+    Ok(Expr::Member(Box::new(left), member_name))
+}
+fn parse_cast(&mut self, left: Expr) -> Result<Expr, String> {
+    self.consume(&Token::KeywordAs)?;
+    
+    let target_type = self.parse_type()?;
+    
+    Ok(Expr::Cast(Box::new(left), target_type))
+}
+fn parse_type(&mut self) -> Result<ParserType, String> {
+
+    if self.peek().token == Token::BinaryAnd {
+        self.advance();
+        let pointed_to_type = self.parse_type()?;
+        Ok(ParserType::Ref(Box::new(pointed_to_type)))
+    }
+    else if self.peek().token == Token::Multiply {
+        self.advance();
+        let pointed_to_type = self.parse_type()?;
+        Ok(ParserType::Ref(Box::new(pointed_to_type)))
+    }
+    else {
+        let type_name = self.advance().expect_name_token()?;
+        Ok(ParserType::Named(type_name))
+    }
+}
 }
