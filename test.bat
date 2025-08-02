@@ -37,13 +37,17 @@ if %errorlevel% neq 0 (
 :: Run the executable and check for specific error
 output.exe
 set run_error=%errorlevel%
+echo.
 echo Exit code: %run_error%
 
-if %run_error% equ -1073741819 (
-    echo Access violation error detected
-)
-
+if %run_error% equ -1073741819 ( echo "ERROR: Access violation (0xC0000005)" )
+if %run_error% equ -1073740940 ( echo "ERROR: Heap corruption (0xC0000374)" )
+if %run_error% equ -1073741571 ( echo "ERROR: Stack overflow (0xC00000FD)" )
+if %run_error% equ -1073741676 ( echo "ERROR: Integer division by zero (0xC0000094)" )
+if %run_error% equ -1073741795 ( echo "ERROR: Illegal instruction (0xC000001D)" )
+if %run_error% equ -1073741515 ( echo "ERROR: DLL Not Found (0xC0000135)" )
 :: Cleanup
+echo.
 if exist output.obj del output.obj
 if exist output.exe del output.exe
 

@@ -232,8 +232,12 @@ fn parse_cast(&mut self, left: Expr) -> Result<Expr, String> {
     Ok(Expr::Cast(Box::new(left), target_type))
 }
 fn parse_type(&mut self) -> Result<ParserType, String> {
-
-    if self.peek().token == Token::BinaryAnd {
+    if self.peek().token == Token::LogicAnd {
+        self.advance();
+        let pointed_to_type = self.parse_type()?;
+        Ok(ParserType::Ref(Box::new(ParserType::Ref(Box::new(pointed_to_type)))))
+    }
+    else if self.peek().token == Token::BinaryAnd {
         self.advance();
         let pointed_to_type = self.parse_type()?;
         Ok(ParserType::Ref(Box::new(pointed_to_type)))

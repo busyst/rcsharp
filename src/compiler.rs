@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{expression_compiler::{compile_expression, implisit_cast}, expression_parser::{BinaryOp, Expr}, parser::{ParserType, Stmt}};
+use crate::{expression_compiler::{compile_expression, implicit_cast, Expected}, expression_parser::{BinaryOp, Expr}, parser::{ParserType, Stmt}};
 pub fn rcsharp_compile_to_file(x: &[Stmt]) -> Result<(), String> {
     let direct_output = rcsharp_compile(x)?;
     let mut file = std::fs::File::create("output.ll").map_err(|e| e.to_string())?;
@@ -270,16 +270,16 @@ pub fn compile_statement(statement: &Stmt,state :&mut CompilerState) -> Result<(
             state.output.push_str(&format!("    %{} = alloca {}\n", name, comp_type.llvm_representation.to_string()));
             state.current_variable_stack.insert(name.clone(), comp_type);
         }
-        Stmt::Expr(expression) => { compile_expression(expression, None, state).map_err(|x| format!("while compiling expression {:?}\n\r{}",expression,x))?; }
+        Stmt::Expr(expression) => { compile_expression(expression, Expected::NoReturn, state).map_err(|x| format!("while compiling expression {:?}\n\r{}",expression,x))?; }
         Stmt::Return(expression) =>{
             if let Some(expression) = expression {
                 let expected_type = state.current_function_return_type()?;
                 let function_actual_return_type = state.get_compiler_type_from_parser(&expected_type)?.llvm_representation;
-                let tmp_idx = compile_expression(expression, Some(&expected_type), state)?;
-                if tmp_idx.value_type != expected_type {
-                    return Err(format!("Result type \"{:?}\" of expresion is not equal to return type \"{:?}\" of function \"{}\"", tmp_idx.value_type, function_actual_return_type, state.current_function_name()?));
+                let tmp_idx = compile_expression(expression, Expected::Type(&expected_type), state)?;
+                if !tmp_idx.equal_to_type(&expected_type) {
+                    return Err(format!("Result type \"{:?}\" of expresion is not equal to return type \"{:?}\" of function \"{}\"", tmp_idx, function_actual_return_type, state.current_function_name()?));
                 }
-                state.output.push_str(&format!("    ret {} %tmp{}\n", function_actual_return_type.to_string(), tmp_idx.index));
+                state.output.push_str(&format!("    ret {} {}\n", function_actual_return_type.to_string(), tmp_idx.to_repr()));
             }else {
                 let expected_type = state.current_function_return_type()?;
                 if expected_type != ParserType::Named(format!("void")) {
@@ -291,26 +291,38 @@ pub fn compile_statement(statement: &Stmt,state :&mut CompilerState) -> Result<(
         Stmt::Continue => {state.output.push_str(&format!("    br label %loop_body{}\n", state.current_logic_counter_function.unwrap()));}
         Stmt::Break => {state.output.push_str(&format!("    br label %loop_body{}_exit\n", state.current_logic_counter_function.unwrap()));}
         Stmt::If(condition, then_stmt, else_stmt) => {
-            let mut cond_val = compile_expression(condition, None, state)?;
+            let expected_type = ParserType::Named(format!("bool"));
+            let mut cond_val = compile_expression(condition, Expected::Type(&expected_type), state)
+            .map_err(|x| format!("while compiling expression in if statement {:?}:\n{}",condition, x))?;
             let logic_u = state.aquire_unique_logic_counter();
-            if cond_val.value_type != ParserType::Named(format!("bool")) {
-                cond_val = implisit_cast(&cond_val, &ParserType::Named(format!("bool")), state)?
+            if !cond_val.equal_to_type(&expected_type) {
+                cond_val = implicit_cast(&cond_val, &expected_type, state)?
             }
-            state.output.push_str(&format!("    br i1 %tmp{}, label %then{}, label %else{}\n", cond_val.index, logic_u, logic_u));
-            state.output.push_str(&format!("then{}:\n", logic_u));
-            compile_statement(&then_stmt, state)?;
-            state.output.push_str(&format!("    br label %after_else{}\n", logic_u));
-            state.output.push_str(&format!("else{}:\n", logic_u));
             if let Some(stmt) = else_stmt {
-                compile_statement(&stmt, state)?;
+                state.output.push_str(&format!("    br {}, label %then{}, label %else{}\n", cond_val.to_repr_with_type(state)?, logic_u, logic_u));
+                state.output.push_str(&format!("then{}:\n", logic_u));
+                compile_statement(&then_stmt, state)
+                .map_err(|x| format!("while compiling body of if statement {:?}:\n{}",condition, x))?;
+                state.output.push_str(&format!("    br label %end_if{}\n", logic_u));
+                state.output.push_str(&format!("else{}:\n", logic_u));
+
+                compile_statement(&stmt, state)
+                .map_err(|x| format!("while compiling else body of if statement {:?}:\n{}",condition, x))?;
+                state.output.push_str(&format!("    br label %end_if{}\n", logic_u));
+                state.output.push_str(&format!("end_if{}:\n", logic_u));
+            }else {
+                state.output.push_str(&format!("    br {}, label %then{}, label %end_if{}\n", cond_val.to_repr_with_type(state)?, logic_u, logic_u));
+                state.output.push_str(&format!("then{}:\n", logic_u)); 
+                compile_statement(&then_stmt, state)
+                .map_err(|x| format!("while compiling body of if statement {:?}:\n{}",condition, x))?;
+                state.output.push_str(&format!("    br label %end_if{}\n", logic_u));
+                state.output.push_str(&format!("end_if{}:\n", logic_u));
             }
-            state.output.push_str(&format!("    br label %after_else{}\n", logic_u));
-            state.output.push_str(&format!("after_else{}:\n", logic_u));
         }
         Stmt::Loop(statement) =>{
             let lc = state.aquire_unique_logic_counter();
             
-            state.output.push_str(&format!("br label %loop_body{}\n", lc));
+            state.output.push_str(&format!("    br label %loop_body{}\n", lc));
             state.output.push_str(&format!("loop_body{}:\n", lc));
 
             state.current_logic_counter_function = Some(lc);

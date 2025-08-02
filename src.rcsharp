@@ -1,69 +1,270 @@
+/*
+// #[ExtentionOf(...)] it does nothing now, but it can be proto-struct function calling, example:
+#[ExtentionOf(List)]
+fn new(list: &List){
+    list.head = 0 as &ListNode;
+    list.foot = 0 as &ListNode;
+    list.length = 0 as u32;
+}
+fn main(){
+    let list: List;     // can be pointer, does not matter
+
+    list.new();         // can be confusing and hard to "catch" when called accidently, will pollute member suggestion (SHIFT + SPACE)  
+    ---OR/AND---
+    List::new(&list);   // too much text to write, but clearly indicates static function
+    ---OR/AND---
+    list = List::new(); // only when `fn new` returns List; Clearly indicates static function. and makes sense. But produces unnecesary copy, that can be avoided with better compilator. 
+    // In this case: How to differentiate between stalloc and malloc? How to call this "constructor" on pointers?
+    // let list: &List = malloc(sizeof(List)) as &List; *list = List::new(); // is the solution it current situation.
+    list = List.new(); // Looks bad. actualy good only in C# where new keyword never had existed
+    let list: List(); // Looks cursed, C++ inspiration
+}
+*/
+
 fn __chkstk() : void{ /*I dont get it, more research needed*/}
+
 #[DllImport("kernel32.dll")]
 fn GetProcessHeap(): &i32;
 #[DllImport("kernel32.dll")]
 fn HeapAlloc(hHeap: &i32, dwFlags: i32, dwBytes: i64): &i8;
-/*
-struct vec2{
-    x:u32,
-    y:u32,
+#[DllImport("kernel32.dll")]
+fn HeapFree(hHeap: &i32, dwFlags: i32, lpMem: &i8): i32;
+#[DllImport("kernel32.dll")]
+fn ExitProcess(code:i32): void;
+
+#[DllImport("kernel32.dll")]
+fn AllocConsole(): i32;
+#[DllImport("kernel32.dll")]
+fn GetStdHandle(nStdHandle: i32): &i8;
+
+fn get_stdout() : &i8 {
+    let stdout_handle: &i8 = GetStdHandle(-11 as i32);
+    if (stdout_handle == -1 as &i8) {
+        ExitProcess(-1 as i32);
+    }
+    return stdout_handle;
 }
-fn operator+(left : &vec2, right : &vec2) : vec2{
-    let q : vec2;
-    q.x = (*left).x + (*right).x;
-    q.y = (*left).y + (*right).y;
-    return q;
+#[DllImport("user32.dll")]
+fn MessageBoxA(hWnd:&i8, lpText: &i8, lpCaption: &i8, uType: i32): i32;
+#[DllImport("kernel32.dll")]
+fn WriteConsoleA(
+    hConsoleOutput: &i8,
+    lpBuffer: &i8,
+    nNumberOfCharsToWrite: i32,
+    lpNumberOfCharsWritten: &i32,
+    lpReserved: &i8
+): i32;
+fn write(buffer: &i8, len: i32){
+    let chars_written: i32;
+    WriteConsoleA(get_stdout(), buffer, len, &chars_written, 0 as &i8);
+
 }
-fn zero(val : &vec2) : void{
-    (*val).x = 0 as u32;
-    (*val).y = 0 as u32;
-}
-*/
+#[DllImport("kernel32.dll")]
+fn FreeConsole(): i32;
+
+
+
 fn malloc(size:i64) : &i8{
     return HeapAlloc(GetProcessHeap(), 0 as i32, size);
 }
-
+fn free(ptr: &i8) : void {
+    HeapFree(GetProcessHeap(), 0, ptr);
+}
+// Linked list
 struct List{
     head: &ListNode,
     foot: &ListNode,
     length: u32,
 }
+// Linked list node
 struct ListNode{
     next_node: &ListNode,
-    data: &i8,
+    data: i32,
 }
+#[ExtentionOf(List)]
 fn new_list(list: &List){
-    (*list).head = 0 as &ListNode;
-    (*list).foot = 0 as &ListNode;
-    (*list).length = 0 as u32;
+    list.head = 0 as &ListNode;
+    list.foot = 0 as &ListNode;
+    list.length = 0 as u32;
 }
+#[ExtentionOf(ListNode)]
 fn new_list_node(list: &ListNode){
-    (*list).next_node = 0 as &ListNode;
-    (*list).data = 0 as &i8;
+    list.next_node = 0 as &ListNode;
+    list.data = 0 as i32;
 }
-fn extend(list: &List, data: &i8){
-    if (*list).head == 0 as &ListNode{
-        (*list).head = malloc(sizeof(ListNode)) as &ListNode;
-        new_list_node((*list).head);
-        (*list).head.data = data;
-
-        (*list).foot = (*list).head;
-        (*list).length = 1;
-        return;
-    }
-    let nln : &ListNode = malloc(sizeof(ListNode)) as &ListNode;
-    new_list_node(nln);
-    (*nln).data = data;
-    (*list).foot.next_node = nln;
+#[ExtentionOf(List)]
+fn extend(list: &List, data: i32){
+    let new_node: &ListNode = malloc(sizeof(ListNode)) as &ListNode;
     
-    (*list).foot = (*list).foot.next_node;
-    (*list).length = (*list).length + 1 as u32;
+    new_node.next_node = 0 as &ListNode;
+    new_node.data = data;
+
+    if list.head == 0 as &ListNode {
+        list.head = new_node;
+        list.foot = new_node;
+    } else {
+        // Append to the end of the list.
+        list.foot.next_node = new_node;
+        list.foot = new_node;
+    }
+    list.length = list.length + 1 as u32;
 }
-fn main(): i32 {
+#[ExtentionOf(List)]
+fn walk(list: &List) : u32{
+    let l : u32 = 0 as u32;
+    let ptr : &ListNode = list.head;
+    loop {
+        if (ptr == 0 as &ListNode){
+            break;
+        }
+        l = l + 1 as u32;
+        ptr = ptr.next_node;
+    }
+    return l;
+}
+#[ExtentionOf(List)]
+fn free_list(list: &List) {
+    let current: &ListNode = list.head;
+    loop {
+        if (current == 0 as &ListNode) {
+            break;
+        }
+        let next: &ListNode = current.next_node;
+        free(current as &i8); 
+        current = next; 
+    }
+    list.head = 0 as &ListNode;
+    list.foot = 0 as &ListNode;
+    list.length = 0;
+}
+/*
+*/
+// Dynamicly expanding array
+struct Vec{
+    array: &i8,
+    length: u32,
+    capacity: u32,
+}
+fn new_vec(vec: &Vec){
+    vec.array = 0 as &i8;
+    vec.length = 0;
+    vec.capacity = 0;
+}
+fn push(vec: &Vec, data: i8){
+    if vec.length >= vec.capacity {
+        let new_capacity : u32 = 4;
+        if vec.capacity != 0 as u32{
+            new_capacity = vec.capacity * 2 as u32;
+        }
+        
+        let new_array: &i8 = malloc(sizeof(i8) * new_capacity as i64) as &i8;
+
+        if vec.array != 0 as &i8 {
+            let i : u32 = 0;
+            loop{
+                if i >= vec.length {
+                    break;
+                }
+                *(new_array + i as i64) = *(vec.array + i as i64);
+                i = i + 1 as u32;
+            }
+            free(vec.array as &i8);
+        }
+        vec.array = new_array;
+        vec.capacity = new_capacity;
+    }
+    *(vec.array + vec.length as i64) = data;
+    vec.length = vec.length + 1 as u32;
+}
+#[ExtentionOf(Vec)]
+fn free_vec(vec: &Vec) {
+    if vec.array != 0 as &i8 {
+        free(vec.array as &i8);
+    }
+    vec.array = 0 as &i8;
+    vec.length = 0;
+    vec.capacity = 0;
+}
+/*
     let list : List;
     new_list(&list);
-    extend(&list, 1 as &i8);
-    extend(&list, 2 as &i8);
-    extend(&list, 3 as &i8);
-    return (list.length) as i32;
+    extend(&list, 1);
+    extend(&list, 2);
+    extend(&list, 3);
+    let list_delta : i32 = (list.length) as i32 - walk(&list) as i32;
+    free_list(&list);
+
+    let vec : Vec;
+    new_vec(&vec);
+    push(&vec, 100);
+    push(&vec, 200);
+    push(&vec, 300);
+    push(&vec, 400);
+    push(&vec, 500);
+    free_vec(&vec);
+    return list_delta as i32;
+
+
+*/
+fn println_i32(n: i32){
+    let buffer: Vec;
+    new_vec(&buffer);
+    if (n == 0) {
+        push(&buffer, 48 as i8);
+        push(&buffer, 10);
+        write(buffer.array, buffer.length as i32);
+        free_vec(&buffer);
+        return;
+    }
+    let mut_n: i64 = n as i64;
+    let is_negative: i32 = 0;
+    if (mut_n < 0) {
+        is_negative = 1;
+        mut_n = -mut_n;
+    }
+    loop {
+        if (mut_n == 0) {
+            break;
+        }
+        let digit_char: i8 = (mut_n % 10) as i8 + (48 as i8);
+        push(&buffer, digit_char);
+        mut_n = mut_n / 10;
+    }
+    if (is_negative != 0) {
+        push(&buffer, 45 as i8);
+    }
+    let i: u32 = 0;
+    let j: u32 = buffer.length - 1;
+    loop {
+        if (i >= j) {
+            break;
+        }
+        let temp: i8 = *(buffer.array + i as i64);
+        *(buffer.array + i as i64) = *(buffer.array + j as i64);
+        *(buffer.array + j as i64) = temp;
+
+        i = i + 1;
+        j = j - 1;
+    }
+    push(&buffer, 10);
+    push(&buffer, 0);
+    write(buffer.array, buffer.length as i32);
+    free_vec(&buffer);
+}
+fn main(): i32 {
+    AllocConsole();
+    println_i32(0 as i32);
+    println_i32(-1432 as i32);
+    println_i32(1342 as i32);
+    FreeConsole();
+    let buffer: Vec;
+    new_vec(&buffer);
+    push(&buffer, 32);
+    free_vec(&buffer);
+    
+    let list: List;
+    new_list(&list);
+    extend(&list, 64);
+    free_list(&list);
+    return 0;
 }

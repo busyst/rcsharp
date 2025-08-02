@@ -21,7 +21,7 @@ pub enum ParserType {
     Ref(Box<ParserType>),
     // return type, arguments
     Fucntion(Box<ParserType>,Vec<ParserType>),
-    // Fields
+    // Name Fields
     Structure(String,Vec<(String,ParserType)>),
 }
 #[allow(dead_code)]
@@ -215,6 +215,16 @@ pub fn parse_type(tokens: &[TokenData]) -> Result<ParserType, String> {
         return Err("Expected a type, but found end of input.".to_string());
     }
     match &tokens[0].token {
+        Token::LogicAnd => {
+            if tokens.len() == 1 {
+                return Err(format!(
+                    "Found '&&' at {:?} but no type follows.",
+                    tokens[0].loc
+                ));
+            }
+            let inner_type = parse_type(&tokens[1..])?;
+            Ok(ParserType::Ref(Box::new(ParserType::Ref(Box::new(inner_type)))))
+        }
         Token::BinaryAnd => {
             if tokens.len() == 1 {
                 return Err(format!(
@@ -410,12 +420,12 @@ fn parse_struct(tokens: &[TokenData], statements: &mut Vec<Stmt>) -> Result<usiz
     let fields_tokens = capture_delimiters(&tokens[2..], Token::LBrace, Token::RBrace)?;
     let fields = fields_tokens.split(|x| x.token == Token::Comma).filter(|x| x.len() != 0);
     let mut struct_fields = vec![];
-    println!("Struct {} at {:?}", struct_name,  tokens[0].loc);
+    //println!("Struct {} at {:?}", struct_name,  tokens[0].loc);
     for field in fields {
         let name = field.first().unwrap().expect_name_token()?;
         field.get(1).ok_or("Expected \':\' after name of field")?.expect(&Token::Colon)?;
         let field_type = parse_type(&field[2..])?;
-        println!("  {:?} : {:?}", name, field_type);
+        //println!("  {:?} : {:?}", name, field_type);
         struct_fields.push((name,field_type));
     }
     statements.push(Stmt::Struct(struct_name, struct_fields));
