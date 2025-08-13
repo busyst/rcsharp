@@ -1,0 +1,160 @@
+fn __chkstk() : void{ /*I dont get it, more research needed*/}
+
+#[DllImport("kernel32.dll", 2)]
+fn GetProcessHeap(): &i32;
+#[DllImport("kernel32.dll")]
+fn HeapAlloc(hHeap: &i32, dwFlags: i32, dwBytes: i64): &i8;
+#[DllImport("kernel32.dll")]
+fn HeapFree(hHeap: &i32, dwFlags: i32, lpMem: &i8): i32;
+#[DllImport("kernel32.dll")]
+fn ExitProcess(code:i32): void;
+
+#[DllImport("kernel32.dll")]
+fn AllocConsole(): i32;
+#[DllImport("kernel32.dll")]
+fn GetStdHandle(nStdHandle: i32): &i8;
+#[DllImport("kernel32.dll")]
+fn FreeConsole(): i32;
+
+#[DllImport("user32.dll")]
+fn MessageBoxA(hWnd:&i8, lpText: &i8, lpCaption: &i8, uType: i32): i32;
+#[DllImport("kernel32.dll")]
+fn WriteConsoleA(
+    hConsoleOutput: &i8,
+    lpBuffer: &i8,
+    nNumberOfCharsToWrite: i32,
+    lpNumberOfCharsWritten: &i32,
+    lpReserved: &i8
+): i32;
+
+fn get_stdout() : &i8 {
+    let stdout_handle: &i8 = GetStdHandle(-11 as i32);
+    if (stdout_handle == -1 as &i8) {
+        ExitProcess(-1 as i32);
+    }
+    return stdout_handle;
+}
+fn write(buffer: &i8, len: i32){
+    let chars_written: i32;
+    WriteConsoleA(get_stdout(), buffer, len, &chars_written, 0 as &i8);
+}
+fn malloc(size:i64) : &i8{return HeapAlloc(GetProcessHeap(), 0 as i32, size);}
+fn free(ptr: &i8) : void {HeapFree(GetProcessHeap(), 0, ptr);}
+
+// Linked list
+struct List{
+    head: &ListNode,
+    foot: &ListNode,
+    length: u32,
+}
+// Linked list node
+struct ListNode{
+    next_node: &ListNode,
+    data: i32,
+}
+#[ExtentionOf(List)]
+fn new_list(list: &List){
+    list.head = 0 as &ListNode;
+    list.foot = 0 as &ListNode;
+    list.length = 0 as u32;
+}
+#[ExtentionOf(ListNode)]
+fn new_list_node(list: &ListNode){
+    list.next_node = 0 as &ListNode;
+    list.data = 0 as i32;
+}
+#[ExtentionOf(List)]
+fn extend(list: &List, data: i32){
+    let new_node: &ListNode = malloc(sizeof(ListNode)) as &ListNode;
+    
+    new_node.next_node = 0 as &ListNode;
+    new_node.data = data;
+
+    if list.head == 0 as &ListNode {
+        list.head = new_node;
+        list.foot = new_node;
+    } else {
+        // Append to the end of the list.
+        list.foot.next_node = new_node;
+        list.foot = new_node;
+    }
+    list.length = list.length + 1 as u32;
+}
+#[ExtentionOf(List)]
+fn walk(list: &List) : u32{
+    let l : u32 = 0 as u32;
+    let ptr : &ListNode = list.head;
+    loop {
+        if (ptr == 0 as &ListNode){
+            break;
+        }
+        l = l + 1 as u32;
+        ptr = ptr.next_node;
+    }
+    return l;
+}
+#[ExtentionOf(List)]
+fn free_list(list: &List) {
+    let current: &ListNode = list.head;
+    loop {
+        if (current == 0 as &ListNode) {
+            break;
+        }
+        let next: &ListNode = current.next_node;
+        free(current as &i8); 
+        current = next; 
+    }
+    list.head = 0 as &ListNode;
+    list.foot = 0 as &ListNode;
+    list.length = 0;
+}
+
+
+// Dynamicly expanding array
+struct Vec{
+    array: &i8,
+    length: u32,
+    capacity: u32,
+}
+#[ExtentionOf(Vec)]
+fn new_vec(vec: &Vec){
+    vec.array = 0 as &i8;
+    vec.length = 0;
+    vec.capacity = 0;
+}
+#[ExtentionOf(Vec)]
+fn push(vec: &Vec, data: i8){
+    if vec.length >= vec.capacity {
+        let new_capacity : u32 = 4;
+        if vec.capacity != 0 as u32{
+            new_capacity = vec.capacity * 2 as u32;
+        }
+        
+        let new_array: &i8 = malloc(sizeof(i8) * new_capacity as i64) as &i8;
+
+        if vec.array != 0 as &i8 {
+            let i : u32 = 0;
+            loop{
+                if i >= vec.length {
+                    break;
+                }
+                *(new_array + i as i64) = *(vec.array + i as i64);
+                i = i + 1 as u32;
+            }
+            free(vec.array as &i8);
+        }
+        vec.array = new_array;
+        vec.capacity = new_capacity;
+    }
+    *(vec.array + vec.length as i64) = data;
+    vec.length = vec.length + 1 as u32;
+}
+#[ExtentionOf(Vec)]
+fn free_vec(vec: &Vec) {
+    if vec.array != 0 as &i8 {
+        free(vec.array as &i8);
+    }
+    vec.array = 0 as &i8;
+    vec.length = 0;
+    vec.capacity = 0;
+}

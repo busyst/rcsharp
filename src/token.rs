@@ -13,7 +13,6 @@ pub struct TokenData {
     pub span: Span,
     pub loc: Location,
 }
-
 impl TokenData {
     pub fn expect_name_token(&self) -> Result<String, String>{
         if let Token::Name(str) = &self.token{
@@ -21,19 +20,8 @@ impl TokenData {
         }
         Err(format!("Expected name token, found {:?} at {:?}", self.token, self.loc))
     }
-    pub fn expect(&self, expected: &Token) -> Result<(), String>{
-        if self.token != *expected {
-            return Err(format!("Expcted {:?}, got {:?}", expected, self.token)); 
-        }
-        Ok(())
-    }
-    pub fn expect_or(&self, expected: &[Token]) -> Result<(), String>{
-        if !expected.iter().any(|x| *x == self.token) {
-            return Err(format!("Expcted {:?}, got {:?}", expected, self.token)); 
-        }
-        Ok(())
-    }
 }
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LexingError {
     pub span: Span,

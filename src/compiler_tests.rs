@@ -2,12 +2,12 @@
 #[cfg(test)]
 mod compiler_tests {
     use crate::compiler::rcsharp_compile;
-    use crate::parser::rcsharp_parser;
+    use crate::parser::GeneralParser;
     use crate::token::Lexer;
     
     fn compile_source_to_string(source: &str) -> Result<String, String> {
         let tokens: Vec<_> = Lexer::new(source).map(|t| t.unwrap()).collect();
-        let output = rcsharp_compile(&rcsharp_parser(&tokens)?)?;
+        let output = rcsharp_compile(&GeneralParser::new(&tokens).parse_all()?)?;
         
         Ok(output)
     }

@@ -9,8 +9,8 @@ pub enum Expr {
     UnaryOp(UnaryOp, Box<Expr>),
     Assign(Box<Expr>, Box<Expr>),
     
-    Cast(Box<Expr>, ParserType),
-    Member(Box<Expr>, String), 
+    Cast(Box<Expr>, Box<ParserType>),
+    MemberAccess(Box<Expr>, String), 
     StringConst(String),
     Call(Box<Expr>, Vec<Expr>),
     Index(Box<Expr>, Box<Expr>),
@@ -19,13 +19,14 @@ pub enum Expr {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum BinaryOp {
     Add, Subtract, Multiply, Divide, Modulo,
-    Equal, NotEqual, Less, LessEqual, Greater, GreaterEqual,
+    Equals, NotEqual, Less, LessEqual, Greater, GreaterEqual,
     And, Or, BitAnd, BitOr, BitXor, ShiftLeft, ShiftRight,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum UnaryOp { // Prefix
-    Negate, Not, Deref, Ref,
+pub enum UnaryOp {
+    Negate, Not, Deref, Pointer,
 }
+
 fn get_precedence(token: &Token) -> u8 {
     match token {
         Token::Equal => 1,
@@ -46,25 +47,11 @@ fn get_precedence(token: &Token) -> u8 {
         _ => 0,
     }
 }
-
-
-pub fn parse_expression(tokens: &[TokenData]) -> Result<Expr, String>{
-    if tokens.len() == 0 {
-        return Err(format!("Tried to parse empty token slice"));
-    }
-    let mut parser = Parser::new(tokens);
-    let expr = parser.parse_expression()?;
-    if !parser.is_at_end() {
-        return Err(format!("Parser did not consume all tokens. Remainder starts at: {:?}", parser.peek()));
-    }
-
-    Ok(expr)
-}
-pub struct Parser<'a> {
+pub struct ExpressionParser<'a> {
     tokens: &'a [TokenData],
     cursor: usize,
 }
-impl<'a> Parser<'a> {
+impl<'a> ExpressionParser<'a> {
     pub fn new(tokens: &'a [TokenData]) -> Self {
         Self { tokens, cursor: 0 }
     }
@@ -74,7 +61,7 @@ impl<'a> Parser<'a> {
     pub fn peek(&self) -> &TokenData {
         const DUMMY_EOF: TokenData = TokenData { 
             token: Token::DummyToken,
-            span: 0..0, 
+            span: 0..0,
             loc: Location { row: 0, col: 0 } 
         };
         self.tokens.get(self.cursor).unwrap_or(&DUMMY_EOF)
@@ -117,11 +104,10 @@ impl<'a> Parser<'a> {
                 Ok(expr)
             }
 
-            // Unary Operators
             Token::Minus => self.parse_unary(UnaryOp::Negate),
             Token::LogicNot => self.parse_unary(UnaryOp::Not),
             Token::Multiply => self.parse_unary(UnaryOp::Deref),
-            Token::BinaryAnd => self.parse_unary(UnaryOp::Ref),
+            Token::BinaryAnd => self.parse_unary(UnaryOp::Pointer),
 
             _ => Err(format!("Unexpected token in prefix position: {:?}", token_data)),
         }
@@ -134,23 +120,18 @@ impl<'a> Parser<'a> {
     fn parse_infix(&mut self, left: Expr) -> Result<Expr, String> {
         let token = &self.peek().token.clone();
         match token {
-            // Binary
             Token::Plus | Token::Minus | Token::Multiply | Token::Divide | Token::Modulo |
             Token::LogicEqual | Token::LogicNotEqual | Token::LogicLess | Token::LogicLessEqual |
             Token::LogicGreater | Token::LogicGreaterEqual | Token::LogicAnd | Token::LogicOr |
             Token::BinaryAnd | Token::BinaryOr | Token::BinaryXor | Token::BinaryShiftL | Token::BinaryShiftR |
             Token::Equal => self.parse_binary(left),
             
-            // Call: expr(`
             Token::LParen => self.parse_call(left),
 
-            // Index: expr[
             Token::LSquareBrace => self.parse_index(left),
             
-            // Member Access: expr.member...
             Token::Dot => self.parse_member_access(left),
 
-            // Cast: expr as Type
             Token::KeywordAs => self.parse_cast(left),
 
             _ => Err(format!("Unexpected token in infix position: {:?}", token)),
@@ -166,7 +147,7 @@ impl<'a> Parser<'a> {
             Token::Multiply => BinaryOp::Multiply,
             Token::Divide => BinaryOp::Divide,
             Token::Modulo => BinaryOp::Modulo,
-            Token::LogicEqual => BinaryOp::Equal,
+            Token::LogicEqual => BinaryOp::Equals,
             Token::LogicNotEqual => BinaryOp::NotEqual,
             Token::LogicLess => BinaryOp::Less,
             Token::LogicLessEqual => BinaryOp::LessEqual,
@@ -217,39 +198,35 @@ impl<'a> Parser<'a> {
 
     Ok(Expr::Index(Box::new(left), Box::new(index_expr)))
 }
-fn parse_member_access(&mut self, left: Expr) -> Result<Expr, String> {
-    self.consume(&Token::Dot)?;
+    fn parse_member_access(&mut self, left: Expr) -> Result<Expr, String> {
+        self.consume(&Token::Dot)?;
 
-    let member_name = self.advance().expect_name_token()?;
+        let member_name = self.advance().expect_name_token()?;
 
-    Ok(Expr::Member(Box::new(left), member_name))
-}
-fn parse_cast(&mut self, left: Expr) -> Result<Expr, String> {
-    self.consume(&Token::KeywordAs)?;
-    
-    let target_type = self.parse_type()?;
-    
-    Ok(Expr::Cast(Box::new(left), target_type))
-}
-fn parse_type(&mut self) -> Result<ParserType, String> {
-    if self.peek().token == Token::LogicAnd {
-        self.advance();
-        let pointed_to_type = self.parse_type()?;
-        Ok(ParserType::Ref(Box::new(ParserType::Ref(Box::new(pointed_to_type)))))
+        Ok(Expr::MemberAccess(Box::new(left), member_name))
     }
-    else if self.peek().token == Token::BinaryAnd {
-        self.advance();
-        let pointed_to_type = self.parse_type()?;
-        Ok(ParserType::Ref(Box::new(pointed_to_type)))
+    fn parse_cast(&mut self, left: Expr) -> Result<Expr, String> {
+        self.consume(&Token::KeywordAs)?;
+        Ok(Expr::Cast(Box::new(left), Box::new(self.parse_type()?)))
     }
-    else if self.peek().token == Token::Multiply {
-        self.advance();
-        let pointed_to_type = self.parse_type()?;
-        Ok(ParserType::Ref(Box::new(pointed_to_type)))
+    fn parse_type(&mut self) -> Result<ParserType, String> {
+        if self.peek().token == Token::LogicAnd {
+            self.advance();
+            Ok(ParserType::Pointer(Box::new(ParserType::Pointer(Box::new(self.parse_type()?)))))
+        }
+        else if self.peek().token == Token::BinaryAnd {
+            self.advance();
+            Ok(ParserType::Pointer(Box::new(self.parse_type()?)))
+        }
+        else if self.peek().token == Token::Multiply && crate::USE_MULTIPLY_AS_POINTER_IN_TYPES {
+            self.advance();
+            Ok(ParserType::Pointer(Box::new(self.parse_type()?)))
+        }
+        else {
+            Ok(ParserType::Named(self.advance().expect_name_token()?))
+        }
     }
-    else {
-        let type_name = self.advance().expect_name_token()?;
-        Ok(ParserType::Named(type_name))
+    pub fn position(&self) -> usize {
+        self.cursor
     }
-}
 }

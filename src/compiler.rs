@@ -10,18 +10,28 @@ pub fn rcsharp_compile_to_file(x: &[Stmt]) -> Result<(), String> {
 }
 
 #[derive(Debug, Clone)]
-pub struct Function {pub name:String,pub args: Vec<(String, ParserType)>,pub return_type: ParserType,pub body: Stmt,pub attribs: Vec<(String, Vec<Expr>)>}
+pub struct Function {pub name:String, pub args: Vec<(String, ParserType)>,pub return_type: ParserType, pub body: Vec<Stmt>,pub attribs: Vec<(String, Vec<Expr>)>}
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub struct Struct {name:String, fields: Vec<(String, ParserType)>, attribs: Vec<(String, Vec<Expr>)>}
 pub fn rcsharp_compile(x: &[Stmt]) -> Result<String, String> {
     let mut main_state = CompilerState::default();
-    main_state.output.push_str("target triple = \"x86_64-pc-windows-msvc\"\n");
+    //main_state.output.push_str("target triple = \"x86_64-pc-windows-msvc\"\n");
     populate_default_types(&mut main_state)?;
+    let mut includes = vec![];
     for i in 0..x.len() {
         let statement = &x[i];
         match statement {
-            Stmt::Hint(_, _) => {}
+            Stmt::Hint(x, y) => {
+                match x.as_str() {
+                    "include" => {
+                        if let Expr::StringConst(x) = &y[0] {
+                            includes.push(x);
+                        }
+                    }
+                    _ => {}
+                }
+            }
             Stmt::Function(n, a, r, b) => {
                 let mut atribs_len= 0;
                 for i in (0..i).rev() {
@@ -32,7 +42,7 @@ pub fn rcsharp_compile(x: &[Stmt]) -> Result<String, String> {
                     }
                 }
                 let attribs = x[i-atribs_len..i].iter().map(|x| {if let Stmt::Hint(x, y) = x {return (x.clone(),y.clone());} else {panic!()}} ).collect::<Vec<_>>();
-                main_state.functions.push(Function{name:n.clone(), args: a.clone(), return_type: r.clone(), body: *b.clone(), attribs});
+                main_state.functions.push(Function{name:n.clone(), args: a.clone(), return_type: r.clone(), body: b.to_vec(), attribs});
             },
             Stmt::Struct(n, a) => {
                 let mut atribs_len= 0;
@@ -49,8 +59,8 @@ pub fn rcsharp_compile(x: &[Stmt]) -> Result<String, String> {
             _ => {return Err(format!("Unexpected statement {:?}", statement));}
         }
     }
-    compile_attributes(&mut main_state)?;
     compile_structs(&mut main_state)?;
+    compile_attributes(&mut main_state)?;
     compile_functions(&mut main_state)?;
     Ok(main_state.output)
 }
@@ -64,7 +74,7 @@ pub fn populate_default_types(state: &mut CompilerState) -> Result<(), String> {
                 CompilerType {
                     parser_type: ParserType::Named(format!($name)),
                     llvm_representation: ParserType::Named(format!($llvm_type)),
-                    struct_representation: ParserType::Structure(format!($llvm_type),vec![]),
+                    struct_representation: ParserType::Structure(Box::new(format!($llvm_type)),vec![],vec![]),
                     explicit_casts: $casts,
                     _binary_operations: HashMap::new(),
                 },
@@ -73,110 +83,110 @@ pub fn populate_default_types(state: &mut CompilerState) -> Result<(), String> {
     }
     // === bool ===
     let mut bool_casts = HashMap::new();
-    bool_casts.insert(format!("i8"),  Stmt::DirectInsertion(format!("    %tmp{{o}} = zext i1 %tmp{{v}} to i8\n")));
-    bool_casts.insert(format!("u8"),  Stmt::DirectInsertion(format!("    %tmp{{o}} = zext i1 %tmp{{v}} to i8\n")));
-    bool_casts.insert(format!("i16"), Stmt::DirectInsertion(format!("    %tmp{{o}} = zext i1 %tmp{{v}} to i16\n")));
-    bool_casts.insert(format!("u16"), Stmt::DirectInsertion(format!("    %tmp{{o}} = zext i1 %tmp{{v}} to i16\n")));
-    bool_casts.insert(format!("i32"), Stmt::DirectInsertion(format!("    %tmp{{o}} = zext i1 %tmp{{v}} to i32\n")));
-    bool_casts.insert(format!("u32"), Stmt::DirectInsertion(format!("    %tmp{{o}} = zext i1 %tmp{{v}} to i32\n")));
-    bool_casts.insert(format!("i64"), Stmt::DirectInsertion(format!("    %tmp{{o}} = zext i1 %tmp{{v}} to i64\n")));
-    bool_casts.insert(format!("u64"), Stmt::DirectInsertion(format!("    %tmp{{o}} = zext i1 %tmp{{v}} to i64\n")));
+    bool_casts.insert(format!("i8"),  Stmt::DirectInsertion(format!("    %tmp{{o}} = zext i1 %{{v}} to i8\n")));
+    bool_casts.insert(format!("u8"),  Stmt::DirectInsertion(format!("    %tmp{{o}} = zext i1 %{{v}} to i8\n")));
+    bool_casts.insert(format!("i16"), Stmt::DirectInsertion(format!("    %tmp{{o}} = zext i1 %{{v}} to i16\n")));
+    bool_casts.insert(format!("u16"), Stmt::DirectInsertion(format!("    %tmp{{o}} = zext i1 %{{v}} to i16\n")));
+    bool_casts.insert(format!("i32"), Stmt::DirectInsertion(format!("    %tmp{{o}} = zext i1 %{{v}} to i32\n")));
+    bool_casts.insert(format!("u32"), Stmt::DirectInsertion(format!("    %tmp{{o}} = zext i1 %{{v}} to i32\n")));
+    bool_casts.insert(format!("i64"), Stmt::DirectInsertion(format!("    %tmp{{o}} = zext i1 %{{v}} to i64\n")));
+    bool_casts.insert(format!("u64"), Stmt::DirectInsertion(format!("    %tmp{{o}} = zext i1 %{{v}} to i64\n")));
     define_type!(state, "bool", "i1", bool_casts);
 
     // === i8 ===
     let mut i8_casts = HashMap::new();
-    i8_casts.insert(format!("bool"), Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i8 %tmp{{v}} to i1\n")));
-    i8_casts.insert(format!("u8"),   Stmt::DirectInsertion(format!("    %tmp{{o}} = bitcast i8 %tmp{{v}} to i8\n")));
-    i8_casts.insert(format!("i16"), Stmt::DirectInsertion(format!("    %tmp{{o}} = sext i8 %tmp{{v}} to i16\n")));
-    i8_casts.insert(format!("u16"), Stmt::DirectInsertion(format!("    %tmp{{o}} = sext i8 %tmp{{v}} to i16\n")));
-    i8_casts.insert(format!("i32"), Stmt::DirectInsertion(format!("    %tmp{{o}} = sext i8 %tmp{{v}} to i32\n")));
-    i8_casts.insert(format!("u32"), Stmt::DirectInsertion(format!("    %tmp{{o}} = sext i8 %tmp{{v}} to i32\n")));
-    i8_casts.insert(format!("i64"), Stmt::DirectInsertion(format!("    %tmp{{o}} = sext i8 %tmp{{v}} to i64\n")));
-    i8_casts.insert(format!("u64"), Stmt::DirectInsertion(format!("    %tmp{{o}} = sext i8 %tmp{{v}} to i64\n")));
+    i8_casts.insert(format!("bool"), Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i8 {{v}} to i1\n")));
+    i8_casts.insert(format!("u8"),   Stmt::DirectInsertion(format!("    %tmp{{o}} = bitcast i8 {{v}} to i8\n")));
+    i8_casts.insert(format!("i16"), Stmt::DirectInsertion(format!("    %tmp{{o}} = sext i8 {{v}} to i16\n")));
+    i8_casts.insert(format!("u16"), Stmt::DirectInsertion(format!("    %tmp{{o}} = sext i8 {{v}} to i16\n")));
+    i8_casts.insert(format!("i32"), Stmt::DirectInsertion(format!("    %tmp{{o}} = sext i8 {{v}} to i32\n")));
+    i8_casts.insert(format!("u32"), Stmt::DirectInsertion(format!("    %tmp{{o}} = sext i8 {{v}} to i32\n")));
+    i8_casts.insert(format!("i64"), Stmt::DirectInsertion(format!("    %tmp{{o}} = sext i8 {{v}} to i64\n")));
+    i8_casts.insert(format!("u64"), Stmt::DirectInsertion(format!("    %tmp{{o}} = sext i8 {{v}} to i64\n")));
     define_type!(state, "i8", "i8", i8_casts);
 
     // === u8 ===
     let mut u8_casts = HashMap::new();
-    u8_casts.insert(format!("bool"), Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i8 %tmp{{v}} to i1\n")));
-    u8_casts.insert(format!("i8"),   Stmt::DirectInsertion(format!("    %tmp{{o}} = bitcast i8 %tmp{{v}} to i8\n")));
-    u8_casts.insert(format!("i16"), Stmt::DirectInsertion(format!("    %tmp{{o}} = zext i8 %tmp{{v}} to i16\n")));
-    u8_casts.insert(format!("u16"), Stmt::DirectInsertion(format!("    %tmp{{o}} = zext i8 %tmp{{v}} to i16\n")));
-    u8_casts.insert(format!("i32"), Stmt::DirectInsertion(format!("    %tmp{{o}} = zext i8 %tmp{{v}} to i32\n")));
-    u8_casts.insert(format!("u32"), Stmt::DirectInsertion(format!("    %tmp{{o}} = zext i8 %tmp{{v}} to i32\n")));
-    u8_casts.insert(format!("i64"), Stmt::DirectInsertion(format!("    %tmp{{o}} = zext i8 %tmp{{v}} to i64\n")));
-    u8_casts.insert(format!("u64"), Stmt::DirectInsertion(format!("    %tmp{{o}} = zext i8 %tmp{{v}} to i64\n")));
+    u8_casts.insert(format!("bool"), Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i8 {{v}} to i1\n")));
+    u8_casts.insert(format!("i8"),   Stmt::DirectInsertion(format!("    %tmp{{o}} = bitcast i8 {{v}} to i8\n")));
+    u8_casts.insert(format!("i16"), Stmt::DirectInsertion(format!("    %tmp{{o}} = zext i8 {{v}} to i16\n")));
+    u8_casts.insert(format!("u16"), Stmt::DirectInsertion(format!("    %tmp{{o}} = zext i8 {{v}} to i16\n")));
+    u8_casts.insert(format!("i32"), Stmt::DirectInsertion(format!("    %tmp{{o}} = zext i8 {{v}} to i32\n")));
+    u8_casts.insert(format!("u32"), Stmt::DirectInsertion(format!("    %tmp{{o}} = zext i8 {{v}} to i32\n")));
+    u8_casts.insert(format!("i64"), Stmt::DirectInsertion(format!("    %tmp{{o}} = zext i8 {{v}} to i64\n")));
+    u8_casts.insert(format!("u64"), Stmt::DirectInsertion(format!("    %tmp{{o}} = zext i8 {{v}} to i64\n")));
     define_type!(state, "u8", "i8", u8_casts);
 
     // === i16 ===
     let mut i16_casts = HashMap::new();
-    i16_casts.insert(format!("bool"), Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i16 %tmp{{v}} to i1\n")));
-    i16_casts.insert(format!("i8"),   Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i16 %tmp{{v}} to i8\n")));
-    i16_casts.insert(format!("u8"),   Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i16 %tmp{{v}} to i8\n")));
-    i16_casts.insert(format!("u16"),  Stmt::DirectInsertion(format!("    %tmp{{o}} = bitcast i16 %tmp{{v}} to i16\n")));
-    i16_casts.insert(format!("i32"), Stmt::DirectInsertion(format!("    %tmp{{o}} = sext i16 %tmp{{v}} to i32\n")));
-    i16_casts.insert(format!("u32"), Stmt::DirectInsertion(format!("    %tmp{{o}} = sext i16 %tmp{{v}} to i32\n")));
-    i16_casts.insert(format!("i64"), Stmt::DirectInsertion(format!("    %tmp{{o}} = sext i16 %tmp{{v}} to i64\n")));
-    i16_casts.insert(format!("u64"), Stmt::DirectInsertion(format!("    %tmp{{o}} = sext i16 %tmp{{v}} to i64\n")));
+    i16_casts.insert(format!("bool"), Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i16 {{v}} to i1\n")));
+    i16_casts.insert(format!("i8"),   Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i16 {{v}} to i8\n")));
+    i16_casts.insert(format!("u8"),   Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i16 {{v}} to i8\n")));
+    i16_casts.insert(format!("u16"),  Stmt::DirectInsertion(format!("    %tmp{{o}} = bitcast i16 {{v}} to i16\n")));
+    i16_casts.insert(format!("i32"), Stmt::DirectInsertion(format!("    %tmp{{o}} = sext i16 {{v}} to i32\n")));
+    i16_casts.insert(format!("u32"), Stmt::DirectInsertion(format!("    %tmp{{o}} = sext i16 {{v}} to i32\n")));
+    i16_casts.insert(format!("i64"), Stmt::DirectInsertion(format!("    %tmp{{o}} = sext i16 {{v}} to i64\n")));
+    i16_casts.insert(format!("u64"), Stmt::DirectInsertion(format!("    %tmp{{o}} = sext i16 {{v}} to i64\n")));
     define_type!(state, "i16", "i16", i16_casts);
 
     // === u16 ===
     let mut u16_casts = HashMap::new();
-    u16_casts.insert(format!("bool"), Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i16 %tmp{{v}} to i1\n")));
-    u16_casts.insert(format!("i8"),   Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i16 %tmp{{v}} to i8\n")));
-    u16_casts.insert(format!("u8"),   Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i16 %tmp{{v}} to i8\n")));
-    u16_casts.insert(format!("i16"),  Stmt::DirectInsertion(format!("    %tmp{{o}} = bitcast i16 %tmp{{v}} to i16\n")));
-    u16_casts.insert(format!("i32"), Stmt::DirectInsertion(format!("    %tmp{{o}} = zext i16 %tmp{{v}} to i32\n")));
-    u16_casts.insert(format!("u32"), Stmt::DirectInsertion(format!("    %tmp{{o}} = zext i16 %tmp{{v}} to i32\n")));
-    u16_casts.insert(format!("i64"), Stmt::DirectInsertion(format!("    %tmp{{o}} = zext i16 %tmp{{v}} to i64\n")));
-    u16_casts.insert(format!("u64"), Stmt::DirectInsertion(format!("    %tmp{{o}} = zext i16 %tmp{{v}} to i64\n")));
+    u16_casts.insert(format!("bool"), Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i16 {{v}} to i1\n")));
+    u16_casts.insert(format!("i8"),   Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i16 {{v}} to i8\n")));
+    u16_casts.insert(format!("u8"),   Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i16 {{v}} to i8\n")));
+    u16_casts.insert(format!("i16"),  Stmt::DirectInsertion(format!("    %tmp{{o}} = bitcast i16 {{v}} to i16\n")));
+    u16_casts.insert(format!("i32"), Stmt::DirectInsertion(format!("    %tmp{{o}} = zext i16 {{v}} to i32\n")));
+    u16_casts.insert(format!("u32"), Stmt::DirectInsertion(format!("    %tmp{{o}} = zext i16 {{v}} to i32\n")));
+    u16_casts.insert(format!("i64"), Stmt::DirectInsertion(format!("    %tmp{{o}} = zext i16 {{v}} to i64\n")));
+    u16_casts.insert(format!("u64"), Stmt::DirectInsertion(format!("    %tmp{{o}} = zext i16 {{v}} to i64\n")));
     define_type!(state, "u16", "i16", u16_casts);
 
     // === i32 ===
     let mut i32_casts = HashMap::new();
-    i32_casts.insert(format!("bool"), Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i32 %tmp{{v}} to i1\n")));
-    i32_casts.insert(format!("i8"),   Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i32 %tmp{{v}} to i8\n")));
-    i32_casts.insert(format!("u8"),   Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i32 %tmp{{v}} to i8\n")));
-    i32_casts.insert(format!("i16"),  Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i32 %tmp{{v}} to i16\n")));
-    i32_casts.insert(format!("u16"),  Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i32 %tmp{{v}} to i16\n")));
-    i32_casts.insert(format!("u32"),  Stmt::DirectInsertion(format!("    %tmp{{o}} = bitcast i32 %tmp{{v}} to i32\n")));
-    i32_casts.insert(format!("i64"),  Stmt::DirectInsertion(format!("    %tmp{{o}} = sext i32 %tmp{{v}} to i64\n")));
-    i32_casts.insert(format!("u64"),  Stmt::DirectInsertion(format!("    %tmp{{o}} = sext i32 %tmp{{v}} to i64\n")));
+    i32_casts.insert(format!("bool"), Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i32 {{v}} to i1\n")));
+    i32_casts.insert(format!("i8"),   Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i32 {{v}} to i8\n")));
+    i32_casts.insert(format!("u8"),   Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i32 {{v}} to i8\n")));
+    i32_casts.insert(format!("i16"),  Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i32 {{v}} to i16\n")));
+    i32_casts.insert(format!("u16"),  Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i32 {{v}} to i16\n")));
+    i32_casts.insert(format!("u32"),  Stmt::DirectInsertion(format!("    %tmp{{o}} = bitcast i32 {{v}} to i32\n")));
+    i32_casts.insert(format!("i64"),  Stmt::DirectInsertion(format!("    %tmp{{o}} = sext i32 {{v}} to i64\n")));
+    i32_casts.insert(format!("u64"),  Stmt::DirectInsertion(format!("    %tmp{{o}} = sext i32 {{v}} to i64\n")));
     define_type!(state, "i32", "i32", i32_casts);
 
     // === u32 ===
     let mut u32_casts = HashMap::new();
-    u32_casts.insert(format!("bool"), Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i32 %tmp{{v}} to i1\n")));
-    u32_casts.insert(format!("i8"),   Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i32 %tmp{{v}} to i8\n")));
-    u32_casts.insert(format!("u8"),   Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i32 %tmp{{v}} to i8\n")));
-    u32_casts.insert(format!("i16"),  Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i32 %tmp{{v}} to i16\n")));
-    u32_casts.insert(format!("u16"),  Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i32 %tmp{{v}} to i16\n")));
-    u32_casts.insert(format!("i32"),  Stmt::DirectInsertion(format!("    %tmp{{o}} = bitcast i32 %tmp{{v}} to i32\n")));
-    u32_casts.insert(format!("i64"),  Stmt::DirectInsertion(format!("    %tmp{{o}} = zext i32 %tmp{{v}} to i64\n")));
-    u32_casts.insert(format!("u64"),  Stmt::DirectInsertion(format!("    %tmp{{o}} = zext i32 %tmp{{v}} to i64\n")));
+    u32_casts.insert(format!("bool"), Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i32 {{v}} to i1\n")));
+    u32_casts.insert(format!("i8"),   Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i32 {{v}} to i8\n")));
+    u32_casts.insert(format!("u8"),   Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i32 {{v}} to i8\n")));
+    u32_casts.insert(format!("i16"),  Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i32 {{v}} to i16\n")));
+    u32_casts.insert(format!("u16"),  Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i32 {{v}} to i16\n")));
+    u32_casts.insert(format!("i32"),  Stmt::DirectInsertion(format!("    %tmp{{o}} = bitcast i32 {{v}} to i32\n")));
+    u32_casts.insert(format!("i64"),  Stmt::DirectInsertion(format!("    %tmp{{o}} = zext i32 {{v}} to i64\n")));
+    u32_casts.insert(format!("u64"),  Stmt::DirectInsertion(format!("    %tmp{{o}} = zext i32 {{v}} to i64\n")));
     define_type!(state, "u32", "i32", u32_casts);
 
     // === i64 ===
     let mut i64_casts = HashMap::new();
-    i64_casts.insert(format!("bool"), Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i64 %tmp{{v}} to i1\n")));
-    i64_casts.insert(format!("i8"),   Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i64 %tmp{{v}} to i8\n")));
-    i64_casts.insert(format!("u8"),   Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i64 %tmp{{v}} to i8\n")));
-    i64_casts.insert(format!("i16"),  Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i64 %tmp{{v}} to i16\n")));
-    i64_casts.insert(format!("u16"),  Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i64 %tmp{{v}} to i16\n")));
-    i64_casts.insert(format!("i32"),  Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i64 %tmp{{v}} to i32\n")));
-    i64_casts.insert(format!("u32"),  Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i64 %tmp{{v}} to i32\n")));
-    i64_casts.insert(format!("u64"),  Stmt::DirectInsertion(format!("    %tmp{{o}} = bitcast i64 %tmp{{v}} to i64\n")));
+    i64_casts.insert(format!("bool"), Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i64 {{v}} to i1\n")));
+    i64_casts.insert(format!("i8"),   Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i64 {{v}} to i8\n")));
+    i64_casts.insert(format!("u8"),   Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i64 {{v}} to i8\n")));
+    i64_casts.insert(format!("i16"),  Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i64 {{v}} to i16\n")));
+    i64_casts.insert(format!("u16"),  Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i64 {{v}} to i16\n")));
+    i64_casts.insert(format!("i32"),  Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i64 {{v}} to i32\n")));
+    i64_casts.insert(format!("u32"),  Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i64 {{v}} to i32\n")));
+    i64_casts.insert(format!("u64"),  Stmt::DirectInsertion(format!("    %tmp{{o}} = bitcast i64 {{v}} to i64\n")));
     define_type!(state, "i64", "i64", i64_casts);
 
     // === u64 ===
     let mut u64_casts = HashMap::new();
-    u64_casts.insert(format!("bool"), Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i64 %tmp{{v}} to i1\n")));
-    u64_casts.insert(format!("i8"),   Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i64 %tmp{{v}} to i8\n")));
-    u64_casts.insert(format!("u8"),   Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i64 %tmp{{v}} to i8\n")));
-    u64_casts.insert(format!("i16"),  Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i64 %tmp{{v}} to i16\n")));
-    u64_casts.insert(format!("u16"),  Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i64 %tmp{{v}} to i16\n")));
-    u64_casts.insert(format!("i32"),  Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i64 %tmp{{v}} to i32\n")));
-    u64_casts.insert(format!("u32"),  Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i64 %tmp{{v}} to i32\n")));
-    u64_casts.insert(format!("i64"),  Stmt::DirectInsertion(format!("    %tmp{{o}} = bitcast i64 %tmp{{v}} to i64\n")));
+    u64_casts.insert(format!("bool"), Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i64 {{v}} to i1\n")));
+    u64_casts.insert(format!("i8"),   Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i64 {{v}} to i8\n")));
+    u64_casts.insert(format!("u8"),   Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i64 {{v}} to i8\n")));
+    u64_casts.insert(format!("i16"),  Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i64 {{v}} to i16\n")));
+    u64_casts.insert(format!("u16"),  Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i64 {{v}} to i16\n")));
+    u64_casts.insert(format!("i32"),  Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i64 {{v}} to i32\n")));
+    u64_casts.insert(format!("u32"),  Stmt::DirectInsertion(format!("    %tmp{{o}} = trunc i64 {{v}} to i32\n")));
+    u64_casts.insert(format!("i64"),  Stmt::DirectInsertion(format!("    %tmp{{o}} = bitcast i64 {{v}} to i64\n")));
     define_type!(state, "u64", "i64", u64_casts);
 
     define_type!(state, "void", "void", HashMap::new());
@@ -184,7 +194,7 @@ pub fn populate_default_types(state: &mut CompilerState) -> Result<(), String> {
 }
 pub fn compile_attributes(state :&mut CompilerState) -> Result<(), String>{
     let mut funcs = vec![];
-
+    let mut extention_funcs_to_structs = vec![];
     for function in &state.functions {
         if let Some(_) =  function.attribs.iter().find(|x| x.0 == "DllImport") {
             let mut args_string = String::new();
@@ -197,9 +207,38 @@ pub fn compile_attributes(state :&mut CompilerState) -> Result<(), String>{
             }
             state.output.push_str(&format!("declare dllimport {} @{}({})\n", func_return_type_string, function.name, args_string));
             state.declared_functions.push(function.clone());
-        }else {
+        }else if let Some(i) =  function.attribs.iter().find(|x| x.0 == "ExtentionOf") {
+            if i.1.is_empty() {
+                return Err(format!("Extention should not be empty"));
+            }
+            if i.1.len() != 1 {
+                return Err(format!("Extention should have only 1 argument, type that will be extended"));
+            }
+            let function_name = &function.name;
+            let extended_type = crate::expression_compiler::type_from_expression(&i.1[0])?;
+            if extended_type.is_pointer() {
+                return Err(format!("You cant extend pointer to type"));
+            }
+            let _x = state.get_compiler_type_from_parser(&extended_type)
+                .map_err(|_| format!("Type \"{}\" was not found to extend in current context", extended_type.to_string()))?;
+            
+            if function.args.is_empty() || function.args[0].1 != extended_type.reference_once() {
+                return Err(format!("Function \"{}\" is extention of \"{}\" struct, this function should have reference to value as first argument. Ex:\n[ExtentionOf(i32)]\nfn foo(val: &i32, ...){{...}}", function_name, extended_type.to_string()));
+            }
+            extention_funcs_to_structs.push((extended_type, function));
             state.declared_functions.push(function.clone());
             funcs.push(function.clone());
+        }
+        else {
+            state.declared_functions.push(function.clone());
+            funcs.push(function.clone());
+        }
+    }
+    for x in extention_funcs_to_structs {
+        let _extended_type = state.get_compiler_type_from_parser(&x.0)?;
+        let extention_function = x.1;
+        if let ParserType::Structure(_, _, z) = &mut state.implemented_types.get_mut(&x.0.to_string()).unwrap().struct_representation {
+            z.push((extention_function.name.clone(), (extention_function.return_type.clone(), extention_function.args.iter().map(|x| x.1.clone()).collect::<Vec<_>>())));
         }
     }
     state.functions = funcs;
@@ -209,7 +248,7 @@ fn compile_structs(main_state: &mut CompilerState) -> Result<(), String> {
     for parsed_struct in &main_state.structs {
         let name = &parsed_struct.name;
         let fields = &parsed_struct.fields;
-        let struct_pt = ParserType::Structure(name.clone(),fields.iter().map(|x|x.clone()).collect::<Vec<_>>());
+        let struct_pt = ParserType::Structure(Box::new(name.clone()),fields.iter().map(|x|x.clone()).collect::<Vec<_>>(), vec![]);
 
         main_state.implemented_types.insert(name.clone(), CompilerType { 
             parser_type: ParserType::Named(name.clone()),
@@ -250,7 +289,10 @@ pub fn compile_functions(state :&mut CompilerState) -> Result<(), String>{
             state.output.push_str(&format!("    store {} %{}, {}* %{}.addr\n", val_type.llvm_representation.to_string(), arg.0, val_type.llvm_representation.to_string(), arg.0));
             state.current_function_arguments.insert(arg.0.clone(), val_type);
         }
-        compile_statement(&function.body.clone(), state).map_err(|x| format!("while compiling function {}\n\r{}",function_name,x))?;
+        for x in &function.body.clone() {
+            compile_statement(x, state)
+            .map_err(|x| format!("while compiling function {}\n\r{}",function_name,x))?;
+        }
         if function_return_type.to_string() == "void" {
             state.output.push_str(&format!("    ret void\n"));
         }
@@ -265,10 +307,13 @@ pub fn compile_statement(statement: &Stmt,state :&mut CompilerState) -> Result<(
                 compile_statement(statement, state)?;
             }
         }
-        Stmt::Let(name, var_type) => {
+        Stmt::Let(name, var_type, expr) => {
             let comp_type = state.get_compiler_type_from_parser(var_type)?;
             state.output.push_str(&format!("    %{} = alloca {}\n", name, comp_type.llvm_representation.to_string()));
             state.current_variable_stack.insert(name.clone(), comp_type);
+            if let Some(expr) = expr {
+                compile_expression(&Expr::Assign(Box::new(Expr::Name(name.clone())), Box::new(expr.clone())), Expected::Type(var_type), state)?;
+            }
         }
         Stmt::Expr(expression) => { compile_expression(expression, Expected::NoReturn, state).map_err(|x| format!("while compiling expression {:?}\n\r{}",expression,x))?; }
         Stmt::Return(expression) =>{
@@ -301,8 +346,10 @@ pub fn compile_statement(statement: &Stmt,state :&mut CompilerState) -> Result<(
             if let Some(stmt) = else_stmt {
                 state.output.push_str(&format!("    br {}, label %then{}, label %else{}\n", cond_val.to_repr_with_type(state)?, logic_u, logic_u));
                 state.output.push_str(&format!("then{}:\n", logic_u));
-                compile_statement(&then_stmt, state)
-                .map_err(|x| format!("while compiling body of if statement {:?}:\n{}",condition, x))?;
+                for x in then_stmt {
+                    compile_statement(x, state)
+                        .map_err(|x| format!("while compiling body of if statement {:?}:\n{}",condition, x))?;
+                }
                 state.output.push_str(&format!("    br label %end_if{}\n", logic_u));
                 state.output.push_str(&format!("else{}:\n", logic_u));
 
@@ -313,8 +360,10 @@ pub fn compile_statement(statement: &Stmt,state :&mut CompilerState) -> Result<(
             }else {
                 state.output.push_str(&format!("    br {}, label %then{}, label %end_if{}\n", cond_val.to_repr_with_type(state)?, logic_u, logic_u));
                 state.output.push_str(&format!("then{}:\n", logic_u)); 
-                compile_statement(&then_stmt, state)
-                .map_err(|x| format!("while compiling body of if statement {:?}:\n{}",condition, x))?;
+                for x in then_stmt {
+                    compile_statement(x, state)
+                        .map_err(|x| format!("while compiling body of if statement {:?}:\n{}",condition, x))?;
+                }
                 state.output.push_str(&format!("    br label %end_if{}\n", logic_u));
                 state.output.push_str(&format!("end_if{}:\n", logic_u));
             }
@@ -326,7 +375,9 @@ pub fn compile_statement(statement: &Stmt,state :&mut CompilerState) -> Result<(
             state.output.push_str(&format!("loop_body{}:\n", lc));
 
             state.current_logic_counter_function = Some(lc);
-            compile_statement(statement, state)?;
+            for x in statement {
+                compile_statement(x, state)?;
+            }
             state.current_logic_counter_function = None;
             state.output.push_str(&format!("    br label %loop_body{}\n", lc));
             state.output.push_str(&format!("loop_body{}_exit:\n", lc));
@@ -353,7 +404,7 @@ impl CompilerType {
                     _ => {
                         if let Some(t) = x.split(|x| x == '.').nth(1) {
                             if state.implemented_types.contains_key(t) {
-                                if let ParserType::Structure(_, f) = &state.implemented_types[t].struct_representation.clone() {
+                                if let ParserType::Structure(_, f, _) = &state.implemented_types[t].struct_representation.clone() {
                                     return f.iter().map(|x| state.get_compiler_type_from_parser(&x.1).unwrap().sizeof(state)).sum();
                                 }
                             }
@@ -363,10 +414,10 @@ impl CompilerType {
                     }
                 }
             }
-            ParserType::Ref(_) => 8,
+            ParserType::Pointer(_) => 8,
             _ => todo!("{:?}", self.llvm_representation)
         }
-    } 
+    }
 }
 #[derive(Debug, Default)]
 pub struct CompilerState{
@@ -379,7 +430,8 @@ pub struct CompilerState{
     current_function: Option<usize>,
     current_logic_counter_function: Option<usize>,
     current_variable_stack: HashMap<String, CompilerType>,
-    pub current_function_arguments: HashMap<String, CompilerType>,
+    current_function_arguments: HashMap<String, CompilerType>,
+
     temp_value_counter: usize,
     logic_counter: usize,
 }
@@ -426,9 +478,9 @@ impl CompilerState {
             let mut underlying_representation = pt.llvm_representation.clone();
             let mut pv = parser_type.clone();
             loop {
-                if let ParserType::Ref(r) = pv {
+                if let ParserType::Pointer(r) = pv {
                     pv = *r.clone();
-                    underlying_representation = ParserType::Ref(Box::new(underlying_representation));
+                    underlying_representation = ParserType::Pointer(Box::new(underlying_representation));
                     continue;
                 }
                 break;

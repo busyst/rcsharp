@@ -12,6 +12,7 @@ pub enum CompiledResult {
     Function(String, ParserType),
     NoReturn,
 }
+
 impl CompiledResult {
     pub fn equal_to_type(&self, to: &ParserType) -> bool{
         match self {
@@ -21,6 +22,7 @@ impl CompiledResult {
             CompiledResult::NoReturn => false,
         }
     }
+
     pub fn get_type(&self) -> &ParserType{
         match self {
             CompiledResult::TempValue(_, x) => x,
@@ -29,24 +31,11 @@ impl CompiledResult {
             CompiledResult::NoReturn => panic!(),
         }
     }
-    pub fn get_expected_type(&self) -> Expected{
-        match self {
-            CompiledResult::TempValue(_, x) => Expected::Type(x),
-            CompiledResult::Integer(_, x) => Expected::Type(x),
-            CompiledResult::Function(_, x) => Expected::Type(x),
-            CompiledResult::NoReturn => Expected::NoReturn,
-        }
-    }
-    pub fn equal_types(&self, with: &CompiledResult) -> bool{
+    pub fn equal_types(&self, with: &CompiledResult) -> bool {
         match (self, with) {
-            (CompiledResult::NoReturn, CompiledResult::NoReturn) => true, // thats true, but this shouldnt happen 
+            (CompiledResult::NoReturn, CompiledResult::NoReturn) => true,
             (CompiledResult::NoReturn, _) | (_, CompiledResult::NoReturn) => false,
-            (CompiledResult::TempValue(_, x), CompiledResult::TempValue(_, y)) => x == y,
-
-            (CompiledResult::TempValue(_, x), CompiledResult::Integer(_, y)) => x == y,
-            (CompiledResult::Integer(_, x), CompiledResult::TempValue(_, y)) => x == y,
-            (CompiledResult::Integer(_, x), CompiledResult::Integer(_, y)) => x == y,
-            _ => false
+            _ => self.get_type() == with.get_type(),
         }
     }
     pub fn to_repr(&self) -> String{
@@ -61,10 +50,12 @@ impl CompiledResult {
         match self {
             CompiledResult::TempValue(uid, typ) => Ok(format!("{} %tmp{}", state.get_compiler_type_from_parser(typ)?.llvm_representation.to_string(), uid)),
             CompiledResult::Integer(name, typ) => Ok(format!("{} {}", state.get_compiler_type_from_parser(typ)?.llvm_representation.to_string(), name)),
-            CompiledResult::Function(name, _) => Ok(format!("@{} -------asd", name)),
+            CompiledResult::Function(name, typ) => {
+                 Ok(format!("{} @{}", typ.to_string(), name))
+            }
             CompiledResult::NoReturn => Err(format!("Tried to get llvm string representation of no return value")),
         }
-    }    
+    }  
     pub fn get_temp_value_index(&self) -> Result<usize, String>{
         match self {
             CompiledResult::TempValue(uid, _) => Ok(uid.clone()),
@@ -86,10 +77,10 @@ impl CompiledResult {
 pub fn type_from_expression(x: &Expr) -> Result<ParserType, String>{
     match x {
         Expr::Name(n) => return Ok(ParserType::Named(n.clone())),
-        Expr::UnaryOp(UnaryOp::Ref, x) => return Ok(ParserType::Ref(Box::new(type_from_expression(&x)?))),
+        Expr::UnaryOp(UnaryOp::Pointer, x) => return Ok(ParserType::Pointer(Box::new(type_from_expression(&x)?))),
         _ => todo!("{:?}",x)
     }
-} 
+}
 pub fn explicit_cast(value: &CompiledResult, to: &ParserType, state: &mut CompilerState) -> Result<CompiledResult, String>{
     let ltype = value.compiler_type(state)?;
     let rtype = state.get_compiler_type_from_parser(&to)?;
@@ -108,9 +99,9 @@ pub fn explicit_cast(value: &CompiledResult, to: &ParserType, state: &mut Compil
             if let Some(cast_statement) = ltype.explicit_casts.get(&to.to_string_core()) {
                 match cast_statement {
                     Stmt::DirectInsertion(x) =>{
-                        let ltvi = value.get_temp_value_index()?;
+                        let ltvi = format!("%tmp{}", value.get_temp_value_index()?);
                         let result = x.replace("{o}", &utvc.to_string())
-                        .replace("{v}", &ltvi.to_string());
+                        .replace("{v}", &ltvi);
                         state.output.push_str(&result);
                         return Ok(CompiledResult::TempValue(utvc, to.clone()));
                     }
@@ -119,7 +110,7 @@ pub fn explicit_cast(value: &CompiledResult, to: &ParserType, state: &mut Compil
             };
             return Err(format!("No explicit cast exists from type \"{:?}\" to \"{:?}\".", value, to));
         }
-        (ParserType::Named(_),ParserType::Ref(_)) => {
+        (ParserType::Named(_),ParserType::Pointer(_)) => {
             if !ltype.parser_type.is_integer() {
                 return Err(format!("Cannot convert from non-integer type to pointer"));
             }
@@ -127,7 +118,7 @@ pub fn explicit_cast(value: &CompiledResult, to: &ParserType, state: &mut Compil
             state.output.push_str(&format!("    %tmp{} = inttoptr {} to {}\n",utvc, value.to_repr_with_type(state)?, rtype_true_string));
             return Ok(CompiledResult::TempValue(utvc, to.clone()));
         }
-        (ParserType::Ref(_),ParserType::Named(_)) => {
+        (ParserType::Pointer(_),ParserType::Named(_)) => {
             if !rtype.parser_type.is_integer() { 
                 return Err(format!("Cannot convert from pointer to non-integer type '{}'", to.to_string()));
             }
@@ -135,7 +126,7 @@ pub fn explicit_cast(value: &CompiledResult, to: &ParserType, state: &mut Compil
             state.output.push_str(&format!("    %tmp{} = ptrtoint {} to {}\n",utvc, value.to_repr_with_type(state)?, rtype_true_string));
             return Ok(CompiledResult::TempValue(utvc, to.clone()));
         }
-        (ParserType::Ref(_),ParserType::Ref(_)) => {
+        (ParserType::Pointer(_),ParserType::Pointer(_)) => {
             let utvc = state.aquire_unique_temp_value_counter();
             state.output.push_str(&format!("    %tmp{} = bitcast {} to {}\n",utvc, value.to_repr_with_type(state)?, rtype_true_string));
             return Ok(CompiledResult::TempValue(utvc, to.clone()));
@@ -146,7 +137,7 @@ pub fn explicit_cast(value: &CompiledResult, to: &ParserType, state: &mut Compil
 pub fn implicit_cast(value: &CompiledResult, to: &ParserType, _state: &mut CompilerState) -> Result<CompiledResult, String>{
     Err(format!("Unable to implisitly cast from \"{:?}\" to \"{:?}\"", &value, to))
 }
-pub fn compile_rvalue(right: &Expr, expected_type: Expected, state: &mut CompilerState) -> Result<CompiledResult, String>{
+fn compile_rvalue(right: &Expr, expected_type: Expected, state: &mut CompilerState) -> Result<CompiledResult, String>{
     match right {
         Expr::Integer(num) =>{
             if let Expected::Type(x) = expected_type {
@@ -155,12 +146,6 @@ pub fn compile_rvalue(right: &Expr, expected_type: Expected, state: &mut Compile
                 }
                 if x.is_pointer() && num == "0" {
                     return Ok(CompiledResult::Integer(format!("null"), x.clone()));
-                }
-                if x.is_pointer(){
-                    let utvc = state.aquire_unique_temp_value_counter();
-                    let comp_type = state.get_compiler_type_from_parser(x)?;
-                    state.output.push_str(&format!("    %tmp{} = inttoptr i64 {} to {}", utvc, num, comp_type.llvm_representation.to_string()));
-                    return Ok(CompiledResult::TempValue(utvc, x.clone()));
                 }
             }
             return Ok(CompiledResult::Integer(num.clone(), ParserType::Named(format!("i64"))));
@@ -175,9 +160,10 @@ pub fn compile_rvalue(right: &Expr, expected_type: Expected, state: &mut Compile
                 return Ok(CompiledResult::TempValue(utvc, var_actual_type));
             }
             if let Ok(var) = state.get_argument_type(&name) {
+                
                 let var_actual_type = var.parser_type.clone();
                 let var_repr_type = var.llvm_representation.clone();
-
+                
                 state.output.push_str(&format!("    %tmp{} = load {}, {}* %{}.addr\n", utvc, var_repr_type.to_string(), var_repr_type.to_string(), name));
                 return Ok(CompiledResult::TempValue(utvc, var_actual_type));  
             }
@@ -192,7 +178,7 @@ pub fn compile_rvalue(right: &Expr, expected_type: Expected, state: &mut Compile
         }
         Expr::BinaryOp(left, op, right) => {
             let l = compile_rvalue(&left, Expected::Anything, state)?;
-            let mut r = compile_rvalue(&right, Expected::Type(&l.get_type()), state)?;
+            let r = compile_rvalue(&right, Expected::Type(&l.get_type()), state)?;
             //if l.value_type.is_integer() && r.value_type.is_integer() && l.value_type != r.value_type {
             //    r = implisit_cast(&r, &l.value_type, state).map_err(|x| format!("while compiling binary expression !{:?}! !{:?}! !{:?}\n{}", left, op, right, x))?;
             //}
@@ -224,7 +210,7 @@ pub fn compile_rvalue(right: &Expr, expected_type: Expected, state: &mut Compile
                         BinaryOp::Divide => if is_signed { "sdiv" } else { "udiv" },
                         BinaryOp::Modulo => if is_signed { "srem" } else { "urem" },
 
-                        BinaryOp::Equal => "icmp eq",
+                        BinaryOp::Equals => "icmp eq",
                         BinaryOp::NotEqual => "icmp ne",
                         BinaryOp::Less => if is_signed { "icmp slt" } else { "icmp ult" },
                         BinaryOp::LessEqual => if is_signed { "icmp sle" } else { "icmp ule" },
@@ -253,7 +239,7 @@ pub fn compile_rvalue(right: &Expr, expected_type: Expected, state: &mut Compile
                 if l.get_type().is_pointer() {
                     let utvc = state.aquire_unique_temp_value_counter();
                     let llvm_op = match op {
-                        BinaryOp::Equal => "icmp eq",
+                        BinaryOp::Equals => "icmp eq",
                         BinaryOp::NotEqual => "icmp ne",
                         _ => panic!("Operation \"{:?}\" is not permited on pointers", op)
                     };
@@ -284,12 +270,29 @@ pub fn compile_rvalue(right: &Expr, expected_type: Expected, state: &mut Compile
                 UnaryOp::Negate => {
                     let value = compile_rvalue(expr, Expected::Anything, state)?;
                     if value.get_type().is_signed_integer() {
-                        if let CompiledResult::Integer(x, t) = value {
-                            return Ok(CompiledResult::Integer(x.parse::<i128>().unwrap().wrapping_neg().to_string(), t));
+                        if let CompiledResult::Integer(x, t) = &value {
+                            let int = x.parse::<i128>().unwrap();
+                            let negated_int = int.wrapping_neg();
+                            let negated_int_string = negated_int.to_string();
+                            if Expected::Type(&t) == expected_type {
+                                return Ok(CompiledResult::Integer(negated_int_string, t.clone()));
+                            }else if Expected::Anything == expected_type{
+                                return Ok(CompiledResult::Integer(negated_int_string, t.clone()));
+                            }else if let Expected::Type(ty) = expected_type {
+                                if ty.is_integer() {
+                                    return Ok(CompiledResult::Integer(negated_int_string, ty.clone()));
+                                }else if ty.is_pointer() {
+                                    let utvc = state.aquire_unique_temp_value_counter();
+                                    let llvm_type = state.get_compiler_type_from_parser(ty)?.llvm_representation.to_string();
+                                    state.output.push_str(&format!("    %tmp{} = inttoptr i64 {} to {}\n",utvc, 0u64.wrapping_sub(int as u64).to_string(), llvm_type));
+                                    return Ok(CompiledResult::TempValue(utvc, ty.clone()));
+                                }
+                            }
+                            return implicit_cast(&value, &t, state);
                         }
                         let utvc = state.aquire_unique_temp_value_counter();
                         let llvm_type = state.get_compiler_type_from_parser(value.get_type())?.llvm_representation.to_string();
-                        // In LLVM, integer negation is performed by subtracting from 0.
+
                         state.output.push_str(&format!( "    %tmp{} = sub {} 0, {}\n",utvc, llvm_type, value.to_repr()));
                         return Ok(CompiledResult::TempValue(utvc, value.get_type().clone()));
                     }
@@ -309,33 +312,42 @@ pub fn compile_rvalue(right: &Expr, expected_type: Expected, state: &mut Compile
                     state.output.push_str(&format!("    %tmp{} = load {}, {}* {}\n",utvc, underlying_type_representation, underlying_type_representation, value.to_repr()));
                     return Ok(CompiledResult::TempValue(utvc, value_deref_type));
                 }
-                UnaryOp::Ref => {
-                    let lvalue = compile_lvalue(expr, state)?;
+                UnaryOp::Pointer => {
+                    let lvalue = compile_lvalue(expr, false, state)?;
                     let referenced_type = lvalue.get_type().reference_once();
                     return Ok(CompiledResult::TempValue(lvalue.get_temp_value_index()?, referenced_type));
                 }
             }
         }
         Expr::Call(left, args) =>{
-            if Expr::Name(format!("sizeof")) == **left {
-                let size = if args.len() == 1 { state.get_compiler_type_from_parser(&type_from_expression(&args[0])?)?.sizeof(state) } else { return Err(format!("Only 1 argument is allowed. Example: sizeof(&i32);"));};
-                if let Expected::Type(x) = expected_type {
-                    if x.is_integer() {
-                        return Ok(CompiledResult::Integer(size.to_string(), x.clone()));
+            if let Expr::Name(func_name) = &**left {
+                if func_name == "sizeof" {
+                    if args.len() != 1 { return Err(format!("sizeof expects exactly 1 type argument. Example: sizeof(i32);"));}
+                    let size = state.get_compiler_type_from_parser(&type_from_expression(&args[0])?)?.sizeof(state);
+                    if let Expected::Type(x) = expected_type {
+                        if x.is_integer() { return Ok(CompiledResult::Integer(size.to_string(), x.clone())); }
+                    }
+                    return Ok(CompiledResult::Integer(size.to_string(), ParserType::Named(format!("i64"))));
+                }
+                if func_name == "stalloc" {
+                    if args.len() != 1 { return Err(format!("stalloc expects exactly 1 size argument. Example: stalloc(32);"));};
+                    let r_val = compile_rvalue(&args[0], Expected::Type(&ParserType::Named(format!("i64"))), state)?;
+                    let utvc = state.aquire_unique_temp_value_counter();
+                    state.output.push_str(&format!("    %tmp{} = alloca i8, i64 {}\n",utvc, r_val.to_repr()));
+                    return Ok(CompiledResult::TempValue(utvc, ParserType::Pointer(Box::new(ParserType::Named(format!("i8"))))));
+                }
+            }
+            
+            let call_address = compile_lvalue(left, false, state)?;
+            if let ParserType::Fucntion(return_type, args_type) = call_address.get_type() {
+                let mut args = args.clone();
+                if let Expr::MemberAccess(instance, _) = left.as_ref() {
+                    if crate::ALLOW_EXTENTION_FUNCTIONS {
+                        args.insert(0, Expr::UnaryOp(UnaryOp::Pointer, instance.clone()));
+                    }else {
+                        return Err(format!("Extention function use is not allowed"));
                     }
                 }
-                return Ok(CompiledResult::Integer(size.to_string(), ParserType::Named(format!("i64"))));
-            }
-            if Expr::Name(format!("stalloc")) == **left {
-                let right = if args.len() == 1 { &args[0] } else { return Err(format!("Only 1 argument is allowed. Example: stalloc(32);"));};
-                let r_val = compile_rvalue(right, Expected::Type(&ParserType::Named(format!("i64"))), state)?;
-
-                let utvc = state.aquire_unique_temp_value_counter();
-                state.output.push_str(&format!("    %tmp{} = alloca i8, i64 {}\n",utvc, r_val.to_repr()));
-                return Ok(CompiledResult::TempValue(utvc, ParserType::Ref(Box::new(ParserType::Named(format!("i8"))))));
-            }
-            let call_address = compile_lvalue(left, state)?;
-            if let ParserType::Fucntion(return_type, args_type) = call_address.get_type() {
                 if args_type.len() != args.len() {
                     return Err(format!("Amount of arguments given {}, does not respond with the amount required {}", args_type.len(), args.len()));
                 }
@@ -368,8 +380,8 @@ pub fn compile_rvalue(right: &Expr, expected_type: Expected, state: &mut Compile
             }
             return Err(format!("Tried to call non-function type"));
         }
-        Expr::Member(x, y) =>{
-            let member_lvalue = compile_lvalue(&Expr::Member(x.clone(), y.clone()), state)?;
+        Expr::MemberAccess(x, y) =>{
+            let member_lvalue = compile_lvalue(&Expr::MemberAccess(x.clone(), y.clone()), false, state)?;
             let utvc = state.aquire_unique_temp_value_counter();
             let member_type_repr = state.get_compiler_type_from_parser(&member_lvalue.get_type())?.llvm_representation.to_string();
             state.output.push_str(&format!("    %tmp{} = load {}, {}* {}\n",utvc, member_type_repr, member_type_repr, member_lvalue.to_repr()));
@@ -378,41 +390,32 @@ pub fn compile_rvalue(right: &Expr, expected_type: Expected, state: &mut Compile
         _ => todo!("{:?}", right)
     }
 }
-fn compile_lvalue(left: &Expr, state: &mut CompilerState) -> Result<CompiledResult, String>{
+fn compile_lvalue(left: &Expr, write: bool, state: &mut CompilerState) -> Result<CompiledResult, String>{
     match left {
         Expr::Name(name) => {
-            
             let utvc = state.aquire_unique_temp_value_counter();
-            if let Ok(var) = state.get_variable_type(&name) {
+            if let Ok(var) = state.get_variable_type(&name) { // Variable
                 let var_actual_type = var.parser_type.clone();
                 let var_repr_type = var.llvm_representation.clone();
 
                 state.output.push_str(&format!("    %tmp{} = getelementptr inbounds {}, {}* %{}, i32 0\n", utvc, var_repr_type.to_string(), var_repr_type.to_string(), name));
                 return Ok(CompiledResult::TempValue(utvc, var_actual_type));
             }
-            if let Ok(var) = state.get_argument_type(&name) {
+            if let Ok(var) = state.get_argument_type(&name) { // Argument
                 let var_actual_type = var.parser_type.clone();
                 let var_repr_type = var.llvm_representation.clone();
-
+                if write {
+                    eprintln!("Warning: Rewriting data of argument \"{}\".", name);
+                }
                 state.output.push_str(&format!("    %tmp{} = getelementptr inbounds {}, {}* %{}.addr, i32 0\n", utvc, var_repr_type.to_string(), var_repr_type.to_string(), name));
                 return Ok(CompiledResult::TempValue(utvc, var_actual_type));
             }
             if let Ok(func) = state.get_function(&name) {
-                let name = &func.name;
-                let args = &func.args;
-                let return_type = state.get_compiler_type_from_parser(&func.return_type)?;
-                let mut arg_parts = Vec::new();
-                for (_, arg_type) in args {
-                    let compiler_type = state.get_compiler_type_from_parser(arg_type)?;
-                    let type_string = compiler_type.llvm_representation.to_string();
-                    let formatted_arg = format!("{}", type_string);
-                    arg_parts.push(formatted_arg);
-                }
-                let args_copy = args.iter().map(|x|x.1.clone()).collect::<Vec<_>>();
-                
-                let args_string = arg_parts.join(",");
-                //state.output.push_str(&format!("    %tmp{} = bitcast {}({})* @{} to ptr\n", utvc, return_type.llvm_representation.to_string(), args_string, name));
-                return Ok(CompiledResult::Function(name.clone(), ParserType::Fucntion(Box::new(return_type.parser_type), args_copy)));
+                let func_type = ParserType::Fucntion(
+                    Box::new(func.return_type.clone()),
+                    func.args.iter().map(|(_, t)| t.clone()).collect()
+                );
+                return Ok(CompiledResult::Function(name.clone(), func_type));
             }
             return Err(format!("Name \"{}\" does not respond to function name or variable name in current context",name));
         }
@@ -429,8 +432,8 @@ fn compile_lvalue(left: &Expr, state: &mut CompilerState) -> Result<CompiledResu
                 _ => todo!()
             }
         }
-        Expr::Member(x, y) =>{
-            let base_lval = compile_lvalue(x, state)?;
+        Expr::MemberAccess(x, y) =>{
+            let base_lval = compile_lvalue(x, false, state)?;
             let mut aggregate_ptr_tmp = base_lval.get_temp_value_index()?;
             let mut aggregate_type = base_lval.get_type().clone();
             while aggregate_type.is_pointer() {
@@ -446,34 +449,37 @@ fn compile_lvalue(left: &Expr, state: &mut CompilerState) -> Result<CompiledResu
                 aggregate_type = pointer_to_load_type.dereference_once();
             }
             let struct_compiler_type = state.get_compiler_type_from_parser(&aggregate_type)?;
-            if let ParserType::Structure(struct_name, fields) = &struct_compiler_type.struct_representation {
-                let field_index = fields.iter().position(|(name, _)| name == y)
-                    .ok_or_else(|| format!("Member '{}' not found in struct '{}'", y, struct_name))?;
-
-                let struct_llvm_type_str = struct_compiler_type.llvm_representation.to_string();
-                let utvc_gep = state.aquire_unique_temp_value_counter();
-                
-                state.output.push_str(&format!("    %tmp{} = getelementptr inbounds {}, {}* %tmp{}, i32 0, i32 {}\n",
-                    utvc_gep, struct_llvm_type_str, struct_llvm_type_str, aggregate_ptr_tmp, field_index
-                ));
-                return Ok(CompiledResult::TempValue(utvc_gep, fields[field_index].1.clone()));
+            if let ParserType::Structure(struct_name, fields, extentions) = &struct_compiler_type.struct_representation {
+                if let Some(field_index) = fields.iter().position(|(name, _)| name == y){
+                    let struct_llvm_type_str = struct_compiler_type.llvm_representation.to_string();
+                    let utvc_gep = state.aquire_unique_temp_value_counter();
+                    
+                    state.output.push_str(&format!("    %tmp{} = getelementptr inbounds {}, {}* %tmp{}, i32 0, i32 {}\n",
+                        utvc_gep, struct_llvm_type_str, struct_llvm_type_str, aggregate_ptr_tmp, field_index
+                    ));
+                    return Ok(CompiledResult::TempValue(utvc_gep, fields[field_index].1.clone()));
+                }
+                if let Some(extention_index) = extentions.iter().position(|(name, _)| name == y) {
+                    let x = extentions[extention_index].clone();
+                    return Ok(CompiledResult::Function(x.0.clone(), ParserType::Fucntion(Box::new(x.1.0), x.1.1)));
+                }
+                return Err(format!("Member/Extended function was '{}' not found in struct '{}'", y, struct_name));
             }
             return Err(format!("Cannot access member '{}' on non-struct type '{}'", y, aggregate_type.to_string()));
         }
-        _ => todo!()
+        
+        _ => todo!("{:?}", left)
     }
 }
-
-
 pub fn compile_expression(expression: &Expr, expected_type: Expected, state: &mut CompilerState) -> Result<CompiledResult, String> {
 
     match expression {
-        Expr::UnaryOp(_, _) | Expr::Name(_) | Expr::Integer(_) | Expr::Call(_, _) | Expr::BinaryOp(_, _, _) | Expr::Member(_, _) | Expr::Cast(_, _) =>{
+        Expr::UnaryOp(_, _) | Expr::Name(_) | Expr::Integer(_) | Expr::Call(_, _) | Expr::BinaryOp(_, _, _) | Expr::MemberAccess(_, _) | Expr::Cast(_, _) =>{
             return compile_rvalue(&expression, expected_type, state);
         }
         Expr::Assign(left, right) => {
-            let l = compile_lvalue(&left, state)?;
-            let mut r = compile_rvalue(&right, l.get_expected_type(), state)?;
+            let l = compile_lvalue(&left, true, state)?;
+            let mut r = compile_rvalue(&right, Expected::Type(l.get_type()), state)?;
             if !l.equal_types(&r) {
                 r = implicit_cast(&r, &l.get_type(), state).map_err(|x| format!("while assigning !{:?}! !EQUAL! !{:?}\n{}", left, right, x))?;
             }

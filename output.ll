@@ -1,16 +1,15 @@
-target triple = "x86_64-pc-windows-msvc"
+%struct.List = type {%struct.ListNode*,%struct.ListNode*,i32}
+%struct.ListNode = type {%struct.ListNode*,i32}
+%struct.Vec = type {i8*,i32,i32}
 declare dllimport i32* @GetProcessHeap()
 declare dllimport i8* @HeapAlloc(i32*, i32, i64)
 declare dllimport i32 @HeapFree(i32*, i32, i8*)
 declare dllimport void @ExitProcess(i32)
 declare dllimport i32 @AllocConsole()
 declare dllimport i8* @GetStdHandle(i32)
+declare dllimport i32 @FreeConsole()
 declare dllimport i32 @MessageBoxA(i8*, i8*, i8*, i32)
 declare dllimport i32 @WriteConsoleA(i8*, i8*, i32, i32*, i8*)
-declare dllimport i32 @FreeConsole()
-%struct.List = type {%struct.ListNode*,%struct.ListNode*,i32}
-%struct.ListNode = type {%struct.ListNode*,i32}
-%struct.Vec = type {i8*,i32,i32}
 
 define void @__chkstk(){
     ret void
@@ -24,7 +23,7 @@ define i8* @get_stdout(){
     %tmp2 = call i8* @GetStdHandle(i32 -11)
     store i8* %tmp2, i8** %tmp0
     %tmp3 = load i8*, i8** %stdout_handle
-    %tmp4 = inttoptr i64 -1 to i8*
+    %tmp4 = inttoptr i64 18446744073709551615 to i8*
     %tmp5 = icmp eq ptr %tmp3, %tmp4
     br i1 %tmp5, label %then0, label %end_if0
 then0:
@@ -596,17 +595,15 @@ loop_body17_exit:
     %tmp89 = getelementptr inbounds %struct.Vec, %struct.Vec* %buffer, i32 0
     call void @push(%struct.Vec* %tmp89,i8 10)
     %tmp91 = getelementptr inbounds %struct.Vec, %struct.Vec* %buffer, i32 0
-    call void @push(%struct.Vec* %tmp91,i8 0)
-    %tmp93 = getelementptr inbounds %struct.Vec, %struct.Vec* %buffer, i32 0
-    %tmp94 = getelementptr inbounds %struct.Vec, %struct.Vec* %tmp93, i32 0, i32 0
-    %tmp95 = load i8*, i8** %tmp94
-    %tmp96 = getelementptr inbounds %struct.Vec, %struct.Vec* %buffer, i32 0
-    %tmp97 = getelementptr inbounds %struct.Vec, %struct.Vec* %tmp96, i32 0, i32 1
-    %tmp98 = load i32, i32* %tmp97
-    %tmp99 = bitcast i32 %tmp98 to i32
-    call void @write(i8* %tmp95,i32 %tmp99)
-    %tmp101 = getelementptr inbounds %struct.Vec, %struct.Vec* %buffer, i32 0
-    call void @free_vec(%struct.Vec* %tmp101)
+    %tmp92 = getelementptr inbounds %struct.Vec, %struct.Vec* %tmp91, i32 0, i32 0
+    %tmp93 = load i8*, i8** %tmp92
+    %tmp94 = getelementptr inbounds %struct.Vec, %struct.Vec* %buffer, i32 0
+    %tmp95 = getelementptr inbounds %struct.Vec, %struct.Vec* %tmp94, i32 0, i32 1
+    %tmp96 = load i32, i32* %tmp95
+    %tmp97 = bitcast i32 %tmp96 to i32
+    call void @write(i8* %tmp93,i32 %tmp97)
+    %tmp99 = getelementptr inbounds %struct.Vec, %struct.Vec* %buffer, i32 0
+    call void @free_vec(%struct.Vec* %tmp99)
     ret void
 
     unreachable
