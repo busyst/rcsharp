@@ -37,6 +37,9 @@ fn get_stdout() : &i8 {
 fn write(buffer: &i8, len: i32){
     let chars_written: i32;
     WriteConsoleA(get_stdout(), buffer, len, &chars_written, 0 as &i8);
+    if len != chars_written{
+        ExitProcess(-2);
+    }
 }
 fn malloc(size:i64) : &i8{return HeapAlloc(GetProcessHeap(), 0 as i32, size);}
 fn free(ptr: &i8) : void {HeapFree(GetProcessHeap(), 0, ptr);}

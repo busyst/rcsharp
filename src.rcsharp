@@ -16,15 +16,12 @@ fn main(){
     list = List::new(); // only when `fn new` returns List; Clearly indicates static function. and makes sense. But produces unnecesary copy, that can be avoided with better compilator. 
     // In this case: How to differentiate between stalloc and malloc? How to call this "constructor" on pointers?
     // let list: &List = malloc(sizeof(List)) as &List; *list = List::new(); // is the solution it current situation.
-    list = List.new(); // Looks bad. actualy good only in C# where new keyword never had existed
+    list = List.new(); // Looks bad. actualy good only in C# and only in universe where new keyword never had existed
     let list: List(); // Looks cursed, C++ inspiration
 }
 */
 
 // with new optimisation arguments MUST be immutable. // This statement is no longer valid, i reverted it
-
-
-
 fn println_i32(n: i32){
     let buffer: Vec;
     new_vec(&buffer);
@@ -69,12 +66,48 @@ fn println_i32(n: i32){
     write(buffer.array, buffer.length as i32);
     free_vec(&buffer);
 }
+fn c_str_len(str: &i8) : i32{
+    let len : i32 = 0;
+    loop{
+        if *(str + len as i64) == 0{
+            break; // for me it is better to read
+        }
+        len = len + 1;
+    }
+    return len;
+}
+// x!!!
+fn triple_factorial(x: i64) : i64{
+    if x < 0{
+        return 0;
+    }
+    if x <= 3{
+        return 1;
+    }
+    return x * triple_factorial(x - 3);
 
+}
 fn main(): i32 {
+    let x : &i8 = "Pee pee poo poo\n Waterfall \n TORRONTO CENTRAL \n";
+    let y : &&i8 = &x;
+    let z : &&&i8 = &y;
+    println_i32((*x) as i32);
+    println_i32((**y) as i32);
+    println_i32((***z) as i32);
+    let i: i64 = 0;
+    loop{
+        println_i32(triple_factorial(i) as i32);
+        i = i + 1;
+        if i >= 15{
+            break;
+        }
+    }
     AllocConsole();
-    println_i32(0);
+    write(x, c_str_len(x));
+    println_i32(*"0" as i32);
     println_i32(-1432);
     println_i32(1342);
+    println_i32(777);
     FreeConsole();
     let buffer: Vec;
     new_vec(&buffer);

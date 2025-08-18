@@ -108,6 +108,9 @@ impl<'a> ExpressionParser<'a> {
             Token::LogicNot => self.parse_unary(UnaryOp::Not),
             Token::Multiply => self.parse_unary(UnaryOp::Deref),
             Token::BinaryAnd => self.parse_unary(UnaryOp::Pointer),
+            Token::LogicAnd => {
+                return Ok(Expr::UnaryOp(UnaryOp::Pointer, Box::new(Expr::UnaryOp(UnaryOp::Pointer, Box::new(self.parse_prefix()?)))));
+            },
 
             _ => Err(format!("Unexpected token in prefix position: {:?}", token_data)),
         }

@@ -1,9 +1,4 @@
 /target
-
-lexer_output.txt
-parser_output.txt
-output.bin
-main
 .code_snippets/gendef/gendef.exe
 .code_snippets/readyLibs/kernel32.Lib
 .code_snippets/readyLibs/User32.Lib

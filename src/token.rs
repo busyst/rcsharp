@@ -1,6 +1,7 @@
 use logos::{Logos, Lexer as LogosLexer, Span};
 use std::fmt;
 // AI assisted, somehow works. Further improvements needed.
+
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct Location {
     pub row: u32,
@@ -95,6 +96,7 @@ pub enum Token {
     #[token("if")] KeywordIf,
     #[token("else")] KeywordElse,
     #[token("struct")] KeywordStruct,
+    #[token("enum")] KeywordEnum,
     #[token("loop")] KeywordLoop,
     #[token("break")] KeywordBreak,
     #[token("continue")] KeywordContinue,

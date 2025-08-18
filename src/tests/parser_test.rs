@@ -114,7 +114,7 @@ mod parser_tests {
                 Box::new(Expr::Integer("1".to_string()))
             ),
             vec![Stmt::Return(None)],
-            None
+            vec![]
         );
         if let Stmt::Function(_, _, _, body) = &ast1[0] {
             assert_eq!(body[0], expected_if1);
@@ -125,12 +125,12 @@ mod parser_tests {
         let expected_if2 = Stmt::If(
             Expr::Name("a".to_string()),
             vec![],
-            Some(Box::new(Stmt::Block(vec![
+            vec![
                 Stmt::Expr(Expr::Assign(
                     Box::new(Expr::Name("a".to_string())),
                     Box::new(Expr::Integer("1".to_string()))
                 ))
-            ])))
+            ]
         );
          if let Stmt::Function(_, _, _, body) = &ast2[0] {
             assert_eq!(body[0], expected_if2);
@@ -141,11 +141,11 @@ mod parser_tests {
         let expected_if3 = Stmt::If(
             Expr::Name("a".to_string()),
             vec![],
-            Some(Box::new(Stmt::If(
+            vec![Stmt::If(
                 Expr::Name("b".to_string()),
                 vec![],
-                Some(Box::new(Stmt::Block(vec![])))
-            )))
+                vec![]
+            )]
         );
         if let Stmt::Function(_, _, _, body) = &ast3[0] {
             assert_eq!(body[0], expected_if3);
@@ -264,11 +264,8 @@ mod parser_tests {
     }
     #[test]
     fn complex_expression_and_types() -> Result<(), String> {
-        // This test uses constructs from the example code provided
         let src = "fn f() { list.foot.next_node = new_node; }";
         let ast = parse(src)?;
-
-        // Test: list.foot.next_node = new_node;
         let expected_stmt = Stmt::Expr(
             Expr::Assign(
                 Box::new(Expr::MemberAccess(

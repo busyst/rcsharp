@@ -7,9 +7,9 @@ pub enum Stmt {
     
     Expr(Expr), // a = 1 + b
     
-    Block(Vec<Stmt>), // { ... }
     
-    If(Expr, Vec<Stmt>, Option<Box<Stmt>>), // if 1 == 1 {} `else `if` {}`
+    If(Expr, Vec<Stmt>, Vec<Stmt>), // if 1 == 1 {} `else `if` {}`
+
     Loop(Vec<Stmt>), // loop { ... }
 
     Break, // break
@@ -20,17 +20,127 @@ pub enum Stmt {
     
     Function(String, Vec<(String, ParserType)>, ParserType, Vec<Stmt>), // fn foo(bar: i8, ...) { ... }
     Struct(String, Vec<(String, ParserType)>), // struct foo { bar : i8, ... }
+    Enum(String, Vec<(String, Expr)>), // enum foo { bar = ..., ... }
 }
-
+impl Stmt {
+    pub fn recursive_statement_count(&self) -> u64{
+        match self {
+            Self::Break => 1,
+            Self::Continue => 1,
+            Self::DirectInsertion(_) => 1,
+            Self::Enum(_, _) => 1,
+            Self::Hint(_, _) => 1,
+            Self::Let(_, _, _) => 1,
+            Self::Expr(_) => 1,
+            Self::If(_, x, y) => { x.iter().map(|x| x.recursive_statement_count()).sum::<u64>() + y.iter().map(|x| x.recursive_statement_count()).sum::<u64>()}
+            Self::Loop(x) => { x.iter().map(|x| x.recursive_statement_count()).sum::<u64>()}
+            Self::Return(_) => 1,
+            Self::Function(_,_,_,x) => { x.iter().map(|x| x.recursive_statement_count()).sum::<u64>()}
+            Self::Struct(_, _) => 1,
+        }
+    }
+}
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParserType {
     Named(String),
     Pointer(Box<ParserType>),
     // return type, arguments
     Fucntion(Box<ParserType>,Vec<ParserType>),
-    // Name Fields Embeded Functions(NAME, [RETURN TYPE, ARGUMENTS])
-    Structure(Box<String>,Vec<(String,ParserType)>,Vec<(String,(ParserType, Vec<ParserType>))>),
 }
+#[allow(dead_code)]
+impl ParserType {
+    pub fn is_simple_type(&self) -> bool {
+        if let ParserType::Named(name) = self {
+            matches!(name.as_str(),
+                "bool" |
+                "void" |
+                "i8" | "u8" | "i16" | "u16" | "i32" | "u32" | "i64" | "u64" |
+                "f32" | "f64"
+            )
+        } else {
+            false
+        }
+    }
+
+    pub fn is_integer(&self) -> bool {
+        if let ParserType::Named(name) = self {
+            matches!(name.as_str(), "i8" | "u8" | "i16" | "u16" | "i32" | "u32" | "i64" | "u64")
+        } else {
+            false
+        }
+    }
+    pub fn is_bool(&self) -> bool{
+        if let ParserType::Named(name) = self {
+            matches!(name.as_str(), "bool")
+        } else {
+            false
+        }
+    }
+    pub fn is_unsigned_integer(&self) -> bool {
+        if let ParserType::Named(name) = self {
+            matches!(name.as_str(), "u8" | "u16" | "u32" | "u64" )
+        } else {
+            false
+        }
+    }
+    
+    pub fn is_signed_integer(&self) -> bool {
+        if let ParserType::Named(name) = self {
+            matches!(name.as_str(), "i8" | "i16" | "i32" | "i64" )
+        } else {
+            false
+        }
+    }
+    pub fn is_float(&self) -> bool {
+        if let ParserType::Named(name) = self {
+            matches!(name.as_str(), "f32" | "f64")
+        } else {
+            false
+        }
+    }
+    pub fn is_void(&self) -> bool {
+        if let ParserType::Named(name) = self {
+            matches!(name.as_str(), "void")
+        } else {
+            false
+        }
+    }
+    pub fn is_pointer(&self) -> bool{
+        match self {
+            ParserType::Named(_) => false,
+            ParserType::Pointer(_) => true,
+            ParserType::Fucntion(_, _) => {todo!()},
+        }
+    }
+    pub fn to_string(&self) -> String{
+        let mut output = String::new();
+        match self {
+            ParserType::Named(x) => output.push_str(x),
+            ParserType::Pointer(x) => {output.push_str(&x.to_string()); output.push('*');},
+            ParserType::Fucntion(_, _) => {todo!()},
+        }
+        return output;
+    }
+    pub fn try_to_string_core(&self) -> Result<String, String>{
+        match self {
+            ParserType::Named(x) => return Ok(x.clone()),
+            ParserType::Pointer(x) => {return x.try_to_string_core();},
+            ParserType::Fucntion(_, _) => {return Err(format!("Tried to get type name of function TODO"));},
+        }
+    }
+    
+    pub fn dereference_once(&self) -> ParserType{
+        match self {
+            ParserType::Named(_) => panic!("ParserType is Named {:?} that is not dereferencable", self),
+            ParserType::Pointer(x) => return *x.clone(),
+            ParserType::Fucntion(_, _) => {todo!()},
+        }
+    }
+    pub fn reference_once(&self) -> ParserType{
+        ParserType::Pointer(Box::new(self.clone()))
+    }
+}
+
 pub struct GeneralParser<'a> {
     tokens: &'a [TokenData],
     cursor: usize,
@@ -39,10 +149,11 @@ impl<'a> GeneralParser<'a> {
     pub fn new(tokens: &'a [TokenData]) -> Self {
         Self { tokens, cursor: 0 }
     }
+    
     pub fn is_at_end(&self) -> bool {
         self.cursor >= self.tokens.len()
     }
-    pub fn peek(&self) -> &TokenData {
+    fn peek(&self) -> &TokenData {
         const DUMMY_EOF: TokenData = TokenData { 
             token: Token::DummyToken,
             span: 0..0,
@@ -50,13 +161,13 @@ impl<'a> GeneralParser<'a> {
         };
         self.tokens.get(self.cursor).unwrap_or(&DUMMY_EOF)
     }
-    pub fn advance(&mut self) -> &TokenData {
+    fn advance(&mut self) -> &TokenData {
         if !self.is_at_end() {
             self.cursor += 1;
         }
         &self.tokens[self.cursor - 1]
     }
-    pub fn consume(&mut self, expected: &Token) -> Result<&TokenData, String> {
+    fn consume(&mut self, expected: &Token) -> Result<&TokenData, String> {
         let token_data = self.peek();
         if &token_data.token != expected {
             return Err(format!("Expected token {:?}, but found {:?}", expected, token_data));
@@ -70,11 +181,13 @@ impl<'a> GeneralParser<'a> {
         }
         Ok(statements)
     }
+    
     fn parse_toplevel_item(&mut self) -> Result<Stmt, String> {
         match &self.peek().token {
             Token::Hint => self.parse_hint(),
             Token::KeywordFunction => self.parse_function(),
             Token::KeywordStruct => self.parse_struct(),
+            Token::KeywordEnum => self.parse_enum(),
             _ => Err(format!(
                     "Unexpected token {:?} at {:?} in top-level scope. Only functions, structs, and hints are allowed.",
                     self.peek().token, self.peek().loc
@@ -128,7 +241,7 @@ impl<'a> GeneralParser<'a> {
             self.advance();
             return Ok(Stmt::Function(name, args, return_type, vec![]));
         }
-        let body = self.parse_block_as_stmt()?;
+        let body = self.parse_block_body()?;
         Ok(Stmt::Function(name, args, return_type, body))
     }  
     fn parse_struct(&mut self) -> Result<Stmt, String> {
@@ -152,6 +265,39 @@ impl<'a> GeneralParser<'a> {
         self.consume(&Token::RBrace)?;
         Ok(Stmt::Struct(name, fields))
     }
+    fn parse_enum(&mut self) -> Result<Stmt, String> {
+        self.consume(&Token::KeywordEnum)?;
+        let name = self.advance().expect_name_token()?;
+        self.consume(&Token::LBrace)?;
+        let mut values = vec![];
+        let mut counter = 0;
+        loop {
+            if self.peek().token == Token::RBrace {
+                break;
+            }
+            let name = self.advance().expect_name_token()?;
+            if self.peek().token == Token::Equal {
+                self.advance();
+                let mut prsr= ExpressionParser::new(&self.tokens[self.cursor..]);
+                let expr = prsr.parse_expression()?;
+                self.cursor += prsr.position();
+                values.push((name, expr));
+                if self.peek().token == Token::Comma {
+                    self.advance();
+                }
+                continue;
+            }
+
+            values.push((name, Expr::Integer(counter.to_string())));
+            counter+=1;
+            if self.peek().token == Token::Comma {
+                self.advance();
+                continue;
+            }
+        }
+        self.consume(&Token::RBrace)?;
+        Ok(Stmt::Enum(name, values))
+    }
     fn parse_type(&mut self) -> Result<ParserType, String> {
         if self.peek().token == Token::LogicAnd {
             self.advance();
@@ -168,15 +314,6 @@ impl<'a> GeneralParser<'a> {
         else {
             Ok(ParserType::Named(self.advance().expect_name_token()?))
         }
-    }
-    fn parse_block_as_stmt(&mut self) -> Result<Vec<Stmt>, String> {
-        self.consume(&Token::LBrace)?;
-        let mut stmts = Vec::new();
-        while self.peek().token != Token::RBrace && !self.is_at_end() {
-            stmts.push(self.parse_statement()?);
-        }
-        self.consume(&Token::RBrace)?;
-        Ok(stmts)
     }
     fn parse_statement(&mut self) -> Result<Stmt, String> {
         match &self.peek().token {
@@ -225,16 +362,16 @@ impl<'a> GeneralParser<'a> {
         self.consume(&Token::KeywordIf)?;
         let condition = self.parse_sub_expression()?;
         let then_body = self.parse_block_body()?;
-        let mut else_branch: Option<Box<Stmt>> = None;
+        let mut else_branch= vec![];
         if self.peek().token == Token::KeywordElse {
             self.advance();
             
             if self.peek().token == Token::KeywordIf {
                 let else_if_stmt = self.parse_if_statement()?;
-                else_branch = Some(Box::new(else_if_stmt));
+                else_branch = vec![else_if_stmt];
             } else {
                 let else_body = self.parse_block_body()?;
-                else_branch = Some(Box::new(Stmt::Block(else_body)));
+                else_branch = else_body;
             }
         }
         Ok(Stmt::If(condition, then_body, else_branch))
@@ -280,97 +417,5 @@ impl<'a> GeneralParser<'a> {
         }
         self.consume(&Token::RBrace)?;
         Ok(stmts)
-    }
-}
-
-#[allow(dead_code)]
-impl ParserType {
-    pub fn is_simple_type(&self) -> bool {
-        if let ParserType::Named(name) = self {
-            matches!(name.as_str(),
-                "bool" |
-                "i8" | "u8" | "i16" | "u16" | "i32" | "u32" | "i64" | "u64" |
-                "f32" | "f64"
-            )
-        } else {
-            false
-        }
-    }
-
-    pub fn is_integer(&self) -> bool {
-        if let ParserType::Named(name) = self {
-            matches!(name.as_str(), "i8" | "u8" | "i16" | "u16" | "i32" | "u32" | "i64" | "u64")
-        } else {
-            false
-        }
-    }
-    pub fn is_unsigned_integer(&self) -> bool {
-        if let ParserType::Named(name) = self {
-            matches!(name.as_str(), "u8" | "u16" | "u32" | "u64" )
-        } else {
-            false
-        }
-    }
-    
-    pub fn is_signed_integer(&self) -> bool {
-        if let ParserType::Named(name) = self {
-            matches!(name.as_str(), "i8" | "i16" | "i32" | "i64" )
-        } else {
-            false
-        }
-    }
-    pub fn is_float(&self) -> bool {
-        if let ParserType::Named(name) = self {
-            matches!(name.as_str(), "f32" | "f64")
-        } else {
-            false
-        }
-    }
-    pub fn is_void(&self) -> bool {
-        if let ParserType::Named(name) = self {
-            matches!(name.as_str(), "void")
-        } else {
-            false
-        }
-    }
-    pub fn is_pointer(&self) -> bool{
-        match self {
-            ParserType::Named(_) => false,
-            ParserType::Pointer(_) => true,
-            ParserType::Fucntion(_, _) => {todo!()},
-            ParserType::Structure(_, _, _) => {todo!()},
-        }
-    }
-    pub fn to_string(&self) -> String{
-        let mut output = String::new();
-        match self {
-            ParserType::Named(x) => output.push_str(x),
-            ParserType::Pointer(x) => {output.push_str(&x.to_string()); output.push('*');},
-            ParserType::Fucntion(_, _) => {todo!()},
-            ParserType::Structure(name, _, _) => {output.push_str(&format!("%struct.{}", name));},
-        }
-        return output;
-    }
-    pub fn to_string_core(&self) -> String{
-        let mut output = String::new();
-        match self {
-            ParserType::Named(x) => output.push_str(x),
-            ParserType::Pointer(x) => {return x.to_string_core();},
-            ParserType::Fucntion(_, _) => {todo!()},
-            ParserType::Structure(name, _, _) => {output.push_str(&name);},
-        }
-        return output;
-    }
-    
-    pub fn dereference_once(&self) -> ParserType{
-        match self {
-            ParserType::Named(_) => panic!("ParserType is Named {:?} that is not dereferencable", self),
-            ParserType::Pointer(x) => return *x.clone(),
-            ParserType::Fucntion(_, _) => {todo!()},
-            ParserType::Structure(_, _, _) => {todo!()},
-        }
-    }
-    pub fn reference_once(&self) -> ParserType{
-        ParserType::Pointer(Box::new(self.clone()))
     }
 }
