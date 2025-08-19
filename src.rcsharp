@@ -1,27 +1,37 @@
-/*
-// #[ExtentionOf(...)] it does nothing now, but it can be proto-struct function calling, example:
-#[ExtentionOf(List)]
-fn new(list: &List){
-    list.head = 0 as &ListNode;
-    list.foot = 0 as &ListNode;
-    list.length = 0 as u32;
-}
-fn main(){
-    let list: List;     // can be pointer, does not matter
+/// General language specs /// SOME NOT YET IMPLEMENTED
+// Rust basic syntax. (Less characters to lex through:fn,let. Easier to parse: let val_name : type = expression; fn name(args) type {body})
+// C memory access and handholding level. (Pointers everywhere, no refereces through)
+// C# (Generic type params fn x<T>(), Properties )
+// those specs are incomplete as current state of language is bare C with rust-like syntax.
 
-    list.new();         // can be confusing and hard to "catch" when called accidently, will pollute member suggestion (SHIFT + SPACE)  
-    ---OR/AND---
-    List::new(&list);   // too much text to write, but clearly indicates static function
-    ---OR/AND---
-    list = List::new(); // only when `fn new` returns List; Clearly indicates static function. and makes sense. But produces unnecesary copy, that can be avoided with better compilator. 
-    // In this case: How to differentiate between stalloc and malloc? How to call this "constructor" on pointers?
-    // let list: &List = malloc(sizeof(List)) as &List; *list = List::new(); // is the solution it current situation.
-    list = List.new(); // Looks bad. actualy good only in C# and only in universe where new keyword never had existed
-    let list: List(); // Looks cursed, C++ inspiration
-}
-*/
+/// Plans ///
+// Compile-Time Type Overlay a.k.a (constant_mask) 
+// For constant index access to array(array[number]), at compile time substitutes type
+// example // indexing with [] NOT YET IMPLEMENTED
+// let x: &&void;
+// constant_mask!(x, &i32, &bool);
+// OR //
+// #[constant_mask(&i32, &bool)]
+// let x: &&void;
+// x = malloc(sizeof(&void) * 4) as &&void;
+// let i : i32 = 0;
+//
+// x[0] = &i; // OK
+// x[0] = 0 as &void; // Compile time error, must cast to &i32
+// let val : i32 = *x[0]; // OK
+// let val : i32 = *x[*val]; // Compile time error, cant cast void to int
+//
+// let iterator: i32 = 0; // when it isnt number constant_mask does not work
+// x[iterator] = &i; // Compile time error, must cast to &void
+// x[iterator] = 0 as &void; // OK
+//
+// WHY DO I NEED THIS: 
+// I needed this functionality once, long time ago. It probably was my C++ game engine project and first type in array was always Transform.
+// I ended up (Transform*)ing all over the place. Probably constexpr function to staticly cast pointer would have been better.
+// ALSO can be used to create "'growing' structures" and interfaces to exposed arrays without needeng to create structures, because it could be overlayed at Vec array 
+// -------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-// with new optimisation arguments MUST be immutable. // This statement is no longer valid, i reverted it
+// with new optimisation arguments MUST be immutable.
 fn println_i32(n: i32){
     let buffer: Vec;
     new_vec(&buffer);
@@ -70,7 +80,7 @@ fn c_str_len(str: &i8) : i32{
     let len : i32 = 0;
     loop{
         if *(str + len as i64) == 0{
-            break; // for me it is better to read
+            break;
         }
         len = len + 1;
     }
@@ -88,6 +98,7 @@ fn triple_factorial(x: i64) : i64{
 
 }
 fn main(): i32 {
+    let c : &fn(i64):i64 = &triple_factorial;
     let x : &i8 = "Pee pee poo poo\n Waterfall \n TORRONTO CENTRAL \n";
     let y : &&i8 = &x;
     let z : &&&i8 = &y;
@@ -96,7 +107,6 @@ fn main(): i32 {
     println_i32((***z) as i32);
     let i: i64 = 0;
     loop{
-        println_i32(triple_factorial(i) as i32);
         i = i + 1;
         if i >= 15{
             break;
@@ -109,13 +119,16 @@ fn main(): i32 {
     println_i32(1342);
     println_i32(777);
     FreeConsole();
-    let buffer: Vec;
-    new_vec(&buffer);
-    push(&buffer, 32);
-    free_vec(&buffer);
+    
+    let vec: Vec;
+    new_vec(&vec);
+    push(&vec, 32);
+    free_vec(&vec);
+    
     let list: List;
     new_list(&list);
     extend(&list, 64);
     free_list(&list);
+
     return 0;
 }

@@ -45,7 +45,7 @@ pub enum ParserType {
     Named(String),
     Pointer(Box<ParserType>),
     // return type, arguments
-    Fucntion(Box<ParserType>,Vec<ParserType>),
+    Function(Box<ParserType>,Vec<ParserType>),
 }
 #[allow(dead_code)]
 impl ParserType {
@@ -109,7 +109,7 @@ impl ParserType {
         match self {
             ParserType::Named(_) => false,
             ParserType::Pointer(_) => true,
-            ParserType::Fucntion(_, _) => {todo!()},
+            ParserType::Function(_, _) => false,
         }
     }
     pub fn to_string(&self) -> String{
@@ -117,23 +117,25 @@ impl ParserType {
         match self {
             ParserType::Named(x) => output.push_str(x),
             ParserType::Pointer(x) => {output.push_str(&x.to_string()); output.push('*');},
-            ParserType::Fucntion(_, _) => {todo!()},
+            ParserType::Function(return_type, arguments) => {
+                output.push_str(&return_type.to_string());
+            },
         }
         return output;
     }
+    
     pub fn try_to_string_core(&self) -> Result<String, String>{
         match self {
             ParserType::Named(x) => return Ok(x.clone()),
             ParserType::Pointer(x) => {return x.try_to_string_core();},
-            ParserType::Fucntion(_, _) => {return Err(format!("Tried to get type name of function TODO"));},
+            ParserType::Function(_, _) => {return Err(format!("Tried to get type name of function TODO"));},
         }
     }
-    
     pub fn dereference_once(&self) -> ParserType{
         match self {
             ParserType::Named(_) => panic!("ParserType is Named {:?} that is not dereferencable", self),
             ParserType::Pointer(x) => return *x.clone(),
-            ParserType::Fucntion(_, _) => {todo!()},
+            ParserType::Function(_, _) => {todo!()},
         }
     }
     pub fn reference_once(&self) -> ParserType{
@@ -310,6 +312,27 @@ impl<'a> GeneralParser<'a> {
         else if self.peek().token == Token::Multiply && crate::USE_MULTIPLY_AS_POINTER_IN_TYPES {
             self.advance();
             Ok(ParserType::Pointer(Box::new(self.parse_type()?)))
+        } 
+        else if self.peek().token == Token::KeywordFunction {
+            self.advance();
+            self.consume(&Token::LParen)?;
+
+            let mut arguments = vec![];
+            let return_type;
+            
+            if self.peek().token != Token::RParen {
+                loop {
+                    arguments.push(self.parse_type()?);
+                    if self.peek().token == Token::RParen {
+                        break;
+                    }
+                    self.consume(&Token::Comma)?;
+                }
+            }
+            self.consume(&Token::RParen)?;
+            self.consume(&Token::Colon)?;
+            return_type = Box::new(self.parse_type()?);
+            Ok(ParserType::Function(return_type, arguments))
         }
         else {
             Ok(ParserType::Named(self.advance().expect_name_token()?))

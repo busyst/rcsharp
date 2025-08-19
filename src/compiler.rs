@@ -255,8 +255,8 @@ fn compile_structs(main_state: &mut CompilerState) -> Result<(), String> {
     for parsed_struct in main_state.implemented_types.iter().filter(|x| !x.1.parser_type.is_simple_type()).map(|x| x.1.struct_representation.clone()) {
         let name = &parsed_struct.0;
         let fields = &parsed_struct.1;
-        let fields = fields.iter().map(|x| main_state.get_compiler_type_from_parser(&x.1).unwrap().llvm_representation.to_string())
-        .collect::<Vec<_>>().join(",");
+        let fields = fields.iter().map(|x| main_state.get_llvm_representation_from_parser_type(&x.1))
+        .collect::<Result<Vec<_>,String>>()?.join(",");
         main_state.output.push_str_header(&format!("%struct.{} = type {{{}}}\n", name, fields));
     }
     Ok(())
@@ -484,10 +484,23 @@ impl CompilerState {
         if self.current_function_arguments.contains_key(name) {
             return Ok(&self.current_function_arguments[name]);
         }
+        return Err(format!("Variable or Argument \"{}\" was not found inside function \"{}\"",name, self.current_function_name()?));
+    }
+    pub fn get_variable_or_argument_type(&self, name: &str) -> Result<&CompilerType,String>{
+        if self.current_variable_stack.contains_key(name) {
+            return Ok(&self.current_variable_stack[name]);
+        }
+        if self.current_function_arguments.contains_key(name) {
+            return Ok(&self.current_function_arguments[name]);
+        }
         return Err(format!("Argument \"{}\" was not found inside function \"{}\"",name, self.current_function_name()?));
     }
     pub fn get_compiler_type_from_parser(&self, parser_type: &ParserType) -> Result<CompilerType,String>{
-        if let Some(x) = self.implemented_types.get(&parser_type.try_to_string_core()?) {
+        let mut t= parser_type.clone();
+        while t.is_pointer() {
+            t = t.dereference_once();
+        }
+        if let Some(x) = self.implemented_types.get(&t.to_string()) {
             let mut pt = x.clone();
             let mut underlying_representation = pt.llvm_representation.clone();
             let mut pv = parser_type.clone();
@@ -504,7 +517,30 @@ impl CompilerState {
             // if given parser type is ref, than add ref to compiler type
             return Ok(pt);
         }
-        Err(format!("Implementation of \"{}\" was not found in current context", parser_type.try_to_string_core()?))
+        Err(format!("Implementation of \"{:?}\" was not found in current context", parser_type))
+    }
+    pub fn get_llvm_representation_from_parser_type(&self, parser_type: &ParserType) -> Result<String, String>{
+        match parser_type {
+            ParserType::Function(return_type, param_types) =>{
+                let ret_llvm = self.get_llvm_representation_from_parser_type(return_type)?;
+                let params_llvm: Vec<String> = param_types.iter()
+                    .map(|param_type| self.get_llvm_representation_from_parser_type(param_type))
+                    .collect::<Result<Vec<String>, String>>()?;
+                let params_str = params_llvm.join(", "); 
+                Ok(format!("{} ({})", ret_llvm, params_str))
+            }
+            ParserType::Named(type_name) =>{
+                if let Some(x) = self.implemented_types.get(type_name) {
+                    return Ok(x.llvm_representation.to_string());
+                }
+                Err(format!("Implementation of \"{:?}\" was not found in current context", parser_type))
+            }
+            ParserType::Pointer(x) =>{
+                let mut inside_value = self.get_llvm_representation_from_parser_type(x)?;
+                inside_value.push('*');
+                return Ok(inside_value);
+            }
+        }
     }
     pub fn get_function(&self, name: &str) -> Result<&Function,String>{
         if let Some(f) = self.declared_functions.iter().find(|x| x.name == name){

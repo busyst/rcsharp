@@ -1,6 +1,6 @@
-%struct.Vec = type {i8*,i32,i32}
-%struct.List = type {%struct.ListNode*,%struct.ListNode*,i32}
 %struct.ListNode = type {%struct.ListNode*,i32}
+%struct.List = type {%struct.ListNode*,%struct.ListNode*,i32}
+%struct.Vec = type {i8*,i32,i32}
 declare dllimport i32* @GetProcessHeap()
 declare dllimport i8* @HeapAlloc(i32*, i32, i64)
 declare dllimport i32 @HeapFree(i32*, i32, i8*)
@@ -551,49 +551,48 @@ end_if23:
 }
 
 define i32 @main(){
+    %c = alloca i64*
+    %tmp0 = getelementptr inbounds i64*, i64** %c, i32 0
+    store i64 (i64)* @triple_factorial, i64 (i64)** %tmp0
     %x = alloca i8*
-    %tmp0 = getelementptr inbounds i8*, i8** %x, i32 0
-    %tmp1 = getelementptr inbounds [48 x i8], ptr @.str24, i64 0, i64 0
-    store i8* %tmp1, i8** %tmp0
+    %tmp2 = getelementptr inbounds i8*, i8** %x, i32 0
+    %tmp3 = getelementptr inbounds [48 x i8], ptr @.str24, i64 0, i64 0
+    store i8* %tmp3, i8** %tmp2
     %y = alloca i8**
-    %tmp2 = getelementptr inbounds i8**, i8*** %y, i32 0
-    %tmp3 = getelementptr inbounds i8*, i8** %x, i32 0
-    store i8** %tmp3, i8*** %tmp2
+    %tmp4 = getelementptr inbounds i8**, i8*** %y, i32 0
+    %tmp5 = getelementptr inbounds i8*, i8** %x, i32 0
+    store i8** %tmp5, i8*** %tmp4
     %z = alloca i8***
-    %tmp4 = getelementptr inbounds i8***, i8**** %z, i32 0
-    %tmp5 = getelementptr inbounds i8**, i8*** %y, i32 0
-    store i8*** %tmp5, i8**** %tmp4
-    %tmp7 = load i8*, i8** %x
-    %tmp8 = load i8, i8* %tmp7
-    %tmp9 = sext i8 %tmp8 to i32
-    call void @println_i32(i32 %tmp9)
-    %tmp11 = load i8**, i8*** %y
-    %tmp12 = load i8*, i8** %tmp11
-    %tmp13 = load i8, i8* %tmp12
-    %tmp14 = sext i8 %tmp13 to i32
-    call void @println_i32(i32 %tmp14)
-    %tmp16 = load i8***, i8**** %z
-    %tmp17 = load i8**, i8*** %tmp16
-    %tmp18 = load i8*, i8** %tmp17
-    %tmp19 = load i8, i8* %tmp18
-    %tmp20 = sext i8 %tmp19 to i32
-    call void @println_i32(i32 %tmp20)
+    %tmp6 = getelementptr inbounds i8***, i8**** %z, i32 0
+    %tmp7 = getelementptr inbounds i8**, i8*** %y, i32 0
+    store i8*** %tmp7, i8**** %tmp6
+    %tmp9 = load i8*, i8** %x
+    %tmp10 = load i8, i8* %tmp9
+    %tmp11 = sext i8 %tmp10 to i32
+    call void @println_i32(i32 %tmp11)
+    %tmp13 = load i8**, i8*** %y
+    %tmp14 = load i8*, i8** %tmp13
+    %tmp15 = load i8, i8* %tmp14
+    %tmp16 = sext i8 %tmp15 to i32
+    call void @println_i32(i32 %tmp16)
+    %tmp18 = load i8***, i8**** %z
+    %tmp19 = load i8**, i8*** %tmp18
+    %tmp20 = load i8*, i8** %tmp19
+    %tmp21 = load i8, i8* %tmp20
+    %tmp22 = sext i8 %tmp21 to i32
+    call void @println_i32(i32 %tmp22)
     %i = alloca i64
-    %tmp21 = getelementptr inbounds i64, i64* %i, i32 0
-    store i64 0, i64* %tmp21
+    %tmp23 = getelementptr inbounds i64, i64* %i, i32 0
+    store i64 0, i64* %tmp23
     br label %loop_body25
 loop_body25:
-    %tmp24 = load i64, i64* %i
-    %tmp25 = call i64 @triple_factorial(i64 %tmp24)
-    %tmp26 = trunc i64 %tmp25 to i32
-    call void @println_i32(i32 %tmp26)
-    %tmp27 = getelementptr inbounds i64, i64* %i, i32 0
-    %tmp28 = load i64, i64* %i
-    %tmp29 = add i64 %tmp28, 1
-    store i64 %tmp29, i64* %tmp27
-    %tmp30 = load i64, i64* %i
-    %tmp31 = icmp sge i64 %tmp30, 15
-    br i1 %tmp31, label %then26, label %end_if26
+    %tmp24 = getelementptr inbounds i64, i64* %i, i32 0
+    %tmp25 = load i64, i64* %i
+    %tmp26 = add i64 %tmp25, 1
+    store i64 %tmp26, i64* %tmp24
+    %tmp27 = load i64, i64* %i
+    %tmp28 = icmp sge i64 %tmp27, 15
+    br i1 %tmp28, label %then26, label %end_if26
 then26:
     br label %loop_body25_exit
     br label %end_if26
@@ -601,32 +600,32 @@ end_if26:
     br label %loop_body25
 loop_body25_exit:
     call i32 @AllocConsole()
-    %tmp34 = load i8*, i8** %x
-    %tmp36 = load i8*, i8** %x
-    %tmp37 = call i32 @c_str_len(i8* %tmp36)
-    call void @write(i8* %tmp34,i32 %tmp37)
-    %tmp39 = getelementptr inbounds [2 x i8], ptr @.str27, i64 0, i64 0
-    %tmp40 = load i8, i8* %tmp39
-    %tmp41 = sext i8 %tmp40 to i32
-    call void @println_i32(i32 %tmp41)
+    %tmp31 = load i8*, i8** %x
+    %tmp33 = load i8*, i8** %x
+    %tmp34 = call i32 @c_str_len(i8* %tmp33)
+    call void @write(i8* %tmp31,i32 %tmp34)
+    %tmp36 = getelementptr inbounds [2 x i8], ptr @.str27, i64 0, i64 0
+    %tmp37 = load i8, i8* %tmp36
+    %tmp38 = sext i8 %tmp37 to i32
+    call void @println_i32(i32 %tmp38)
     call void @println_i32(i32 -1432)
     call void @println_i32(i32 1342)
     call void @println_i32(i32 777)
     call i32 @FreeConsole()
-    %buffer = alloca %struct.Vec
-    %tmp47 = getelementptr inbounds %struct.Vec, %struct.Vec* %buffer, i32 0
-    call void @new_vec(%struct.Vec* %tmp47)
-    %tmp49 = getelementptr inbounds %struct.Vec, %struct.Vec* %buffer, i32 0
-    call void @push(%struct.Vec* %tmp49,i8 32)
-    %tmp51 = getelementptr inbounds %struct.Vec, %struct.Vec* %buffer, i32 0
-    call void @free_vec(%struct.Vec* %tmp51)
+    %vec = alloca %struct.Vec
+    %tmp44 = getelementptr inbounds %struct.Vec, %struct.Vec* %vec, i32 0
+    call void @new_vec(%struct.Vec* %tmp44)
+    %tmp46 = getelementptr inbounds %struct.Vec, %struct.Vec* %vec, i32 0
+    call void @push(%struct.Vec* %tmp46,i8 32)
+    %tmp48 = getelementptr inbounds %struct.Vec, %struct.Vec* %vec, i32 0
+    call void @free_vec(%struct.Vec* %tmp48)
     %list = alloca %struct.List
-    %tmp53 = getelementptr inbounds %struct.List, %struct.List* %list, i32 0
-    call void @new_list(%struct.List* %tmp53)
-    %tmp55 = getelementptr inbounds %struct.List, %struct.List* %list, i32 0
-    call void @extend(%struct.List* %tmp55,i32 64)
-    %tmp57 = getelementptr inbounds %struct.List, %struct.List* %list, i32 0
-    call void @free_list(%struct.List* %tmp57)
+    %tmp50 = getelementptr inbounds %struct.List, %struct.List* %list, i32 0
+    call void @new_list(%struct.List* %tmp50)
+    %tmp52 = getelementptr inbounds %struct.List, %struct.List* %list, i32 0
+    call void @extend(%struct.List* %tmp52,i32 64)
+    %tmp54 = getelementptr inbounds %struct.List, %struct.List* %list, i32 0
+    call void @free_list(%struct.List* %tmp54)
     ret i32 0
 
     unreachable
