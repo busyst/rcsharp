@@ -61,6 +61,7 @@ pub enum Token {
     #[token("[")] LSquareBrace,
     #[token("]")] RSquareBrace,
     #[token(":")] Colon,
+    #[token("::")] DoubleColon,
     #[token(";")] SemiColon,
     #[token(",")] Comma,
     #[token(".")] Dot,
@@ -103,11 +104,14 @@ pub enum Token {
     #[token("return")] KeywordReturn,
     #[token("this")] KeywordThis,
     #[token("operator")] KeywordOperator,
+    #[token("namespace")] KeywordNamespace,
     DummyToken,
     #[regex(r"[a-zA-Z_]\w*", |lex| lex.slice().to_string().into_boxed_str())]
     Name(Box<str>),
-    #[regex(r"\d+", |lex| lex.slice().to_string().into_boxed_str())]
+    #[regex(r"0x[0-9a-fA-F]+|\d+", unhex_num)]
     Integer(Box<str>),
+    #[regex(r"[0-9]+\.[0-9]+", |lex| lex.slice().to_string().into_boxed_str())]
+    Decimal(Box<str>),
     #[regex(r#""([^"\\]|\\.)*""#, unescape_string)]
     String(Box<str>),
     
@@ -197,4 +201,19 @@ fn unescape_string(lex: &mut logos::Lexer<Token>) -> Box<str> {
     }
 
     unescaped.into_boxed_str()
+}
+fn unhex_num(lex: &mut logos::Lexer<Token>) -> Box<str> {
+    let slice = lex.slice();
+    if slice.len() < 2 {
+        return slice.to_string().into_boxed_str();
+    }
+    if slice.chars().nth(1).unwrap() == 'x' {
+        let b = i128::from_str_radix(&slice[2..], 16).unwrap();
+        return b.to_string().into_boxed_str();
+    }
+    if slice.chars().nth(1).unwrap() == 'b' {
+        let b = i128::from_str_radix(&slice[2..], 2).unwrap();
+        return b.to_string().into_boxed_str();
+    }
+    return slice.to_string().into_boxed_str();
 }

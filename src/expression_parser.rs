@@ -11,6 +11,7 @@ pub enum Expr {
     
     Cast(Box<Expr>, Box<ParserType>),
     MemberAccess(Box<Expr>, String), 
+    StaticAccess(Box<Expr>, String), 
     StringConst(String),
     Call(Box<Expr>, Vec<Expr>),
     Index(Box<Expr>, Box<Expr>),
@@ -43,7 +44,7 @@ fn get_precedence(token: &Token) -> u8 {
         Token::Multiply | Token::Divide | Token::Modulo => 11,
         Token::KeywordAs => 12,
         Token::LogicNot | Token::BinaryNot => 13,
-        Token::LParen | Token::LSquareBrace | Token::Dot => 14,
+        Token::LParen | Token::LSquareBrace | Token::Dot | Token::DoubleColon => 14,
         _ => 0,
     }
 }
@@ -134,6 +135,7 @@ impl<'a> ExpressionParser<'a> {
             Token::LSquareBrace => self.parse_index(left),
             
             Token::Dot => self.parse_member_access(left),
+            Token::DoubleColon => self.parse_static_access(left),
 
             Token::KeywordAs => self.parse_cast(left),
 
@@ -231,5 +233,13 @@ impl<'a> ExpressionParser<'a> {
     }
     pub fn position(&self) -> usize {
         self.cursor
+    }
+    
+    fn parse_static_access(&mut self, left: Expr) -> Result<Expr, String> {
+        self.consume(&Token::DoubleColon)?;
+
+        let member_name = self.advance().expect_name_token()?;
+
+        Ok(Expr::StaticAccess(Box::new(left), member_name))
     }
 }

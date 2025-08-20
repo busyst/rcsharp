@@ -1,78 +1,129 @@
 use core::str;
 use std::collections::HashMap;
 
+use ordered_hash_map::OrderedHashMap;
+
 use crate::{expression_compiler::{compile_expression, implicit_cast, Expected}, expression_parser::{BinaryOp, Expr}, parser::{ParserType, Stmt}};
 pub fn rcsharp_compile_to_file(x: &[Stmt]) -> Result<(), String> {
-    let direct_output = rcsharp_compile(x)?;
+    let mut state = CompilerState::default();
+    rcsharp_compile(x, &mut state)?;
+    let direct_output = state.output.output();
     let mut file = std::fs::File::create("output.ll").map_err(|e| e.to_string())?;
     std::io::Write::write_all(&mut file, direct_output.as_bytes()).map_err(|e| e.to_string())?;
 
     Ok(())
 }
-
 #[derive(Debug, Clone)]
-pub struct Function {pub name:String, pub args: Vec<(String, ParserType)>,pub return_type: ParserType, pub body: Vec<Stmt>,pub attribs: Vec<(String, Vec<Expr>)>}
+pub struct Function {pub path:String, pub name:String, pub args: Vec<(String, ParserType)>, pub return_type: ParserType, pub body: Vec<Stmt>, pub attribs: Vec<(String, Vec<Expr>)>}
+impl Function {
+    pub fn effective_name(&self) -> String {
+        let output = if self.path.is_empty() {
+            self.name.clone()
+        }else{
+            let mut o = self.path.clone();
+            o.push('.');
+            o.push_str(&self.name);
+            o
+        };
+        return output;
+    }
+}
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub struct Struct {name:String, fields: Vec<(String, ParserType)>, attribs: Vec<(String, Vec<Expr>)>}
-pub fn rcsharp_compile(x: &[Stmt]) -> Result<String, String> {
-    let mut main_state = CompilerState::default();
-    //main_state.output.push_str("target triple = \"x86_64-pc-windows-msvc\"\n");
-    populate_default_types(&mut main_state)?;
+#[derive(Debug, Default, Clone)]
+pub struct Namespace {
+    pub functions: HashMap<String, Function>,
+    pub types: HashMap<String, ParserType>,
+    pub sub_namespaces: HashMap<String, Namespace>,
+}
+
+
+
+pub fn rcsharp_compile(x: &[Stmt], main_state :&mut CompilerState) -> Result<(), String> {
+    main_state.output.push_str_header("target triple = \"x86_64-pc-windows-msvc\"\n");
+    populate_default_types(main_state)?;
+    pre_compile(x, main_state)?;
+    compile_structs(main_state)?;
+    let funcs = compile_attributes(main_state)?;
+    compile_functions(funcs, main_state)?;
+    Ok(())
+}
+fn pre_compile(x: &[Stmt], state :&mut CompilerState) -> Result<(), String>{
+    let mut ns = state.root_namespace.clone();
+    recursive_pre_compile(x, &mut ns, "", state)?;
+    state.root_namespace = ns;
+    Ok(())
+}
+fn recursive_pre_compile(x: &[Stmt], current_ns: &mut Namespace, current_path: &str, state: &mut CompilerState) -> Result<(), String>{
     for i in 0..x.len() {
         let statement = &x[i];
         match statement {
-            Stmt::Hint(x, y) => {
-                match x.as_str() {
-                    "include" => {
-                        if let Expr::StringConst(x) = &y[0] {
-                            main_state.output.push_str_header(&format!(";include {}\n", x));
-                        }
-                    }
-                    _ => {}
-                }
-            }
             Stmt::Function(n, a, r, b) => {
-                let mut atribs_len= 0;
-                for i in (0..i).rev() {
-                    if matches!(&x[i], Stmt::Hint(_, _)) {
-                        atribs_len += 1;
-                    }else {
-                        break;
-                    }
+                let mut atribs_len = 0;
+                for j in (0..i).rev() {
+                    if matches!(&x[j], Stmt::Hint(_, _)) { atribs_len += 1; } 
+                    else { break; }
                 }
                 let attribs = x[i-atribs_len..i].iter().map(|x| {if let Stmt::Hint(x, y) = x {return (x.clone(),y.clone());} else {panic!()}} ).collect::<Vec<_>>();
-                main_state.functions.push(Function{name:n.clone(), args: a.clone(), return_type: r.clone(), body: b.to_vec(), attribs});
+
+                let full_name = if current_path.is_empty() {
+                    n.clone()
+                } else {
+                    format!("{}.{}", current_path, n)
+                };
+
+                let function = Function {
+                    path: current_path.to_string(),
+                    name: n.clone(),
+                    args: a.clone(), 
+                    return_type: r.clone(), 
+                    body: b.to_vec(), 
+                    attribs,
+                };
+
+                if current_ns.functions.insert(n.clone(), function.clone()).is_some() {
+                    return Err(format!("Function '{}' already defined in this scope.", n));
+                }
+                state.declared_functions.insert(full_name, function);
             },
             Stmt::Struct(n, a) => {
-                /*let mut atribs_len= 0;
-                for i in (0..i).rev() {
-                    if matches!(&x[i], Stmt::Hint(_, _)) {
-                        atribs_len += 1;
-                    }else {
-                        break;
-                    }
-                }*/
-                //let attribs = x[i-atribs_len..i].iter().map(|x| {if let Stmt::Hint(x, y) = x {return (x.clone(),y.clone());} else {panic!()}} ).collect::<Vec<_>>();
-                let name = n.clone();
-                let fields = a.clone();
-                let struct_pt = (name.clone(),fields.iter().map(|x|x.clone()).collect::<Vec<_>>(), vec![]);
+                let full_name = if current_path.is_empty() {
+                    n.clone()
+                } else {
+                    format!("{}::{}", current_path, n)
+                };
 
-                main_state.implemented_types.insert(name.clone(), CompilerType { 
-                    parser_type: ParserType::Named(name.clone()),
-                    llvm_representation: ParserType::Named(format!("%struct.{}", name.clone())), 
+                let fields = a.clone();
+                let struct_pt = (full_name.clone(), fields.iter().map(|x|x.clone()).collect::<Vec<_>>(), vec![]);
+                
+                let compiler_type = CompilerType { 
+                    parser_type: ParserType::Named(full_name.clone()),
+                    llvm_representation: ParserType::Named(format!("%struct.{}", full_name.replace("::", "."))), 
                     struct_representation : struct_pt,
                     explicit_casts: HashMap::new(), _binary_operations: HashMap::new() 
-                });
+                };
+                if current_ns.types.insert(n.clone(), ParserType::Named(full_name.clone())).is_some() {
+                     return Err(format!("Type '{}' already defined in this scope.", n));
+                }
+                state.implemented_types.insert(full_name.clone(), compiler_type);
             },
-            _ => {return Err(format!("Unexpected statement {:?}", statement));}
+            Stmt::Namespace(name, body) =>{
+                let sub_ns = current_ns.sub_namespaces.entry(name.clone()).or_default();
+                let new_path = if current_path.is_empty() {
+                    name.clone()
+                } else {
+                    format!("{}.{}", current_path, name)
+                };
+                recursive_pre_compile(body, sub_ns, &new_path, state)?;
+            }
+            Stmt::Hint(_, _) => {}
+            _ => {return Err(format!("Unexpected statement during pre-compilation: {:?}", statement));}
         }
     }
-    compile_structs(&mut main_state)?;
-    compile_attributes(&mut main_state)?;
-    compile_functions(&mut main_state)?;
-    Ok(main_state.output.output())
+    Ok(())
 }
+
 fn populate_default_types(state: &mut CompilerState) -> Result<(), String> {
     // Was AI assisted
     macro_rules! define_type {
@@ -200,72 +251,47 @@ fn populate_default_types(state: &mut CompilerState) -> Result<(), String> {
     define_type!(state, "void", "void", HashMap::new());
     Ok(())
 }
-fn compile_attributes(state :&mut CompilerState) -> Result<(), String>{
-    let mut funcs = vec![];
-    let mut extention_funcs_to_structs = vec![];
-    for function in &state.functions {
-        if let Some(_) =  function.attribs.iter().find(|x| x.0 == "DllImport") {
-            let mut args_string = String::new();
-            let func_return_type_string = function.return_type.to_string();
-            for i in 0..function.args.len() {
-                args_string.push_str(&function.args[i].1.to_string());
-                if i + 1 != function.args.len() {
-                    args_string.push_str(&", ");
-                }
-            }
-            state.output.push_str_header(&format!("declare dllimport {} @{}({})\n", func_return_type_string, function.name, args_string));
-            state.declared_functions.push(function.clone());
-        }else if let Some(i) =  function.attribs.iter().find(|x| x.0 == "ExtentionOf") {
-            if i.1.is_empty() {
-                return Err(format!("Extention should not be empty"));
-            }
-            if i.1.len() != 1 {
-                return Err(format!("Extention should have only 1 argument, type that will be extended"));
-            }
-            let function_name = &function.name;
-            let extended_type = crate::expression_compiler::type_from_expression(&i.1[0])?;
-            if extended_type.is_pointer() {
-                return Err(format!("You cant extend pointer to type"));
-            }
-            let _x = state.get_compiler_type_from_parser(&extended_type)
-                .map_err(|_| format!("Type \"{}\" was not found to extend in current context", extended_type.to_string()))?;
+
+fn compile_attributes(state :&mut CompilerState) -> Result<Vec<Function>, String>{
+    let all_functions= state.declared_functions.clone();
+    let mut functions_to_compile = vec![];
+    for function in all_functions {
+        if function.1.attribs.iter().any(|x| x.0 == "DllImport") {
+            let func_return_type_string = state.get_llvm_representation_from_parser_type(&function.1.return_type)?;
+            let args_string = function.1.args.iter().map(|x| state.get_llvm_representation_from_parser_type(&x.1))
+                .collect::<Result<Vec<_>,String>>()?.join(",");
             
-            if function.args.is_empty() || function.args[0].1 != extended_type.reference_once() {
-                return Err(format!("Function \"{}\" is extention of \"{}\" struct, this function should have reference to value as first argument. Ex:\n[ExtentionOf(i32)]\nfn foo(val: &i32, ...){{...}}", function_name, extended_type.to_string()));
-            }
-            extention_funcs_to_structs.push((extended_type, function));
-            state.declared_functions.push(function.clone());
-            funcs.push(function.clone());
+            state.output.push_str_header(&format!("declare dllimport {} @{}({})\n", func_return_type_string, function.1.name, args_string));
+            state.imported_functions.insert(function.0, function.1.clone());
+            continue;
         }
-        else {
-            state.declared_functions.push(function.clone());
-            funcs.push(function.clone());
-        }
+        functions_to_compile.push(function.1.clone());
     }
-    for x in extention_funcs_to_structs {
-        let _extended_type = state.get_compiler_type_from_parser(&x.0)?;
-        let extention_function = x.1;
-        let x = &mut state.implemented_types.get_mut(&x.0.to_string()).unwrap().struct_representation;
-        x.2.push((extention_function.name.clone(), (extention_function.return_type.clone(), extention_function.args.iter().map(|x| x.1.clone()).collect::<Vec<_>>())));
-    }
-    state.functions = funcs;
-    Ok(())
+    Ok(functions_to_compile)
 }
 fn compile_structs(main_state: &mut CompilerState) -> Result<(), String> {
-    for parsed_struct in main_state.implemented_types.iter().filter(|x| !x.1.parser_type.is_simple_type()).map(|x| x.1.struct_representation.clone()) {
-        let name = &parsed_struct.0;
-        let fields = &parsed_struct.1;
-        let fields = fields.iter().map(|x| main_state.get_llvm_representation_from_parser_type(&x.1))
-        .collect::<Result<Vec<_>,String>>()?.join(",");
-        main_state.output.push_str_header(&format!("%struct.{} = type {{{}}}\n", name, fields));
+    for (_name, compiler_type) in main_state.implemented_types.iter().filter(|(_k, v)| !v.parser_type.is_simple_type()) {
+        let (_, fields, _methods) = &compiler_type.struct_representation;
+        
+        let field_types = fields.iter().map(|x| main_state.get_llvm_representation_from_parser_type(&x.1))
+            .collect::<Result<Vec<_>,String>>()?.join(", ");
+        
+        let llvm_struct_name = &compiler_type.llvm_representation.to_string();
+        main_state.output.push_str_header(&format!("{} = type {{{}}}\n", llvm_struct_name, field_types));
     }
     Ok(())
 }
-fn compile_functions(state :&mut CompilerState) -> Result<(), String>{
-    for i in 0..state.functions.len() {
-        let function = &state.functions[i];
-        let function_name = function.name.clone();
+fn compile_functions(funcs: Vec<Function>, state :&mut CompilerState) -> Result<(), String>{
+    for function in funcs {
         let function_return_type = state.get_compiler_type_from_parser(&function.return_type)?.llvm_representation;
+        let effective_function_name = if function.path.is_empty(){
+            function.name.clone()
+        }else{
+            let mut x = function.path.clone();
+            x.push('.');
+            x.push_str(&function.name);
+            x
+        };
         let mut arg_parts = Vec::new();
         for (arg_name, arg_type) in &function.args {
             let compiler_type = state.get_compiler_type_from_parser(arg_type)?;
@@ -274,19 +300,22 @@ fn compile_functions(state :&mut CompilerState) -> Result<(), String>{
             arg_parts.push(formatted_arg);
         }
         let args_string = arg_parts.join(", ");
-        state.output.push_str(&format!("\ndefine {} @{}({}){{\n", function_return_type.to_string(), function_name, args_string));
-        state.current_function = i as u32;
+
+        state.output.push_str(&format!("\ndefine {} @{}({}){{\n", function_return_type.to_string(), effective_function_name, args_string));
+        
         state.current_variable_stack.clear();
+        state.current_function_arguments.clear();
         state.temp_value_counter = 0;
+
         for arg in &function.args {
             let val_type = state.get_compiler_type_from_parser(&arg.1)?;
-            //state.output.push_str(&format!("    %{}.addr = alloca {}\n", arg.0, val_type.llvm_representation.to_string()));
-            //state.output.push_str(&format!("    store {} %{}, {}* %{}.addr\n", val_type.llvm_representation.to_string(), arg.0, val_type.llvm_representation.to_string(), arg.0));
             state.current_function_arguments.insert(arg.0.clone(), val_type);
         }
+        state.current_function_name = function.name.clone();
+        state.current_function_path = function.path.clone();
         for x in &function.body.clone() {
             compile_statement(x, state)
-            .map_err(|x| format!("while compiling function {}\n\r{}",function_name,x))?;
+            .map_err(|x| format!("while compiling function \"{}\"\n\r{}",state.current_function_name,x))?;
         }
         if function_return_type.to_string() == "void" {
             state.output.push_str(&format!("    ret void\n"));
@@ -310,17 +339,17 @@ fn compile_statement(statement: &Stmt, state :&mut CompilerState) -> Result<(), 
         Stmt::Expr(expression) => { compile_expression(expression, Expected::NoReturn, state).map_err(|x| format!("while compiling expression {:?}\n\r{}",expression,x))?; }
         Stmt::Return(expression) =>{
             if let Some(expression) = expression {
-                let expected_type = state.current_function_return_type()?;
+                let expected_type = state.get_current_function()?.return_type.clone();
                 let function_actual_return_type = state.get_compiler_type_from_parser(&expected_type)?.llvm_representation;
                 let tmp_idx = compile_expression(expression, Expected::Type(&expected_type), state)
                     .map_err(|x| format!("while compiling expression in return statement {:?}:\n{}", expression, x))?;
                 if !tmp_idx.equal_to_type(&expected_type) {
-                    return Err(format!("Result type \"{:?}\" of expresion is not equal to return type \"{:?}\" of function \"{}\"", tmp_idx, function_actual_return_type, state.current_function_name()?));
+                    return Err(format!("Result type \"{:?}\" of expresion is not equal to return type \"{:?}\" of function \"{}\"", tmp_idx, function_actual_return_type, state.get_current_function()?.effective_name()));
                 }
                 state.output.push_str(&format!("    ret {} {}\n", function_actual_return_type.to_string(), tmp_idx.to_repr()));
             }else {
-                let expected_type = state.current_function_return_type()?;
-                if expected_type != ParserType::Named(format!("void")) {
+                let expected_type = &state.get_current_function()?.return_type;
+                if *expected_type != ParserType::Named(format!("void")) {
                     return Err(format!("Returning empty expression in non void function"));
                 }
                 state.output.push_str(&format!("    ret void\n"));
@@ -413,7 +442,6 @@ impl CompilerType {
         }
     }
 }
-
 #[derive(Debug, Default)]
 pub struct LLVMOutputHandler{
     output_header: String,
@@ -436,70 +464,82 @@ impl LLVMOutputHandler {
 #[derive(Debug, Default)]
 pub struct CompilerState{
     pub output: LLVMOutputHandler,
-
-    pub functions: Vec<Function>,
-    pub declared_functions: Vec<Function>,
     
-    pub implemented_types: HashMap<String, CompilerType>,
+    pub root_namespace: Namespace,
 
-    current_function: u32,
+    pub imported_functions: OrderedHashMap<String, Function>,
+    pub declared_functions: OrderedHashMap<String, Function>,
+    pub implemented_types: OrderedHashMap<String, CompilerType>,
+    
+    current_function_path: String,
+    current_function_name: String,
+
+    current_variable_stack: OrderedHashMap<String, CompilerType>,
+    current_function_arguments: OrderedHashMap<String, CompilerType>,
+
+    temp_value_counter: u32,
+    logic_counter: u32,
+    const_vectors_counter: u32,
     current_logic_counter_function: u32,
-    current_variable_stack: HashMap<String, CompilerType>,
-    current_function_arguments: HashMap<String, CompilerType>,
-
-    const_vectors_counter: usize,
-    temp_value_counter: usize,
-    logic_counter: usize,
 }
 impl CompilerState {
-    pub fn current_function_return_type(&self) -> Result<ParserType,String>{
-        let idx = self.current_function;
-        let function = &self.functions[idx as usize];
-        return Ok(function.return_type.clone());
+    fn get_namespace_from_path(&self, path: &str) -> Result<&Namespace, String>{
+        if path.is_empty() || path == "root" {
+            return Ok(&self.root_namespace);
+        }
+        let mut node = &self.root_namespace;
+        let mut iter = 0;
+        for x in path.split(|x| x == '.') {
+            if iter == 0 && x == "root" {
+                iter += 1;
+                continue;
+            }
+            if x.is_empty() {
+                continue;
+            }
+            if !node.sub_namespaces.contains_key(x) {
+                return Err(format!("Sub-Namespace \"{}\" does not exist on path \"{}\"", x, path));
+            }
+            node = &node.sub_namespaces[x];
+            iter+=1;
+        }
+        return Ok(node);
     }
-    pub fn current_function_name(&self) -> Result<String,String>{
-        let idx = self.current_function;
-        let function = &self.functions[idx as usize];
-        return Ok(function.name.clone());
+    pub fn get_function_from_path(&self, path: &str, func_name: &str) -> Result<&Function, String>{
+        let ns = self.get_namespace_from_path(path)?;
+        let func = ns.functions.get(func_name).ok_or(format!("Current function was not found inside current namespace path"))?;
+        return Ok(func);
     }
-    pub fn aquire_unique_temp_value_counter(&mut self) -> usize{
-        self.temp_value_counter += 1;
-        self.temp_value_counter - 1
-    }
-    pub fn aquire_unique_logic_counter(&mut self) -> usize{
-        self.const_vectors_counter += 1;
-        self.const_vectors_counter - 1
-    }
-    pub fn aquire_unique_const_vector_counter(&mut self) -> usize{
-        self.logic_counter += 1;
-        self.logic_counter - 1
+    pub fn get_current_function(&self) -> Result<&Function, String>{
+        let ns = self.get_namespace_from_path(&self.current_function_path)?;
+        let func = ns.functions.get(&self.current_function_name).ok_or(format!("Current function was not found inside current namespace path"))?;
+        return Ok(func);
+    } 
+    pub fn get_current_path(&self) -> &str{
+        return &self.current_function_path;
+    } 
+    pub fn set_current_path(&mut self, path: &str) {
+        self.current_function_path = path.to_string();
     }
     pub fn get_variable_type(&self, name: &str) -> Result<&CompilerType,String>{
         if self.current_variable_stack.contains_key(name) {
             return Ok(&self.current_variable_stack[name]);
         }
-        return Err(format!("Variable \"{}\" was not found inside function \"{}\"",name, self.current_function_name()?));
+        return Err(format!("Variable \"{}\" was not found inside function \"{}\"",name, self.current_function_name));
     }
     pub fn get_argument_type(&self, name: &str) -> Result<&CompilerType,String>{
         if self.current_function_arguments.contains_key(name) {
             return Ok(&self.current_function_arguments[name]);
         }
-        return Err(format!("Variable or Argument \"{}\" was not found inside function \"{}\"",name, self.current_function_name()?));
+        return Err(format!("Variable or Argument \"{}\" was not found inside function \"{}\"",name, self.current_function_name));
     }
-    pub fn get_variable_or_argument_type(&self, name: &str) -> Result<&CompilerType,String>{
-        if self.current_variable_stack.contains_key(name) {
-            return Ok(&self.current_variable_stack[name]);
-        }
-        if self.current_function_arguments.contains_key(name) {
-            return Ok(&self.current_function_arguments[name]);
-        }
-        return Err(format!("Argument \"{}\" was not found inside function \"{}\"",name, self.current_function_name()?));
-    }
+
     pub fn get_compiler_type_from_parser(&self, parser_type: &ParserType) -> Result<CompilerType,String>{
         let mut t= parser_type.clone();
         while t.is_pointer() {
             t = t.dereference_once();
         }
+        
         if let Some(x) = self.implemented_types.get(&t.to_string()) {
             let mut pt = x.clone();
             let mut underlying_representation = pt.llvm_representation.clone();
@@ -519,6 +559,7 @@ impl CompilerState {
         }
         Err(format!("Implementation of \"{:?}\" was not found in current context", parser_type))
     }
+
     pub fn get_llvm_representation_from_parser_type(&self, parser_type: &ParserType) -> Result<String, String>{
         match parser_type {
             ParserType::Function(return_type, param_types) =>{
@@ -542,10 +583,18 @@ impl CompilerState {
             }
         }
     }
-    pub fn get_function(&self, name: &str) -> Result<&Function,String>{
-        if let Some(f) = self.declared_functions.iter().find(|x| x.name == name){
-            return Ok(f);
-        }
-        Err(format!("Function \"{}\" was not found in current context", name))
+
+    pub fn aquire_unique_temp_value_counter(&mut self) -> u32{
+        self.temp_value_counter += 1;
+        self.temp_value_counter - 1
     }
+    pub fn aquire_unique_logic_counter(&mut self) -> u32{
+        self.logic_counter += 1;
+        self.logic_counter - 1
+    }
+    pub fn aquire_unique_const_vector_counter(&mut self) -> u32{
+        self.const_vectors_counter += 1;
+        self.const_vectors_counter - 1
+    }
+
 }

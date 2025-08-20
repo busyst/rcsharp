@@ -18,9 +18,10 @@ pub enum Stmt {
     
     DirectInsertion(String), // continue
     
-    Function(String, Vec<(String, ParserType)>, ParserType, Vec<Stmt>), // fn foo(bar: i8, ...) { ... }
+    Function(String, Vec<(String, ParserType)>, ParserType, Vec<Stmt>), // fn foo(bar: i8, ...) ... { ... }
     Struct(String, Vec<(String, ParserType)>), // struct foo { bar : i8, ... }
     Enum(String, Vec<(String, Expr)>), // enum foo { bar = ..., ... }
+    Namespace(String, Vec<Stmt>), // namespace foo { fn bar() ... {...} ... }
 }
 impl Stmt {
     pub fn recursive_statement_count(&self) -> u64{
@@ -34,6 +35,7 @@ impl Stmt {
             Self::Expr(_) => 1,
             Self::If(_, x, y) => { x.iter().map(|x| x.recursive_statement_count()).sum::<u64>() + y.iter().map(|x| x.recursive_statement_count()).sum::<u64>()}
             Self::Loop(x) => { x.iter().map(|x| x.recursive_statement_count()).sum::<u64>()}
+            Self::Namespace(_, x) => { x.iter().map(|x| x.recursive_statement_count()).sum::<u64>()}
             Self::Return(_) => 1,
             Self::Function(_,_,_,x) => { x.iter().map(|x| x.recursive_statement_count()).sum::<u64>()}
             Self::Struct(_, _) => 1,
@@ -106,20 +108,14 @@ impl ParserType {
         }
     }
     pub fn is_pointer(&self) -> bool{
-        match self {
-            ParserType::Named(_) => false,
-            ParserType::Pointer(_) => true,
-            ParserType::Function(_, _) => false,
-        }
+        return matches!(self, ParserType::Pointer(_));
     }
     pub fn to_string(&self) -> String{
         let mut output = String::new();
         match self {
             ParserType::Named(x) => output.push_str(x),
             ParserType::Pointer(x) => {output.push_str(&x.to_string()); output.push('*');},
-            ParserType::Function(return_type, arguments) => {
-                output.push_str(&return_type.to_string());
-            },
+            ParserType::Function(return_type, _) => {output.push_str(&return_type.to_string());},
         }
         return output;
     }
@@ -190,6 +186,7 @@ impl<'a> GeneralParser<'a> {
             Token::KeywordFunction => self.parse_function(),
             Token::KeywordStruct => self.parse_struct(),
             Token::KeywordEnum => self.parse_enum(),
+            Token::KeywordNamespace => self.parse_namespace(),
             _ => Err(format!(
                     "Unexpected token {:?} at {:?} in top-level scope. Only functions, structs, and hints are allowed.",
                     self.peek().token, self.peek().loc
@@ -266,6 +263,20 @@ impl<'a> GeneralParser<'a> {
         }
         self.consume(&Token::RBrace)?;
         Ok(Stmt::Struct(name, fields))
+    }    
+    fn parse_namespace(&mut self) -> Result<Stmt, String> {
+        self.consume(&Token::KeywordNamespace)?;
+        let x= self.advance().expect_name_token()?;
+        self.consume(&Token::LBrace)?;
+        let mut body = vec![];
+        loop {
+            if self.peek().token == Token::RBrace {
+                break;
+            }
+            body.push(self.parse_toplevel_item()?);
+        }
+        self.consume(&Token::RBrace)?;
+        return Ok(Stmt::Namespace(x, body));
     }
     fn parse_enum(&mut self) -> Result<Stmt, String> {
         self.consume(&Token::KeywordEnum)?;
@@ -441,4 +452,5 @@ impl<'a> GeneralParser<'a> {
         self.consume(&Token::RBrace)?;
         Ok(stmts)
     }
+
 }

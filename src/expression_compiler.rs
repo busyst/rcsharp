@@ -7,7 +7,7 @@ pub enum Expected<'a> {
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CompiledResult {
-    TempValue(usize, ParserType),
+    TempValue(u32, ParserType),
     Integer(String, ParserType),
     Argument(String, ParserType),
     Function(String, ParserType),
@@ -58,10 +58,10 @@ impl CompiledResult {
             CompiledResult::NoReturn => unreachable!("Tried to get llvm string representation with type of no return value, catch it beforehand"),
         }
     }  
-    pub fn get_or_allocate_temp_value_index(&self, state: &mut CompilerState) -> Result<usize, String>{
+    pub fn get_or_allocate_temp_value_index(&self, state: &mut CompilerState) -> Result<u32, String>{
         match self {
             CompiledResult::TempValue(uid, _) => Ok(uid.clone()),
-            CompiledResult::Integer(n, _) => Err(format!("Tried to get temp value index from integer")),
+            CompiledResult::Integer(_, _) => Err(format!("Tried to get temp value index from integer")),
             CompiledResult::Function(_, _) => Err(format!("Tried to get temp value index from function")),
             CompiledResult::Argument(a, _) => {
                 let utvc = state.aquire_unique_temp_value_counter();
@@ -405,7 +405,7 @@ fn compile_rvalue(right: &Expr, expected_type: Expected, state: &mut CompilerSta
             return Ok(CompiledResult::TempValue(utvc, member_lvalue.get_type().clone()));
         }
         Expr::StringConst(x) => {
-            let unique_constant_string_counter = state.aquire_unique_logic_counter();
+            let unique_constant_string_counter = state.aquire_unique_const_vector_counter();
             state.output.push_str_header(&format!("@.str{} = internal constant [{} x i8] c\"{}\\00\"\n", unique_constant_string_counter, x.len() + 1, x));
             let utvc = state.aquire_unique_temp_value_counter();
             state.output.push_str(&format!("    %tmp{} = getelementptr inbounds [{} x i8], ptr @.str{}, i64 0, i64 0\n", utvc, x.len() + 1, unique_constant_string_counter));
@@ -427,20 +427,20 @@ fn compile_lvalue(left: &Expr, write: bool, state: &mut CompilerState) -> Result
             }
             if let Ok(var) = state.get_argument_type(&name) { // Argument
                 let var_actual_type = var.parser_type.clone();
-                //let var_repr_type = var.llvm_representation.clone();
                 if write {
-                    //eprintln!("Warning: Rewriting data of argument \"{}\".", name);
-                    return Err(format!("Rewriting data of argument"));
+                    return Err(format!("Tried to rewrite data of argument {}", name));
                 }
-                //state.output.push_str(&format!("    %tmp{} = getelementptr inbounds {}, {}* %{}.addr, i32 0\n", utvc, var_repr_type.to_string(), var_repr_type.to_string(), name));
                 return Ok(CompiledResult::Argument(name.clone(), var_actual_type));
             }
-            if let Ok(func) = state.get_function(&name) { // Function
+            if let Ok(func) = state.get_function_from_path(state.get_current_path(), &name) { // Function
                 let func_type = ParserType::Function(
                     Box::new(func.return_type.clone()),
                     func.args.iter().map(|(_, t)| t.clone()).collect()
                 );
-                return Ok(CompiledResult::Function(name.clone(), func_type));
+                if state.imported_functions.contains_key(&func.effective_name()) {
+                    return Ok(CompiledResult::Function(func.name.clone(), func_type));
+                }
+                return Ok(CompiledResult::Function(func.effective_name(), func_type));
             }
             return Err(format!("Name \"{}\" does not respond to function, argument or variable name in current context",name));
         }
@@ -521,7 +521,26 @@ fn compile_lvalue(left: &Expr, write: bool, state: &mut CompilerState) -> Result
             }
             return Err(format!("Member/Extended function was '{}' not found in struct '{}'", y, struct_name));
         }
-
+        Expr::StaticAccess(x, y) =>{
+            let mut path = String::new();
+            if let Expr::Name(ns) = &**x {
+                path.push_str(&ns);
+            }else {
+                fn rec(x: &Box::<Expr>, out: &mut String){
+                    match x.as_ref() {
+                        Expr::Name(x) => out.push_str(&x),
+                        Expr::StaticAccess(x, y) => {rec(x, out); out.push('.'); out.push_str(&y)},
+                        _ => panic!()
+                    }
+                }
+                rec(x, &mut path);
+            }
+            let x = state.get_current_path().to_string();
+            state.set_current_path(&path);
+            let r= compile_lvalue(&Expr::Name(y.clone()), write, state)?;
+            state.set_current_path(&x);
+            return Ok(r);
+        }
         _ => todo!("{:?}", left)
     }
 }
@@ -532,8 +551,6 @@ pub fn compile_expression(expression: &Expr, expected_type: Expected, state: &mu
             let l = compile_lvalue(&left, true, state)?;
             let mut r = compile_rvalue(&right, Expected::Type(l.get_type()), state)?;
             if !l.equal_types(&r) {
-                println!("l:{:?}",l);
-                println!("r:{:?}",r);
                 r = implicit_cast(&r, &l.get_type(), state).map_err(|x| format!("while assigning !{:?}! !EQUAL! !{:?}\n{}", left, right, x))?;
             }
             let l_ut = state.get_llvm_representation_from_parser_type(&l.get_type())?;
