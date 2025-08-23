@@ -1,6 +1,6 @@
 use crate::{parser::ParserType, token::{Location, Token, TokenData}};
 
-#[derive(Debug, Clone, PartialEq, Eq)] 
+#[derive(Debug, Clone, PartialEq)] 
 pub enum Expr {
     Integer(String),
     Name(String),
@@ -9,7 +9,7 @@ pub enum Expr {
     UnaryOp(UnaryOp, Box<Expr>),
     Assign(Box<Expr>, Box<Expr>),
     
-    Cast(Box<Expr>, Box<ParserType>),
+    Cast(Box<Expr>, ParserType),
     MemberAccess(Box<Expr>, String), 
     StaticAccess(Box<Expr>, String), 
     StringConst(String),
@@ -212,7 +212,7 @@ impl<'a> ExpressionParser<'a> {
     }
     fn parse_cast(&mut self, left: Expr) -> Result<Expr, String> {
         self.consume(&Token::KeywordAs)?;
-        Ok(Expr::Cast(Box::new(left), Box::new(self.parse_type()?)))
+        Ok(Expr::Cast(Box::new(left), self.parse_type()?))
     }
     fn parse_type(&mut self) -> Result<ParserType, String> {
         if self.peek().token == Token::LogicAnd {

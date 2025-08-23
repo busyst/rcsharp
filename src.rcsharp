@@ -30,8 +30,14 @@
 // I ended up (Transform*)ing all over the place. Probably constexpr function to staticly cast pointer would have been better.
 // ALSO can be used to create "'growing' structures" and interfaces to exposed arrays without needeng to create structures, because it could be overlayed at Vec array 
 // -------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-// with new optimisation arguments MUST be immutable.
+// Problems:
+// Variable flags dont work on function that modify them, ex: let x: i32; mod_x(&x); <- x is unmodified // Variable flags now (and in future) just a unreliable tool to detect unused variables
+// I should replace dll import with external fn foo(...)...;
+#[DllImport("kernel32")]
+fn GetTickCount64() : u64;
+#[DllImport("kernel32")]
+fn Sleep(ticks: u64);
+// with new "optimisation" arguments MUST be immutable.
 fn c_str_len(str: &i8) : i32{
     let len : i32 = 0;
     loop{
@@ -42,14 +48,31 @@ fn c_str_len(str: &i8) : i32{
     }
     return len;
 }
-fn main(): i32 {
-    let x : &i8 = "Pee pee poo poo\n Waterfall \n TORRONTO CENTRAL \n";
-    let y : &&i8 = &x;
-    let z : &&&i8 = &y;
+namespace test{
+    namespace test_in1ternal{
+        struct Example1{
+            x: i32,
+        }
+        struct Example2{
+            y: i32,
+            z: &Example1
+        }
+    }
+}
 
-    std_console::println_u64((*x) as u64);
-    std_console::println_u64((**y) as u64);
-    std_console::println_u64((***z) as u64);
+fn main(): i32 {
+    let time : u64 = GetTickCount64();
+    let tick : u64;
+    loop{
+        Sleep(1000);
+        tick = GetTickCount64();
+        if (tick - time) >= 1000 {
+            time = tick;
+            std_console::println_u64(tick);
+            break;
+        }
+    }
+
 
     let i: i64 = 0;
     loop{
@@ -59,187 +82,186 @@ fn main(): i32 {
         }
     }
     std_console::AllocConsole();
-    std_console::write(x, c_str_len(x));
     std_console::println_u64(*"0" as u64);
-    std_console::println_u64(-1);
+    std_console::println_u64(sizeof(window::WNDCLASSEXA));
     std_console::println_i64(-1);
     std_console::println_u64(1342);
     std_console::println_u64(777);
-    std_console::FreeConsole();
-    let vec: Vec;
+
+    let vec: vector::Vec;
     vector::new(&vec);
     vector::push(&vec, 32);
     vector::free(&vec);
     
-    let list: List;
+    let list: list::List;
     list::new(&list);
     list::extend(&list, 64);
     list::free(&list);
-    wind();
+    window::start();
+    std_console::FreeConsole();
     return 0;
 }
+namespace window{
 
-
-// Down from here, ai assisted code
-struct WNDCLASSEXA {
-    cbSize: u32,                            // UINT
-    style: u32,                             // UINT
-    //lpfnWndProc: &fn(hWnd: &i8, uMsg: u32, wParam: u64, lParam: u64): i64, // WNDPROC (function pointer)
-    lpfnWndProc: &fn(&i8, u32, u64, u64): i64, // WNDPROC (function pointer)
-    cbClsExtra: i32,                        // INT
-    cbWndExtra: i32,                        // INT
-    hInstance: &i8,                         // HINSTANCE
-    hIcon: &i8,                             // HICON
-    hCursor: &i8,                           // HCURSOR
-    hbrBackground: &i8,                     // HBRUSH
-    lpszMenuName: &i8,                      // LPCSTR
-    lpszClassName: &i8,                     // LPCSTR
-    hIconSm: &i8,                           // HICON
-}
-#[DllImport("user32.dll")]
-fn RegisterClassExA(lpwcx: &WNDCLASSEXA): u16; // ATOM is WORD, so u16
-#[DllImport("user32.dll")]
-fn CreateWindowExA(
-    dwExStyle: u32,
-    lpClassName: &i8,
-    lpWindowName: &i8,
-    dwStyle: u32,
-    x: i32,
-    y: i32,
-    nWidth: i32,
-    nHeight: i32,
-    hWndParent: &i8,
-    hMenu: &i8,
-    hInstance: &i8,
-    lpParam: &i8
-): &i8; // HWND is a HANDLE, so &i8
-
-#[DllImport("user32.dll")]
-fn ShowWindow(hWnd: &i8, nCmdShow: i32): i32; // BOOL is int, so i32
-#[DllImport("user32.dll")]
-fn UpdateWindow(hWnd: &i8): i32; // BOOL is int, so i32
-#[DllImport("user32.dll")]
-fn GetMessageA(lpMsg: &MSG, hWnd: &i8, wMsgFilterMin: u32, wMsgFilterMax: u32): i32; // BOOL is int, so i32
-#[DllImport("user32.dll")]
-fn TranslateMessage(lpMsg: &MSG): i32; // BOOL is int, so i32
-#[DllImport("user32.dll")]
-fn DispatchMessageA(lpMsg: &MSG): i64; // LRESULT is LONG_PTR, so i64
-#[DllImport("user32.dll")]
-fn DefWindowProcA(hWnd: &i8, uMsg: u32, wParam: u64, lParam: u64): i64; // LRESULT is LONG_PTR, so i64
-#[DllImport("user32.dll")]
-fn PostQuitMessage(nExitCode: i32): void;
-#[DllImport("kernel32.dll")]
-fn GetModuleHandleA(lpModuleName: &i8): &i8; // HINSTANCE is just a HANDLE, so &i8
-struct POINT {
-    x: i32,
-    y: i32,
-}
-struct MSG {
-    hWnd: &i8,      // HWND
-    message: u32,   // UINT
-    wParam: u64,    // WPARAM
-    lParam: u64,    // LPARAM
-    time: u32,      // DWORD
-    pt: POINT,      // POINT
-    // There are actually two more internal fields, but often ignored for basic use
-}
-
-fn WindowProc(hWnd: &i8, uMsg: u32, wParam: u64, lParam: u64): i64 {
-    let WM_DESTROY: u32 = 0x0002;
-    let WM_CLOSE: u32 = 0x0010;
-
-    if (uMsg == WM_CLOSE) {
-        PostQuitMessage(0);
-        return 0;
+    // Down from here, ai assisted code
+    struct WNDCLASSEXA {
+        cbSize: u32,                            // UINT
+        style: u32,                             // UINT
+        //lpfnWndProc: &fn(hWnd: &i8, uMsg: u32, wParam: u64, lParam: u64): i64, // WNDPROC (function pointer)
+        lpfnWndProc: &fn(&i8, u32, u64, u64): i64, // WNDPROC (function pointer)
+        cbClsExtra: i32,                        // INT
+        cbWndExtra: i32,                        // INT
+        hInstance: &i8,                         // HINSTANCE
+        hIcon: &i8,                             // HICON
+        hCursor: &i8,                           // HCURSOR
+        hbrBackground: &i8,                     // HBRUSH
+        lpszMenuName: &i8,                      // LPCSTR
+        lpszClassName: &i8,                     // LPCSTR
+        hIconSm: &i8,                           // HICON
     }
-    if (uMsg == WM_DESTROY) {
-        PostQuitMessage(0);
-        return 0;
+    #[DllImport("user32.dll")]
+    fn RegisterClassExA(lpwcx: &WNDCLASSEXA): u16; // ATOM is WORD, so u16
+    #[DllImport("user32.dll")]
+    fn CreateWindowExA(
+        dwExStyle: u32,
+        lpClassName: &i8,
+        lpWindowName: &i8,
+        dwStyle: u32,
+        x: i32,
+        y: i32,
+        nWidth: i32,
+        nHeight: i32,
+        hWndParent: &i8,
+        hMenu: &i8,
+        hInstance: &i8,
+        lpParam: &i8
+    ): &i8; // HWND is a HANDLE, so &i8
+
+    #[DllImport("user32.dll")]
+    fn ShowWindow(hWnd: &i8, nCmdShow: i32): i32; // BOOL is int, so i32
+    #[DllImport("user32.dll")]
+    fn UpdateWindow(hWnd: &i8): i32; // BOOL is int, so i32
+    #[DllImport("user32.dll")]
+    fn GetMessageA(lpMsg: &MSG, hWnd: &i8, wMsgFilterMin: u32, wMsgFilterMax: u32): i32; // BOOL is int, so i32
+    #[DllImport("user32.dll")]
+    fn TranslateMessage(lpMsg: &MSG): i32; // BOOL is int, so i32
+    #[DllImport("user32.dll")]
+    fn DispatchMessageA(lpMsg: &MSG): i64; // LRESULT is LONG_PTR, so i64
+    #[DllImport("user32.dll")]
+    fn DefWindowProcA(hWnd: &i8, uMsg: u32, wParam: u64, lParam: u64): i64; // LRESULT is LONG_PTR, so i64
+    #[DllImport("user32.dll")]
+    fn PostQuitMessage(nExitCode: i32): void;
+    #[DllImport("kernel32.dll")]
+    fn GetModuleHandleA(lpModuleName: &i8): &i8; // HINSTANCE is just a HANDLE, so &i8
+    struct POINT {
+        x: i32,
+        y: i32,
     }
-    //println_i32(uMsg as i32);
-
-    return DefWindowProcA(hWnd, uMsg, wParam, lParam);
-}
-fn wind() : i32{
-    // Class Styles
-    let CS_HREDRAW: u32 = 0x0002;
-    let CS_VREDRAW: u32 = 0x0001;
-
-    // Window Styles
-    let WS_OVERLAPPED: u32 = 0x00000000;
-    let WS_CAPTION: u32 = 0x00C00000;
-    let WS_SYSMENU: u32 = 0x00080000;
-    let WS_THICKFRAME: u32 = 0x00040000;
-    let WS_MINIMIZEBOX: u32 = 0x00020000;
-    let WS_MAXIMIZEBOX: u32 = 0x00010000;
-    let WS_OVERLAPPEDWINDOW: u32 = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX;
-
-    let CW_USEDEFAULT: i32 = 0x80000000 as i32;
-
-    let COLOR_WINDOW: i32 = 5;
-
-    let WM_DESTROY: u32 = 0x0002;
-    let WM_CLOSE: u32 = 0x0010;
-
-    let SW_SHOWNORMAL: i32 = 1;
-
-    let hInstance: &i8 = GetModuleHandleA(0 as &i8);
-    if (hInstance == (0 as &i8)) {
-        return -1; // Failure
+    struct MSG {
+        hWnd: &i8,      // HWND
+        message: u32,   // UINT
+        wParam: u64,    // WPARAM
+        lParam: u64,    // LPARAM
+        time: u32,      // DWORD
+        pt: POINT,      // POINT
+        // There are actually two more internal fields, but often ignored for basic use
     }
 
-    let className: &i8 = "MyWindowClass";
-    let wc: WNDCLASSEXA;
-    wc.cbSize = sizeof(WNDCLASSEXA);
-    wc.style = CS_HREDRAW | CS_VREDRAW;
-    wc.lpfnWndProc = &WindowProc;
-    wc.cbClsExtra = 0;
-    wc.cbWndExtra = 0;
-    wc.hInstance = hInstance;
-    wc.hIcon = 0 as &i8;
-    wc.hCursor = 0 as &i8;
-    wc.hbrBackground = (COLOR_WINDOW + 1) as &i8;
-    wc.lpszMenuName = 0 as &i8;
-    wc.lpszClassName = className;
-    wc.hIconSm = 0 as &i8;
+    fn WindowProc(hWnd: &i8, uMsg: u32, wParam: u64, lParam: u64): i64 {
+        let WM_DESTROY: u32 = 0x0002;
+        let WM_CLOSE: u32 = 0x0010;
 
-    if (RegisterClassExA(&wc) == 0) {
-        return -2; // Failed to register class
-    }
-
-    let windowTitle: &i8 = "Hello, World!";
-    let hWnd: &i8 = CreateWindowExA(
-        0,                      // Extended window style
-        className,              // Window class name
-        windowTitle,            // Window title
-        WS_OVERLAPPEDWINDOW,    // Window style
-        CW_USEDEFAULT,          // X position
-        CW_USEDEFAULT,          // Y position
-        800,                    // Width
-        600,                    // Height
-        0 as &i8,               // Parent window
-        0 as &i8,               // Menu
-        hInstance,              // Application instance handle
-        0 as &i8                // Additional application data
-    );
-
-    if (hWnd == (0 as &i8)) {
-        return -3; // Failed to create window
-    }
-
-    ShowWindow(hWnd, SW_SHOWNORMAL);
-    UpdateWindow(hWnd);
-
-    let msg: MSG;
-    loop {
-        let result: i32 = GetMessageA(&msg, 0 as &i8, 0, 0);
-        if (result > 0) {
-            TranslateMessage(&msg);
-            DispatchMessageA(&msg);
-        } else {
-            break; 
+        if (uMsg == WM_CLOSE) {
+            PostQuitMessage(0);
+            return 0;
         }
+        if (uMsg == WM_DESTROY) {
+            PostQuitMessage(0);
+            return 0;
+        }
+        //std_console::println_u64(uMsg as u64);
+
+        return DefWindowProcA(hWnd, uMsg, wParam, lParam);
+    }
+    fn start() : i32{
+        // Class Styles
+        let CS_HREDRAW: u32 = 0x0002;
+        let CS_VREDRAW: u32 = 0x0001;
+
+        // Window Styles
+        let WS_OVERLAPPED: u32 = 0x00000000;
+        let WS_CAPTION: u32 = 0x00C00000;
+        let WS_SYSMENU: u32 = 0x00080000;
+        let WS_THICKFRAME: u32 = 0x00040000;
+        let WS_MINIMIZEBOX: u32 = 0x00020000;
+        let WS_MAXIMIZEBOX: u32 = 0x00010000;
+        let WS_OVERLAPPEDWINDOW: u32 = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX;
+
+        let CW_USEDEFAULT: i32 = 0x80000000 as i32;
+
+        let COLOR_WINDOW: i32 = 5;
+
+        let SW_SHOWNORMAL: i32 = 1;
+
+        let hInstance: &i8 = GetModuleHandleA(0 as &i8);
+        if (hInstance == (0 as &i8)) {
+            return -1; // Failure
+        }
+
+        let className: &i8 = "MyWindowClass";
+        let wc: WNDCLASSEXA;
+        wc.cbSize = sizeof(WNDCLASSEXA);
+        wc.style = CS_HREDRAW | CS_VREDRAW;
+        wc.lpfnWndProc = &WindowProc;
+        wc.cbClsExtra = 0;
+        wc.cbWndExtra = 0;
+        wc.hInstance = hInstance;
+        wc.hIcon = 0 as &i8;
+        wc.hCursor = 0 as &i8;
+        wc.hbrBackground = (COLOR_WINDOW + 1) as &i8;
+        wc.lpszMenuName = 0 as &i8;
+        wc.lpszClassName = className;
+        wc.hIconSm = 0 as &i8;
+
+        if (RegisterClassExA(&wc) == 0) {
+            return -2; // Failed to register class
+        }
+
+        let windowTitle: &i8 = "Hello, World!";
+        let hWnd: &i8 = CreateWindowExA(
+            0,                      // Extended window style
+            className,              // Window class name
+            windowTitle,            // Window title
+            WS_OVERLAPPEDWINDOW,    // Window style
+            CW_USEDEFAULT,          // X position
+            CW_USEDEFAULT,          // Y position
+            800,                    // Width
+            600,                    // Height
+            0 as &i8,               // Parent window
+            0 as &i8,               // Menu
+            hInstance,              // Application instance handle
+            0 as &i8                // Additional application data
+        );
+
+        if (hWnd == (0 as &i8)) {
+            return -3; // Failed to create window
+        }
+
+        ShowWindow(hWnd, SW_SHOWNORMAL);
+        UpdateWindow(hWnd);
+
+        let msg: MSG;
+        loop {
+            let result: i32 = GetMessageA(&msg, 0 as &i8, 0, 0);
+            if (result > 0) {
+                TranslateMessage(&msg);
+                DispatchMessageA(&msg);
+            } else {
+                break; 
+            }
+        }
+
+        return msg.wParam as i32;
     }
 
-    return msg.wParam as i32;
 }

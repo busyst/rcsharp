@@ -42,16 +42,31 @@ impl Stmt {
         }
     }
 }
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub enum ParserType {
     Named(String),
     Pointer(Box<ParserType>),
     // return type, arguments
     Function(Box<ParserType>,Vec<ParserType>),
+    NamespaceLink(String,Box<ParserType>),
+}
+
+impl PartialEq for ParserType {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Named(l0), Self::Named(r0)) => l0 == r0,
+            (Self::Pointer(l0), Self::Pointer(r0)) => l0 == r0,
+            (Self::Function(l0, l1), Self::Function(r0, r1)) => l0 == r0 && l1 == r1,
+            (Self::NamespaceLink(l0, l1), Self::NamespaceLink(r0, r1)) => l0 == r0 && l1 == r1,
+            (l, Self::NamespaceLink(_, r)) => l.eq(&r),
+            (Self::NamespaceLink(_, l), r) => r.eq(&l),
+            _ => false,
+        }
+    }
 }
 #[allow(dead_code)]
 impl ParserType {
-    pub fn is_simple_type(&self) -> bool {
+    pub fn is_primitive_type(&self) -> bool {
         if let ParserType::Named(name) = self {
             matches!(name.as_str(),
                 "bool" |
@@ -70,6 +85,14 @@ impl ParserType {
         } else {
             false
         }
+    }
+    pub fn both_integers(&self, other: &ParserType) -> Option<(u32, u32)> {
+        if self.is_integer() && other.is_integer() {
+            let ln = self.try_to_string_core().unwrap()[1..].parse::<u32>().unwrap();
+            let rn = other.try_to_string_core().unwrap()[1..].parse::<u32>().unwrap();
+            return Some((ln, rn));
+        }
+        None
     }
     pub fn is_bool(&self) -> bool{
         if let ParserType::Named(name) = self {
@@ -110,12 +133,19 @@ impl ParserType {
     pub fn is_pointer(&self) -> bool{
         return matches!(self, ParserType::Pointer(_));
     }
+    pub fn unpointer(&self) -> ParserType{
+        match self {
+            ParserType::Pointer(x) => return x.unpointer(),
+            _ => return self.clone()
+        }
+    }
     pub fn to_string(&self) -> String{
         let mut output = String::new();
         match self {
             ParserType::Named(x) => output.push_str(x),
             ParserType::Pointer(x) => {output.push_str(&x.to_string()); output.push('*');},
             ParserType::Function(return_type, _) => {output.push_str(&return_type.to_string());},
+            ParserType::NamespaceLink(x, y) => {output.push_str(&format!("{}.{}", x, y.to_string()));}
         }
         return output;
     }
@@ -125,6 +155,7 @@ impl ParserType {
             ParserType::Named(x) => return Ok(x.clone()),
             ParserType::Pointer(x) => {return x.try_to_string_core();},
             ParserType::Function(_, _) => {return Err(format!("Tried to get type name of function TODO"));},
+            ParserType::NamespaceLink(_, _) => unreachable!()
         }
     }
     pub fn dereference_once(&self) -> ParserType{
@@ -132,10 +163,26 @@ impl ParserType {
             ParserType::Named(_) => panic!("ParserType is Named {:?} that is not dereferencable", self),
             ParserType::Pointer(x) => return *x.clone(),
             ParserType::Function(_, _) => {todo!()},
+            ParserType::NamespaceLink(_, _) => unreachable!()
         }
     }
     pub fn reference_once(&self) -> ParserType{
         ParserType::Pointer(Box::new(self.clone()))
+    }
+    pub fn get_absolute_path_or(&self, current_fallback: &String) -> String{
+        match self {
+            ParserType::NamespaceLink(x, y) =>{
+                return format!("{}.{}", x, y.to_string());
+            }
+            ParserType::Named(x) =>{
+                if current_fallback.is_empty() || self.is_primitive_type() {
+                    return format!("{}", x.clone());
+                }else {
+                    return format!("{}.{}",current_fallback, x.clone());
+                }
+            }
+            _ => return current_fallback.clone(),
+        }
     }
 }
 
@@ -346,7 +393,12 @@ impl<'a> GeneralParser<'a> {
             Ok(ParserType::Function(return_type, arguments))
         }
         else {
-            Ok(ParserType::Named(self.advance().expect_name_token()?))
+            let link_or_name = self.advance().expect_name_token()?;
+            if self.peek().token == Token::DoubleColon {
+                self.advance();
+                return Ok(ParserType::NamespaceLink(link_or_name, Box::new(self.parse_type()?)))
+            }
+            Ok(ParserType::Named(link_or_name))
         }
     }
     fn parse_statement(&mut self) -> Result<Stmt, String> {

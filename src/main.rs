@@ -6,12 +6,13 @@ pub mod expression_parser;
 pub mod expression_compiler;
 pub mod parser;
 pub mod compiler;
+pub mod compiler_essentials;
 mod tests;
 
 pub const ALLOW_EXTENTION_FUNCTIONS: bool = false;
 pub const USE_MULTIPLY_AS_POINTER_IN_TYPES: bool = true;
 
-fn main() {
+fn main() -> Result<(),()> {
     //let dll_path = r#"c:\Windows\System32\kernel32.dll"#;
     //let lib_path = "./kernel32.lib";
     //rcsharp::generate_lib_with_dlltool(&dll_path, &lib_path).unwrap();
@@ -39,14 +40,14 @@ fn main() {
     let y = GeneralParser::new(&all_tokens).parse_all();
     if let Err(err) = y {
         eprintln!("{}",err);
-        return;
+        return Err(());
     };
     let tokens_parsed = Instant::now();
     let y = y.unwrap();
     
     if let Err(err) = rcsharp_compile_to_file(&y) {
         eprintln!("{}",err);
-        return;
+        return Err(());
     };
     let compiled_and_wrote = Instant::now();
     println!("\t\tBase structs");
@@ -63,6 +64,7 @@ fn main() {
     println!("pars\t{:?} statements", y.iter().map(|x| x.recursive_statement_count()).sum::<u64>());
     println!("pars\t{:?} top level statements", y.len());
     println!("compil\t{:?}", compiled_and_wrote - tokens_parsed);
+    return Ok(());
 }
 
 

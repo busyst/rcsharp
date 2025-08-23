@@ -17,31 +17,27 @@ namespace std_process{
 #[DllImport("user32.dll")]
 fn MessageBoxA(hWnd:&i8, lpText: &i8, lpCaption: &i8, uType: i32): i32;
 
-
-// Linked list
-struct List{
-    head: &ListNode,
-    foot: &ListNode,
-    length: u32,
-}
-// Linked list node
-struct ListNode{
-    next_node: &ListNode,
-    data: i32,
-}
 namespace list{
-    #[ExtentionOf(List)]
+    // Linked list
+    struct List{
+        head: &ListNode,
+        foot: &ListNode,
+        length: u32,
+    }
+    // Linked list node
+    struct ListNode{
+        next_node: &ListNode,
+        data: i32,
+    }
     fn new(list: &List){
         list.head = 0 as &ListNode;
         list.foot = 0 as &ListNode;
         list.length = 0 as u32;
     }
-    #[ExtentionOf(ListNode)]
     fn new_node(list: &ListNode){
         list.next_node = 0 as &ListNode;
         list.data = 0 as i32;
     }
-    #[ExtentionOf(List)]
     fn extend(list: &List, data: i32){
         let new_node: &ListNode = std_process::malloc(sizeof(ListNode)) as &ListNode;
         
@@ -58,7 +54,6 @@ namespace list{
         }
         list.length = list.length + 1 as u32;
     }
-    #[ExtentionOf(List)]
     fn walk(list: &List) : u32{
         let l : u32 = 0 as u32;
         let ptr : &ListNode = list.head;
@@ -71,7 +66,6 @@ namespace list{
         }
         return l;
     }
-    #[ExtentionOf(List)]
     fn free(list: &List) {
         let current: &ListNode = list.head;
         loop {
@@ -87,13 +81,14 @@ namespace list{
         list.length = 0;
     }
 }
-// Dynamicly expanding array
-struct Vec{
-    array: &i8,
-    length: u32,
-    capacity: u32,
-}
+
 namespace vector{
+    // Dynamicly expanding array
+    struct Vec{
+        array: &i8,
+        length: u32,
+        capacity: u32,
+    }
     #[ExtentionOf(Vec)]
     fn new(vec: &Vec){
         vec.array = 0 as &i8;
@@ -179,7 +174,7 @@ namespace std_console{
         }
     }
     fn println_u64(n: u64) {
-        let buffer: Vec;
+        let buffer: vector::Vec;
         vector::new(&buffer);
 
         if (n == 0) {
