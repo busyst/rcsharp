@@ -108,7 +108,7 @@ pub enum Token {
     DummyToken,
     #[regex(r"[a-zA-Z_]\w*", |lex| lex.slice().to_string().into_boxed_str())]
     Name(Box<str>),
-    #[regex(r"0x[0-9a-fA-F]+|\d+", unhex_num)]
+    #[regex(r"0x[0-9a-fA-F]+|0b[01]+|\d+", unhex_num)]
     Integer(Box<str>),
     #[regex(r"[0-9]+\.[0-9]+", |lex| lex.slice().to_string().into_boxed_str())]
     Decimal(Box<str>),

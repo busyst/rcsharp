@@ -420,7 +420,7 @@ namespace window{
     #[DllImport("user32.dll")]
     fn PostQuitMessage(nExitCode: i32): void;
     #[DllImport("kernel32.dll")]
-    fn GetModuleHandleA(lpModuleName: &i8): &i8; // HINSTANCE is just a HANDLE, so &i8
+    fn GetModuleHandleA(lpModuleName: &i8): &void; // HINSTANCE is just a HANDLE, so &i8
     struct POINT {
         x: i32,
         y: i32,
@@ -461,7 +461,7 @@ namespace window{
         // CW apparently stands for Control Word. https://stackoverflow.com/questions/48079439/winapi-cw-usedefault-vs-cw-default
         let CW_USEDEFAULT: i32 = 0x80000000;
 
-        let hInstance: &i8 = GetModuleHandleA(0 as &i8);
+        let hInstance: &i8 = GetModuleHandleA(0 as &i8) as &i8;
         if is_null(hInstance) { return StartError::GetModuleHandleFailed; }
 
         let className: &i8 = "MyWindowClass";

@@ -66,7 +66,8 @@ impl CompiledResult {
             CompiledResult::Argument(a, _) => {
                 let utvc = state.aquire_unique_temp_value_counter();
                 let val = state.get_variable(a)?;
-                state.output.push_str(&format!("%tmp{} = add {} %{} , 0", utvc, state.get_llvm_representation_from_parser_type(&val.get_type(false, false).parser_type)?, a));
+                // Make work for all arguments
+                state.output.push_str(&format!("%tmp{} = add {} %{} , 0\n", utvc, state.get_llvm_representation_from_parser_type(&val.get_type(false, false).parser_type)?, a));
                 Ok(utvc)
             },
             CompiledResult::NoReturn => unreachable!("Should not be called on NoReturn, catch it beforehand"),

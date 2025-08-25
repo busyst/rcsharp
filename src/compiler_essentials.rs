@@ -18,7 +18,7 @@ impl Attribute {
     }
     /// Ensures that attribute has only one argument, and returns it
     pub fn one_argument(&self) -> Result<&Expr, String>{
-        self.arguments.get(0).and_then(|x| if self.arguments.len() != 1 {Some(x)} else {None}).ok_or(format!("Atribute {} should have only one argument, it has {} arguments", self.name, self.arguments.len()))
+        self.arguments.get(0).and_then(|x| if self.arguments.len() == 1 {Some(x)} else {None}).ok_or(format!("Atribute {} should have only one argument, it has {} arguments", self.name, self.arguments.len()))
     }
 }
 pub enum StructFlags {
@@ -139,7 +139,7 @@ impl Variable {
         }
         if !(self.is_argument() && !self.has_wrote()) {
             if !self.has_wrote() && !self.modified() {
-                output.push_str(&format!("Unwroten\\Unmodified\t"));
+                output.push_str(&format!("Unwritten\\Unmodified\t"));
             }
             if self.is_argument() {
                 output.push_str(&format!("Argument\t"));

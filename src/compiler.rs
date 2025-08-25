@@ -374,7 +374,7 @@ impl CompilerState {
             ParserType::Named(type_name) =>{
                 if self.declared_types.contains_key(type_name) {
                     match type_name.as_str() {
-                        "void" => return Ok(format!("i8")),
+                        "void" => return Ok(format!("void")),
                         "bool" => return Ok(format!("i1")),
                         "i8" | "u8" => return Ok(format!("i8")),
                         "i16" | "u16" => return Ok(format!("i16")),
@@ -391,6 +391,9 @@ impl CompilerState {
                 Err(format!("Implementation of \"{:?}\" was not found in current context '{}/{}', lfpt", parser_type, self.current_function_path, self.current_function_name))
             }
             ParserType::Pointer(x) =>{
+                if x.is_void() {
+                    return Ok(format!("i8*"));
+                }
                 let mut inside_value = self.get_llvm_representation_from_parser_type(x)?;
                 inside_value.push('*');
                 return Ok(inside_value);
@@ -439,6 +442,7 @@ impl CompilerState {
                         "f32" => return Ok(4),
                         "f64" => return Ok(8),
                         _ => {
+                            //TODO: make it calculate with alligment https://stackoverflow.com/questions/23927837/compute-size-of-object-if-it-has-to-be-aligned-as-a-specific-type
                             let x = self.get_struct_representaition_from_parser_type(parser_type)?;
                             return Ok(x.1.iter().map(|x| self.get_sizeof(&x.1)).collect::<Result<Vec<_>,String>>()?.iter().sum());
                         }

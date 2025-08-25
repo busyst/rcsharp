@@ -463,11 +463,7 @@ impl<'a> GeneralParser<'a> {
                 self.consume(&Token::SemiColon)?;
                 Ok(Stmt::Continue)
             }
-            Token::LBrace => {panic!()/*self.parse_block_as_stmt() */},
-            Token::SemiColon => {
-                self.advance();
-                panic!()
-            }
+            Token::LBrace | Token::RBrace | Token::SemiColon => {unreachable!("Congratulations! I broke parser!")},
             _ => { 
                 let expr = self.parse_expression()?;
                 Ok(Stmt::Expr(expr))
