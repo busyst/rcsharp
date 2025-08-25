@@ -3,7 +3,7 @@ use std::cell::Cell;
 
 use ordered_hash_map::OrderedHashMap;
 
-use crate::{compiler_essentials::{Attribute, CompilerType, Function, Scope, Struct, Variable}, expression_compiler::{compile_expression, implicit_cast, Expected}, expression_parser::Expr, parser::{ParserType, Stmt}};
+use crate::{compiler_essentials::{Attribute, CompilerType, Function, Scope, Struct, Variable}, expression_compiler::{compile_expression, constant_integer_expression_compiler, implicit_cast, Expected}, expression_parser::Expr, parser::{ParserType, Stmt}};
 pub fn rcsharp_compile_to_file(x: &[Stmt]) -> Result<(), String> {
     let mut state = CompilerState::default();
     rcsharp_compile(x, &mut state)?;
@@ -86,6 +86,21 @@ fn recursive_pre_compile(x: &[Stmt], current_path: &str, state: &mut CompilerSta
                 };
                 recursive_pre_compile(body, &new_path, state)?;
             }
+            Stmt::Enum(n, enum_base_type, entries) =>{
+                let full_name = if current_path.is_empty() {
+                    n.clone()
+                } else {
+                    format!("{}.{}", current_path, n)
+                };
+                let entries = entries.iter().map(|x| {let e = constant_integer_expression_compiler(&x.1); if e.is_ok() {return Some((x.0.clone(), e.unwrap()));} else {return None;}}).collect::<Option<Vec<_>>>()
+                .ok_or(format!("Enum {} has invalid value", full_name))?;
+                let base_type = enum_base_type.as_ref().unwrap_or(&ParserType::Named(format!("i64"))).clone();
+                if !base_type.is_integer() {
+                    return Err(format!("Base type of enum '{}' is allowed to be integer only!", n));
+                }
+
+                state.declared_enums.insert(full_name, (base_type, entries));
+            }
             Stmt::Hint(_, _) => {}
             _ => {return Err(format!("Unexpected statement during pre-compilation: {:?}", statement));}
         }
@@ -138,7 +153,11 @@ fn compile_functions(state :&mut CompilerState) -> Result<(), String>{
     let funcs_to_compile = state.declared_functions.iter().filter(|x| !x.1.is_imported()).map(|x| x.1.clone()).collect::<Vec<_>>();
     for function in funcs_to_compile {
         state.current_function_path = function.path.to_string();
-        let function_return_type = state.get_llvm_representation_from_parser_type(&function.return_type)?;
+        let function_return_type = if function.return_type.is_void() {
+            format!("void")
+        }else{
+            state.get_llvm_representation_from_parser_type(&function.return_type)?
+        };
         let effective_function_name = if function.path.is_empty(){
             function.name.clone()
         }else{
@@ -295,6 +314,7 @@ pub struct CompilerState{
     
     declared_functions: OrderedHashMap<String, Function>,
     declared_types: OrderedHashMap<String, Struct>,
+    declared_enums: OrderedHashMap<String, (ParserType, Vec<(String, i128)>)>,
 
     structures_of_types: OrderedHashMap<String, (String, Vec<(String,ParserType)>, Vec<(String,(ParserType, Vec<ParserType>))>)>,
     
@@ -315,6 +335,15 @@ impl CompilerState {
         let path = if path.is_empty() { func_name } else { &format!("{}.{}",path, func_name)};
         let func = self.declared_functions.get(path).ok_or(format!("Current function was not found inside current namespace path"))?;
         return Ok(func);
+    }
+    pub fn get_enum_entry_val_from_path(&self, path: &str, enum_entry: &str) -> Result<(&ParserType, i128), String>{
+        let r#enum = self.declared_enums.get(path).ok_or(format!("Enum \"{}\" was not found", path))?;
+        for x in r#enum.1.clone() {
+            if x.0 == enum_entry {
+                return Ok((&r#enum.0, x.1.clone()));
+            }
+        }
+        return Err(format!("Entry {} was not found inside enum {}", enum_entry, path));
     }
     pub fn get_current_function(&self) -> Result<&Function, String>{
         let path = if self.current_function_path.is_empty() { &self.current_function_name } else { &format!("{}.{}",self.current_function_path, self.current_function_name)};
@@ -345,7 +374,7 @@ impl CompilerState {
             ParserType::Named(type_name) =>{
                 if self.declared_types.contains_key(type_name) {
                     match type_name.as_str() {
-                        "void" => return Ok(format!("void")),
+                        "void" => return Ok(format!("i8")),
                         "bool" => return Ok(format!("i1")),
                         "i8" | "u8" => return Ok(format!("i8")),
                         "i16" | "u16" => return Ok(format!("i16")),

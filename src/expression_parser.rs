@@ -76,7 +76,13 @@ impl<'a> ExpressionParser<'a> {
     pub fn consume(&mut self, expected: &Token) -> Result<&TokenData, String> {
         let token_data = self.peek();
         if &token_data.token != expected {
-            return Err(format!("Expected token {:?}, but found {:?}", expected, token_data));
+            return Err(format!(
+                "Expected token {:?}, found {:?} at row {}, col {}",
+                expected,
+                token_data.token,
+                token_data.loc.row,
+                token_data.loc.col
+            ));
         }
         Ok(self.advance())
     }
@@ -96,6 +102,7 @@ impl<'a> ExpressionParser<'a> {
         let token_data = self.advance();
         match &token_data.token {
             Token::Integer(val) => Ok(Expr::Integer(val.to_string())),
+            Token::Char(val) => {  Ok(Expr::Integer((val[1..2].parse::<char>().unwrap() as u64).to_string()))},
             Token::String(val) => Ok(Expr::StringConst(val.to_string())),
             Token::Name(name) => Ok(Expr::Name(name.to_string())),
 
@@ -113,7 +120,10 @@ impl<'a> ExpressionParser<'a> {
                 return Ok(Expr::UnaryOp(UnaryOp::Pointer, Box::new(Expr::UnaryOp(UnaryOp::Pointer, Box::new(self.parse_prefix()?)))));
             },
 
-            _ => Err(format!("Unexpected token in prefix position: {:?}", token_data)),
+            _ => Err(format!(
+                "Unexpected token {:?} in expression at row {}, col {}",
+                token_data.token, token_data.loc.row, token_data.loc.col
+            )),
         }
     }
     fn parse_unary(&mut self, op: UnaryOp) -> Result<Expr, String> {
@@ -139,7 +149,12 @@ impl<'a> ExpressionParser<'a> {
 
             Token::KeywordAs => self.parse_cast(left),
 
-            _ => Err(format!("Unexpected token in infix position: {:?}", token)),
+            _ => Err(format!(
+                "Unexpected token {:?} in expression at row {}, col {}",
+                token,
+                self.peek().loc.row,
+                self.peek().loc.col
+            )),
         }
     }
     fn parse_binary(&mut self, left: Expr) -> Result<Expr, String> {

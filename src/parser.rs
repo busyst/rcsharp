@@ -20,7 +20,7 @@ pub enum Stmt {
     
     Function(String, Vec<(String, ParserType)>, ParserType, Vec<Stmt>), // fn foo(bar: i8, ...) ... { ... }
     Struct(String, Vec<(String, ParserType)>), // struct foo { bar : i8, ... }
-    Enum(String, Vec<(String, Expr)>), // enum foo { bar = ..., ... }
+    Enum(String, Option<ParserType>, Vec<(String, Expr)>), // enum foo 'base_type' { bar = ..., ... }
     Namespace(String, Vec<Stmt>), // namespace foo { fn bar() ... {...} ... }
 }
 impl Stmt {
@@ -29,7 +29,7 @@ impl Stmt {
             Self::Break => 1,
             Self::Continue => 1,
             Self::DirectInsertion(_) => 1,
-            Self::Enum(_, _) => 1,
+            Self::Enum(_, _, _) => 1,
             Self::Hint(_, _) => 1,
             Self::Let(_, _, _) => 1,
             Self::Expr(_) => 1,
@@ -64,6 +64,7 @@ impl PartialEq for ParserType {
         }
     }
 }
+
 #[allow(dead_code)]
 impl ParserType {
     pub fn is_primitive_type(&self) -> bool {
@@ -166,10 +167,26 @@ impl ParserType {
             ParserType::NamespaceLink(_, _) => unreachable!()
         }
     }
+    pub fn dereference_full(&self) -> &ParserType{
+        match self {
+            ParserType::Named(_) => return self,
+            ParserType::Pointer(x) => return &x,
+            ParserType::Function(_, _) => return self,
+            ParserType::NamespaceLink(_, _) => return self
+        }
+    }
+    pub fn replace_name(&self, name: String) -> ParserType{
+        match self {
+            ParserType::Named(_) => return ParserType::Named(name),
+            ParserType::Pointer(x) => return ParserType::Pointer(Box::new(x.replace_name(name))),
+            ParserType::Function(_, _) => unreachable!(),
+            ParserType::NamespaceLink(_, _) => unreachable!()
+        }
+    }
     pub fn reference_once(&self) -> ParserType{
         ParserType::Pointer(Box::new(self.clone()))
     }
-    pub fn get_absolute_path_or(&self, current_fallback: &String) -> String{
+    pub fn get_absolute_path_or(&self, current_fallback: &str) -> String{
         match self {
             ParserType::NamespaceLink(x, y) =>{
                 return format!("{}.{}", x, y.to_string());
@@ -181,7 +198,23 @@ impl ParserType {
                     return format!("{}.{}",current_fallback, x.clone());
                 }
             }
-            _ => return current_fallback.clone(),
+            _ => return current_fallback.to_string(),
+        }
+    }
+    pub fn as_absolute_path_or(&self, current_fallback: &str) -> ParserType{
+        match self {
+            ParserType::Named(_) =>{
+                let paths = current_fallback.split(|x| x == '.').rev();
+                let mut output = self.clone();
+                for x in paths {
+                    if x.is_empty() {
+                        continue;
+                    }
+                    output = ParserType::NamespaceLink(x.to_string(), Box::new(output));
+                }
+                return output;
+            }
+            _ => return self.clone(),
         }
     }
 }
@@ -215,7 +248,13 @@ impl<'a> GeneralParser<'a> {
     fn consume(&mut self, expected: &Token) -> Result<&TokenData, String> {
         let token_data = self.peek();
         if &token_data.token != expected {
-            return Err(format!("Expected token {:?}, but found {:?}", expected, token_data));
+            return Err(format!(
+                "Expected token {:?}, found {:?} at row {}, col {}",
+                expected,
+                token_data.token,
+                token_data.loc.row,
+                token_data.loc.col
+            ));
         }
         Ok(self.advance())
     }
@@ -328,6 +367,13 @@ impl<'a> GeneralParser<'a> {
     fn parse_enum(&mut self) -> Result<Stmt, String> {
         self.consume(&Token::KeywordEnum)?;
         let name = self.advance().expect_name_token()?;
+        let enum_base_type ;
+        if self.peek().token == Token::Colon {
+            self.advance();
+            enum_base_type = Some(self.parse_type()?);
+        }else {
+            enum_base_type = None;
+        }
         self.consume(&Token::LBrace)?;
         let mut values = vec![];
         let mut counter = 0;
@@ -356,7 +402,7 @@ impl<'a> GeneralParser<'a> {
             }
         }
         self.consume(&Token::RBrace)?;
-        Ok(Stmt::Enum(name, values))
+        Ok(Stmt::Enum(name, enum_base_type, values))
     }
     fn parse_type(&mut self) -> Result<ParserType, String> {
         if self.peek().token == Token::LogicAnd {

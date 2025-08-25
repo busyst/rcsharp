@@ -1,0 +1,10 @@
+
+fn q(x: &void) : void{
+    *(x as &i32) = 312;
+    return;
+}
+fn main() : i32{
+    let x: i32 = 0;
+    q(&x as &void);
+    return x;
+}

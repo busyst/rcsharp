@@ -91,6 +91,22 @@ impl CompiledResult {
         }
     }
 }
+pub fn constant_integer_expression_compiler(expression: &Expr) -> Result<i128, String>{
+    match expression {
+        Expr::Integer(x) => Ok(x.parse::<i128>().unwrap()),
+        Expr::BinaryOp(l, op, r) =>{
+            let lv = constant_integer_expression_compiler(&l)?;
+            let rv = constant_integer_expression_compiler(&r)?;
+            match op {
+                BinaryOp::BitOr => {
+                    return Ok(lv | rv);
+                }
+                _ => panic!("{:?}",op)
+            }
+        }
+        _ => Err(format!(""))
+    }
+}
 
 pub fn type_from_expression(x: &Expr) -> Result<ParserType, String>{
     match x {
@@ -103,7 +119,7 @@ pub fn type_from_expression(x: &Expr) -> Result<ParserType, String>{
 
 pub fn explicit_cast(value: &CompiledResult, to: &ParserType, state: &mut CompilerState) -> Result<CompiledResult, String>{
     let ltype = value.get_type();
-    if matches!(value, CompiledResult::Integer(_, _)) && to.is_integer() {
+    if matches!(value, CompiledResult::Integer(_, _)) && (to.is_integer() || to.is_bool()) {
         return Ok(value.with_type(to.clone()));
     }
     match (&ltype, to) {
@@ -201,6 +217,9 @@ fn compile_rvalue(right: &Expr, expected_type: Expected, state: &mut CompilerSta
 
             if !l.equal_types(&r) {
                 if l.get_type().is_pointer() && r.get_type().is_integer() {
+                    if *r.get_type() != ParserType::Named(format!("i64")) {
+                        return Err(format!("Moving pointer is allowed only with 64 bit integer (i64)"));
+                    }
                     let utvc = state.aquire_unique_temp_value_counter();
                     let pointed_to_type = l.get_type().dereference_once();
                     let llvm_pointed_to_type = state.get_llvm_representation_from_parser_type(&pointed_to_type)?;
@@ -412,6 +431,45 @@ fn compile_rvalue(right: &Expr, expected_type: Expected, state: &mut CompilerSta
             state.output.push_str(&format!("    %tmp{} = getelementptr inbounds [{} x i8], ptr @.str{}, i64 0, i64 0\n", utvc, x.len() + 1, unique_constant_string_counter));
             return Ok(CompiledResult::TempValue(utvc, ParserType::Pointer(Box::new(ParserType::Named(format!("i8"))))));
         }
+        Expr::StaticAccess(x, e) => {
+            let mut path = String::new();
+            if let Expr::Name(ns) = &**x {
+                path.push_str(&ns);
+            }else {
+                fn rec(x: &Box::<Expr>, out: &mut String){
+                    match x.as_ref() {
+                        Expr::Name(x) => out.push_str(&x),
+                        Expr::StaticAccess(x, y) => {rec(x, out); out.push('.'); out.push_str(&y)},
+                        _ => panic!()
+                    }
+                }
+                rec(x, &mut path);
+            }
+            if let Ok(_) = state.get_function_from_path(&path, &e) {
+                unreachable!()
+            }
+            if let Ok(x) = state.get_enum_entry_val_from_path(&path, &e) {
+                return Ok(CompiledResult::Integer(x.1.to_string(), x.0.clone()));
+            }
+            if let Ok(x) = state.get_enum_entry_val_from_path(&format!("{}.{}",state.get_current_path(), path), &e) {
+                return Ok(CompiledResult::Integer(x.1.to_string(), x.0.clone()));
+            }
+            Err(format!("erter"))
+        }
+        Expr::Assign(left, right) => {
+            let l = compile_lvalue(&left, true, true, state)?;
+            let mut r = compile_rvalue(&right, Expected::Type(l.get_type()), state)?;
+            if !l.equal_types(&r) {
+                r = implicit_cast(&r, &l.get_type(), state).map_err(|x| format!("while assigning !{:?}! !EQUAL! !{:?}\n{}", left, right, x))?;
+            }
+            let l_ut = state.get_llvm_representation_from_parser_type(&l.get_type())?;
+
+            state.output.push_str(&format!("    store {}, {}* {}\n", r.to_repr_with_type(state)?, l_ut, l.to_repr()));
+            if expected_type == Expected::NoReturn {
+                return Ok(CompiledResult::NoReturn);
+            }
+            return Ok(r);
+        }
         _ => todo!("{:?}", right)
     }
 }
@@ -433,10 +491,23 @@ fn compile_lvalue(left: &Expr, write_to_address: bool, modify_content: bool, sta
                 return Ok(CompiledResult::TempValue(utvc, var_pars_type));
             }
             if let Ok(func) = state.get_function_from_path(state.get_current_path(), &name) { // Function
-                let func_type = ParserType::Function(
-                    Box::new(func.return_type.clone()),
-                    func.args.iter().map(|(_, t)| t.clone()).collect()
-                );
+                if !func.return_type.is_primitive_type() {
+
+
+                }
+                let func_type = if func.return_type.dereference_full().is_primitive_type() {
+                    ParserType::Function(
+                        Box::new(func.return_type.clone()),
+                        func.args.iter().map(|(_, t)| t.clone()).collect()
+                    )
+                }else{
+                    let fp = func.return_type.as_absolute_path_or(state.get_current_path());
+                    println!("{:?}", fp);
+                    ParserType::Function(
+                        Box::new(fp),
+                        func.args.iter().map(|(_, t)| t.clone()).collect()
+                    )
+                };
                 if func.is_imported() {
                     return Ok(CompiledResult::Function(func.name.clone(), func_type, func.flags()));
                 }
@@ -540,24 +611,19 @@ fn compile_lvalue(left: &Expr, write_to_address: bool, modify_content: bool, sta
             state.set_current_path(&x);
             return Ok(r);
         }
+        Expr::Cast(expression, desired_type) =>{
+            let result = compile_rvalue(expression, Expected::Type(desired_type), state)?;
+            if result.equal_to_type(desired_type) {
+                return Ok(result);
+            }
+            return explicit_cast(&result, desired_type, state);
+        }
         _ => todo!("{:?}", left)
     }
 }
 
 pub fn compile_expression(expression: &Expr, expected_type: Expected, state: &mut CompilerState) -> Result<CompiledResult, String> {
     match expression {
-        Expr::Assign(left, right) => {
-            let l = compile_lvalue(&left, true, true, state)?;
-            let mut r = compile_rvalue(&right, Expected::Type(l.get_type()), state)?;
-            if !l.equal_types(&r) {
-                r = implicit_cast(&r, &l.get_type(), state).map_err(|x| format!("while assigning !{:?}! !EQUAL! !{:?}\n{}", left, right, x))?;
-            }
-            let l_ut = state.get_llvm_representation_from_parser_type(&l.get_type())?;
-
-            state.output.push_str(&format!("    store {}, {}* {}\n", r.to_repr_with_type(state)?, l_ut, l.to_repr()));
-            
-            return Ok(CompiledResult::NoReturn);
-        }
         _ =>{
             return compile_rvalue(&expression, expected_type, state);
         }
