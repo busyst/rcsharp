@@ -92,7 +92,7 @@ fn recursive_pre_compile(x: &[Stmt], current_path: &str, state: &mut CompilerSta
                 } else {
                     format!("{}.{}", current_path, n)
                 };
-                let entries = entries.iter().map(|x| {let e = constant_integer_expression_compiler(&x.1); if e.is_ok() {return Some((x.0.clone(), e.unwrap()));} else {return None;}}).collect::<Option<Vec<_>>>()
+                let entries = entries.iter().map(|x| {let e = constant_integer_expression_compiler(&x.1, state); if e.is_ok() {return Some((x.0.clone(), e.unwrap()));} else {return None;}}).collect::<Option<Vec<_>>>()
                 .ok_or(format!("Enum {} has invalid value", full_name))?;
                 let base_type = enum_base_type.as_ref().unwrap_or(&ParserType::Named(format!("i64"))).clone();
                 if !base_type.is_integer() {

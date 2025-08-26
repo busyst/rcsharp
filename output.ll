@@ -11,6 +11,7 @@ declare dllimport i32 @GetModuleFileNameA(i8*,i8*,i32)
 declare dllimport i32* @GetProcessHeap()
 declare dllimport i8* @HeapAlloc(i32*,i32,i64)
 declare dllimport i32 @HeapFree(i32*,i32,i8*)
+declare dllimport i64 @HeapSize(i32*,i32,i8*)
 declare dllimport i32 @AllocConsole()
 declare dllimport i8* @GetStdHandle(i32)
 declare dllimport i32 @FreeConsole()
@@ -35,13 +36,14 @@ declare dllimport i8* @GetModuleHandleA(i8*)
 @.str1 = internal constant [2 x i8] c"-\00"
 @.str2 = internal constant [20 x i8] c"File  was not found\00"
 @.str3 = internal constant [17 x i8] c"File read failed\00"
-@.str4 = internal constant [10 x i8] c"fs_test: \00"
-@.str5 = internal constant [47 x i8] c"The quick brown fox jumps over crazy lost dog.\00"
-@.str6 = internal constant [9 x i8] c"test.txt\00"
-@.str7 = internal constant [38 x i8] c"Filesystem test failed, data mismatch\00"
-@.str8 = internal constant [3 x i8] c"OK\00"
-@.str9 = internal constant [14 x i8] c"MyWindowClass\00"
-@.str10 = internal constant [14 x i8] c"Hello, World!\00"
+@.str4 = internal constant [47 x i8] c"The quick brown fox jumps over crazy lost dog.\00"
+@.str5 = internal constant [10 x i8] c"fs_test: \00"
+@.str6 = internal constant [47 x i8] c"The quick brown fox jumps over crazy lost dog.\00"
+@.str7 = internal constant [9 x i8] c"test.txt\00"
+@.str8 = internal constant [38 x i8] c"Filesystem test failed, data mismatch\00"
+@.str9 = internal constant [3 x i8] c"OK\00"
+@.str10 = internal constant [14 x i8] c"MyWindowClass\00"
+@.str11 = internal constant [14 x i8] c"Hello, World!\00"
 
 
 define void @__chkstk(){
@@ -93,7 +95,8 @@ loop_body0:
     %tmp8 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp7, i32 0, i32 0
     %tmp9 = load i8*, i8** %tmp8
     %tmp10 = load i32, i32* %index
-    %tmp11 = zext i32 %tmp10 to i64    %tmp12 = getelementptr i8, i8* %tmp9, i64 %tmp11
+    %tmp11 = zext i32 %tmp10 to i64
+    %tmp12 = getelementptr i8, i8* %tmp9, i64 %tmp11
     %tmp13 = load i8, i8* %tmp12
     %tmp14 = icmp eq i8 %tmp13, 92
     %tmp15 = load i32, i32* %index
@@ -418,7 +421,8 @@ end_if12:
     %new_array = alloca i8*
     %tmp13 = getelementptr inbounds i8*, i8** %new_array, i32 0
     %tmp14 = load i32, i32* %new_capacity
-    %tmp15 = zext i32 %tmp14 to i64    %tmp16 = mul i64 1, %tmp15
+    %tmp15 = zext i32 %tmp14 to i64
+    %tmp16 = mul i64 %tmp15, 1
     %tmp17 = call i8* @mem.malloc(i64 %tmp16)
     store i8* %tmp17, i8** %tmp13
     %tmp18 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 0
@@ -442,11 +446,13 @@ then15:
 end_if15:
     %tmp26 = load i8*, i8** %new_array
     %tmp27 = load i32, i32* %i
-    %tmp28 = zext i32 %tmp27 to i64    %tmp29 = getelementptr i8, i8* %tmp26, i64 %tmp28
+    %tmp28 = zext i32 %tmp27 to i64
+    %tmp29 = getelementptr i8, i8* %tmp26, i64 %tmp28
     %tmp30 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 0
     %tmp31 = load i8*, i8** %tmp30
     %tmp32 = load i32, i32* %i
-    %tmp33 = zext i32 %tmp32 to i64    %tmp34 = getelementptr i8, i8* %tmp31, i64 %tmp33
+    %tmp33 = zext i32 %tmp32 to i64
+    %tmp34 = getelementptr i8, i8* %tmp31, i64 %tmp33
     %tmp35 = load i8, i8* %tmp34
     store i8 %tmp35, i8* %tmp29
     %tmp36 = getelementptr inbounds i32, i32* %i, i32 0
@@ -472,7 +478,8 @@ end_if11:
     %tmp46 = load i8*, i8** %tmp45
     %tmp47 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 1
     %tmp48 = load i32, i32* %tmp47
-    %tmp49 = zext i32 %tmp48 to i64    %tmp50 = getelementptr i8, i8* %tmp46, i64 %tmp49
+    %tmp49 = zext i32 %tmp48 to i64
+    %tmp50 = getelementptr i8, i8* %tmp46, i64 %tmp49
     store i8 %data, i8* %tmp50
     %tmp51 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 1
     %tmp52 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 1
@@ -498,7 +505,8 @@ then17:
     br label %end_if17
 end_if17:
     %tmp3 = load i32, i32* %index
-    %tmp4 = sext i32 %tmp3 to i64    %tmp5 = getelementptr i8, i8* %data, i64 %tmp4
+    %tmp4 = sext i32 %tmp3 to i64
+    %tmp5 = getelementptr i8, i8* %data, i64 %tmp4
     %tmp6 = load i8, i8* %tmp5
     call void @vector.push(%struct.vector.Vec* %vec,i8 %tmp6)
     %tmp7 = getelementptr inbounds i32, i32* %index, i32 0
@@ -691,7 +699,8 @@ end_if27:
     %tmp14 = getelementptr inbounds i8, i8* %digit_char, i32 0
     %tmp15 = load i64, i64* %mut_n
     %tmp16 = urem i64 %tmp15, 10
-    %tmp17 = trunc i64 %tmp16 to i8    %tmp18 = add i8 %tmp17, 48
+    %tmp17 = trunc i64 %tmp16 to i8
+    %tmp18 = add i8 %tmp17, 48
     store i8 %tmp18, i8* %tmp14
     %tmp19 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %buffer, i32 0
     %tmp20 = load i8, i8* %digit_char
@@ -728,26 +737,30 @@ end_if29:
     %tmp35 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %tmp34, i32 0, i32 0
     %tmp36 = load i8*, i8** %tmp35
     %tmp37 = load i32, i32* %i
-    %tmp38 = zext i32 %tmp37 to i64    %tmp39 = getelementptr i8, i8* %tmp36, i64 %tmp38
+    %tmp38 = zext i32 %tmp37 to i64
+    %tmp39 = getelementptr i8, i8* %tmp36, i64 %tmp38
     %tmp40 = load i8, i8* %tmp39
     store i8 %tmp40, i8* %tmp33
     %tmp41 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %buffer, i32 0
     %tmp42 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %tmp41, i32 0, i32 0
     %tmp43 = load i8*, i8** %tmp42
     %tmp44 = load i32, i32* %i
-    %tmp45 = zext i32 %tmp44 to i64    %tmp46 = getelementptr i8, i8* %tmp43, i64 %tmp45
+    %tmp45 = zext i32 %tmp44 to i64
+    %tmp46 = getelementptr i8, i8* %tmp43, i64 %tmp45
     %tmp47 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %buffer, i32 0
     %tmp48 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %tmp47, i32 0, i32 0
     %tmp49 = load i8*, i8** %tmp48
     %tmp50 = load i32, i32* %j
-    %tmp51 = zext i32 %tmp50 to i64    %tmp52 = getelementptr i8, i8* %tmp49, i64 %tmp51
+    %tmp51 = zext i32 %tmp50 to i64
+    %tmp52 = getelementptr i8, i8* %tmp49, i64 %tmp51
     %tmp53 = load i8, i8* %tmp52
     store i8 %tmp53, i8* %tmp46
     %tmp54 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %buffer, i32 0
     %tmp55 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %tmp54, i32 0, i32 0
     %tmp56 = load i8*, i8** %tmp55
     %tmp57 = load i32, i32* %j
-    %tmp58 = zext i32 %tmp57 to i64    %tmp59 = getelementptr i8, i8* %tmp56, i64 %tmp58
+    %tmp58 = zext i32 %tmp57 to i64
+    %tmp59 = getelementptr i8, i8* %tmp56, i64 %tmp58
     %tmp60 = load i8, i8* %temp
     store i8 %tmp60, i8* %tmp59
     %tmp61 = getelementptr inbounds i32, i32* %i, i32 0
@@ -787,7 +800,8 @@ define %struct.string.String @string.from_c_string(i8* %c_string){
     %tmp5 = getelementptr inbounds %struct.string.String, %struct.string.String* %x, i32 0
     %tmp6 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp5, i32 0, i32 1
     %tmp7 = load i32, i32* %tmp6
-    %tmp8 = sext i32 %tmp7 to i64    %tmp9 = mul i64 1, %tmp8
+    %tmp8 = sext i32 %tmp7 to i64
+    %tmp9 = mul i64 %tmp8, 1
     %tmp10 = call i8* @mem.malloc(i64 %tmp9)
     store i8* %tmp10, i8** %tmp4
     %tmp11 = getelementptr inbounds %struct.string.String, %struct.string.String* %x, i32 0
@@ -796,7 +810,8 @@ define %struct.string.String @string.from_c_string(i8* %c_string){
     %tmp14 = getelementptr inbounds %struct.string.String, %struct.string.String* %x, i32 0
     %tmp15 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp14, i32 0, i32 1
     %tmp16 = load i32, i32* %tmp15
-    %tmp17 = sext i32 %tmp16 to i64    call void @mem.copy(i8* %c_string,i8* %tmp13,i64 %tmp17)
+    %tmp17 = sext i32 %tmp16 to i64
+    call void @mem.copy(i8* %c_string,i8* %tmp13,i64 %tmp17)
     %tmp18 = load %struct.string.String, %struct.string.String* %x
     ret %struct.string.String %tmp18
 
@@ -824,7 +839,8 @@ define %struct.string.String @string.with_size(i32 %size){
     store i32 %size, i32* %tmp1
     %tmp2 = getelementptr inbounds %struct.string.String, %struct.string.String* %x, i32 0
     %tmp3 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp2, i32 0, i32 0
-    %tmp4 = sext i32 %size to i64    %tmp5 = mul i64 1, %tmp4
+    %tmp4 = sext i32 %size to i64
+    %tmp5 = mul i64 %tmp4, 1
     %tmp6 = call i8* @mem.malloc(i64 %tmp5)
     store i8* %tmp6, i8** %tmp3
     %tmp7 = load %struct.string.String, %struct.string.String* %x
@@ -844,7 +860,8 @@ define %struct.string.String @string.concat_with_c_string(%struct.string.String*
     %tmp4 = getelementptr inbounds %struct.string.String, %struct.string.String* %src_string, i32 0, i32 1
     %tmp5 = load i32, i32* %tmp4
     %tmp6 = add i32 %tmp3, %tmp5
-    %tmp7 = sext i32 %tmp6 to i64    %tmp8 = mul i64 1, %tmp7
+    %tmp7 = sext i32 %tmp6 to i64
+    %tmp8 = mul i64 %tmp7, 1
     %tmp9 = call i8* @mem.malloc(i64 %tmp8)
     store i8* %tmp9, i8** %tmp2
     %tmp10 = getelementptr inbounds %struct.string.String, %struct.string.String* %src_string, i32 0, i32 0
@@ -852,13 +869,16 @@ define %struct.string.String @string.concat_with_c_string(%struct.string.String*
     %tmp12 = load i8*, i8** %combined
     %tmp13 = getelementptr inbounds %struct.string.String, %struct.string.String* %src_string, i32 0, i32 1
     %tmp14 = load i32, i32* %tmp13
-    %tmp15 = sext i32 %tmp14 to i64    call void @mem.copy(i8* %tmp11,i8* %tmp12,i64 %tmp15)
+    %tmp15 = sext i32 %tmp14 to i64
+    call void @mem.copy(i8* %tmp11,i8* %tmp12,i64 %tmp15)
     %tmp16 = load i8*, i8** %combined
     %tmp17 = getelementptr inbounds %struct.string.String, %struct.string.String* %src_string, i32 0, i32 1
     %tmp18 = load i32, i32* %tmp17
-    %tmp19 = sext i32 %tmp18 to i64    %tmp20 = getelementptr i8, i8* %tmp16, i64 %tmp19
+    %tmp19 = sext i32 %tmp18 to i64
+    %tmp20 = getelementptr i8, i8* %tmp16, i64 %tmp19
     %tmp21 = load i32, i32* %c_string_len
-    %tmp22 = sext i32 %tmp21 to i64    call void @mem.copy(i8* %c_string,i8* %tmp20,i64 %tmp22)
+    %tmp22 = sext i32 %tmp21 to i64
+    call void @mem.copy(i8* %c_string,i8* %tmp20,i64 %tmp22)
     %str = alloca %struct.string.String
     %tmp23 = getelementptr inbounds %struct.string.String, %struct.string.String* %str, i32 0
     %tmp24 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp23, i32 0, i32 0
@@ -906,12 +926,14 @@ end_if32:
     %tmp11 = getelementptr inbounds %struct.string.String, %struct.string.String* %first, i32 0, i32 0
     %tmp12 = load i8*, i8** %tmp11
     %tmp13 = load i32, i32* %iter
-    %tmp14 = sext i32 %tmp13 to i64    %tmp15 = getelementptr i8, i8* %tmp12, i64 %tmp14
+    %tmp14 = sext i32 %tmp13 to i64
+    %tmp15 = getelementptr i8, i8* %tmp12, i64 %tmp14
     %tmp16 = load i8, i8* %tmp15
     %tmp17 = getelementptr inbounds %struct.string.String, %struct.string.String* %second, i32 0, i32 0
     %tmp18 = load i8*, i8** %tmp17
     %tmp19 = load i32, i32* %iter
-    %tmp20 = sext i32 %tmp19 to i64    %tmp21 = getelementptr i8, i8* %tmp18, i64 %tmp20
+    %tmp20 = sext i32 %tmp19 to i64
+    %tmp21 = getelementptr i8, i8* %tmp18, i64 %tmp20
     %tmp22 = load i8, i8* %tmp21
     %tmp23 = icmp ne i8 %tmp16, %tmp22
     br i1 %tmp23, label %then33, label %end_if33
@@ -956,30 +978,34 @@ define i8* @string_utils.insert(i8* %src1, i8* %src2, i32 %index){
     %tmp6 = load i32, i32* %len2
     %tmp7 = add i32 %tmp5, %tmp6
     %tmp8 = add i32 %tmp7, 1
-    %tmp9 = sext i32 %tmp8 to i64    %tmp10 = call i8* @mem.malloc(i64 %tmp9)
+    %tmp9 = sext i32 %tmp8 to i64
+    %tmp10 = call i8* @mem.malloc(i64 %tmp9)
     store i8* %tmp10, i8** %tmp4
     %tmp11 = load i8*, i8** %output
-    %tmp12 = sext i32 %index to i64    call void @mem.copy(i8* %src1,i8* %tmp11,i64 %tmp12)
+    %tmp12 = sext i32 %index to i64
+    call void @mem.copy(i8* %src1,i8* %tmp11,i64 %tmp12)
     %tmp13 = load i8*, i8** %output
-    %tmp14 = sext i32 %index to i64    %tmp15 = getelementptr i8, i8* %tmp13, i64 %tmp14
-    %tmp16 = load i32, i32* %len2
-    %tmp17 = sext i32 %tmp16 to i64    call void @mem.copy(i8* %src2,i8* %tmp15,i64 %tmp17)
-    %tmp18 = sext i32 %index to i64    %tmp19 = getelementptr i8, i8* %src1, i64 %tmp18
-    %tmp20 = load i8*, i8** %output
-    %tmp21 = load i32, i32* %len2
-    %tmp22 = add i32 %index, %tmp21
-    %tmp23 = sext i32 %tmp22 to i64    %tmp24 = getelementptr i8, i8* %tmp20, i64 %tmp23
-    %tmp25 = load i32, i32* %len1
-    %tmp26 = sub i32 %tmp25, %index
-    %tmp27 = sext i32 %tmp26 to i64    call void @mem.copy(i8* %tmp19,i8* %tmp24,i64 %tmp27)
-    %tmp28 = load i8*, i8** %output
-    %tmp29 = load i32, i32* %len1
-    %tmp30 = load i32, i32* %len2
-    %tmp31 = add i32 %tmp29, %tmp30
-    %tmp32 = sext i32 %tmp31 to i64    %tmp33 = getelementptr i8, i8* %tmp28, i64 %tmp32
-    store i8 0, i8* %tmp33
-    %tmp34 = load i8*, i8** %output
-    ret i8* %tmp34
+    %tmp14 = getelementptr i8, i8* %tmp13, i32 %index
+    %tmp15 = load i32, i32* %len2
+    %tmp16 = sext i32 %tmp15 to i64
+    call void @mem.copy(i8* %src2,i8* %tmp14,i64 %tmp16)
+    %tmp17 = getelementptr i8, i8* %src1, i32 %index
+    %tmp18 = load i8*, i8** %output
+    %tmp19 = getelementptr i8, i8* %tmp18, i32 %index
+    %tmp20 = load i32, i32* %len2
+    %tmp21 = getelementptr i8, i8* %tmp19, i32 %tmp20
+    %tmp22 = load i32, i32* %len1
+    %tmp23 = sub i32 %tmp22, %index
+    %tmp24 = sext i32 %tmp23 to i64
+    call void @mem.copy(i8* %tmp17,i8* %tmp21,i64 %tmp24)
+    %tmp25 = load i8*, i8** %output
+    %tmp26 = load i32, i32* %len1
+    %tmp27 = getelementptr i8, i8* %tmp25, i32 %tmp26
+    %tmp28 = load i32, i32* %len2
+    %tmp29 = getelementptr i8, i8* %tmp27, i32 %tmp28
+    store i8 0, i8* %tmp29
+    %tmp30 = load i8*, i8** %output
+    ret i8* %tmp30
 
     unreachable
 }
@@ -991,22 +1017,22 @@ define i32 @string_utils.c_str_len(i8* %str){
     br label %loop_body34
 loop_body34:
     %tmp1 = load i32, i32* %len
-    %tmp2 = sext i32 %tmp1 to i64    %tmp3 = getelementptr i8, i8* %str, i64 %tmp2
-    %tmp4 = load i8, i8* %tmp3
-    %tmp5 = icmp eq i8 %tmp4, 0
-    br i1 %tmp5, label %then35, label %end_if35
+    %tmp2 = getelementptr i8, i8* %str, i32 %tmp1
+    %tmp3 = load i8, i8* %tmp2
+    %tmp4 = icmp eq i8 %tmp3, 0
+    br i1 %tmp4, label %then35, label %end_if35
 then35:
     br label %loop_body34_exit
     br label %end_if35
 end_if35:
-    %tmp6 = getelementptr inbounds i32, i32* %len, i32 0
-    %tmp7 = load i32, i32* %len
-    %tmp8 = add i32 %tmp7, 1
-    store i32 %tmp8, i32* %tmp6
+    %tmp5 = getelementptr inbounds i32, i32* %len, i32 0
+    %tmp6 = load i32, i32* %len
+    %tmp7 = add i32 %tmp6, 1
+    store i32 %tmp7, i32* %tmp5
     br label %loop_body34
 loop_body34_exit:
-    %tmp9 = load i32, i32* %len
-    ret i32 %tmp9
+    %tmp8 = load i32, i32* %len
+    ret i32 %tmp8
 
     unreachable
 }
@@ -1119,7 +1145,8 @@ end_if40:
     %buffer = alloca %struct.string.String
     %tmp22 = getelementptr inbounds %struct.string.String, %struct.string.String* %buffer, i32 0
     %tmp23 = load i64, i64* %file_size
-    %tmp24 = trunc i64 %tmp23 to i32    %tmp25 = add i32 %tmp24, 1
+    %tmp24 = trunc i64 %tmp23 to i32
+    %tmp25 = add i32 %tmp24, 1
     %tmp26 = call %struct.string.String @string.with_size(i32 %tmp25)
     store %struct.string.String %tmp26, %struct.string.String* %tmp22
     %bytes_read = alloca i32
@@ -1132,7 +1159,8 @@ end_if40:
     %tmp31 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp30, i32 0, i32 0
     %tmp32 = load i8*, i8** %tmp31
     %tmp33 = load i64, i64* %file_size
-    %tmp34 = trunc i64 %tmp33 to i32    %tmp35 = getelementptr inbounds i32, i32* %bytes_read, i32 0
+    %tmp34 = trunc i64 %tmp33 to i32
+    %tmp35 = getelementptr inbounds i32, i32* %bytes_read, i32 0
     %tmp36 = call i32 @ReadFile(i8* %tmp29,i8* %tmp32,i32 %tmp34,i32* %tmp35,i8* null)
     store i32 %tmp36, i32* %tmp28
     %tmp37 = load i8*, i8** %hFile
@@ -1140,7 +1168,8 @@ end_if40:
     %tmp38 = load i32, i32* %success
     %tmp39 = icmp eq i32 %tmp38, 0
     %tmp40 = load i32, i32* %bytes_read
-    %tmp41 = zext i32 %tmp40 to i64    %tmp42 = load i64, i64* %file_size
+    %tmp41 = zext i32 %tmp40 to i64
+    %tmp42 = load i64, i64* %file_size
     %tmp43 = icmp ne i64 %tmp41, %tmp42
     %tmp44 = or i1 %tmp39, %tmp43
     br i1 %tmp44, label %then41, label %end_if41
@@ -1154,7 +1183,8 @@ end_if41:
     %tmp47 = getelementptr inbounds %struct.string.String, %struct.string.String* %buffer, i32 0
     %tmp48 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp47, i32 0, i32 1
     %tmp49 = load i64, i64* %file_size
-    %tmp50 = trunc i64 %tmp49 to i32    store i32 %tmp50, i32* %tmp48
+    %tmp50 = trunc i64 %tmp49 to i32
+    store i32 %tmp50, i32* %tmp48
     %tmp51 = load %struct.string.String, %struct.string.String* %buffer
     ret %struct.string.String %tmp51
 
@@ -1206,17 +1236,24 @@ define i32 @fs.delete_file(i8* %path){
 
 define void @tests.run(){
     call void @tests.fs_test()
+    %data = alloca %struct.string.String
+    %tmp0 = getelementptr inbounds %struct.string.String, %struct.string.String* %data, i32 0
+    %tmp1 = getelementptr inbounds [47 x i8], ptr @.str4, i64 0, i64 0
+    %tmp2 = call %struct.string.String @string.from_c_string(i8* %tmp1)
+    store %struct.string.String %tmp2, %struct.string.String* %tmp0
+    %tmp3 = getelementptr inbounds %struct.string.String, %struct.string.String* %data, i32 0
+    call void @string.free(%struct.string.String* %tmp3)
     ret void
 
     unreachable
 }
 
 define void @tests.fs_test(){
-    %tmp0 = getelementptr inbounds [10 x i8], ptr @.str4, i64 0, i64 0
+    %tmp0 = getelementptr inbounds [10 x i8], ptr @.str5, i64 0, i64 0
     call void @console.write(i8* %tmp0,i32 9)
     %data = alloca %struct.string.String
     %tmp1 = getelementptr inbounds %struct.string.String, %struct.string.String* %data, i32 0
-    %tmp2 = getelementptr inbounds [47 x i8], ptr @.str5, i64 0, i64 0
+    %tmp2 = getelementptr inbounds [47 x i8], ptr @.str6, i64 0, i64 0
     %tmp3 = call %struct.string.String @string.from_c_string(i8* %tmp2)
     store %struct.string.String %tmp3, %struct.string.String* %tmp1
     %env_path = alloca %struct.string.String
@@ -1226,7 +1263,7 @@ define void @tests.fs_test(){
     %new_file_path = alloca %struct.string.String
     %tmp6 = getelementptr inbounds %struct.string.String, %struct.string.String* %new_file_path, i32 0
     %tmp7 = getelementptr inbounds %struct.string.String, %struct.string.String* %env_path, i32 0
-    %tmp8 = getelementptr inbounds [9 x i8], ptr @.str6, i64 0, i64 0
+    %tmp8 = getelementptr inbounds [9 x i8], ptr @.str7, i64 0, i64 0
     %tmp9 = call %struct.string.String @string.concat_with_c_string(%struct.string.String* %tmp7,i8* %tmp8)
     store %struct.string.String %tmp9, %struct.string.String* %tmp6
     %c_string = alloca i8*
@@ -1235,7 +1272,8 @@ define void @tests.fs_test(){
     %tmp12 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp11, i32 0, i32 1
     %tmp13 = load i32, i32* %tmp12
     %tmp14 = add i32 %tmp13, 1
-    %tmp15 = sext i32 %tmp14 to i64    %tmp16 = mul i64 1, %tmp15
+    %tmp15 = sext i32 %tmp14 to i64
+    %tmp16 = mul i64 %tmp15, 1
     %tmp17 = alloca i8, i64 %tmp16
     store i8* %tmp17, i8** %tmp10
     %tmp18 = getelementptr inbounds %struct.string.String, %struct.string.String* %new_file_path, i32 0
@@ -1245,12 +1283,14 @@ define void @tests.fs_test(){
     %tmp22 = getelementptr inbounds %struct.string.String, %struct.string.String* %new_file_path, i32 0
     %tmp23 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp22, i32 0, i32 1
     %tmp24 = load i32, i32* %tmp23
-    %tmp25 = sext i32 %tmp24 to i64    call void @mem.copy(i8* %tmp20,i8* %tmp21,i64 %tmp25)
+    %tmp25 = sext i32 %tmp24 to i64
+    call void @mem.copy(i8* %tmp20,i8* %tmp21,i64 %tmp25)
     %tmp26 = load i8*, i8** %c_string
     %tmp27 = getelementptr inbounds %struct.string.String, %struct.string.String* %new_file_path, i32 0
     %tmp28 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp27, i32 0, i32 1
     %tmp29 = load i32, i32* %tmp28
-    %tmp30 = sext i32 %tmp29 to i64    %tmp31 = getelementptr i8, i8* %tmp26, i64 %tmp30
+    %tmp30 = sext i32 %tmp29 to i64
+    %tmp31 = getelementptr i8, i8* %tmp26, i64 %tmp30
     store i8 0, i8* %tmp31
     %tmp32 = load i8*, i8** %c_string
     call i32 @fs.create_file(i8* %tmp32)
@@ -1277,7 +1317,7 @@ define void @tests.fs_test(){
     %tmp48 = xor i1 %tmp47, 1
     br i1 %tmp48, label %then43, label %end_if43
 then43:
-    %tmp49 = getelementptr inbounds [38 x i8], ptr @.str7, i64 0, i64 0
+    %tmp49 = getelementptr inbounds [38 x i8], ptr @.str8, i64 0, i64 0
     call void @process.throw(i8* %tmp49)
     br label %end_if43
 end_if43:
@@ -1291,7 +1331,7 @@ end_if43:
     call void @string.free(%struct.string.String* %tmp53)
     %tmp54 = getelementptr inbounds %struct.string.String, %struct.string.String* %data, i32 0
     call void @string.free(%struct.string.String* %tmp54)
-    %tmp55 = getelementptr inbounds [3 x i8], ptr @.str8, i64 0, i64 0
+    %tmp55 = getelementptr inbounds [3 x i8], ptr @.str9, i64 0, i64 0
     call void @console.writeln(i8* %tmp55,i32 2)
     ret void
 
@@ -1333,7 +1373,8 @@ then47:
     ret i64 0
     br label %end_if47
 end_if47:
-    %tmp4 = trunc i64 %wParam to i8    call void @console.print_char(i8 %tmp4)
+    %tmp4 = trunc i64 %wParam to i8
+    call void @console.print_char(i8 %tmp4)
     br label %end_if46
 end_if46:
     %tmp5 = call i64 @DefWindowProcA(i8* %hWnd,i32 %uMsg,i64 %wParam,i64 %lParam)
@@ -1367,7 +1408,7 @@ then48:
 end_if48:
     %className = alloca i8*
     %tmp6 = getelementptr inbounds i8*, i8** %className, i32 0
-    %tmp7 = getelementptr inbounds [14 x i8], ptr @.str9, i64 0, i64 0
+    %tmp7 = getelementptr inbounds [14 x i8], ptr @.str10, i64 0, i64 0
     store i8* %tmp7, i8** %tmp6
     %wc = alloca %struct.window.WNDCLASSEXA
     %tmp8 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %wc, i32 0
@@ -1375,90 +1416,88 @@ end_if48:
     store i32 80, i32* %tmp9
     %tmp10 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %wc, i32 0
     %tmp11 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %tmp10, i32 0, i32 1
-    %tmp12 = or i32 2, 1
-    store i32 %tmp12, i32* %tmp11
-    %tmp13 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %wc, i32 0
-    %tmp14 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %tmp13, i32 0, i32 2
-    store i64 (i8*, i32, i64, i64)* @window.WindowProc, i64 (i8*, i32, i64, i64)** %tmp14
-    %tmp15 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %wc, i32 0
-    %tmp16 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %tmp15, i32 0, i32 3
-    store i32 0, i32* %tmp16
-    %tmp17 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %wc, i32 0
-    %tmp18 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %tmp17, i32 0, i32 4
-    store i32 0, i32* %tmp18
-    %tmp19 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %wc, i32 0
-    %tmp20 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %tmp19, i32 0, i32 5
-    %tmp21 = load i8*, i8** %hInstance
-    store i8* %tmp21, i8** %tmp20
-    %tmp22 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %wc, i32 0
-    %tmp23 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %tmp22, i32 0, i32 6
-    store i8* null, i8** %tmp23
-    %tmp24 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %wc, i32 0
-    %tmp25 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %tmp24, i32 0, i32 7
-    store i8* null, i8** %tmp25
-    %tmp26 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %wc, i32 0
-    %tmp27 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %tmp26, i32 0, i32 8
-    %tmp28 = add i32 5, 1
-    %tmp29 = inttoptr i32 %tmp28 to i8*
-    store i8* %tmp29, i8** %tmp27
+    store i32 1, i32* %tmp11
+    %tmp12 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %wc, i32 0
+    %tmp13 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %tmp12, i32 0, i32 2
+    store i64 (i8*, i32, i64, i64)* @window.WindowProc, i64 (i8*, i32, i64, i64)** %tmp13
+    %tmp14 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %wc, i32 0
+    %tmp15 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %tmp14, i32 0, i32 3
+    store i32 0, i32* %tmp15
+    %tmp16 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %wc, i32 0
+    %tmp17 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %tmp16, i32 0, i32 4
+    store i32 0, i32* %tmp17
+    %tmp18 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %wc, i32 0
+    %tmp19 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %tmp18, i32 0, i32 5
+    %tmp20 = load i8*, i8** %hInstance
+    store i8* %tmp20, i8** %tmp19
+    %tmp21 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %wc, i32 0
+    %tmp22 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %tmp21, i32 0, i32 6
+    store i8* null, i8** %tmp22
+    %tmp23 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %wc, i32 0
+    %tmp24 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %tmp23, i32 0, i32 7
+    store i8* null, i8** %tmp24
+    %tmp25 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %wc, i32 0
+    %tmp26 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %tmp25, i32 0, i32 8
+    %tmp27 = inttoptr i32 1 to i8*
+    store i8* %tmp27, i8** %tmp26
+    %tmp28 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %wc, i32 0
+    %tmp29 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %tmp28, i32 0, i32 9
+    store i8* null, i8** %tmp29
     %tmp30 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %wc, i32 0
-    %tmp31 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %tmp30, i32 0, i32 9
-    store i8* null, i8** %tmp31
-    %tmp32 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %wc, i32 0
-    %tmp33 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %tmp32, i32 0, i32 10
-    %tmp34 = load i8*, i8** %className
-    store i8* %tmp34, i8** %tmp33
+    %tmp31 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %tmp30, i32 0, i32 10
+    %tmp32 = load i8*, i8** %className
+    store i8* %tmp32, i8** %tmp31
+    %tmp33 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %wc, i32 0
+    %tmp34 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %tmp33, i32 0, i32 11
+    store i8* null, i8** %tmp34
     %tmp35 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %wc, i32 0
-    %tmp36 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %tmp35, i32 0, i32 11
-    store i8* null, i8** %tmp36
-    %tmp37 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %wc, i32 0
-    %tmp38 = call i16 @RegisterClassExA(%struct.window.WNDCLASSEXA* %tmp37)
-    %tmp39 = icmp eq i16 %tmp38, 0
-    br i1 %tmp39, label %then49, label %end_if49
+    %tmp36 = call i16 @RegisterClassExA(%struct.window.WNDCLASSEXA* %tmp35)
+    %tmp37 = icmp eq i16 %tmp36, 0
+    br i1 %tmp37, label %then49, label %end_if49
 then49:
     ret i32 2
     br label %end_if49
 end_if49:
     %windowTitle = alloca i8*
-    %tmp40 = getelementptr inbounds i8*, i8** %windowTitle, i32 0
-    %tmp41 = getelementptr inbounds [14 x i8], ptr @.str10, i64 0, i64 0
-    store i8* %tmp41, i8** %tmp40
+    %tmp38 = getelementptr inbounds i8*, i8** %windowTitle, i32 0
+    %tmp39 = getelementptr inbounds [14 x i8], ptr @.str11, i64 0, i64 0
+    store i8* %tmp39, i8** %tmp38
     %hWnd = alloca i8*
-    %tmp42 = getelementptr inbounds i8*, i8** %hWnd, i32 0
-    %tmp43 = load i8*, i8** %className
-    %tmp44 = load i8*, i8** %windowTitle
-    %tmp45 = load i32, i32* %CW_USEDEFAULT
-    %tmp46 = load i32, i32* %CW_USEDEFAULT
-    %tmp47 = load i8*, i8** %hInstance
-    %tmp48 = call i8* @CreateWindowExA(i32 0,i8* %tmp43,i8* %tmp44,i32 13565952,i32 %tmp45,i32 %tmp46,i32 800,i32 600,i8* null,i8* null,i8* %tmp47,i8* null)
-    store i8* %tmp48, i8** %tmp42
-    %tmp49 = load i8*, i8** %hWnd
-    %tmp50 = call i1 @window.is_null(i8* %tmp49)
-    br i1 %tmp50, label %then50, label %end_if50
+    %tmp40 = getelementptr inbounds i8*, i8** %hWnd, i32 0
+    %tmp41 = load i8*, i8** %className
+    %tmp42 = load i8*, i8** %windowTitle
+    %tmp43 = load i32, i32* %CW_USEDEFAULT
+    %tmp44 = load i32, i32* %CW_USEDEFAULT
+    %tmp45 = load i8*, i8** %hInstance
+    %tmp46 = call i8* @CreateWindowExA(i32 0,i8* %tmp41,i8* %tmp42,i32 13565952,i32 %tmp43,i32 %tmp44,i32 800,i32 600,i8* null,i8* null,i8* %tmp45,i8* null)
+    store i8* %tmp46, i8** %tmp40
+    %tmp47 = load i8*, i8** %hWnd
+    %tmp48 = call i1 @window.is_null(i8* %tmp47)
+    br i1 %tmp48, label %then50, label %end_if50
 then50:
     ret i32 3
     br label %end_if50
 end_if50:
-    %tmp51 = load i8*, i8** %hWnd
-    call i32 @ShowWindow(i8* %tmp51,i32 1)
-    %tmp52 = load i8*, i8** %hWnd
-    call i32 @UpdateWindow(i8* %tmp52)
+    %tmp49 = load i8*, i8** %hWnd
+    call i32 @ShowWindow(i8* %tmp49,i32 1)
+    %tmp50 = load i8*, i8** %hWnd
+    call i32 @UpdateWindow(i8* %tmp50)
     %msg = alloca %struct.window.MSG
     br label %loop_body51
 loop_body51:
     %result = alloca i32
-    %tmp53 = getelementptr inbounds i32, i32* %result, i32 0
-    %tmp54 = getelementptr inbounds %struct.window.MSG, %struct.window.MSG* %msg, i32 0
-    %tmp55 = call i32 @GetMessageA(%struct.window.MSG* %tmp54,i8* null,i32 0,i32 0)
-    store i32 %tmp55, i32* %tmp53
-    %tmp56 = load i32, i32* %result
-    %tmp57 = icmp sgt i32 %tmp56, 0
-    br i1 %tmp57, label %then52, label %else52
+    %tmp51 = getelementptr inbounds i32, i32* %result, i32 0
+    %tmp52 = getelementptr inbounds %struct.window.MSG, %struct.window.MSG* %msg, i32 0
+    %tmp53 = call i32 @GetMessageA(%struct.window.MSG* %tmp52,i8* null,i32 0,i32 0)
+    store i32 %tmp53, i32* %tmp51
+    %tmp54 = load i32, i32* %result
+    %tmp55 = icmp sgt i32 %tmp54, 0
+    br i1 %tmp55, label %then52, label %else52
 then52:
-    %tmp58 = getelementptr inbounds %struct.window.MSG, %struct.window.MSG* %msg, i32 0
-    call i32 @TranslateMessage(%struct.window.MSG* %tmp58)
-    %tmp59 = getelementptr inbounds %struct.window.MSG, %struct.window.MSG* %msg, i32 0
-    call i64 @DispatchMessageA(%struct.window.MSG* %tmp59)
+    %tmp56 = getelementptr inbounds %struct.window.MSG, %struct.window.MSG* %msg, i32 0
+    call i32 @TranslateMessage(%struct.window.MSG* %tmp56)
+    %tmp57 = getelementptr inbounds %struct.window.MSG, %struct.window.MSG* %msg, i32 0
+    call i64 @DispatchMessageA(%struct.window.MSG* %tmp57)
     br label %end_if52
 else52:
     br label %loop_body51_exit
@@ -1466,10 +1505,11 @@ else52:
 end_if52:
     br label %loop_body51
 loop_body51_exit:
-    %tmp60 = getelementptr inbounds %struct.window.MSG, %struct.window.MSG* %msg, i32 0
-    %tmp61 = getelementptr inbounds %struct.window.MSG, %struct.window.MSG* %tmp60, i32 0, i32 2
-    %tmp62 = load i64, i64* %tmp61
-    %tmp63 = trunc i64 %tmp62 to i32    ret i32 %tmp63
+    %tmp58 = getelementptr inbounds %struct.window.MSG, %struct.window.MSG* %msg, i32 0
+    %tmp59 = getelementptr inbounds %struct.window.MSG, %struct.window.MSG* %tmp58, i32 0, i32 2
+    %tmp60 = load i64, i64* %tmp59
+    %tmp61 = trunc i64 %tmp60 to i32
+    ret i32 %tmp61
 
     unreachable
 }

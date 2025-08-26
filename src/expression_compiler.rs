@@ -92,12 +92,12 @@ impl CompiledResult {
         }
     }
 }
-pub fn constant_integer_expression_compiler(expression: &Expr) -> Result<i128, String>{
+pub fn constant_integer_expression_compiler(expression: &Expr, state: &mut CompilerState) -> Result<i128, String>{
     match expression {
         Expr::Integer(x) => Ok(x.parse::<i128>().unwrap()),
         Expr::BinaryOp(l, op, r) =>{
-            let lv = constant_integer_expression_compiler(&l)?;
-            let rv = constant_integer_expression_compiler(&r)?;
+            let lv = constant_integer_expression_compiler(&l, state)?;
+            let rv = constant_integer_expression_compiler(&r, state)?;
             match op {
                 BinaryOp::BitOr => {
                     return Ok(lv | rv);
@@ -105,7 +105,15 @@ pub fn constant_integer_expression_compiler(expression: &Expr) -> Result<i128, S
                 _ => panic!("{:?}",op)
             }
         }
-        _ => Err(format!(""))
+        Expr::StaticAccess(_, _) =>{
+            let x = compile_rvalue(expression, Expected::Anything, state)?;
+            if let CompiledResult::Integer(x, _) = x {
+                return Ok(x.parse::<i128>().unwrap());
+            }
+            Err(format!(""))
+        }
+        
+        _ => Err(format!("\ndfghfghfgdhfd{:?}", expression))
     }
 }
 
@@ -132,15 +140,15 @@ pub fn explicit_cast(value: &CompiledResult, to: &ParserType, state: &mut Compil
                 let utvc = state.aquire_unique_temp_value_counter();
                 if ltype.is_unsigned_integer() {
                     if ln < rn {
-                        state.output.push_str(&format!("    %tmp{} = zext i{} {} to i{}", utvc, ln, value.to_repr(),  rn));
+                        state.output.push_str(&format!("    %tmp{} = zext i{} {} to i{}\n", utvc, ln, value.to_repr(),  rn));
                     }else {
-                        state.output.push_str(&format!("    %tmp{} = trunc i{} {} to i{}", utvc, ln, value.to_repr(),  rn));
+                        state.output.push_str(&format!("    %tmp{} = trunc i{} {} to i{}\n", utvc, ln, value.to_repr(),  rn));
                     }
                 }else {
                     if ln < rn {
-                        state.output.push_str(&format!("    %tmp{} = sext i{} {} to i{}", utvc, ln, value.to_repr(), rn));
+                        state.output.push_str(&format!("    %tmp{} = sext i{} {} to i{}\n", utvc, ln, value.to_repr(), rn));
                     }else {
-                        state.output.push_str(&format!("    %tmp{} = trunc i{} {} to i{}", utvc, ln, value.to_repr(), rn));
+                        state.output.push_str(&format!("    %tmp{} = trunc i{} {} to i{}\n", utvc, ln, value.to_repr(), rn));
                     }
                 }
                 return Ok(CompiledResult::TempValue(utvc, to.clone()));
@@ -175,7 +183,7 @@ pub fn explicit_cast(value: &CompiledResult, to: &ParserType, state: &mut Compil
 pub fn implicit_cast(value: &CompiledResult, to: &ParserType, _state: &mut CompilerState) -> Result<CompiledResult, String>{
     Err(format!("Unable to implisitly cast from \"{:?}\" to \"{:?}\"", &value, to))
 }
-
+// Always readonly
 fn compile_rvalue(right: &Expr, expected_type: Expected, state: &mut CompilerState) -> Result<CompiledResult, String>{
     match right {
         Expr::Integer(num) =>{
@@ -211,21 +219,30 @@ fn compile_rvalue(right: &Expr, expected_type: Expected, state: &mut CompilerSta
             return explicit_cast(&result, desired_type, state);
         }
         Expr::BinaryOp(left, op, right) => {
-            let l = compile_rvalue(&left, Expected::Anything, state)?;
-            let r = compile_rvalue(&right, Expected::Type(&l.get_type()), state)?;
+            let mut l = compile_rvalue(&left, Expected::Anything, state)?;
+            let mut r = compile_rvalue(&right, Expected::Type(&l.get_type()), state)?;
+            
+            if matches!(l, CompiledResult::Integer(_, _)) && matches!(r, CompiledResult::Integer(_, _)) {
+                return Ok(CompiledResult::Integer(constant_integer_expression_compiler(&right, state)?.to_string(), l.get_type().clone()));
+            }
+            if matches!(l, CompiledResult::Integer(_, _)) && !matches!(r, CompiledResult::Integer(_, _)) {
 
+                // If operation is insensitive to operands position
+                if matches!(op, BinaryOp::Add | BinaryOp::Multiply)  {
+                    (l, r) = (r, l);
+                }else {
+                    println!("{:?}", op);
+                }
+            }
             let ltype = l.get_type();
 
             if !l.equal_types(&r) {
                 if l.get_type().is_pointer() && r.get_type().is_integer() {
-                    if *r.get_type() != ParserType::Named(format!("i64")) {
-                        return Err(format!("Moving pointer is allowed only with 64 bit integer (i64)"));
-                    }
                     let utvc = state.aquire_unique_temp_value_counter();
                     let pointed_to_type = l.get_type().dereference_once();
                     let llvm_pointed_to_type = state.get_llvm_representation_from_parser_type(&pointed_to_type)?;
 
-                    state.output.push_str(&format!("    %tmp{} = getelementptr {}, {}* {}, i64 {}\n", utvc, llvm_pointed_to_type, llvm_pointed_to_type, l.to_repr(), r.to_repr()));
+                    state.output.push_str(&format!("    %tmp{} = getelementptr {}, {}* {}, {}\n", utvc, llvm_pointed_to_type, llvm_pointed_to_type, l.to_repr(), r.to_repr_with_type(state)?));
                     return Ok(CompiledResult::TempValue(utvc, l.get_type().clone()));
                 }
                 return Err(format!("Binary operator '{:?}' cannot be applied to mismatched types '{}' and '{}'",op,l.get_type().to_string(),r.get_type().to_string()));
@@ -234,8 +251,6 @@ fn compile_rvalue(right: &Expr, expected_type: Expected, state: &mut CompilerSta
             if l.equal_types(&r) {
                 if ltype.is_integer() || ltype.is_bool() {
 
-                    let utvc = state.aquire_unique_temp_value_counter();
-                    
                     let is_signed = ltype.is_signed_integer();
 
                     let llvm_op = match op {
@@ -263,6 +278,7 @@ fn compile_rvalue(right: &Expr, expected_type: Expected, state: &mut CompilerSta
                         BinaryOp::Or => "or",
                     };
 
+                    let utvc = state.aquire_unique_temp_value_counter();
                     let repr = state.get_llvm_representation_from_parser_type(ltype)?;
                     state.output.push_str(&format!("    %tmp{} = {} {} {}, {}\n",utvc, llvm_op, repr, l.to_repr(), r.to_repr()));
                     let result_type = if llvm_op.starts_with("icmp") {
@@ -503,7 +519,6 @@ fn compile_lvalue(left: &Expr, write_to_address: bool, modify_content: bool, sta
                     )
                 }else{
                     let fp = func.return_type.as_absolute_path_or(state.get_current_path());
-                    println!("{:?}", fp);
                     ParserType::Function(
                         Box::new(fp),
                         func.args.iter().map(|(_, t)| t.clone()).collect()
@@ -619,14 +634,13 @@ fn compile_lvalue(left: &Expr, write_to_address: bool, modify_content: bool, sta
             }
             return explicit_cast(&result, desired_type, state);
         }
+        Expr::Assign(_, _) => {
+            return Err(format!("You tried to do something like this `x = y = z` use this instead `x = (y = z)`"));
+        }
         _ => todo!("{:?}", left)
     }
 }
 
 pub fn compile_expression(expression: &Expr, expected_type: Expected, state: &mut CompilerState) -> Result<CompiledResult, String> {
-    match expression {
-        _ =>{
-            return compile_rvalue(&expression, expected_type, state);
-        }
-    }
+    return compile_rvalue(&expression, expected_type, state)
 }

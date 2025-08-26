@@ -45,6 +45,9 @@ namespace mem{
     fn HeapAlloc(hHeap: &i32, dwFlags: i32, dwBytes: i64): &i8;
     #[DllImport("kernel32.dll")]
     fn HeapFree(hHeap: &i32, dwFlags: i32, lpMem: &i8): i32;
+    #[DllImport("kernel32.dll")]
+    fn HeapSize(hHeap: &i32,dwFlags : i32,lpMem : &void) : i64;
+
     fn malloc(size:i64) : &i8{return HeapAlloc(GetProcessHeap(), 0 as i32, size);}
     fn free(ptr: &i8) : void {HeapFree(GetProcessHeap(), 0, ptr);}
     fn copy(src: &i8, dest:&i8, len: i64) {
@@ -367,15 +370,15 @@ namespace string_utils{
         let len2 : i32 = c_str_len(src2);
         let output : &i8 = mem::malloc((len1 + len2 + 1) as i64);
         mem::copy(src1, output, index as i64);
-        mem::copy(src2, (output + index as i64), len2 as i64);
-        mem::copy((src1 + index as i64), (output + (index + len2) as i64), (len1 - index) as i64);
-        *(output + (len1 + len2) as i64) = 0;
+        mem::copy(src2, (output + index), len2 as i64);
+        mem::copy((src1 + index), (output + index + len2), (len1 - index) as i64);
+        *(output + len1 + len2) = 0;
         return output;
     }
     fn c_str_len(str: &i8) : i32{
         let len : i32 = 0;
         loop{
-            if *(str + len as i64) == 0{
+            if *(str + len) == 0{
                 break;
             }
             len = len + 1;
@@ -513,7 +516,6 @@ namespace tests{
     fn run(){
         fs_test();
     }
-
     fn fs_test(){
         console::write("fs_test: ", 9);
         let data : string::String = string::from_c_string("The quick brown fox jumps over crazy lost dog.");
