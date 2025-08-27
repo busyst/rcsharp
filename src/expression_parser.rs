@@ -102,7 +102,7 @@ impl<'a> ExpressionParser<'a> {
         let token_data = self.advance();
         match &token_data.token {
             Token::Integer(val) => Ok(Expr::Integer(val.to_string())),
-            Token::Char(val) => {  Ok(Expr::Integer((val[1..2].parse::<char>().unwrap() as u64).to_string()))},
+            Token::Char(val) => {  Ok(Expr::Integer(({val.parse::<char>().unwrap() as u64}).to_string()))},
             Token::String(val) => Ok(Expr::StringConst(val.to_string())),
             Token::Name(name) => Ok(Expr::Name(name.to_string())),
 
@@ -241,9 +241,38 @@ impl<'a> ExpressionParser<'a> {
         else if self.peek().token == Token::Multiply && crate::USE_MULTIPLY_AS_POINTER_IN_TYPES {
             self.advance();
             Ok(ParserType::Pointer(Box::new(self.parse_type()?)))
+        } 
+        else if self.peek().token == Token::KeywordFunction {
+            self.advance();
+            self.consume(&Token::LParen)?;
+
+            let mut arguments = vec![];
+            let return_type;
+            
+            if self.peek().token != Token::RParen {
+                loop {
+                    arguments.push(self.parse_type()?);
+                    if self.peek().token == Token::RParen {
+                        break;
+                    }
+                    self.consume(&Token::Comma)?;
+                }
+            }
+            self.consume(&Token::RParen)?;
+            self.consume(&Token::Colon)?;
+            return_type = Box::new(self.parse_type()?);
+            Ok(ParserType::Function(return_type, arguments))
         }
         else {
-            Ok(ParserType::Named(self.advance().expect_name_token()?))
+            let link_or_name = self.advance().expect_name_token()?;
+            if self.peek().token == Token::DoubleColon {
+                self.advance();
+                return Ok(ParserType::NamespaceLink(link_or_name, Box::new(self.parse_type()?)))
+            }
+            else if self.peek().token == Token::LogicLess{
+                todo!("Generic structures / functions, not yet implemented")
+            }
+            Ok(ParserType::Named(link_or_name))
         }
     }
     pub fn position(&self) -> usize {

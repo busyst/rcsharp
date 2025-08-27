@@ -15,7 +15,7 @@ namespace process{
     }
     fn get_executable_env_path() : string::String {
         let string : string::String = get_executable_path();
-        let index : u32 = string.len as u32 - 1;
+        let index : i32 = string.len as i32 - 1;
         loop {
             if *(string.data + index as i64) == '\\' || index < 0 {
                 break;
@@ -385,6 +385,15 @@ namespace string_utils{
         }
         return len;
     }
+    fn is_ascii_num(char: i8) : bool{
+        return char >= '0' && char <= '9';
+    }
+    fn is_ascii_char(char: i8) : bool{
+        return (char >= 'A' && char <= 'Z') || (char >= 'a' && char <= 'z');
+    }
+    fn is_ascii_hex(char: i8) : bool{
+        return (char >= '0' && char <= '9') || (char >= 'A' && char <= 'F') || (char >= 'a' && char <= 'f');
+    }
 }
 
 namespace fs{
@@ -515,6 +524,7 @@ namespace fs{
 namespace tests{
     fn run(){
         fs_test();
+        funny();
     }
     fn fs_test(){
         console::write("fs_test: ", 9);
@@ -543,5 +553,226 @@ namespace tests{
         string::free(&env_path);
         string::free(&data);
         console::writeln("OK", 2);
+    }
+    fn consume_while(file: &string::String, iterator: &i32, condition: &fn(i8) : bool) {
+        loop {
+            if *iterator >= file.len {
+                break;
+            }
+            let char : i8 = *(file.data + *iterator);
+            if (*condition)(char) {
+                *iterator = *iterator + 1;
+            } else {
+                break;
+            }
+        }
+    }
+    fn not_new_line(c:i8) : bool { return c != '\n'; }
+    fn valid_name_token(c:i8) : bool { return string_utils::is_ascii_char(c) || string_utils::is_ascii_num(c) || c == '_'; }
+    fn is_valid_number_token(c:i8) : bool { return string_utils::is_ascii_num(c) || string_utils::is_ascii_hex(c) || c == '_'; }
+    // No.
+    fn funny(){
+        let path: &i8 = "D:\\Projects\\rcsharp\\src.rcsharp";
+        let file: string::String = fs::read_full_file_as_string(path);
+        // Need to implement generics for structs <T>;
+        let tokens: vector::Vec;
+        vector::new(&tokens); 
+        let iterator: i32 = 0;
+        // Need to automaticly solve problem with variables inside loop, causing stack overflow, beacause prealocating is insane.
+        let char: i8;
+        let next_char: i8;
+        let index: i32;
+        let temp_string: string::String;
+        // Loop situation is crazy, fix it with scope
+        loop{
+            if iterator >= file.len {
+                break;
+            }
+            char = *(file.data + iterator);
+            if (char == ' ' || char == '\t' || char == '\n' || char == '\r') && 1 as bool{
+                iterator = iterator + 1;
+                continue;
+            }
+
+            if (iterator + 1) < file.len{
+                next_char = *(file.data + (iterator + 1));
+            }else{
+                next_char = 0;
+            }
+            
+            if char == '/' && next_char == '/'{
+                index = iterator;
+                consume_while(&file, &iterator, &not_new_line);
+                continue;
+            }
+            if string_utils::is_ascii_num(char){
+                index = iterator;
+                if next_char == 'x' || next_char == 'b'{
+                    iterator = iterator + 2;
+                }
+                consume_while(&file, &iterator, &is_valid_number_token);
+                // Num string
+                temp_string = string::with_size(iterator - index);
+                mem::copy(file.data + index, temp_string.data, temp_string.len as i64);
+                //console::write_string(&temp_string);
+                //console::print_char('\n');
+                string::free(&temp_string);
+                continue;
+            }
+
+            if string_utils::is_ascii_char(char) || char == '_'{
+                index = iterator;
+                consume_while(&file, &iterator, &valid_name_token);
+                // name token string
+                temp_string = string::with_size(iterator - index);
+                mem::copy(file.data + index, temp_string.data, temp_string.len as i64);
+                //console::write_string(&temp_string);
+                //console::print_char('\n');
+                string::free(&temp_string);
+                continue;
+            }
+
+            if char == '"'{
+                index = iterator;
+                loop{
+                    iterator = iterator + 1;
+                    if iterator >= file.len {
+                        break;
+                    }
+                    char = *(file.data + iterator);
+                    if char != '"'{
+                        continue;
+                    }
+                    iterator = iterator + 1;
+                    break;
+                }
+                // string token
+                temp_string = string::with_size(iterator - index);
+                mem::copy(file.data + index, temp_string.data, temp_string.len as i64);
+                string::free(&temp_string);
+                continue;
+            }
+            if char == '('{
+                iterator = iterator + 1;
+                continue;
+            }
+            if char == ')'{
+                iterator = iterator + 1;
+                continue;
+            }
+            if char == '{'{
+                iterator = iterator + 1;
+                continue;
+            }
+            if char == '}'{
+                iterator = iterator + 1;
+                continue;
+            }
+            if char == '['{
+                iterator = iterator + 1;
+                continue;
+            }
+            if char == ']'{
+                iterator = iterator + 1;
+                continue;
+            }
+            if char == '='{
+                if next_char == '='{
+                    iterator = iterator + 2;
+                    continue;
+                }
+                iterator = iterator + 1;
+                continue;
+            }
+            if char == ':'{
+                if next_char == ':'{
+                    iterator = iterator + 2;
+                    continue;
+                }
+                iterator = iterator + 1;
+                continue;
+            }
+            if char == '|'{
+                if next_char == '|'{
+                    iterator = iterator + 2;
+                    continue;
+                }
+                iterator = iterator + 1;
+                continue;
+            }
+            if char == '&'{
+                if next_char == '&'{
+                    iterator = iterator + 2;
+                    continue;
+                }
+                iterator = iterator + 1;
+                continue;
+            }
+            if char == '>'{
+                if next_char == '='{
+                    iterator = iterator + 2;
+                    continue;
+                }
+                iterator = iterator + 1;
+                continue;
+            }
+            if char == '<'{
+                if next_char == '='{
+                    iterator = iterator + 2;
+                    continue;
+                }
+                iterator = iterator + 1;
+                continue;
+            }
+            if char == '#'{
+                iterator = iterator + 1;
+                continue;
+            }
+            if char == ';'{
+                iterator = iterator + 1;
+                continue;
+            }
+            if char == '.'{
+                iterator = iterator + 1;
+                continue;
+            }
+            if char == ','{
+                iterator = iterator + 1;
+                continue;
+            }
+            if char == '+'{
+                iterator = iterator + 1;
+                continue;
+            }
+            if char == '-'{
+                iterator = iterator + 1;
+                continue;
+            }
+            if char == '*'{
+                iterator = iterator + 1;
+                continue;
+            }
+            if char == '/'{
+                iterator = iterator + 1;
+                continue;
+            }
+            if char == '%'{
+                iterator = iterator + 1;
+                continue;
+            }
+            if char == '!'{
+                iterator = iterator + 1;
+                continue;
+            }
+            if char == '~'{
+                iterator = iterator + 1;
+                continue;
+            }
+
+            console::print_char(char);
+            iterator = iterator + 1;
+        }
+
+        //console::write_string(&file);
     }
 }

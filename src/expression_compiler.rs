@@ -432,7 +432,7 @@ fn compile_rvalue(right: &Expr, expected_type: Expected, state: &mut CompilerSta
                 state.output.push_str(&format!("    %tmp{} = call {} {}({})\n",utvc, return_type_repr, call_address.to_repr(), args_string));
                 return Ok(CompiledResult::TempValue(utvc, *return_type.clone()));
             }
-            return Err(format!("Tried to call non-function type"));
+            return Err(format!("Tried to call non-function type, {:?}", call_address));
         }
         Expr::MemberAccess(x, y) =>{
             let member_lvalue = compile_lvalue(&Expr::MemberAccess(x.clone(), y.clone()), false, false, state)?;

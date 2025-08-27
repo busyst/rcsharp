@@ -444,6 +444,9 @@ impl<'a> GeneralParser<'a> {
                 self.advance();
                 return Ok(ParserType::NamespaceLink(link_or_name, Box::new(self.parse_type()?)))
             }
+            else if self.peek().token == Token::LogicLess{
+                todo!("Generic structures / functions, not yet implemented")
+            }
             Ok(ParserType::Named(link_or_name))
         }
     }

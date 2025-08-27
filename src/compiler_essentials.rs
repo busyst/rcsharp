@@ -22,6 +22,7 @@ impl Attribute {
     }
 }
 pub enum StructFlags {
+    Generic = 64,
     PrimitiveType = 128,
 }
 #[derive(Debug, Clone)]
@@ -40,7 +41,11 @@ impl Struct {
     pub fn new_primitive(name: &str) -> Self {
         Self { path : "".to_string().into_boxed_str(), name: name.to_string().into_boxed_str(), fields : vec![], attribs: vec![], flags: Cell::new(StructFlags::PrimitiveType as u8) }
     }
+    pub fn new_generic(path: Box<str>, name: Box<str>, fields: Vec<(String, ParserType)>, attribs: Vec<Attribute>) -> Self {
+        Self { path, name, fields, attribs, flags: Cell::new(StructFlags::Generic as u8) }
+    }
     pub fn is_primitive(&self) -> bool { self.flags.get() & StructFlags::PrimitiveType as u8 != 0 }
+    pub fn is_generic(&self) -> bool { self.flags.get() & StructFlags::Generic as u8 != 0 }
     pub fn llvm_representation(&self) -> String { 
         if self.is_primitive() {
             self.name.to_string()
@@ -153,13 +158,14 @@ impl Variable {
 pub struct Scope{
     upper_scope_variables: OrderedHashMap<String, Variable>,
     current_scope_variables: OrderedHashMap<String, Variable>,
+    loop_index: Option<u32>
 }
 impl Scope {
     pub fn new(upper_scope_variables: OrderedHashMap<String, Variable>, current_scope_variables: OrderedHashMap<String, Variable>) -> Self {
-        Self { upper_scope_variables, current_scope_variables }
+        Self { upper_scope_variables, current_scope_variables, loop_index: None }
     }
     pub fn empty() -> Self {
-        Self { upper_scope_variables: OrderedHashMap::new(), current_scope_variables: OrderedHashMap::new() }
+        Self { upper_scope_variables: OrderedHashMap::new(), current_scope_variables: OrderedHashMap::new(), loop_index: None }
     }
     pub fn get_variable(&self, name: &str) -> Result<&Variable,String>{
         if self.current_scope_variables.contains_key(name) {
@@ -199,6 +205,7 @@ impl Scope {
         }
         self.current_scope_variables = original_scope.current_scope_variables;
         self.upper_scope_variables = original_scope.upper_scope_variables;
+        self.loop_index = original_scope.loop_index;
     }
     pub fn clone_and_enter(&mut self) -> Scope{
         let sc = self.clone();
@@ -211,7 +218,15 @@ impl Scope {
         }
         self.upper_scope_variables = new_scope;
         self.current_scope_variables.clear();
-
+        
         return sc;
+    }
+    
+    pub fn loop_index(&self) -> Option<u32> {
+        self.loop_index
+    }
+    
+    pub fn set_loop_index(&mut self, loop_index: Option<u32>) {
+        self.loop_index = loop_index;
     }
 }

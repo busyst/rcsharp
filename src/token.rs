@@ -115,7 +115,7 @@ pub enum Token {
     #[regex(r#""([^"\\]|\\.)*""#, unescape_string)]
     String(Box<str>),
     
-    #[regex(r"'([^'\\]|\\.)'", |lex| lex.slice().to_string().into_boxed_str())]
+    #[regex(r"'([^'\\]|\\.)'", unescape_char)]
     Char(Box<str>),
 }
 
@@ -178,6 +178,31 @@ impl<'source> Iterator for Lexer<'source> {
     }
 }
 fn unescape_string(lex: &mut logos::Lexer<Token>) -> Box<str> {
+    let slice = lex.slice();
+    let content = &slice[1..slice.len() - 1];
+
+    let mut unescaped = String::with_capacity(content.len());
+    let mut chars = content.chars();
+
+    while let Some(c) = chars.next() {
+        if c == '\\' {
+            match chars.next() {
+                Some('n') => unescaped.push('\n'),
+                Some('t') => unescaped.push('\t'),
+                Some('r') => unescaped.push('\r'),
+                Some('\\') => unescaped.push('\\'),
+                Some('"') => unescaped.push('"'),
+                Some(other) => unescaped.push(other),
+                None => break,
+            }
+        } else {
+            unescaped.push(c);
+        }
+    }
+
+    unescaped.into_boxed_str()
+}
+fn unescape_char(lex: &mut logos::Lexer<Token>) -> Box<str> {
     let slice = lex.slice();
     let content = &slice[1..slice.len() - 1];
 

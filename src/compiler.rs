@@ -225,8 +225,20 @@ fn compile_statement(statement: &Stmt, state :&mut CompilerState) -> Result<(), 
                 state.output.push_str(&format!("    ret void\n"));
             }
         }
-        Stmt::Continue => {state.output.push_str(&format!("    br label %loop_body{}\n", state.current_logic_counter_function));}
-        Stmt::Break => {state.output.push_str(&format!("    br label %loop_body{}_exit\n", state.current_logic_counter_function));}
+        Stmt::Continue => {
+            if let Some(li) = state.current_scope.loop_index() {
+                state.output.push_str(&format!("    br label %loop_body{}\n", li));
+                return Ok(());
+            }
+            return Err(format!("Tried to continue without loop"));
+        }
+        Stmt::Break => {
+            if let Some(li) = state.current_scope.loop_index() {
+                state.output.push_str(&format!("    br label %loop_body{}_exit\n", li));
+                return Ok(());
+            }
+            return Err(format!("Tried to break without loop"));
+        }
         Stmt::If(condition, then_stmt, else_stmt) => {
             let expected_type = ParserType::Named(format!("bool"));
             let mut cond_val = compile_expression(condition, Expected::Type(&expected_type), state)
@@ -273,12 +285,11 @@ fn compile_statement(statement: &Stmt, state :&mut CompilerState) -> Result<(), 
             state.output.push_str(&format!("    br label %loop_body{}\n", lc));
             state.output.push_str(&format!("loop_body{}:\n", lc));
             let original_scope = state.current_scope.clone_and_enter();
-            state.current_logic_counter_function = lc as u32;
+            state.current_scope.set_loop_index(Some(lc));
             for x in statement {
                 compile_statement(x, state)?;
             }
             state.current_scope.swap_and_exit(original_scope);
-            state.current_logic_counter_function = u32::MAX;
             state.output.push_str(&format!("    br label %loop_body{}\n", lc));
             state.output.push_str(&format!("loop_body{}_exit:\n", lc));
         }
@@ -326,8 +337,6 @@ pub struct CompilerState{
     temp_value_counter: Cell<u32>,
     logic_counter: Cell<u32>,
     const_vectors_counter: Cell<u32>,
-
-    current_logic_counter_function: u32,
 }
 
 impl CompilerState {

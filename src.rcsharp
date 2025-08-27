@@ -35,7 +35,6 @@
 //   These flags (for now) are hints for unused variables, not strict correctness checks.
 // - Replace `#[DllImport]` with a more idiomatic `extern fn ...` once FFI design stabilizes.
 // Note: under current calling convention, function arguments are treated as immutable.
-
 fn main(): i32 {
     console::AllocConsole();
     tests::run();
