@@ -148,7 +148,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             }
 
             Expr::Call(callee, given_args) =>{ // ---
-                if let Some(x) = self.compiler_function_calls(&callee, given_args, expected) {
+                if let Some(x) = self.compiler_function_calls(&callee, given_args, &expected) {
                     return x;
                 }
                 let l: CompiledValue = self.compile_lvalue(callee)?;
@@ -171,10 +171,14 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
                         return Ok(CompiledValue::NoReturn);
                     }
 
-                    let utvc = self.ctx.aquire_unique_temp_value_counter();
                     let return_type_repr = get_llvm_type_str(&return_type, self.ctx.symbols, &func.path)?;
-                    self.output.push_str(&format!("    %tmp{} = call {} @{}({})\n", utvc, return_type_repr, func.get_llvm_repr(), arg_string));
-                    return Ok(CompiledValue::Value { llvm_repr: format!("%tmp{}", utvc), ptype: *return_type.clone() });
+                    if expected != Expected::NoReturn {
+                        let utvc = self.ctx.aquire_unique_temp_value_counter();
+                        self.output.push_str(&format!("    %tmp{} = call {} @{}({})\n", utvc, return_type_repr, func.get_llvm_repr(), arg_string));
+                        return Ok(CompiledValue::Value { llvm_repr: format!("%tmp{}", utvc), ptype: *return_type.clone() });
+                    }
+                    self.output.push_str(&format!("    call {} @{}({})\n", return_type_repr, func.get_llvm_repr(), arg_string));
+                    return Ok(CompiledValue::NoReturn);
                 }
                 if let CompiledValue::Pointer { llvm_repr, ptype: ParserType::Function(return_type, required_arguments) } = &l {
                     if required_arguments.len() != given_args.len() {
@@ -479,8 +483,15 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
 
                 let llvm_array_type = get_llvm_type_str(&base_type, self.ctx.symbols, &self.ctx.current_function_path)?;
                 let size_of_l_item = self.sizeof_from_type(&base_type)?;
-                let r_scaled = self.ctx.aquire_unique_temp_value_counter();
-                self.output.push_str(&format!("    %tmp{} = mul {}, {}", r_scaled ,r.get_llvm_repr_with_type(self.ctx)?, size_of_l_item));
+                debug_assert!(size_of_l_item != 0);
+                let r_scaled = 
+                if size_of_l_item != 1 {
+                    let r_scaled = self.ctx.aquire_unique_temp_value_counter();
+                    self.output.push_str(&format!("    %tmp{} = mul {}, {}\n", r_scaled ,r.get_llvm_repr_with_type(self.ctx)?, size_of_l_item));
+                    CompiledValue::Value { llvm_repr: format!("%tmp{}", r_scaled), ptype: r.get_type().clone() }.get_llvm_repr_with_type(self.ctx)?
+                }else{
+                    r.get_llvm_repr_with_type(self.ctx)?
+                };
                 let gep_ptr_reg = self.ctx.aquire_unique_temp_value_counter();
                 self.output.push_str(&format!(
                     "    %tmp{} = getelementptr inbounds {}, {}* {}, {}\n",
@@ -488,7 +499,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
                     llvm_array_type,
                     llvm_array_type,
                     l.get_llvm_repr(),
-                    CompiledValue::Value { llvm_repr: format!("%tmp{}", r_scaled), ptype: r.get_type().clone() }.get_llvm_repr_with_type(self.ctx)?
+                    r_scaled
                 ));
                 return Ok(CompiledValue::Pointer { llvm_repr: format!("%tmp{}", gep_ptr_reg), ptype: base_type });
             }
@@ -514,17 +525,17 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             ptype: ParserType::Pointer(Box::new(ParserType::Named("i8".to_string()))),
         })
     }
-    fn compiler_function_calls(&mut self, callee: &Box<Expr>, given_args: &Box<[Expr]>, expected: Expected) -> Option<CompileResult<CompiledValue>>{ // --
+    fn compiler_function_calls(&mut self, callee: &Box<Expr>, given_args: &Box<[Expr]>, expected: &Expected) -> Option<CompileResult<CompiledValue>>{ // --
 
         if let Expr::Name(x) = &**callee {
             match x.as_str() {
                 "sizeof" =>{
-                    debug_assert!(expected != Expected::NoReturn);
+                    debug_assert!(*expected != Expected::NoReturn);
                     if given_args.len() != 1 { return Some(Err(CompileError::Generic(format!("sizeof expects exactly 1 type argument. Example: sizeof(i32);"))));}
                     if let Ok(sizeof) = self.sizeof_from_expression(&given_args[0]){
                         if let Expected::Type(pt) = expected {
                             if pt.is_integer() {
-                                return Some(Ok(CompiledValue::Value { llvm_repr: sizeof.to_string(), ptype: pt.clone() }));
+                                return Some(Ok(CompiledValue::Value { llvm_repr: sizeof.to_string(), ptype: (*pt).clone() }));
                             }
                         }
                         return Some(Ok(CompiledValue::Value { llvm_repr: sizeof.to_string(), ptype: ParserType::Named(format!("i64")) }));
@@ -532,7 +543,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
                     return Some(Err(CompileError::Generic(format!("Unable to calculate sizeof structure given by this expression '{:?}'", given_args[0]))));
                 }
                 "stalloc" =>{
-                    debug_assert!(expected != Expected::NoReturn);
+                    debug_assert!(*expected != Expected::NoReturn);
                     if given_args.len() != 1 { return Some(Err(CompileError::Generic(format!("sizeof expects exactly 1 type argument. Example: sizeof(i32);"))));}
                     if let Ok(r_val) = self.compile_rvalue(&given_args[0], Expected::Type(&ParserType::Named(format!("i64")))) {
                         let utvc = self.ctx.aquire_unique_temp_value_counter();

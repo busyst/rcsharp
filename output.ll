@@ -82,54 +82,54 @@ loop_body0:
     %tmp4 = getelementptr inbounds %struct.string.String, %struct.string.String* %string, i32 0, i32 0
     %tmp5 = load i8*, i8** %tmp4
     %tmp6 = load i32, i32* %index
-    %tmp7 = mul i32 %tmp6, 1    %tmp8 = getelementptr inbounds i8, i8* %tmp5, i32 %tmp7
-    %tmp9 = load i8, i8* %tmp8
-    %tmp10 = icmp eq i8 %tmp9, 92
-    %tmp11 = load i32, i32* %index
-    %tmp12 = icmp slt i32 %tmp11, 0
-    %tmp13 = or i1 %tmp10, %tmp12
-    br i1 %tmp13, label %then1, label %endif1
+    %tmp7 = getelementptr inbounds i8, i8* %tmp5, i32 %tmp6
+    %tmp8 = load i8, i8* %tmp7
+    %tmp9 = icmp eq i8 %tmp8, 92
+    %tmp10 = load i32, i32* %index
+    %tmp11 = icmp slt i32 %tmp10, 0
+    %tmp12 = or i1 %tmp9, %tmp11
+    br i1 %tmp12, label %then1, label %endif1
 then1:
     br label %loop_body0_exit
     br label %endif1
 endif1:
-    %tmp14 = load i32, i32* %index
-    %tmp15 = sub i32 %tmp14, 1
-    store i32 %tmp15, i32* %index
+    %tmp13 = load i32, i32* %index
+    %tmp14 = sub i32 %tmp13, 1
+    store i32 %tmp14, i32* %index
     br label %loop_body0
 loop_body0_exit:
-    %tmp16 = getelementptr inbounds %struct.string.String, %struct.string.String* %string, i32 0, i32 1
-    %tmp17 = load i32, i32* %index
-    %tmp18 = add i32 %tmp17, 1
-    store i32 %tmp18, i32* %tmp16
-    %tmp19 = load %struct.string.String, %struct.string.String* %string
-    ret %struct.string.String %tmp19
+    %tmp15 = getelementptr inbounds %struct.string.String, %struct.string.String* %string, i32 0, i32 1
+    %tmp16 = load i32, i32* %index
+    %tmp17 = add i32 %tmp16, 1
+    store i32 %tmp17, i32* %tmp15
+    %tmp18 = load %struct.string.String, %struct.string.String* %string
+    ret %struct.string.String %tmp18
 }
 
 define void @process.throw(i8* %exception) {
     %len = alloca i32
     %tmp0 = call i32 @string_utils.c_str_len(i8* %exception)
     store i32 %tmp0, i32* %len
-    %tmp1 = call i32 @AllocConsole()
+    call i32 @AllocConsole()
     %chars_written = alloca i32
     %stdout_handle = alloca i8*
-    %tmp2 = call i8* @GetStdHandle(i32 -11)
-    store i8* %tmp2, i8** %stdout_handle
+    %tmp1 = call i8* @GetStdHandle(i32 -11)
+    store i8* %tmp1, i8** %stdout_handle
     %e = alloca i8*
-    %tmp3 = getelementptr inbounds [12 x i8], [12 x i8]* @.str.0, i64 0, i64 0
-    store i8* %tmp3, i8** %e
-    %tmp4 = load i8*, i8** %stdout_handle
+    %tmp2 = getelementptr inbounds [12 x i8], [12 x i8]* @.str.0, i64 0, i64 0
+    store i8* %tmp2, i8** %e
+    %tmp3 = load i8*, i8** %stdout_handle
+    %tmp4 = load i8*, i8** %e
     %tmp5 = load i8*, i8** %e
-    %tmp6 = load i8*, i8** %e
-    %tmp7 = call i32 @string_utils.c_str_len(i8* %tmp6)
-    %tmp8 = call i32 @WriteConsoleA(i8* %tmp4, i8* %tmp5, i32 %tmp7, i32* %chars_written, i8* null)
-    %tmp9 = load i8*, i8** %stdout_handle
-    %tmp10 = load i32, i32* %len
-    %tmp11 = call i32 @WriteConsoleA(i8* %tmp9, i8* %exception, i32 %tmp10, i32* %chars_written, i8* null)
+    %tmp6 = call i32 @string_utils.c_str_len(i8* %tmp5)
+    call i32 @WriteConsoleA(i8* %tmp3, i8* %tmp4, i32 %tmp6, i32* %chars_written, i8* null)
+    %tmp7 = load i8*, i8** %stdout_handle
+    %tmp8 = load i32, i32* %len
+    call i32 @WriteConsoleA(i8* %tmp7, i8* %exception, i32 %tmp8, i32* %chars_written, i8* null)
     %nl = alloca i8
     store i8 10, i8* %nl
-    %tmp12 = load i8*, i8** %stdout_handle
-    %tmp13 = call i32 @WriteConsoleA(i8* %tmp12, i8* %nl, i32 1, i32* %chars_written, i8* null)
+    %tmp9 = load i8*, i8** %stdout_handle
+    call i32 @WriteConsoleA(i8* %tmp9, i8* %nl, i32 1, i32* %chars_written, i8* null)
     call void @ExitProcess(i32 -1)
     ret void
 }
@@ -142,7 +142,7 @@ define i8* @mem.malloc(i64 %size) {
 
 define void @mem.free(i8* %ptr) {
     %tmp0 = call i32* @GetProcessHeap()
-    %tmp1 = call i32 @HeapFree(i32* %tmp0, i32 0, i8* %ptr)
+    call i32 @HeapFree(i32* %tmp0, i32 0, i8* %ptr)
     ret void
 }
 
@@ -159,14 +159,14 @@ then1:
     br label %endif1
 endif1:
     %tmp2 = load i64, i64* %i
-    %tmp3 = mul i64 %tmp2, 1    %tmp4 = getelementptr inbounds i8, i8* %dest, i64 %tmp3
-    %tmp5 = load i64, i64* %i
-    %tmp6 = mul i64 %tmp5, 1    %tmp7 = getelementptr inbounds i8, i8* %src, i64 %tmp6
-    %tmp8 = load i8, i8* %tmp7
-    store i8 %tmp8, i8* %tmp4
-    %tmp9 = load i64, i64* %i
-    %tmp10 = add i64 %tmp9, 1
-    store i64 %tmp10, i64* %i
+    %tmp3 = getelementptr inbounds i8, i8* %dest, i64 %tmp2
+    %tmp4 = load i64, i64* %i
+    %tmp5 = getelementptr inbounds i8, i8* %src, i64 %tmp4
+    %tmp6 = load i8, i8* %tmp5
+    store i8 %tmp6, i8* %tmp3
+    %tmp7 = load i64, i64* %i
+    %tmp8 = add i64 %tmp7, 1
+    store i64 %tmp8, i64* %i
     br label %loop_body0
 loop_body0_exit:
     ret void
@@ -190,11 +190,11 @@ then1:
     br label %endif1
 endif1:
     %tmp2 = load i64, i64* %i
-    %tmp3 = mul i64 %tmp2, 1    %tmp4 = getelementptr inbounds i8, i8* %dest, i64 %tmp3
-    store i8 %val, i8* %tmp4
-    %tmp5 = load i64, i64* %i
-    %tmp6 = add i64 %tmp5, 1
-    store i64 %tmp6, i64* %i
+    %tmp3 = getelementptr inbounds i8, i8* %dest, i64 %tmp2
+    store i8 %val, i8* %tmp3
+    %tmp4 = load i64, i64* %i
+    %tmp5 = add i64 %tmp4, 1
+    store i64 %tmp5, i64* %i
     br label %loop_body0
 loop_body0_exit:
     ret void
@@ -376,42 +376,42 @@ then4:
 endif4:
     %tmp22 = load i8*, i8** %new_array
     %tmp23 = load i32, i32* %i
-    %tmp24 = mul i32 %tmp23, 1    %tmp25 = getelementptr inbounds i8, i8* %tmp22, i32 %tmp24
-    %tmp26 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 0
-    %tmp27 = load i8*, i8** %tmp26
-    %tmp28 = load i32, i32* %i
-    %tmp29 = mul i32 %tmp28, 1    %tmp30 = getelementptr inbounds i8, i8* %tmp27, i32 %tmp29
-    %tmp31 = load i8, i8* %tmp30
-    store i8 %tmp31, i8* %tmp25
-    %tmp32 = load i32, i32* %i
-    %tmp33 = add i32 %tmp32, 1
-    store i32 %tmp33, i32* %i
+    %tmp24 = getelementptr inbounds i8, i8* %tmp22, i32 %tmp23
+    %tmp25 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 0
+    %tmp26 = load i8*, i8** %tmp25
+    %tmp27 = load i32, i32* %i
+    %tmp28 = getelementptr inbounds i8, i8* %tmp26, i32 %tmp27
+    %tmp29 = load i8, i8* %tmp28
+    store i8 %tmp29, i8* %tmp24
+    %tmp30 = load i32, i32* %i
+    %tmp31 = add i32 %tmp30, 1
+    store i32 %tmp31, i32* %i
     br label %loop_body3
 loop_body3_exit:
-    %tmp34 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 0
-    %tmp35 = load i8*, i8** %tmp34
-    call void @mem.free(i8* %tmp35)
+    %tmp32 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 0
+    %tmp33 = load i8*, i8** %tmp32
+    call void @mem.free(i8* %tmp33)
     br label %endif2
 endif2:
-    %tmp36 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 0
-    %tmp37 = load i8*, i8** %new_array
-    store i8* %tmp37, i8** %tmp36
-    %tmp38 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 2
-    %tmp39 = load i32, i32* %new_capacity
-    store i32 %tmp39, i32* %tmp38
+    %tmp34 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 0
+    %tmp35 = load i8*, i8** %new_array
+    store i8* %tmp35, i8** %tmp34
+    %tmp36 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 2
+    %tmp37 = load i32, i32* %new_capacity
+    store i32 %tmp37, i32* %tmp36
     br label %endif0
 endif0:
-    %tmp40 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 0
-    %tmp41 = load i8*, i8** %tmp40
-    %tmp42 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 1
-    %tmp43 = load i32, i32* %tmp42
-    %tmp44 = mul i32 %tmp43, 1    %tmp45 = getelementptr inbounds i8, i8* %tmp41, i32 %tmp44
-    store i8 %data, i8* %tmp45
-    %tmp46 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 1
-    %tmp47 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 1
-    %tmp48 = load i32, i32* %tmp47
-    %tmp49 = add i32 %tmp48, 1
-    store i32 %tmp49, i32* %tmp46
+    %tmp38 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 0
+    %tmp39 = load i8*, i8** %tmp38
+    %tmp40 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 1
+    %tmp41 = load i32, i32* %tmp40
+    %tmp42 = getelementptr inbounds i8, i8* %tmp39, i32 %tmp41
+    store i8 %data, i8* %tmp42
+    %tmp43 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 1
+    %tmp44 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 1
+    %tmp45 = load i32, i32* %tmp44
+    %tmp46 = add i32 %tmp45, 1
+    store i32 %tmp46, i32* %tmp43
     ret void
 }
 
@@ -428,12 +428,12 @@ then1:
     br label %endif1
 endif1:
     %tmp2 = load i32, i32* %index
-    %tmp3 = mul i32 %tmp2, 1    %tmp4 = getelementptr inbounds i8, i8* %data, i32 %tmp3
-    %tmp5 = load i8, i8* %tmp4
-    call void @vector.push(%struct.vector.Vec* %vec, i8 %tmp5)
-    %tmp6 = load i32, i32* %index
-    %tmp7 = add i32 %tmp6, 1
-    store i32 %tmp7, i32* %index
+    %tmp3 = getelementptr inbounds i8, i8* %data, i32 %tmp2
+    %tmp4 = load i8, i8* %tmp3
+    call void @vector.push(%struct.vector.Vec* %vec, i8 %tmp4)
+    %tmp5 = load i32, i32* %index
+    %tmp6 = add i32 %tmp5, 1
+    store i32 %tmp6, i32* %index
     br label %loop_body0
 loop_body0_exit:
     ret void
@@ -478,10 +478,10 @@ endif0:
 define void @console.write(i8* %buffer, i32 %len) {
     %chars_written = alloca i32
     %tmp0 = call i8* @console.get_stdout()
-    %tmp1 = call i32 @WriteConsoleA(i8* %tmp0, i8* %buffer, i32 %len, i32* %chars_written, i8* null)
-    %tmp2 = load i32, i32* %chars_written
-    %tmp3 = icmp ne i32 %len, %tmp2
-    br i1 %tmp3, label %then0, label %endif0
+    call i32 @WriteConsoleA(i8* %tmp0, i8* %buffer, i32 %len, i32* %chars_written, i8* null)
+    %tmp1 = load i32, i32* %chars_written
+    %tmp2 = icmp ne i32 %len, %tmp1
+    br i1 %tmp2, label %then0, label %endif0
 then0:
     call void @ExitProcess(i32 -2)
     br label %endif0
@@ -496,12 +496,12 @@ define void @console.write_string(%struct.string.String* %str) {
     %tmp2 = load i8*, i8** %tmp1
     %tmp3 = getelementptr inbounds %struct.string.String, %struct.string.String* %str, i32 0, i32 1
     %tmp4 = load i32, i32* %tmp3
-    %tmp5 = call i32 @WriteConsoleA(i8* %tmp0, i8* %tmp2, i32 %tmp4, i32* %chars_written, i8* null)
-    %tmp6 = getelementptr inbounds %struct.string.String, %struct.string.String* %str, i32 0, i32 1
-    %tmp7 = load i32, i32* %tmp6
-    %tmp8 = load i32, i32* %chars_written
-    %tmp9 = icmp ne i32 %tmp7, %tmp8
-    br i1 %tmp9, label %then0, label %endif0
+    call i32 @WriteConsoleA(i8* %tmp0, i8* %tmp2, i32 %tmp4, i32* %chars_written, i8* null)
+    %tmp5 = getelementptr inbounds %struct.string.String, %struct.string.String* %str, i32 0, i32 1
+    %tmp6 = load i32, i32* %tmp5
+    %tmp7 = load i32, i32* %chars_written
+    %tmp8 = icmp ne i32 %tmp6, %tmp7
+    br i1 %tmp8, label %then0, label %endif0
 then0:
     call void @ExitProcess(i32 -2)
     br label %endif0
@@ -518,18 +518,18 @@ then0:
 endif0:
     %chars_written = alloca i32
     %tmp1 = call i8* @console.get_stdout()
-    %tmp2 = call i32 @WriteConsoleA(i8* %tmp1, i8* %buffer, i32 %len, i32* %chars_written, i8* null)
-    %tmp3 = load i32, i32* %chars_written
-    %tmp4 = icmp ne i32 %len, %tmp3
-    br i1 %tmp4, label %then1, label %endif1
+    call i32 @WriteConsoleA(i8* %tmp1, i8* %buffer, i32 %len, i32* %chars_written, i8* null)
+    %tmp2 = load i32, i32* %chars_written
+    %tmp3 = icmp ne i32 %len, %tmp2
+    br i1 %tmp3, label %then1, label %endif1
 then1:
     call void @ExitProcess(i32 -2)
     br label %endif1
 endif1:
     %nl = alloca i8
     store i8 10, i8* %nl
-    %tmp5 = call i8* @console.get_stdout()
-    %tmp6 = call i32 @WriteConsoleA(i8* %tmp5, i8* %nl, i32 1, i32* %chars_written, i8* null)
+    %tmp4 = call i8* @console.get_stdout()
+    call i32 @WriteConsoleA(i8* %tmp4, i8* %nl, i32 1, i32* %chars_written, i8* null)
     ret void
 }
 
@@ -617,39 +617,39 @@ endif4:
     %tmp20 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %buffer, i32 0, i32 0
     %tmp21 = load i8*, i8** %tmp20
     %tmp22 = load i32, i32* %i
-    %tmp23 = mul i32 %tmp22, 1    %tmp24 = getelementptr inbounds i8, i8* %tmp21, i32 %tmp23
-    %tmp25 = load i8, i8* %tmp24
-    store i8 %tmp25, i8* %temp
-    %tmp26 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %buffer, i32 0, i32 0
-    %tmp27 = load i8*, i8** %tmp26
-    %tmp28 = load i32, i32* %i
-    %tmp29 = mul i32 %tmp28, 1    %tmp30 = getelementptr inbounds i8, i8* %tmp27, i32 %tmp29
-    %tmp31 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %buffer, i32 0, i32 0
-    %tmp32 = load i8*, i8** %tmp31
-    %tmp33 = load i32, i32* %j
-    %tmp34 = mul i32 %tmp33, 1    %tmp35 = getelementptr inbounds i8, i8* %tmp32, i32 %tmp34
-    %tmp36 = load i8, i8* %tmp35
-    store i8 %tmp36, i8* %tmp30
-    %tmp37 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %buffer, i32 0, i32 0
-    %tmp38 = load i8*, i8** %tmp37
-    %tmp39 = load i32, i32* %j
-    %tmp40 = mul i32 %tmp39, 1    %tmp41 = getelementptr inbounds i8, i8* %tmp38, i32 %tmp40
-    %tmp42 = load i8, i8* %temp
-    store i8 %tmp42, i8* %tmp41
-    %tmp43 = load i32, i32* %i
-    %tmp44 = add i32 %tmp43, 1
-    store i32 %tmp44, i32* %i
-    %tmp45 = load i32, i32* %j
-    %tmp46 = sub i32 %tmp45, 1
-    store i32 %tmp46, i32* %j
+    %tmp23 = getelementptr inbounds i8, i8* %tmp21, i32 %tmp22
+    %tmp24 = load i8, i8* %tmp23
+    store i8 %tmp24, i8* %temp
+    %tmp25 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %buffer, i32 0, i32 0
+    %tmp26 = load i8*, i8** %tmp25
+    %tmp27 = load i32, i32* %i
+    %tmp28 = getelementptr inbounds i8, i8* %tmp26, i32 %tmp27
+    %tmp29 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %buffer, i32 0, i32 0
+    %tmp30 = load i8*, i8** %tmp29
+    %tmp31 = load i32, i32* %j
+    %tmp32 = getelementptr inbounds i8, i8* %tmp30, i32 %tmp31
+    %tmp33 = load i8, i8* %tmp32
+    store i8 %tmp33, i8* %tmp28
+    %tmp34 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %buffer, i32 0, i32 0
+    %tmp35 = load i8*, i8** %tmp34
+    %tmp36 = load i32, i32* %j
+    %tmp37 = getelementptr inbounds i8, i8* %tmp35, i32 %tmp36
+    %tmp38 = load i8, i8* %temp
+    store i8 %tmp38, i8* %tmp37
+    %tmp39 = load i32, i32* %i
+    %tmp40 = add i32 %tmp39, 1
+    store i32 %tmp40, i32* %i
+    %tmp41 = load i32, i32* %j
+    %tmp42 = sub i32 %tmp41, 1
+    store i32 %tmp42, i32* %j
     br label %loop_body3
 loop_body3_exit:
     call void @vector.push(%struct.vector.Vec* %buffer, i8 10)
-    %tmp47 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %buffer, i32 0, i32 0
-    %tmp48 = load i8*, i8** %tmp47
-    %tmp49 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %buffer, i32 0, i32 1
-    %tmp50 = load i32, i32* %tmp49
-    call void @console.write(i8* %tmp48, i32 %tmp50)
+    %tmp43 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %buffer, i32 0, i32 0
+    %tmp44 = load i8*, i8** %tmp43
+    %tmp45 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %buffer, i32 0, i32 1
+    %tmp46 = load i32, i32* %tmp45
+    call void @console.write(i8* %tmp44, i32 %tmp46)
     call void @vector.free(%struct.vector.Vec* %buffer)
     ret void
 }
@@ -769,22 +769,22 @@ endif2:
     %tmp10 = getelementptr inbounds %struct.string.String, %struct.string.String* %first, i32 0, i32 0
     %tmp11 = load i8*, i8** %tmp10
     %tmp12 = load i32, i32* %iter
-    %tmp13 = mul i32 %tmp12, 1    %tmp14 = getelementptr inbounds i8, i8* %tmp11, i32 %tmp13
-    %tmp15 = load i8, i8* %tmp14
-    %tmp16 = getelementptr inbounds %struct.string.String, %struct.string.String* %second, i32 0, i32 0
-    %tmp17 = load i8*, i8** %tmp16
-    %tmp18 = load i32, i32* %iter
-    %tmp19 = mul i32 %tmp18, 1    %tmp20 = getelementptr inbounds i8, i8* %tmp17, i32 %tmp19
-    %tmp21 = load i8, i8* %tmp20
-    %tmp22 = icmp ne i8 %tmp15, %tmp21
-    br i1 %tmp22, label %then3, label %endif3
+    %tmp13 = getelementptr inbounds i8, i8* %tmp11, i32 %tmp12
+    %tmp14 = load i8, i8* %tmp13
+    %tmp15 = getelementptr inbounds %struct.string.String, %struct.string.String* %second, i32 0, i32 0
+    %tmp16 = load i8*, i8** %tmp15
+    %tmp17 = load i32, i32* %iter
+    %tmp18 = getelementptr inbounds i8, i8* %tmp16, i32 %tmp17
+    %tmp19 = load i8, i8* %tmp18
+    %tmp20 = icmp ne i8 %tmp14, %tmp19
+    br i1 %tmp20, label %then3, label %endif3
 then3:
     ret i1 0
     br label %endif3
 endif3:
-    %tmp23 = load i32, i32* %iter
-    %tmp24 = sub i32 %tmp23, 1
-    store i32 %tmp24, i32* %iter
+    %tmp21 = load i32, i32* %iter
+    %tmp22 = sub i32 %tmp21, 1
+    store i32 %tmp22, i32* %iter
     br label %loop_body1
 loop_body1_exit:
     ret i1 1
@@ -835,10 +835,10 @@ define i8* @string_utils.insert(i8* %src1, i8* %src2, i32 %index) {
     %tmp23 = load i32, i32* %len1
     %tmp24 = load i32, i32* %len2
     %tmp25 = add i32 %tmp23, %tmp24
-    %tmp26 = mul i32 %tmp25, 1    %tmp27 = getelementptr inbounds i8, i8* %tmp22, i32 %tmp26
-    store i8 0, i8* %tmp27
-    %tmp28 = load i8*, i8** %output
-    ret i8* %tmp28
+    %tmp26 = getelementptr inbounds i8, i8* %tmp22, i32 %tmp25
+    store i8 0, i8* %tmp26
+    %tmp27 = load i8*, i8** %output
+    ret i8* %tmp27
 }
 
 define i32 @string_utils.c_str_len(i8* %str) {
@@ -847,21 +847,21 @@ define i32 @string_utils.c_str_len(i8* %str) {
     br label %loop_body0
 loop_body0:
     %tmp0 = load i32, i32* %len
-    %tmp1 = mul i32 %tmp0, 1    %tmp2 = getelementptr inbounds i8, i8* %str, i32 %tmp1
-    %tmp3 = load i8, i8* %tmp2
-    %tmp4 = icmp eq i8 %tmp3, 0
-    br i1 %tmp4, label %then1, label %endif1
+    %tmp1 = getelementptr inbounds i8, i8* %str, i32 %tmp0
+    %tmp2 = load i8, i8* %tmp1
+    %tmp3 = icmp eq i8 %tmp2, 0
+    br i1 %tmp3, label %then1, label %endif1
 then1:
     br label %loop_body0_exit
     br label %endif1
 endif1:
-    %tmp5 = load i32, i32* %len
-    %tmp6 = add i32 %tmp5, 1
-    store i32 %tmp6, i32* %len
+    %tmp4 = load i32, i32* %len
+    %tmp5 = add i32 %tmp4, 1
+    store i32 %tmp5, i32* %len
     br label %loop_body0
 loop_body0_exit:
-    %tmp7 = load i32, i32* %len
-    ret i32 %tmp7
+    %tmp6 = load i32, i32* %len
+    ret i32 %tmp6
 }
 
 define i1 @string_utils.is_ascii_num(i8 %char) {
@@ -928,17 +928,17 @@ endif0:
     %tmp9 = call i32 @WriteFile(i8* %tmp8, i8* %content, i32 %content_len, i32* %bytes_written, i8* null)
     store i32 %tmp9, i32* %success
     %tmp10 = load i8*, i8** %hFile
-    %tmp11 = call i32 @CloseHandle(i8* %tmp10)
-    %tmp12 = load i32, i32* %success
-    %tmp13 = icmp eq i32 %tmp12, 0
-    br i1 %tmp13, label %then1, label %endif1
+    call i32 @CloseHandle(i8* %tmp10)
+    %tmp11 = load i32, i32* %success
+    %tmp12 = icmp eq i32 %tmp11, 0
+    br i1 %tmp12, label %then1, label %endif1
 then1:
     ret i32 0
     br label %endif1
 endif1:
-    %tmp14 = load i32, i32* %bytes_written
-    %tmp15 = icmp ne i32 %tmp14, %content_len
-    br i1 %tmp15, label %then2, label %endif2
+    %tmp13 = load i32, i32* %bytes_written
+    %tmp14 = icmp ne i32 %tmp13, %content_len
+    br i1 %tmp14, label %then2, label %endif2
 then2:
     ret i32 0
     br label %endif2
@@ -980,49 +980,49 @@ endif0:
     br i1 %tmp12, label %then1, label %endif1
 then1:
     %tmp13 = load i8*, i8** %hFile
-    %tmp14 = call i32 @CloseHandle(i8* %tmp13)
-    %tmp15 = call %struct.string.String @string.empty()
-    ret %struct.string.String %tmp15
+    call i32 @CloseHandle(i8* %tmp13)
+    %tmp14 = call %struct.string.String @string.empty()
+    ret %struct.string.String %tmp14
     br label %endif1
 endif1:
     %buffer = alloca %struct.string.String
-    %tmp16 = load i64, i64* %file_size
-    %tmp17 = trunc i64 %tmp16 to i32
-    %tmp18 = add i32 %tmp17, 1
-    %tmp19 = call %struct.string.String @string.with_size(i32 %tmp18)
-    store %struct.string.String %tmp19, %struct.string.String* %buffer
+    %tmp15 = load i64, i64* %file_size
+    %tmp16 = trunc i64 %tmp15 to i32
+    %tmp17 = add i32 %tmp16, 1
+    %tmp18 = call %struct.string.String @string.with_size(i32 %tmp17)
+    store %struct.string.String %tmp18, %struct.string.String* %buffer
     %bytes_read = alloca i32
     store i32 0, i32* %bytes_read
     %success = alloca i32
-    %tmp20 = load i8*, i8** %hFile
-    %tmp21 = getelementptr inbounds %struct.string.String, %struct.string.String* %buffer, i32 0, i32 0
-    %tmp22 = load i8*, i8** %tmp21
-    %tmp23 = load i64, i64* %file_size
-    %tmp24 = trunc i64 %tmp23 to i32
-    %tmp25 = call i32 @ReadFile(i8* %tmp20, i8* %tmp22, i32 %tmp24, i32* %bytes_read, i8* null)
-    store i32 %tmp25, i32* %success
-    %tmp26 = load i8*, i8** %hFile
-    %tmp27 = call i32 @CloseHandle(i8* %tmp26)
-    %tmp28 = load i32, i32* %success
-    %tmp29 = icmp eq i32 %tmp28, 0
-    %tmp30 = load i32, i32* %bytes_read
-    %tmp31 = zext i32 %tmp30 to i64
-    %tmp32 = load i64, i64* %file_size
-    %tmp33 = icmp ne i64 %tmp31, %tmp32
-    %tmp34 = or i1 %tmp29, %tmp33
-    br i1 %tmp34, label %then2, label %endif2
+    %tmp19 = load i8*, i8** %hFile
+    %tmp20 = getelementptr inbounds %struct.string.String, %struct.string.String* %buffer, i32 0, i32 0
+    %tmp21 = load i8*, i8** %tmp20
+    %tmp22 = load i64, i64* %file_size
+    %tmp23 = trunc i64 %tmp22 to i32
+    %tmp24 = call i32 @ReadFile(i8* %tmp19, i8* %tmp21, i32 %tmp23, i32* %bytes_read, i8* null)
+    store i32 %tmp24, i32* %success
+    %tmp25 = load i8*, i8** %hFile
+    call i32 @CloseHandle(i8* %tmp25)
+    %tmp26 = load i32, i32* %success
+    %tmp27 = icmp eq i32 %tmp26, 0
+    %tmp28 = load i32, i32* %bytes_read
+    %tmp29 = zext i32 %tmp28 to i64
+    %tmp30 = load i64, i64* %file_size
+    %tmp31 = icmp ne i64 %tmp29, %tmp30
+    %tmp32 = or i1 %tmp27, %tmp31
+    br i1 %tmp32, label %then2, label %endif2
 then2:
     call void @string.free(%struct.string.String* %buffer)
-    %tmp35 = getelementptr inbounds [17 x i8], [17 x i8]* @.str.3, i64 0, i64 0
-    call void @process.throw(i8* %tmp35)
+    %tmp33 = getelementptr inbounds [17 x i8], [17 x i8]* @.str.3, i64 0, i64 0
+    call void @process.throw(i8* %tmp33)
     br label %endif2
 endif2:
-    %tmp36 = getelementptr inbounds %struct.string.String, %struct.string.String* %buffer, i32 0, i32 1
-    %tmp37 = load i64, i64* %file_size
-    %tmp38 = trunc i64 %tmp37 to i32
-    store i32 %tmp38, i32* %tmp36
-    %tmp39 = load %struct.string.String, %struct.string.String* %buffer
-    ret %struct.string.String %tmp39
+    %tmp34 = getelementptr inbounds %struct.string.String, %struct.string.String* %buffer, i32 0, i32 1
+    %tmp35 = load i64, i64* %file_size
+    %tmp36 = trunc i64 %tmp35 to i32
+    store i32 %tmp36, i32* %tmp34
+    %tmp37 = load %struct.string.String, %struct.string.String* %buffer
+    ret %struct.string.String %tmp37
 }
 
 define i32 @fs.create_file(i8* %path) {
@@ -1050,7 +1050,7 @@ then0:
     br label %endif0
 endif0:
     %tmp8 = load i8*, i8** %hFile
-    %tmp9 = call i32 @CloseHandle(i8* %tmp8)
+    call i32 @CloseHandle(i8* %tmp8)
     ret i32 1
 }
 
@@ -1097,40 +1097,40 @@ define void @tests.fs_test() {
     %tmp18 = load i8*, i8** %c_string
     %tmp19 = getelementptr inbounds %struct.string.String, %struct.string.String* %new_file_path, i32 0, i32 1
     %tmp20 = load i32, i32* %tmp19
-    %tmp21 = mul i32 %tmp20, 1    %tmp22 = getelementptr inbounds i8, i8* %tmp18, i32 %tmp21
-    store i8 0, i8* %tmp22
+    %tmp21 = getelementptr inbounds i8, i8* %tmp18, i32 %tmp20
+    store i8 0, i8* %tmp21
+    %tmp22 = load i8*, i8** %c_string
+    call i32 @fs.create_file(i8* %tmp22)
     %tmp23 = load i8*, i8** %c_string
-    %tmp24 = call i32 @fs.create_file(i8* %tmp23)
+    call i32 @fs.delete_file(i8* %tmp23)
+    %tmp24 = load i8*, i8** %c_string
+    call i32 @fs.create_file(i8* %tmp24)
     %tmp25 = load i8*, i8** %c_string
-    %tmp26 = call i32 @fs.delete_file(i8* %tmp25)
-    %tmp27 = load i8*, i8** %c_string
-    %tmp28 = call i32 @fs.create_file(i8* %tmp27)
-    %tmp29 = load i8*, i8** %c_string
-    %tmp30 = getelementptr inbounds %struct.string.String, %struct.string.String* %data, i32 0, i32 0
-    %tmp31 = load i8*, i8** %tmp30
-    %tmp32 = getelementptr inbounds %struct.string.String, %struct.string.String* %data, i32 0, i32 1
-    %tmp33 = load i32, i32* %tmp32
-    %tmp34 = call i32 @fs.write_to_file(i8* %tmp29, i8* %tmp31, i32 %tmp33)
+    %tmp26 = getelementptr inbounds %struct.string.String, %struct.string.String* %data, i32 0, i32 0
+    %tmp27 = load i8*, i8** %tmp26
+    %tmp28 = getelementptr inbounds %struct.string.String, %struct.string.String* %data, i32 0, i32 1
+    %tmp29 = load i32, i32* %tmp28
+    call i32 @fs.write_to_file(i8* %tmp25, i8* %tmp27, i32 %tmp29)
     %read = alloca %struct.string.String
-    %tmp35 = load i8*, i8** %c_string
-    %tmp36 = call %struct.string.String @fs.read_full_file_as_string(i8* %tmp35)
-    store %struct.string.String %tmp36, %struct.string.String* %read
-    %tmp37 = call i1 @string.equal(%struct.string.String* %data, %struct.string.String* %read)
-    %tmp38 = xor i1 %tmp37, 1
-    br i1 %tmp38, label %then0, label %endif0
+    %tmp30 = load i8*, i8** %c_string
+    %tmp31 = call %struct.string.String @fs.read_full_file_as_string(i8* %tmp30)
+    store %struct.string.String %tmp31, %struct.string.String* %read
+    %tmp32 = call i1 @string.equal(%struct.string.String* %data, %struct.string.String* %read)
+    %tmp33 = xor i1 %tmp32, 1
+    br i1 %tmp33, label %then0, label %endif0
 then0:
-    %tmp39 = getelementptr inbounds [38 x i8], [38 x i8]* @.str.7, i64 0, i64 0
-    call void @process.throw(i8* %tmp39)
+    %tmp34 = getelementptr inbounds [38 x i8], [38 x i8]* @.str.7, i64 0, i64 0
+    call void @process.throw(i8* %tmp34)
     br label %endif0
 endif0:
-    %tmp40 = load i8*, i8** %c_string
-    %tmp41 = call i32 @fs.delete_file(i8* %tmp40)
+    %tmp35 = load i8*, i8** %c_string
+    call i32 @fs.delete_file(i8* %tmp35)
     call void @string.free(%struct.string.String* %read)
     call void @string.free(%struct.string.String* %new_file_path)
     call void @string.free(%struct.string.String* %env_path)
     call void @string.free(%struct.string.String* %data)
-    %tmp42 = getelementptr inbounds [3 x i8], [3 x i8]* @.str.8, i64 0, i64 0
-    call void @console.writeln(i8* %tmp42, i32 2)
+    %tmp36 = getelementptr inbounds [3 x i8], [3 x i8]* @.str.8, i64 0, i64 0
+    call void @console.writeln(i8* %tmp36, i32 2)
     ret void
 }
 
@@ -1150,16 +1150,16 @@ endif1:
     %tmp4 = getelementptr inbounds %struct.string.String, %struct.string.String* %file, i32 0, i32 0
     %tmp5 = load i8*, i8** %tmp4
     %tmp6 = load i32, i32* %iterator
-    %tmp7 = mul i32 %tmp6, 1    %tmp8 = getelementptr inbounds i8, i8* %tmp5, i32 %tmp7
-    %tmp9 = load i8, i8* %tmp8
-    store i8 %tmp9, i8* %char
-    %tmp10 = load i8, i8* %char
-    %tmp11 = call i1 %condition(i8 %tmp10)
-    br i1 %tmp11, label %then2, label %else2
+    %tmp7 = getelementptr inbounds i8, i8* %tmp5, i32 %tmp6
+    %tmp8 = load i8, i8* %tmp7
+    store i8 %tmp8, i8* %char
+    %tmp9 = load i8, i8* %char
+    %tmp10 = call i1 %condition(i8 %tmp9)
+    br i1 %tmp10, label %then2, label %else2
 then2:
-    %tmp12 = load i32, i32* %iterator
-    %tmp13 = add i32 %tmp12, 1
-    store i32 %tmp13, i32* %iterator
+    %tmp11 = load i32, i32* %iterator
+    %tmp12 = add i32 %tmp11, 1
+    store i32 %tmp12, i32* %iterator
     br label %endif2
 else2:
     br label %loop_body0_exit
@@ -1223,491 +1223,491 @@ endif1:
     %tmp7 = getelementptr inbounds %struct.string.String, %struct.string.String* %file, i32 0, i32 0
     %tmp8 = load i8*, i8** %tmp7
     %tmp9 = load i32, i32* %iterator
-    %tmp10 = mul i32 %tmp9, 1    %tmp11 = getelementptr inbounds i8, i8* %tmp8, i32 %tmp10
-    %tmp12 = load i8, i8* %tmp11
-    store i8 %tmp12, i8* %char
-    %tmp13 = load i8, i8* %char
-    %tmp14 = icmp eq i8 %tmp13, 32
-    %tmp15 = load i8, i8* %char
-    %tmp16 = icmp eq i8 %tmp15, 9
-    %tmp17 = or i1 %tmp14, %tmp16
-    %tmp18 = load i8, i8* %char
-    %tmp19 = icmp eq i8 %tmp18, 10
-    %tmp20 = or i1 %tmp17, %tmp19
-    %tmp21 = load i8, i8* %char
-    %tmp22 = icmp eq i8 %tmp21, 13
-    %tmp23 = or i1 %tmp20, %tmp22
-    %tmp24 = and i1 %tmp23, 1
-    br i1 %tmp24, label %then2, label %endif2
+    %tmp10 = getelementptr inbounds i8, i8* %tmp8, i32 %tmp9
+    %tmp11 = load i8, i8* %tmp10
+    store i8 %tmp11, i8* %char
+    %tmp12 = load i8, i8* %char
+    %tmp13 = icmp eq i8 %tmp12, 32
+    %tmp14 = load i8, i8* %char
+    %tmp15 = icmp eq i8 %tmp14, 9
+    %tmp16 = or i1 %tmp13, %tmp15
+    %tmp17 = load i8, i8* %char
+    %tmp18 = icmp eq i8 %tmp17, 10
+    %tmp19 = or i1 %tmp16, %tmp18
+    %tmp20 = load i8, i8* %char
+    %tmp21 = icmp eq i8 %tmp20, 13
+    %tmp22 = or i1 %tmp19, %tmp21
+    %tmp23 = and i1 %tmp22, 1
+    br i1 %tmp23, label %then2, label %endif2
 then2:
-    %tmp25 = load i32, i32* %iterator
-    %tmp26 = add i32 %tmp25, 1
-    store i32 %tmp26, i32* %iterator
+    %tmp24 = load i32, i32* %iterator
+    %tmp25 = add i32 %tmp24, 1
+    store i32 %tmp25, i32* %iterator
     br label %loop_body0
     br label %endif2
 endif2:
-    %tmp27 = load i32, i32* %iterator
-    %tmp28 = add i32 %tmp27, 1
-    %tmp29 = getelementptr inbounds %struct.string.String, %struct.string.String* %file, i32 0, i32 1
-    %tmp30 = load i32, i32* %tmp29
-    %tmp31 = icmp slt i32 %tmp28, %tmp30
-    br i1 %tmp31, label %then3, label %else3
+    %tmp26 = load i32, i32* %iterator
+    %tmp27 = add i32 %tmp26, 1
+    %tmp28 = getelementptr inbounds %struct.string.String, %struct.string.String* %file, i32 0, i32 1
+    %tmp29 = load i32, i32* %tmp28
+    %tmp30 = icmp slt i32 %tmp27, %tmp29
+    br i1 %tmp30, label %then3, label %else3
 then3:
-    %tmp32 = getelementptr inbounds %struct.string.String, %struct.string.String* %file, i32 0, i32 0
-    %tmp33 = load i8*, i8** %tmp32
-    %tmp34 = load i32, i32* %iterator
-    %tmp35 = add i32 %tmp34, 1
-    %tmp36 = mul i32 %tmp35, 1    %tmp37 = getelementptr inbounds i8, i8* %tmp33, i32 %tmp36
-    %tmp38 = load i8, i8* %tmp37
-    store i8 %tmp38, i8* %next_char
+    %tmp31 = getelementptr inbounds %struct.string.String, %struct.string.String* %file, i32 0, i32 0
+    %tmp32 = load i8*, i8** %tmp31
+    %tmp33 = load i32, i32* %iterator
+    %tmp34 = add i32 %tmp33, 1
+    %tmp35 = getelementptr inbounds i8, i8* %tmp32, i32 %tmp34
+    %tmp36 = load i8, i8* %tmp35
+    store i8 %tmp36, i8* %next_char
     br label %endif3
 else3:
     store i8 0, i8* %next_char
     br label %endif3
 endif3:
-    %tmp39 = load i8, i8* %char
+    %tmp37 = load i8, i8* %char
+    %tmp38 = icmp eq i8 %tmp37, 47
+    %tmp39 = load i8, i8* %next_char
     %tmp40 = icmp eq i8 %tmp39, 47
-    %tmp41 = load i8, i8* %next_char
-    %tmp42 = icmp eq i8 %tmp41, 47
-    %tmp43 = and i1 %tmp40, %tmp42
-    br i1 %tmp43, label %then4, label %endif4
+    %tmp41 = and i1 %tmp38, %tmp40
+    br i1 %tmp41, label %then4, label %endif4
 then4:
-    %tmp44 = load i32, i32* %iterator
-    store i32 %tmp44, i32* %index
+    %tmp42 = load i32, i32* %iterator
+    store i32 %tmp42, i32* %index
     call void @tests.consume_while(%struct.string.String* %file, i32* %iterator, i1 (i8)** @tests.not_new_line)
     br label %loop_body0
     br label %endif4
 endif4:
-    %tmp45 = load i8, i8* %char
-    %tmp46 = call i1 @string_utils.is_ascii_num(i8 %tmp45)
-    br i1 %tmp46, label %then5, label %endif5
+    %tmp43 = load i8, i8* %char
+    %tmp44 = call i1 @string_utils.is_ascii_num(i8 %tmp43)
+    br i1 %tmp44, label %then5, label %endif5
 then5:
-    %tmp47 = load i32, i32* %iterator
-    store i32 %tmp47, i32* %index
+    %tmp45 = load i32, i32* %iterator
+    store i32 %tmp45, i32* %index
+    %tmp46 = load i8, i8* %next_char
+    %tmp47 = icmp eq i8 %tmp46, 120
     %tmp48 = load i8, i8* %next_char
-    %tmp49 = icmp eq i8 %tmp48, 120
-    %tmp50 = load i8, i8* %next_char
-    %tmp51 = icmp eq i8 %tmp50, 98
-    %tmp52 = or i1 %tmp49, %tmp51
-    br i1 %tmp52, label %then6, label %endif6
+    %tmp49 = icmp eq i8 %tmp48, 98
+    %tmp50 = or i1 %tmp47, %tmp49
+    br i1 %tmp50, label %then6, label %endif6
 then6:
-    %tmp53 = load i32, i32* %iterator
-    %tmp54 = add i32 %tmp53, 2
-    store i32 %tmp54, i32* %iterator
+    %tmp51 = load i32, i32* %iterator
+    %tmp52 = add i32 %tmp51, 2
+    store i32 %tmp52, i32* %iterator
     br label %endif6
 endif6:
     call void @tests.consume_while(%struct.string.String* %file, i32* %iterator, i1 (i8)** @tests.is_valid_number_token)
-    %tmp55 = load i32, i32* %iterator
-    %tmp56 = load i32, i32* %index
-    %tmp57 = sub i32 %tmp55, %tmp56
-    %tmp58 = call %struct.string.String @string.with_size(i32 %tmp57)
-    store %struct.string.String %tmp58, %struct.string.String* %temp_string
-    %tmp59 = getelementptr inbounds %struct.string.String, %struct.string.String* %file, i32 0, i32 0
-    %tmp60 = load i8*, i8** %tmp59
-    %tmp61 = load i32, i32* %index
-    %tmp62 = getelementptr i8, i8* %tmp60, i32 %tmp61
-    %tmp63 = getelementptr inbounds %struct.string.String, %struct.string.String* %temp_string, i32 0, i32 0
-    %tmp64 = load i8*, i8** %tmp63
-    %tmp65 = getelementptr inbounds %struct.string.String, %struct.string.String* %temp_string, i32 0, i32 1
-    %tmp66 = load i32, i32* %tmp65
-    %tmp67 = sext i32 %tmp66 to i64
-    call void @mem.copy(i8* %tmp62, i8* %tmp64, i64 %tmp67)
+    %tmp53 = load i32, i32* %iterator
+    %tmp54 = load i32, i32* %index
+    %tmp55 = sub i32 %tmp53, %tmp54
+    %tmp56 = call %struct.string.String @string.with_size(i32 %tmp55)
+    store %struct.string.String %tmp56, %struct.string.String* %temp_string
+    %tmp57 = getelementptr inbounds %struct.string.String, %struct.string.String* %file, i32 0, i32 0
+    %tmp58 = load i8*, i8** %tmp57
+    %tmp59 = load i32, i32* %index
+    %tmp60 = getelementptr i8, i8* %tmp58, i32 %tmp59
+    %tmp61 = getelementptr inbounds %struct.string.String, %struct.string.String* %temp_string, i32 0, i32 0
+    %tmp62 = load i8*, i8** %tmp61
+    %tmp63 = getelementptr inbounds %struct.string.String, %struct.string.String* %temp_string, i32 0, i32 1
+    %tmp64 = load i32, i32* %tmp63
+    %tmp65 = sext i32 %tmp64 to i64
+    call void @mem.copy(i8* %tmp60, i8* %tmp62, i64 %tmp65)
     call void @string.free(%struct.string.String* %temp_string)
     br label %loop_body0
     br label %endif5
 endif5:
+    %tmp66 = load i8, i8* %char
+    %tmp67 = call i1 @string_utils.is_ascii_char(i8 %tmp66)
     %tmp68 = load i8, i8* %char
-    %tmp69 = call i1 @string_utils.is_ascii_char(i8 %tmp68)
-    %tmp70 = load i8, i8* %char
-    %tmp71 = icmp eq i8 %tmp70, 95
-    %tmp72 = or i1 %tmp69, %tmp71
-    br i1 %tmp72, label %then7, label %endif7
+    %tmp69 = icmp eq i8 %tmp68, 95
+    %tmp70 = or i1 %tmp67, %tmp69
+    br i1 %tmp70, label %then7, label %endif7
 then7:
-    %tmp73 = load i32, i32* %iterator
-    store i32 %tmp73, i32* %index
+    %tmp71 = load i32, i32* %iterator
+    store i32 %tmp71, i32* %index
     call void @tests.consume_while(%struct.string.String* %file, i32* %iterator, i1 (i8)** @tests.valid_name_token)
-    %tmp74 = load i32, i32* %iterator
-    %tmp75 = load i32, i32* %index
-    %tmp76 = sub i32 %tmp74, %tmp75
-    %tmp77 = call %struct.string.String @string.with_size(i32 %tmp76)
-    store %struct.string.String %tmp77, %struct.string.String* %temp_string
-    %tmp78 = getelementptr inbounds %struct.string.String, %struct.string.String* %file, i32 0, i32 0
-    %tmp79 = load i8*, i8** %tmp78
-    %tmp80 = load i32, i32* %index
-    %tmp81 = getelementptr i8, i8* %tmp79, i32 %tmp80
-    %tmp82 = getelementptr inbounds %struct.string.String, %struct.string.String* %temp_string, i32 0, i32 0
-    %tmp83 = load i8*, i8** %tmp82
-    %tmp84 = getelementptr inbounds %struct.string.String, %struct.string.String* %temp_string, i32 0, i32 1
-    %tmp85 = load i32, i32* %tmp84
-    %tmp86 = sext i32 %tmp85 to i64
-    call void @mem.copy(i8* %tmp81, i8* %tmp83, i64 %tmp86)
+    %tmp72 = load i32, i32* %iterator
+    %tmp73 = load i32, i32* %index
+    %tmp74 = sub i32 %tmp72, %tmp73
+    %tmp75 = call %struct.string.String @string.with_size(i32 %tmp74)
+    store %struct.string.String %tmp75, %struct.string.String* %temp_string
+    %tmp76 = getelementptr inbounds %struct.string.String, %struct.string.String* %file, i32 0, i32 0
+    %tmp77 = load i8*, i8** %tmp76
+    %tmp78 = load i32, i32* %index
+    %tmp79 = getelementptr i8, i8* %tmp77, i32 %tmp78
+    %tmp80 = getelementptr inbounds %struct.string.String, %struct.string.String* %temp_string, i32 0, i32 0
+    %tmp81 = load i8*, i8** %tmp80
+    %tmp82 = getelementptr inbounds %struct.string.String, %struct.string.String* %temp_string, i32 0, i32 1
+    %tmp83 = load i32, i32* %tmp82
+    %tmp84 = sext i32 %tmp83 to i64
+    call void @mem.copy(i8* %tmp79, i8* %tmp81, i64 %tmp84)
     call void @string.free(%struct.string.String* %temp_string)
     br label %loop_body0
     br label %endif7
 endif7:
-    %tmp87 = load i8, i8* %char
-    %tmp88 = icmp eq i8 %tmp87, 34
-    br i1 %tmp88, label %then8, label %endif8
+    %tmp85 = load i8, i8* %char
+    %tmp86 = icmp eq i8 %tmp85, 34
+    br i1 %tmp86, label %then8, label %endif8
 then8:
-    %tmp89 = load i32, i32* %iterator
-    store i32 %tmp89, i32* %index
+    %tmp87 = load i32, i32* %iterator
+    store i32 %tmp87, i32* %index
     br label %loop_body9
 loop_body9:
+    %tmp88 = load i32, i32* %iterator
+    %tmp89 = add i32 %tmp88, 1
+    store i32 %tmp89, i32* %iterator
     %tmp90 = load i32, i32* %iterator
-    %tmp91 = add i32 %tmp90, 1
-    store i32 %tmp91, i32* %iterator
-    %tmp92 = load i32, i32* %iterator
-    %tmp93 = getelementptr inbounds %struct.string.String, %struct.string.String* %file, i32 0, i32 1
-    %tmp94 = load i32, i32* %tmp93
-    %tmp95 = icmp sge i32 %tmp92, %tmp94
-    br i1 %tmp95, label %then10, label %endif10
+    %tmp91 = getelementptr inbounds %struct.string.String, %struct.string.String* %file, i32 0, i32 1
+    %tmp92 = load i32, i32* %tmp91
+    %tmp93 = icmp sge i32 %tmp90, %tmp92
+    br i1 %tmp93, label %then10, label %endif10
 then10:
     br label %loop_body9_exit
     br label %endif10
 endif10:
-    %tmp96 = getelementptr inbounds %struct.string.String, %struct.string.String* %file, i32 0, i32 0
-    %tmp97 = load i8*, i8** %tmp96
-    %tmp98 = load i32, i32* %iterator
-    %tmp99 = mul i32 %tmp98, 1    %tmp100 = getelementptr inbounds i8, i8* %tmp97, i32 %tmp99
-    %tmp101 = load i8, i8* %tmp100
-    store i8 %tmp101, i8* %char
-    %tmp102 = load i8, i8* %char
-    %tmp103 = icmp ne i8 %tmp102, 34
-    br i1 %tmp103, label %then11, label %endif11
+    %tmp94 = getelementptr inbounds %struct.string.String, %struct.string.String* %file, i32 0, i32 0
+    %tmp95 = load i8*, i8** %tmp94
+    %tmp96 = load i32, i32* %iterator
+    %tmp97 = getelementptr inbounds i8, i8* %tmp95, i32 %tmp96
+    %tmp98 = load i8, i8* %tmp97
+    store i8 %tmp98, i8* %char
+    %tmp99 = load i8, i8* %char
+    %tmp100 = icmp ne i8 %tmp99, 34
+    br i1 %tmp100, label %then11, label %endif11
 then11:
     br label %loop_body9
     br label %endif11
 endif11:
-    %tmp104 = load i32, i32* %iterator
-    %tmp105 = add i32 %tmp104, 1
-    store i32 %tmp105, i32* %iterator
+    %tmp101 = load i32, i32* %iterator
+    %tmp102 = add i32 %tmp101, 1
+    store i32 %tmp102, i32* %iterator
     br label %loop_body9_exit
     br label %loop_body9
 loop_body9_exit:
-    %tmp106 = load i32, i32* %iterator
-    %tmp107 = load i32, i32* %index
-    %tmp108 = sub i32 %tmp106, %tmp107
-    %tmp109 = call %struct.string.String @string.with_size(i32 %tmp108)
-    store %struct.string.String %tmp109, %struct.string.String* %temp_string
-    %tmp110 = getelementptr inbounds %struct.string.String, %struct.string.String* %file, i32 0, i32 0
-    %tmp111 = load i8*, i8** %tmp110
-    %tmp112 = load i32, i32* %index
-    %tmp113 = getelementptr i8, i8* %tmp111, i32 %tmp112
-    %tmp114 = getelementptr inbounds %struct.string.String, %struct.string.String* %temp_string, i32 0, i32 0
-    %tmp115 = load i8*, i8** %tmp114
-    %tmp116 = getelementptr inbounds %struct.string.String, %struct.string.String* %temp_string, i32 0, i32 1
-    %tmp117 = load i32, i32* %tmp116
-    %tmp118 = sext i32 %tmp117 to i64
-    call void @mem.copy(i8* %tmp113, i8* %tmp115, i64 %tmp118)
+    %tmp103 = load i32, i32* %iterator
+    %tmp104 = load i32, i32* %index
+    %tmp105 = sub i32 %tmp103, %tmp104
+    %tmp106 = call %struct.string.String @string.with_size(i32 %tmp105)
+    store %struct.string.String %tmp106, %struct.string.String* %temp_string
+    %tmp107 = getelementptr inbounds %struct.string.String, %struct.string.String* %file, i32 0, i32 0
+    %tmp108 = load i8*, i8** %tmp107
+    %tmp109 = load i32, i32* %index
+    %tmp110 = getelementptr i8, i8* %tmp108, i32 %tmp109
+    %tmp111 = getelementptr inbounds %struct.string.String, %struct.string.String* %temp_string, i32 0, i32 0
+    %tmp112 = load i8*, i8** %tmp111
+    %tmp113 = getelementptr inbounds %struct.string.String, %struct.string.String* %temp_string, i32 0, i32 1
+    %tmp114 = load i32, i32* %tmp113
+    %tmp115 = sext i32 %tmp114 to i64
+    call void @mem.copy(i8* %tmp110, i8* %tmp112, i64 %tmp115)
     call void @string.free(%struct.string.String* %temp_string)
     br label %loop_body0
     br label %endif8
 endif8:
-    %tmp119 = load i8, i8* %char
-    %tmp120 = icmp eq i8 %tmp119, 40
-    br i1 %tmp120, label %then12, label %endif12
+    %tmp116 = load i8, i8* %char
+    %tmp117 = icmp eq i8 %tmp116, 40
+    br i1 %tmp117, label %then12, label %endif12
 then12:
-    %tmp121 = load i32, i32* %iterator
-    %tmp122 = add i32 %tmp121, 1
-    store i32 %tmp122, i32* %iterator
+    %tmp118 = load i32, i32* %iterator
+    %tmp119 = add i32 %tmp118, 1
+    store i32 %tmp119, i32* %iterator
     br label %loop_body0
     br label %endif12
 endif12:
-    %tmp123 = load i8, i8* %char
-    %tmp124 = icmp eq i8 %tmp123, 41
-    br i1 %tmp124, label %then13, label %endif13
+    %tmp120 = load i8, i8* %char
+    %tmp121 = icmp eq i8 %tmp120, 41
+    br i1 %tmp121, label %then13, label %endif13
 then13:
-    %tmp125 = load i32, i32* %iterator
-    %tmp126 = add i32 %tmp125, 1
-    store i32 %tmp126, i32* %iterator
+    %tmp122 = load i32, i32* %iterator
+    %tmp123 = add i32 %tmp122, 1
+    store i32 %tmp123, i32* %iterator
     br label %loop_body0
     br label %endif13
 endif13:
-    %tmp127 = load i8, i8* %char
-    %tmp128 = icmp eq i8 %tmp127, 123
-    br i1 %tmp128, label %then14, label %endif14
+    %tmp124 = load i8, i8* %char
+    %tmp125 = icmp eq i8 %tmp124, 123
+    br i1 %tmp125, label %then14, label %endif14
 then14:
-    %tmp129 = load i32, i32* %iterator
-    %tmp130 = add i32 %tmp129, 1
-    store i32 %tmp130, i32* %iterator
+    %tmp126 = load i32, i32* %iterator
+    %tmp127 = add i32 %tmp126, 1
+    store i32 %tmp127, i32* %iterator
     br label %loop_body0
     br label %endif14
 endif14:
-    %tmp131 = load i8, i8* %char
-    %tmp132 = icmp eq i8 %tmp131, 125
-    br i1 %tmp132, label %then15, label %endif15
+    %tmp128 = load i8, i8* %char
+    %tmp129 = icmp eq i8 %tmp128, 125
+    br i1 %tmp129, label %then15, label %endif15
 then15:
-    %tmp133 = load i32, i32* %iterator
-    %tmp134 = add i32 %tmp133, 1
-    store i32 %tmp134, i32* %iterator
+    %tmp130 = load i32, i32* %iterator
+    %tmp131 = add i32 %tmp130, 1
+    store i32 %tmp131, i32* %iterator
     br label %loop_body0
     br label %endif15
 endif15:
-    %tmp135 = load i8, i8* %char
-    %tmp136 = icmp eq i8 %tmp135, 91
-    br i1 %tmp136, label %then16, label %endif16
+    %tmp132 = load i8, i8* %char
+    %tmp133 = icmp eq i8 %tmp132, 91
+    br i1 %tmp133, label %then16, label %endif16
 then16:
-    %tmp137 = load i32, i32* %iterator
-    %tmp138 = add i32 %tmp137, 1
-    store i32 %tmp138, i32* %iterator
+    %tmp134 = load i32, i32* %iterator
+    %tmp135 = add i32 %tmp134, 1
+    store i32 %tmp135, i32* %iterator
     br label %loop_body0
     br label %endif16
 endif16:
-    %tmp139 = load i8, i8* %char
-    %tmp140 = icmp eq i8 %tmp139, 93
-    br i1 %tmp140, label %then17, label %endif17
+    %tmp136 = load i8, i8* %char
+    %tmp137 = icmp eq i8 %tmp136, 93
+    br i1 %tmp137, label %then17, label %endif17
 then17:
-    %tmp141 = load i32, i32* %iterator
-    %tmp142 = add i32 %tmp141, 1
-    store i32 %tmp142, i32* %iterator
+    %tmp138 = load i32, i32* %iterator
+    %tmp139 = add i32 %tmp138, 1
+    store i32 %tmp139, i32* %iterator
     br label %loop_body0
     br label %endif17
 endif17:
-    %tmp143 = load i8, i8* %char
-    %tmp144 = icmp eq i8 %tmp143, 61
-    br i1 %tmp144, label %then18, label %endif18
+    %tmp140 = load i8, i8* %char
+    %tmp141 = icmp eq i8 %tmp140, 61
+    br i1 %tmp141, label %then18, label %endif18
 then18:
-    %tmp145 = load i8, i8* %next_char
-    %tmp146 = icmp eq i8 %tmp145, 61
-    br i1 %tmp146, label %then19, label %endif19
+    %tmp142 = load i8, i8* %next_char
+    %tmp143 = icmp eq i8 %tmp142, 61
+    br i1 %tmp143, label %then19, label %endif19
 then19:
-    %tmp147 = load i32, i32* %iterator
-    %tmp148 = add i32 %tmp147, 2
-    store i32 %tmp148, i32* %iterator
+    %tmp144 = load i32, i32* %iterator
+    %tmp145 = add i32 %tmp144, 2
+    store i32 %tmp145, i32* %iterator
     br label %loop_body0
     br label %endif19
 endif19:
-    %tmp149 = load i32, i32* %iterator
-    %tmp150 = add i32 %tmp149, 1
-    store i32 %tmp150, i32* %iterator
+    %tmp146 = load i32, i32* %iterator
+    %tmp147 = add i32 %tmp146, 1
+    store i32 %tmp147, i32* %iterator
     br label %loop_body0
     br label %endif18
 endif18:
-    %tmp151 = load i8, i8* %char
-    %tmp152 = icmp eq i8 %tmp151, 58
-    br i1 %tmp152, label %then20, label %endif20
+    %tmp148 = load i8, i8* %char
+    %tmp149 = icmp eq i8 %tmp148, 58
+    br i1 %tmp149, label %then20, label %endif20
 then20:
-    %tmp153 = load i8, i8* %next_char
-    %tmp154 = icmp eq i8 %tmp153, 58
-    br i1 %tmp154, label %then21, label %endif21
+    %tmp150 = load i8, i8* %next_char
+    %tmp151 = icmp eq i8 %tmp150, 58
+    br i1 %tmp151, label %then21, label %endif21
 then21:
-    %tmp155 = load i32, i32* %iterator
-    %tmp156 = add i32 %tmp155, 2
-    store i32 %tmp156, i32* %iterator
+    %tmp152 = load i32, i32* %iterator
+    %tmp153 = add i32 %tmp152, 2
+    store i32 %tmp153, i32* %iterator
     br label %loop_body0
     br label %endif21
 endif21:
-    %tmp157 = load i32, i32* %iterator
-    %tmp158 = add i32 %tmp157, 1
-    store i32 %tmp158, i32* %iterator
+    %tmp154 = load i32, i32* %iterator
+    %tmp155 = add i32 %tmp154, 1
+    store i32 %tmp155, i32* %iterator
     br label %loop_body0
     br label %endif20
 endif20:
-    %tmp159 = load i8, i8* %char
-    %tmp160 = icmp eq i8 %tmp159, 124
-    br i1 %tmp160, label %then22, label %endif22
+    %tmp156 = load i8, i8* %char
+    %tmp157 = icmp eq i8 %tmp156, 124
+    br i1 %tmp157, label %then22, label %endif22
 then22:
-    %tmp161 = load i8, i8* %next_char
-    %tmp162 = icmp eq i8 %tmp161, 124
-    br i1 %tmp162, label %then23, label %endif23
+    %tmp158 = load i8, i8* %next_char
+    %tmp159 = icmp eq i8 %tmp158, 124
+    br i1 %tmp159, label %then23, label %endif23
 then23:
-    %tmp163 = load i32, i32* %iterator
-    %tmp164 = add i32 %tmp163, 2
-    store i32 %tmp164, i32* %iterator
+    %tmp160 = load i32, i32* %iterator
+    %tmp161 = add i32 %tmp160, 2
+    store i32 %tmp161, i32* %iterator
     br label %loop_body0
     br label %endif23
 endif23:
-    %tmp165 = load i32, i32* %iterator
-    %tmp166 = add i32 %tmp165, 1
-    store i32 %tmp166, i32* %iterator
+    %tmp162 = load i32, i32* %iterator
+    %tmp163 = add i32 %tmp162, 1
+    store i32 %tmp163, i32* %iterator
     br label %loop_body0
     br label %endif22
 endif22:
-    %tmp167 = load i8, i8* %char
-    %tmp168 = icmp eq i8 %tmp167, 38
-    br i1 %tmp168, label %then24, label %endif24
+    %tmp164 = load i8, i8* %char
+    %tmp165 = icmp eq i8 %tmp164, 38
+    br i1 %tmp165, label %then24, label %endif24
 then24:
-    %tmp169 = load i8, i8* %next_char
-    %tmp170 = icmp eq i8 %tmp169, 38
-    br i1 %tmp170, label %then25, label %endif25
+    %tmp166 = load i8, i8* %next_char
+    %tmp167 = icmp eq i8 %tmp166, 38
+    br i1 %tmp167, label %then25, label %endif25
 then25:
-    %tmp171 = load i32, i32* %iterator
-    %tmp172 = add i32 %tmp171, 2
-    store i32 %tmp172, i32* %iterator
+    %tmp168 = load i32, i32* %iterator
+    %tmp169 = add i32 %tmp168, 2
+    store i32 %tmp169, i32* %iterator
     br label %loop_body0
     br label %endif25
 endif25:
-    %tmp173 = load i32, i32* %iterator
-    %tmp174 = add i32 %tmp173, 1
-    store i32 %tmp174, i32* %iterator
+    %tmp170 = load i32, i32* %iterator
+    %tmp171 = add i32 %tmp170, 1
+    store i32 %tmp171, i32* %iterator
     br label %loop_body0
     br label %endif24
 endif24:
-    %tmp175 = load i8, i8* %char
-    %tmp176 = icmp eq i8 %tmp175, 62
-    br i1 %tmp176, label %then26, label %endif26
+    %tmp172 = load i8, i8* %char
+    %tmp173 = icmp eq i8 %tmp172, 62
+    br i1 %tmp173, label %then26, label %endif26
 then26:
-    %tmp177 = load i8, i8* %next_char
-    %tmp178 = icmp eq i8 %tmp177, 61
-    br i1 %tmp178, label %then27, label %endif27
+    %tmp174 = load i8, i8* %next_char
+    %tmp175 = icmp eq i8 %tmp174, 61
+    br i1 %tmp175, label %then27, label %endif27
 then27:
-    %tmp179 = load i32, i32* %iterator
-    %tmp180 = add i32 %tmp179, 2
-    store i32 %tmp180, i32* %iterator
+    %tmp176 = load i32, i32* %iterator
+    %tmp177 = add i32 %tmp176, 2
+    store i32 %tmp177, i32* %iterator
     br label %loop_body0
     br label %endif27
 endif27:
-    %tmp181 = load i32, i32* %iterator
-    %tmp182 = add i32 %tmp181, 1
-    store i32 %tmp182, i32* %iterator
+    %tmp178 = load i32, i32* %iterator
+    %tmp179 = add i32 %tmp178, 1
+    store i32 %tmp179, i32* %iterator
     br label %loop_body0
     br label %endif26
 endif26:
-    %tmp183 = load i8, i8* %char
-    %tmp184 = icmp eq i8 %tmp183, 60
-    br i1 %tmp184, label %then28, label %endif28
+    %tmp180 = load i8, i8* %char
+    %tmp181 = icmp eq i8 %tmp180, 60
+    br i1 %tmp181, label %then28, label %endif28
 then28:
-    %tmp185 = load i8, i8* %next_char
-    %tmp186 = icmp eq i8 %tmp185, 61
-    br i1 %tmp186, label %then29, label %endif29
+    %tmp182 = load i8, i8* %next_char
+    %tmp183 = icmp eq i8 %tmp182, 61
+    br i1 %tmp183, label %then29, label %endif29
 then29:
-    %tmp187 = load i32, i32* %iterator
-    %tmp188 = add i32 %tmp187, 2
-    store i32 %tmp188, i32* %iterator
+    %tmp184 = load i32, i32* %iterator
+    %tmp185 = add i32 %tmp184, 2
+    store i32 %tmp185, i32* %iterator
     br label %loop_body0
     br label %endif29
 endif29:
-    %tmp189 = load i32, i32* %iterator
-    %tmp190 = add i32 %tmp189, 1
-    store i32 %tmp190, i32* %iterator
+    %tmp186 = load i32, i32* %iterator
+    %tmp187 = add i32 %tmp186, 1
+    store i32 %tmp187, i32* %iterator
     br label %loop_body0
     br label %endif28
 endif28:
-    %tmp191 = load i8, i8* %char
-    %tmp192 = icmp eq i8 %tmp191, 35
-    br i1 %tmp192, label %then30, label %endif30
+    %tmp188 = load i8, i8* %char
+    %tmp189 = icmp eq i8 %tmp188, 35
+    br i1 %tmp189, label %then30, label %endif30
 then30:
-    %tmp193 = load i32, i32* %iterator
-    %tmp194 = add i32 %tmp193, 1
-    store i32 %tmp194, i32* %iterator
+    %tmp190 = load i32, i32* %iterator
+    %tmp191 = add i32 %tmp190, 1
+    store i32 %tmp191, i32* %iterator
     br label %loop_body0
     br label %endif30
 endif30:
-    %tmp195 = load i8, i8* %char
-    %tmp196 = icmp eq i8 %tmp195, 59
-    br i1 %tmp196, label %then31, label %endif31
+    %tmp192 = load i8, i8* %char
+    %tmp193 = icmp eq i8 %tmp192, 59
+    br i1 %tmp193, label %then31, label %endif31
 then31:
-    %tmp197 = load i32, i32* %iterator
-    %tmp198 = add i32 %tmp197, 1
-    store i32 %tmp198, i32* %iterator
+    %tmp194 = load i32, i32* %iterator
+    %tmp195 = add i32 %tmp194, 1
+    store i32 %tmp195, i32* %iterator
     br label %loop_body0
     br label %endif31
 endif31:
-    %tmp199 = load i8, i8* %char
-    %tmp200 = icmp eq i8 %tmp199, 46
-    br i1 %tmp200, label %then32, label %endif32
+    %tmp196 = load i8, i8* %char
+    %tmp197 = icmp eq i8 %tmp196, 46
+    br i1 %tmp197, label %then32, label %endif32
 then32:
-    %tmp201 = load i32, i32* %iterator
-    %tmp202 = add i32 %tmp201, 1
-    store i32 %tmp202, i32* %iterator
+    %tmp198 = load i32, i32* %iterator
+    %tmp199 = add i32 %tmp198, 1
+    store i32 %tmp199, i32* %iterator
     br label %loop_body0
     br label %endif32
 endif32:
-    %tmp203 = load i8, i8* %char
-    %tmp204 = icmp eq i8 %tmp203, 44
-    br i1 %tmp204, label %then33, label %endif33
+    %tmp200 = load i8, i8* %char
+    %tmp201 = icmp eq i8 %tmp200, 44
+    br i1 %tmp201, label %then33, label %endif33
 then33:
-    %tmp205 = load i32, i32* %iterator
-    %tmp206 = add i32 %tmp205, 1
-    store i32 %tmp206, i32* %iterator
+    %tmp202 = load i32, i32* %iterator
+    %tmp203 = add i32 %tmp202, 1
+    store i32 %tmp203, i32* %iterator
     br label %loop_body0
     br label %endif33
 endif33:
-    %tmp207 = load i8, i8* %char
-    %tmp208 = icmp eq i8 %tmp207, 43
-    br i1 %tmp208, label %then34, label %endif34
+    %tmp204 = load i8, i8* %char
+    %tmp205 = icmp eq i8 %tmp204, 43
+    br i1 %tmp205, label %then34, label %endif34
 then34:
-    %tmp209 = load i32, i32* %iterator
-    %tmp210 = add i32 %tmp209, 1
-    store i32 %tmp210, i32* %iterator
+    %tmp206 = load i32, i32* %iterator
+    %tmp207 = add i32 %tmp206, 1
+    store i32 %tmp207, i32* %iterator
     br label %loop_body0
     br label %endif34
 endif34:
-    %tmp211 = load i8, i8* %char
-    %tmp212 = icmp eq i8 %tmp211, 45
-    br i1 %tmp212, label %then35, label %endif35
+    %tmp208 = load i8, i8* %char
+    %tmp209 = icmp eq i8 %tmp208, 45
+    br i1 %tmp209, label %then35, label %endif35
 then35:
-    %tmp213 = load i32, i32* %iterator
-    %tmp214 = add i32 %tmp213, 1
-    store i32 %tmp214, i32* %iterator
+    %tmp210 = load i32, i32* %iterator
+    %tmp211 = add i32 %tmp210, 1
+    store i32 %tmp211, i32* %iterator
     br label %loop_body0
     br label %endif35
 endif35:
-    %tmp215 = load i8, i8* %char
-    %tmp216 = icmp eq i8 %tmp215, 42
-    br i1 %tmp216, label %then36, label %endif36
+    %tmp212 = load i8, i8* %char
+    %tmp213 = icmp eq i8 %tmp212, 42
+    br i1 %tmp213, label %then36, label %endif36
 then36:
-    %tmp217 = load i32, i32* %iterator
-    %tmp218 = add i32 %tmp217, 1
-    store i32 %tmp218, i32* %iterator
+    %tmp214 = load i32, i32* %iterator
+    %tmp215 = add i32 %tmp214, 1
+    store i32 %tmp215, i32* %iterator
     br label %loop_body0
     br label %endif36
 endif36:
-    %tmp219 = load i8, i8* %char
-    %tmp220 = icmp eq i8 %tmp219, 47
-    br i1 %tmp220, label %then37, label %endif37
+    %tmp216 = load i8, i8* %char
+    %tmp217 = icmp eq i8 %tmp216, 47
+    br i1 %tmp217, label %then37, label %endif37
 then37:
-    %tmp221 = load i32, i32* %iterator
-    %tmp222 = add i32 %tmp221, 1
-    store i32 %tmp222, i32* %iterator
+    %tmp218 = load i32, i32* %iterator
+    %tmp219 = add i32 %tmp218, 1
+    store i32 %tmp219, i32* %iterator
     br label %loop_body0
     br label %endif37
 endif37:
-    %tmp223 = load i8, i8* %char
-    %tmp224 = icmp eq i8 %tmp223, 37
-    br i1 %tmp224, label %then38, label %endif38
+    %tmp220 = load i8, i8* %char
+    %tmp221 = icmp eq i8 %tmp220, 37
+    br i1 %tmp221, label %then38, label %endif38
 then38:
-    %tmp225 = load i32, i32* %iterator
-    %tmp226 = add i32 %tmp225, 1
-    store i32 %tmp226, i32* %iterator
+    %tmp222 = load i32, i32* %iterator
+    %tmp223 = add i32 %tmp222, 1
+    store i32 %tmp223, i32* %iterator
     br label %loop_body0
     br label %endif38
 endif38:
-    %tmp227 = load i8, i8* %char
-    %tmp228 = icmp eq i8 %tmp227, 33
-    br i1 %tmp228, label %then39, label %endif39
+    %tmp224 = load i8, i8* %char
+    %tmp225 = icmp eq i8 %tmp224, 33
+    br i1 %tmp225, label %then39, label %endif39
 then39:
-    %tmp229 = load i32, i32* %iterator
-    %tmp230 = add i32 %tmp229, 1
-    store i32 %tmp230, i32* %iterator
+    %tmp226 = load i32, i32* %iterator
+    %tmp227 = add i32 %tmp226, 1
+    store i32 %tmp227, i32* %iterator
     br label %loop_body0
     br label %endif39
 endif39:
-    %tmp231 = load i8, i8* %char
-    %tmp232 = icmp eq i8 %tmp231, 126
-    br i1 %tmp232, label %then40, label %endif40
+    %tmp228 = load i8, i8* %char
+    %tmp229 = icmp eq i8 %tmp228, 126
+    br i1 %tmp229, label %then40, label %endif40
 then40:
-    %tmp233 = load i32, i32* %iterator
-    %tmp234 = add i32 %tmp233, 1
-    store i32 %tmp234, i32* %iterator
+    %tmp230 = load i32, i32* %iterator
+    %tmp231 = add i32 %tmp230, 1
+    store i32 %tmp231, i32* %iterator
     br label %loop_body0
     br label %endif40
 endif40:
-    %tmp235 = load i8, i8* %char
-    call void @console.print_char(i8 %tmp235)
-    %tmp236 = load i32, i32* %iterator
-    %tmp237 = add i32 %tmp236, 1
-    store i32 %tmp237, i32* %iterator
+    %tmp232 = load i8, i8* %char
+    call void @console.print_char(i8 %tmp232)
+    %tmp233 = load i32, i32* %iterator
+    %tmp234 = add i32 %tmp233, 1
+    store i32 %tmp234, i32* %iterator
     br label %loop_body0
 loop_body0_exit:
     ret void
 }
 
 define i32 @main() {
-    %tmp0 = call i32 @AllocConsole()
+    call i32 @AllocConsole()
     call void @tests.run()
-    %tmp1 = call i32 @window.start()
-    %tmp2 = call i32 @FreeConsole()
+    call i32 @window.start()
+    call i32 @FreeConsole()
     ret i32 0
 }
 
@@ -1822,21 +1822,21 @@ then2:
     br label %endif2
 endif2:
     %tmp33 = load i8*, i8** %hWnd
-    %tmp34 = call i32 @ShowWindow(i8* %tmp33, i32 1)
-    %tmp35 = load i8*, i8** %hWnd
-    %tmp36 = call i32 @UpdateWindow(i8* %tmp35)
+    call i32 @ShowWindow(i8* %tmp33, i32 1)
+    %tmp34 = load i8*, i8** %hWnd
+    call i32 @UpdateWindow(i8* %tmp34)
     %msg = alloca %struct.window.MSG
     br label %loop_body3
 loop_body3:
     %result = alloca i32
-    %tmp37 = call i32 @GetMessageA(%struct.window.MSG* %msg, i8* null, i32 0, i32 0)
-    store i32 %tmp37, i32* %result
-    %tmp38 = load i32, i32* %result
-    %tmp39 = icmp sgt i32 %tmp38, 0
-    br i1 %tmp39, label %then4, label %else4
+    %tmp35 = call i32 @GetMessageA(%struct.window.MSG* %msg, i8* null, i32 0, i32 0)
+    store i32 %tmp35, i32* %result
+    %tmp36 = load i32, i32* %result
+    %tmp37 = icmp sgt i32 %tmp36, 0
+    br i1 %tmp37, label %then4, label %else4
 then4:
-    %tmp40 = call i32 @TranslateMessage(%struct.window.MSG* %msg)
-    %tmp41 = call i64 @DispatchMessageA(%struct.window.MSG* %msg)
+    call i32 @TranslateMessage(%struct.window.MSG* %msg)
+    call i64 @DispatchMessageA(%struct.window.MSG* %msg)
     br label %endif4
 else4:
     br label %loop_body3_exit
@@ -1844,8 +1844,8 @@ else4:
 endif4:
     br label %loop_body3
 loop_body3_exit:
-    %tmp42 = getelementptr inbounds %struct.window.MSG, %struct.window.MSG* %msg, i32 0, i32 2
-    %tmp43 = load i64, i64* %tmp42
-    %tmp44 = trunc i64 %tmp43 to i32
-    ret i32 %tmp44
+    %tmp38 = getelementptr inbounds %struct.window.MSG, %struct.window.MSG* %msg, i32 0, i32 2
+    %tmp39 = load i64, i64* %tmp38
+    %tmp40 = trunc i64 %tmp39 to i32
+    ret i32 %tmp40
 }
