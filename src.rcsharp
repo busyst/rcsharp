@@ -7,7 +7,7 @@
 /// Planned features
 // Compile-Time Type Overlay (aka `constant_mask`) for fixed index-based typed overlays on arrays.
 // For constant indices in `array[const]`, substitute a concrete type at compile-time.
-// Example (indexing with [] not yet implemented):
+// Example:
 // let x: &&void;
 // constant_mask!(x, &i32, &bool);
 // OR //

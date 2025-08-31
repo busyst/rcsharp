@@ -1,480 +1,393 @@
 use core::str;
 use std::cell::Cell;
-
 use ordered_hash_map::OrderedHashMap;
-
-use crate::{compiler_essentials::{Attribute, CompilerType, Function, Scope, Struct, Variable}, expression_compiler::{compile_expression, constant_integer_expression_compiler, implicit_cast, Expected}, expression_parser::Expr, parser::{ParserType, Stmt}};
-pub fn rcsharp_compile_to_file(x: &[Stmt]) -> Result<(), String> {
-    let mut state = CompilerState::default();
-    rcsharp_compile(x, &mut state)?;
-    let direct_output = state.output.output();
-    let mut file = std::fs::File::create("output.ll").map_err(|e| e.to_string())?;
-    std::io::Write::write_all(&mut file, direct_output.as_bytes()).map_err(|e| e.to_string())?;
-
-    Ok(())
+use crate::{compiler_essentials::{Attribute, Enum, Function, Scope, Struct, Variable}, expression_compiler::{compile_expression, constant_integer_expression_compiler, Expected}, expression_parser::Expr, parser::{ParserType, Stmt}};
+pub const POINTER_SIZE_IN_BYTES : u32 = 8;
+#[derive(Debug)]
+pub enum CompileError {
+    Io(std::io::Error),
+    DuplicateSymbol(String),
+    SymbolNotFound(String),
+    TypeMismatch {
+        expected: ParserType,
+        found: ParserType,
+    },
+    InvalidStatementInContext(String),
+    InvalidExpression(String),
+    InvalidEnumBaseType(String),
+    Generic(String),
 }
-
-
-
-pub fn rcsharp_compile(x: &[Stmt], main_state :&mut CompilerState) -> Result<(), String> {
-    main_state.output.push_str_header("target triple = \"x86_64-pc-windows-msvc\"\n");
-    populate_default_types(main_state)?;
-    pre_compile(x, main_state)?;
-    compile_structs(main_state)?;
-    compile_attributes(main_state)?;
-    compile_functions(main_state)?;
-    Ok(())
-}
-fn pre_compile(x: &[Stmt], state :&mut CompilerState) -> Result<(), String>{
-    return recursive_pre_compile(x,"", state);
-}
-fn recursive_pre_compile(x: &[Stmt], current_path: &str, state: &mut CompilerState) -> Result<(), String>{
-    for i in 0..x.len() {
-        let statement = &x[i];
-        match statement {
-            Stmt::Function(n, a, r, b) => {
-                let mut atribs_len = 0;
-                for j in (0..i).rev() {
-                    if matches!(&x[j], Stmt::Hint(_, _)) { atribs_len += 1; } 
-                    else { break; }
-                }
-                let attribs = x[i-atribs_len..i].iter().map(|x| {if let Stmt::Hint(x, y) = x {return Attribute::new(x.clone().into_boxed_str(),y.clone());} else {panic!()}} ).collect::<Vec<_>>();
-
-                let full_name = if current_path.is_empty() {
-                    n.clone()
-                } else {
-                    format!("{}.{}", current_path, n)
-                };
-
-                let function = Function::new(
-                    current_path.to_string(),
-                    n.clone(),
-                    a.clone(), 
-                    r.clone(), 
-                    b.to_vec(), 
-                    attribs,
-                    Cell::new(0),
-                );
-
-                if state.declared_functions.contains_key(&full_name) {
-                    return Err(format!("Function '{}' already defined in this scope.", n));
-                }
-                state.declared_functions.insert(full_name, function);
-            },
-            Stmt::Struct(n, a) => {
-                let full_name = if current_path.is_empty() {
-                    n.clone()
-                } else {
-                    format!("{}.{}", current_path, n)
-                };
-
-                let fields = a.clone();
-                let struct_pt = (full_name.clone(), fields.iter().map(|x|x.clone()).collect::<Vec<_>>(), vec![]);
-                
-                if state.declared_types.contains_key(&full_name) {
-                     return Err(format!("Type '{}' already defined in this scope.", n));
-                }
-                state.declared_types.insert(full_name.clone(), Struct::new(current_path.to_string().into_boxed_str(), n.clone().into_boxed_str(), fields, vec![], Cell::new(0)));
-                
-                state.structures_of_types.insert(full_name.clone(), struct_pt);
-            },
-            Stmt::Namespace(name, body) =>{
-                let new_path = if current_path.is_empty() {
-                    name.clone()
-                } else {
-                    format!("{}.{}", current_path, name)
-                };
-                recursive_pre_compile(body, &new_path, state)?;
-            }
-            Stmt::Enum(n, enum_base_type, entries) =>{
-                let full_name = if current_path.is_empty() {
-                    n.clone()
-                } else {
-                    format!("{}.{}", current_path, n)
-                };
-                let entries = entries.iter().map(|x| {let e = constant_integer_expression_compiler(&x.1, state); if e.is_ok() {return Some((x.0.clone(), e.unwrap()));} else {return None;}}).collect::<Option<Vec<_>>>()
-                .ok_or(format!("Enum {} has invalid value", full_name))?;
-                let base_type = enum_base_type.as_ref().unwrap_or(&ParserType::Named(format!("i64"))).clone();
-                if !base_type.is_integer() {
-                    return Err(format!("Base type of enum '{}' is allowed to be integer only!", n));
-                }
-
-                state.declared_enums.insert(full_name, (base_type, entries));
-            }
-            Stmt::Hint(_, _) => {}
-            _ => {return Err(format!("Unexpected statement during pre-compilation: {:?}", statement));}
+impl std::fmt::Display for CompileError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CompileError::Io(e) => write!(f, "IO Error: {}", e),
+            CompileError::DuplicateSymbol(name) => write!(f, "Symbol '{}' is already defined", name),
+            CompileError::SymbolNotFound(name) => write!(f, "Symbol '{}' not found in the current scope", name),
+            CompileError::TypeMismatch { expected, found } => write!(f, "Type mismatch: expected {:?}, found {:?}", expected, found),
+            CompileError::InvalidStatementInContext(stmt) => write!(f, "Statement '{}' is not valid in the current context", stmt),
+            CompileError::InvalidExpression(expr) => write!(f, "Invalid expression: {}", expr),
+            CompileError::InvalidEnumBaseType(name) => write!(f, "Enum '{}' has an invalid (non-integer) base type", name),
+            CompileError::Generic(msg) => write!(f, "Compilation error: {}", msg),
         }
+    }
+}
+impl From<std::io::Error> for CompileError {
+    fn from(err: std::io::Error) -> Self {
+        CompileError::Io(err)
+    }
+}
+
+pub type CompileResult<T> = Result<T, CompileError>;
+
+pub fn rcsharp_compile_to_file(stmts: &[Stmt]) -> Result<(), String> {
+    match rcsharp_compile(stmts) {
+        Ok(llvm_ir) => {
+            std::fs::write("output.ll", llvm_ir)
+                .map_err(|e| e.to_string())
+        }
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+pub fn rcsharp_compile(stmts: &[Stmt]) -> CompileResult<String>  {
+    
+    let mut symbols = SymbolTable::new();
+    let mut output = LLVMOutputHandler::default();
+    output.push_str_header("target triple = \"x86_64-pc-windows-msvc\"\n");
+    SymbolCollector::collect(stmts, &mut symbols).unwrap();
+
+    compile_structs(&symbols, &mut output)?;
+    compile_attributes(&symbols, &mut output)?;
+    compile_functions(&symbols, &mut output)?;
+    
+    Ok(output.build())
+}
+
+fn populate_default_types(table: &mut SymbolTable) {
+    table.types.insert("i8".to_string(), Struct::new_primitive("i8"));
+    table.types.insert("u8".to_string(), Struct::new_primitive("u8"));
+    table.types.insert("i16".to_string(), Struct::new_primitive("i16"));
+    table.types.insert("u16".to_string(), Struct::new_primitive("u16"));
+    table.types.insert("i32".to_string(), Struct::new_primitive("i32"));
+    table.types.insert("u32".to_string(), Struct::new_primitive("u32"));
+    table.types.insert("i64".to_string(), Struct::new_primitive("i64"));
+    table.types.insert("u64".to_string(), Struct::new_primitive("u64"));
+    table.types.insert("bool".to_string(), Struct::new_primitive("bool"));
+    table.types.insert("void".to_string(), Struct::new_primitive("void"));
+}
+fn compile_structs(symbols: &SymbolTable, output: &mut LLVMOutputHandler) -> CompileResult<()> {
+    let user_defined_structs = symbols.types.values().filter(|s: &&Struct| !s.is_primitive());
+    for s in user_defined_structs {
+        let field_types: Vec<String> = s.fields
+            .iter()
+            .map(|(_field_name, field_type)| get_llvm_type_str(field_type, symbols, &s.path))
+            .collect::<CompileResult<_>>()?;
+
+        let llvm_struct_name = s.llvm_representation();
+        let fields_str = field_types.join(", ");
+        let type_definition = format!("{} = type {{ {} }}\n", llvm_struct_name, fields_str);
+        output.push_str_header(&type_definition);
+    }
+    Ok(())
+}
+fn compile_attributes(symbols: &SymbolTable, output: &mut LLVMOutputHandler) -> CompileResult<()>{
+    let imported_funcs = symbols.functions.values().filter(|s| s.attribs.iter().any(|attr| attr.name_equals("DllImport")));
+    for function in imported_funcs {
+        let return_type_str = get_llvm_type_str(&function.return_type, symbols, &function.path)?;
+        let args_string = function.args.iter().map(|x| get_llvm_type_str(&x.1, symbols, &function.path))
+            .collect::<CompileResult<Vec<_>>>()?.join(",");
+        function.set_as_imported();
+        output.push_str_header(&format!("declare dllimport {} @{}({})\n", return_type_str, function.name, args_string));
     }
     Ok(())
 }
 
-fn populate_default_types(state: &mut CompilerState) -> Result<(), String> {
-    state.declared_types.insert("i8".to_string(), Struct::new_primitive("i8"));
-    state.declared_types.insert("u8".to_string(), Struct::new_primitive("u8"));
-    state.declared_types.insert("i16".to_string(), Struct::new_primitive("i16"));
-    state.declared_types.insert("u16".to_string(), Struct::new_primitive("u16"));
-    state.declared_types.insert("i32".to_string(), Struct::new_primitive("i32"));
-    state.declared_types.insert("u32".to_string(), Struct::new_primitive("u32"));
-    state.declared_types.insert("i64".to_string(), Struct::new_primitive("i64"));
-    state.declared_types.insert("u64".to_string(), Struct::new_primitive("u64"));
-    state.declared_types.insert("bool".to_string(), Struct::new_primitive("bool"));
-    state.declared_types.insert("void".to_string(), Struct::new_primitive("void"));
+fn compile_functions(symbols: &SymbolTable, output: &mut LLVMOutputHandler) -> CompileResult<()>{
+    let functions_to_compile = symbols.functions.values()
+        .filter(|f| !f.is_imported());
+    let mut cvc = 0;
+    for function in functions_to_compile {
+        let mut ctx = CodeGenContext::new(symbols, function);
+        ctx.const_vectors_counter = Cell::new(cvc);
+        compile_single_function(&mut ctx, function, output)?;
+        cvc = ctx.const_vectors_counter.get();
+    }
+    Ok(())
+}
+fn compile_single_function(
+    ctx: &mut CodeGenContext,
+    function: &Function,
+    output: &mut LLVMOutputHandler,
+) -> CompileResult<()> {
+    let return_type_str = get_llvm_type_str(&function.return_type, ctx.symbols, &function.path)?;
+
+    let args_str = function.args.iter()
+        .map(|(name, ptype)| {
+            get_llvm_type_str(ptype, ctx.symbols, &function.path)
+                .map(|type_str| format!("{} %{}", type_str, name))
+        })
+        .collect::<CompileResult<Vec<_>>>()?
+        .join(", ");
+    
+    output.push_str(&format!(
+        "\ndefine {} @{}({}) {{\n",
+        return_type_str,
+        function.effective_name(),
+        args_str
+    ));
+
+    /*for (arg_name, arg_type) in function.args.iter() { // FOR MUTABLE ARGUMENTS
+        let arg_type_str = get_llvm_type_str(arg_type, ctx.symbols, &function.path)?;
+        let ptr_name = format!("{}.addr", arg_name);
+
+        output.push_str(&format!("    %{} = alloca {}\n", ptr_name, arg_type_str));
+        output.push_str(&format!("    store {} %{}, {}* %{}\n", arg_type_str, arg_name, arg_type_str, ptr_name));
+
+        ctx.scope.add_variable(arg_name.clone(), Variable::new_argument(arg_type.clone(), ptr_name));
+    }*/
+    for (arg_name, arg_type) in function.args.iter() {
+        ctx.scope.add_variable(arg_name.clone(), Variable::new_argument(arg_type.clone()));
+    }
+    for stmt in function.body.iter(){
+        compile_statement(stmt, ctx, output)
+            .map_err(|e| CompileError::Generic(format!("In function '{}':\n{}", function.effective_name(), e)))?;
+    }
+    if !matches!(function.body.last(), Some(Stmt::Return(_))) {
+         if function.return_type.is_void() {
+            output.push_str("    ret void\n");
+        } else {
+            output.push_str("\n    unreachable\n");
+        }   
+    }
+
+    output.push_str("}\n");
+
     Ok(())
 }
 
-fn compile_attributes(state :&mut CompilerState) -> Result<(), String>{
-    for function in &state.declared_functions {
-        if function.1.attribs.iter().any(|attr| attr.name_equals("DllImport")) {
-            let func_return_type_string = state.get_llvm_representation_from_parser_type(&function.1.return_type)?;
-            
-            let args_string = function.1.args.iter().map(|x| state.get_llvm_representation_from_parser_type(&x.1))
-                .collect::<Result<Vec<_>,String>>()?.join(",");
-            
-            state.declared_functions[function.0].set_as_imported();
-            state.output.push_str_header(&format!("declare dllimport {} @{}({})\n", func_return_type_string, function.1.name, args_string));
-            continue;
-        }
-    }
-    Ok(())
-}
-fn compile_structs(main_state: &mut CompilerState) -> Result<(), String> {
-    for (_name, act_struct) in main_state.declared_types.iter().filter(|(_k, v)| !v.is_primitive()) {
-        let (_, fields, _methods) = &main_state.structures_of_types[_name];
-        main_state.current_function_path = act_struct.path.to_string();
-        let field_types = fields.iter().map(|x| main_state.get_llvm_representation_from_parser_type(&x.1))
-            .collect::<Result<Vec<_>,String>>()?.join(", ");
-        
-        let llvm_struct_name = act_struct.llvm_representation();
-        main_state.output.push_str_header(&format!("{} = type {{{}}}\n", llvm_struct_name, field_types));
-    }
-    Ok(())
-}
-fn compile_functions(state :&mut CompilerState) -> Result<(), String>{
-    let funcs_to_compile = state.declared_functions.iter().filter(|x| !x.1.is_imported()).map(|x| x.1.clone()).collect::<Vec<_>>();
-    for function in funcs_to_compile {
-        state.current_function_path = function.path.to_string();
-        let function_return_type = if function.return_type.is_void() {
-            format!("void")
-        }else{
-            state.get_llvm_representation_from_parser_type(&function.return_type)?
-        };
-        let effective_function_name = if function.path.is_empty(){
-            function.name.clone()
-        }else{
-            let mut x = function.path.clone();
-            x.push('.');
-            x.push_str(&function.name);
-            x
-        };
-        let mut arg_parts = Vec::new();
-        for (arg_name, arg_type) in &function.args {
-            let type_string = state.get_llvm_representation_from_parser_type(arg_type)?;
-            let formatted_arg = format!("{} %{}", type_string, arg_name);
-            arg_parts.push(formatted_arg);
-        }
-        let args_string = arg_parts.join(", ");
-
-        state.output.push_str(&format!("\ndefine {} @{}({}){{\n", function_return_type.to_string(), effective_function_name, args_string));
-        state.temp_value_counter = Cell::new(0);
-        let original_scope = state.current_scope.clone_and_enter();
-        for arg in &function.args {
-            state.current_scope.add_variable(arg.0.clone(), Variable::new_argument(CompilerType { parser_type: arg.1.clone() }));
-        }
-        state.current_function_name = function.name.clone();
-        state.current_function_path = function.path.clone();
-        for x in &function.body.clone() {
-            compile_statement(x, state)
-            .map_err(|x| format!("while compiling function \"{}\"\n\r{}",state.current_function_name,x))?;
-        }
-        state.current_scope.swap_and_exit(original_scope);
-        if function_return_type.to_string() == "void" {
-            state.output.push_str(&format!("    ret void\n"));
-        }
-        state.output.push_str(&format!("\n    unreachable\n}}\n"));
-    }
-    Ok(())
-}
-fn compile_statement(statement: &Stmt, state :&mut CompilerState) -> Result<(), String>{
-    match &statement {
+fn compile_statement(stmt: &Stmt, ctx: &mut CodeGenContext, output: &mut LLVMOutputHandler) -> CompileResult<()>{
+    match &stmt {
         Stmt::Let(name, var_type, expr) => {
-            let comp_type_llvm_repr = state.get_llvm_representation_from_parser_type(var_type)?;
-            state.output.push_str(&format!("    %{} = alloca {}\n", name, comp_type_llvm_repr));
-            state.current_scope.add_variable(name.clone(), Variable::new(CompilerType { parser_type: var_type.clone() }));
-            if let Some(expr) = expr {
-                compile_expression(&Expr::Assign(Box::new(Expr::Name(name.clone())), Box::new(expr.clone())), Expected::Type(var_type), state)
-                    .map_err(|x| format!("while compiling assign expression {:?}:\n{}", expr, x))?;
-                
+            let llvm_type = get_llvm_type_str(var_type, ctx.symbols, &ctx.current_function_path)?;
+            output.push_str(&format!("    %{} = alloca {}\n", name, llvm_type));
+            ctx.scope.add_variable(name.clone(), Variable::new(var_type.clone()));
+
+            if let Some(init_expr) = expr {
+                let assignment = Expr::Assign(
+                    Box::new(Expr::Name(name.clone())),
+                    Box::new(init_expr.clone())
+                );
+                compile_expression(&assignment, Expected::Type(var_type), ctx, output)?;
             }
         }
-        Stmt::Expr(expression) => { compile_expression(expression, Expected::NoReturn, state).map_err(|x| format!("while compiling expression {:?}\n\r{}",expression,x))?; }
-        Stmt::Return(expression) =>{
-            if let Some(expression) = expression {
-                let expected_type = state.get_current_function()?.return_type.clone();
-                let function_actual_return_type = state.get_llvm_representation_from_parser_type(&expected_type)?;
-                let tmp_idx = compile_expression(expression, Expected::Type(&expected_type), state)
-                    .map_err(|x| format!("while compiling expression in return statement {:?}:\n{}", expression, x))?;
-                if !tmp_idx.equal_to_type(&expected_type) {
-                    return Err(format!("Result type \"{:?}\" of expresion is not equal to return type \"{:?}\" of function \"{}\"", tmp_idx, function_actual_return_type, state.get_current_function()?.effective_name()));
+        Stmt::Expr(expression) => {
+            compile_expression(expression, Expected::NoReturn, ctx, output)?;
+        }
+        Stmt::Return(expression) => {
+            let func = ctx.get_current_function()?;
+            if let Some(expr) = expression {
+                let expected_type = &func.return_type;
+                let value = compile_expression(expr, Expected::Type(expected_type), ctx, output)?;
+                
+                let llvm_type_str = get_llvm_type_str(expected_type, ctx.symbols, &ctx.current_function_path)?;
+                output.push_str(&format!("    ret {} {}\n", llvm_type_str, value.get_llvm_repr()));
+            } else {
+                if !func.return_type.is_void() {
+                    return Err(CompileError::Generic("Cannot return without a value from a non-void function.".to_string()));
                 }
-                state.output.push_str(&format!("    ret {} {}\n", function_actual_return_type.to_string(), tmp_idx.to_repr()));
-            }else {
-                let expected_type = &state.get_current_function()?.return_type;
-                if *expected_type != ParserType::Named(format!("void")) {
-                    return Err(format!("Returning empty expression in non void function"));
-                }
-                state.output.push_str(&format!("    ret void\n"));
+                output.push_str("    ret void\n");
             }
         }
         Stmt::Continue => {
-            if let Some(li) = state.current_scope.loop_index() {
-                state.output.push_str(&format!("    br label %loop_body{}\n", li));
+            if let Some(li) = ctx.scope.loop_index() {
+                output.push_str(&format!("    br label %loop_body{}\n", li));
                 return Ok(());
             }
-            return Err(format!("Tried to continue without loop"));
+            return Err(CompileError::InvalidStatementInContext(format!("Tried to continue without loop")));
         }
         Stmt::Break => {
-            if let Some(li) = state.current_scope.loop_index() {
-                state.output.push_str(&format!("    br label %loop_body{}_exit\n", li));
+            if let Some(li) = ctx.scope.loop_index() {
+                output.push_str(&format!("    br label %loop_body{}_exit\n", li));
                 return Ok(());
             }
-            return Err(format!("Tried to break without loop"));
+            return Err(CompileError::InvalidStatementInContext(format!("Tried to break without loop")));
         }
-        Stmt::If(condition, then_stmt, else_stmt) => {
-            let expected_type = ParserType::Named(format!("bool"));
-            let mut cond_val = compile_expression(condition, Expected::Type(&expected_type), state)
-            .map_err(|x| format!("while compiling expression in if statement {:?}:\n{}",condition, x))?;
-            let logic_u = state.aquire_unique_logic_counter();
-            if !cond_val.equal_to_type(&expected_type) {
-                cond_val = implicit_cast(&cond_val, &expected_type, state)?
+        Stmt::If(condition, then_body, else_body) => {
+            let bool_type = ParserType::Named("bool".to_string());
+            let cond_val = compile_expression(condition, Expected::Type(&bool_type), ctx, output)?;
+
+            if cond_val.get_type() != &bool_type {
+                return Err(CompileError::InvalidExpression(format!("'{:?}' must result in bool, instead resulted in {:?}", condition, cond_val.get_type())));
             }
-            if !else_stmt.is_empty() {
-                state.output.push_str(&format!("    br {}, label %then{}, label %else{}\n", cond_val.to_repr_with_type(state)?, logic_u, logic_u));
-                state.output.push_str(&format!("then{}:\n", logic_u));
-                let original_scope = state.current_scope.clone_and_enter();
-                for x in then_stmt {
-                    compile_statement(x, state)
-                        .map_err(|x| format!("while compiling body of if statement {:?}:\n{}",condition, x))?;
-                }
-                state.current_scope.swap_and_exit(original_scope);
-                state.output.push_str(&format!("    br label %end_if{}\n", logic_u));
-                state.output.push_str(&format!("else{}:\n", logic_u));
-                let original_scope = state.current_scope.clone_and_enter();
-                for stmt in else_stmt {
-                    compile_statement(&stmt, state)
-                        .map_err(|x| format!("while compiling else body of if statement {:?}:\n{}",condition, x))?;
-                }
-                state.current_scope.swap_and_exit(original_scope);
-                state.output.push_str(&format!("    br label %end_if{}\n", logic_u));
-                state.output.push_str(&format!("end_if{}:\n", logic_u));
-            }else {
-                state.output.push_str(&format!("    br {}, label %then{}, label %end_if{}\n", cond_val.to_repr_with_type(state)?, logic_u, logic_u));
-                state.output.push_str(&format!("then{}:\n", logic_u)); 
-                let original_scope = state.current_scope.clone_and_enter();
-                for x in then_stmt {
-                    compile_statement(x, state)
-                        .map_err(|x| format!("while compiling body of if statement {:?}:\n{}",condition, x))?;
-                }
-                state.current_scope.swap_and_exit(original_scope);
-                state.output.push_str(&format!("    br label %end_if{}\n", logic_u));
-                state.output.push_str(&format!("end_if{}:\n", logic_u));
+
+            let logic_id = ctx.aquire_unique_logic_counter();
+            let then_label = format!("then{}", logic_id);
+            let else_label = format!("else{}", logic_id);
+            let end_label = format!("endif{}", logic_id);
+            
+            let target_else = if else_body.is_empty() { &end_label } else { &else_label };
+            output.push_str(&format!("    br i1 {}, label %{}, label %{}\n", cond_val.get_llvm_repr(), then_label, target_else));
+
+            output.push_str(&format!("{}:\n", then_label));
+            let original_scope = ctx.scope.clone_and_enter();
+            for then_stmt in then_body {
+                compile_statement(then_stmt, ctx, output)?;
             }
+            ctx.scope.swap_and_exit(original_scope);
+            output.push_str(&format!("    br label %{}\n", end_label));
+
+            if !else_body.is_empty() {
+                output.push_str(&format!("{}:\n", else_label));
+                let original_scope = ctx.scope.clone_and_enter();
+                for else_stmt in else_body {
+                    compile_statement(else_stmt, ctx, output)?;
+                }
+                ctx.scope.swap_and_exit(original_scope);
+                output.push_str(&format!("    br label %{}\n", end_label));
+            }
+
+            output.push_str(&format!("{}:\n", end_label));
         }
         Stmt::Loop(statement) =>{
-            let lc = state.aquire_unique_logic_counter();
+            let lc = ctx.aquire_unique_logic_counter();
             
-            state.output.push_str(&format!("    br label %loop_body{}\n", lc));
-            state.output.push_str(&format!("loop_body{}:\n", lc));
-            let original_scope = state.current_scope.clone_and_enter();
-            state.current_scope.set_loop_index(Some(lc));
+            output.push_str(&format!("    br label %loop_body{}\n", lc));
+            output.push_str(&format!("loop_body{}:\n", lc));
+            let original_scope = ctx.scope.clone_and_enter();
+            ctx.scope.set_loop_index(Some(lc));
             for x in statement {
-                compile_statement(x, state)?;
+                compile_statement(x, ctx, output)?;
             }
-            state.current_scope.swap_and_exit(original_scope);
-            state.output.push_str(&format!("    br label %loop_body{}\n", lc));
-            state.output.push_str(&format!("loop_body{}_exit:\n", lc));
+            ctx.scope.swap_and_exit(original_scope);
+            output.push_str(&format!("    br label %loop_body{}\n", lc));
+            output.push_str(&format!("loop_body{}_exit:\n", lc));
         }
-        Stmt::Hint(_,_) | Stmt::Function(_, _, _, _) | Stmt::Struct(_, _)  => return Err(format!("Statement {:?} was not expected in current context", statement)),
-        _ => panic!("{:?}", statement),
+        Stmt::Function(..) | Stmt::Struct(..) | Stmt::Enum(..) | Stmt::Namespace(..) | Stmt::Hint(..) => {
+            return Err(CompileError::InvalidStatementInContext(format!("{:?}", stmt)));
+        }
+        _ => panic!("{:?}", stmt),
     }
     Ok(())
 }
 
+
+
+pub fn get_llvm_type_str(
+    ptype: &ParserType,
+    symbols: &SymbolTable,
+    current_namespace: &str,
+) -> CompileResult<String> {
+    match ptype {
+        ParserType::Named(name) => match name.as_str() {
+            "void" => Ok("void".to_string()),
+            "bool" => Ok("i1".to_string()),
+            "i8" | "u8" => Ok("i8".to_string()),
+            "i16" | "u16" => Ok("i16".to_string()),
+            "i32" | "u32" => Ok("i32".to_string()),
+            "i64" | "u64" => Ok("i64".to_string()),
+            "f32" => Ok("f32".to_string()),
+            "f64" => Ok("f64".to_string()),
+            _ => {
+                let fqn = ptype.get_absolute_path_or(current_namespace);
+                if symbols.types.contains_key(&fqn) {
+                    Ok(format!("%struct.{}", fqn))
+                } else if symbols.enums.contains_key(&fqn) {
+                    let enum_info = &symbols.enums[&fqn];
+                    get_llvm_type_str(&enum_info.base_type, symbols, current_namespace)
+                }
+                else {
+                    Err(CompileError::SymbolNotFound(fqn))
+                }
+            }
+        },
+        ParserType::Pointer(inner_type) => {
+            if inner_type.is_void() {
+                Ok("i8*".to_string())
+            } else {
+                let inner_llvm_type = get_llvm_type_str(inner_type, symbols, current_namespace)?;
+                Ok(format!("{}*", inner_llvm_type))
+            }
+        }
+        ParserType::Function(return_type, param_types) => {
+            let ret_llvm = get_llvm_type_str(return_type, symbols, current_namespace)?;
+            let params_llvm: Vec<String> = param_types
+                .iter()
+                .map(|param_type| get_llvm_type_str(param_type, symbols, current_namespace))
+                .collect::<CompileResult<Vec<String>>>()?;
+            Ok(format!("{} ({})*", ret_llvm, params_llvm.join(", ")))
+        }
+        ParserType::NamespaceLink(_, _) => {
+            let fqn = ptype.get_absolute_path_or(current_namespace);
+            if symbols.types.contains_key(&fqn) {
+                Ok(format!("%struct.{}", fqn))
+            } else if symbols.enums.contains_key(&fqn) {
+                let enum_info = &symbols.enums[&fqn];
+                get_llvm_type_str(&enum_info.base_type, symbols, current_namespace)
+            }
+            else {
+                Err(CompileError::SymbolNotFound(fqn))
+            }
+        }
+    }
+}
+
+
 #[derive(Debug, Default)]
 pub struct LLVMOutputHandler{
-    output_header: String,
-    output_main: String,
+    header: String,
+    main: String,
 }
 impl LLVMOutputHandler {
-    pub fn push_str(&mut self, x: &str){
-        self.output_main.push_str(x);
+    pub fn push_str(&mut self, s: &str) {
+        self.main.push_str(s);
     }
-    pub fn push_str_header(&mut self, x: &str){
-        self.output_header.push_str(x);
+    pub fn push_str_header(&mut self, s: &str) {
+        self.header.push_str(s);
     }
-    pub fn output(&self) -> String{
-        let mut x = self.output_header.clone();
-        x.push('\n');
-        x.push_str(&self.output_main);
-        return x;
+    pub fn build(self) -> String {
+        format!("{}\n{}", self.header, self.main)
     }
 }
 
+
 #[derive(Debug, Default)]
-pub struct CompilerState{
-    pub output: LLVMOutputHandler,
-    
-    declared_functions: OrderedHashMap<String, Function>,
-    declared_types: OrderedHashMap<String, Struct>,
-    declared_enums: OrderedHashMap<String, (ParserType, Vec<(String, i128)>)>,
-
-    structures_of_types: OrderedHashMap<String, (String, Vec<(String,ParserType)>, Vec<(String,(ParserType, Vec<ParserType>))>)>,
-    
-    current_function_path: String,
-    current_function_name: String,
-
-    current_scope: Scope,
+pub struct SymbolTable {
+    pub functions: OrderedHashMap<String, Function>,
+    pub types: OrderedHashMap<String, Struct>,
+    pub enums: OrderedHashMap<String, Enum>,
+}
+pub struct CodeGenContext<'a> {
+    pub symbols: &'a SymbolTable,
+    pub current_function_path: String,
+    pub current_function_name: String,
+    pub scope: Scope,
 
     temp_value_counter: Cell<u32>,
     logic_counter: Cell<u32>,
     const_vectors_counter: Cell<u32>,
 }
-
-impl CompilerState {
-    pub fn get_function_from_path(&self, path: &str, func_name: &str) -> Result<&Function, String>{
-        let path = if path.is_empty() { func_name } else { &format!("{}.{}",path, func_name)};
-        let func = self.declared_functions.get(path).ok_or(format!("Current function was not found inside current namespace path"))?;
-        return Ok(func);
-    }
-    pub fn get_enum_entry_val_from_path(&self, path: &str, enum_entry: &str) -> Result<(&ParserType, i128), String>{
-        let r#enum = self.declared_enums.get(path).ok_or(format!("Enum \"{}\" was not found", path))?;
-        for x in r#enum.1.clone() {
-            if x.0 == enum_entry {
-                return Ok((&r#enum.0, x.1.clone()));
-            }
-        }
-        return Err(format!("Entry {} was not found inside enum {}", enum_entry, path));
-    }
-    pub fn get_current_function(&self) -> Result<&Function, String>{
-        let path = if self.current_function_path.is_empty() { &self.current_function_name } else { &format!("{}.{}",self.current_function_path, self.current_function_name)};
-        let func = self.declared_functions.get(path).ok_or(format!("Current function was not found inside current namespace path"))?;
-        return Ok(func);
-    } 
-    pub fn get_current_path(&self) -> &str{
-        return &self.current_function_path;
-    } 
-    pub fn set_current_path(&mut self, path: &str) {
-        self.current_function_path = path.to_string();
-    }
-    pub fn get_variable(&self, name: &str) -> Result<&Variable,String>{
-        return self.current_scope.get_variable(name).map_err(|x| format!("Inside function'{}'\n{}", self.current_function_name, x));
-    }
-
-    pub fn get_llvm_representation_from_parser_type(&self, parser_type: &ParserType) -> Result<String, String>{
-        let true_path = parser_type.get_absolute_path_or(&self.current_function_path);
-        match parser_type {
-            ParserType::Function(return_type, param_types) =>{
-                let ret_llvm = self.get_llvm_representation_from_parser_type(return_type)?;
-                let params_llvm: Vec<String> = param_types.iter()
-                    .map(|param_type| self.get_llvm_representation_from_parser_type(param_type))
-                    .collect::<Result<Vec<String>, String>>()?;
-                let params_str = params_llvm.join(", "); 
-                Ok(format!("{} ({})", ret_llvm, params_str))
-            }
-            ParserType::Named(type_name) =>{
-                if self.declared_types.contains_key(type_name) {
-                    match type_name.as_str() {
-                        "void" => return Ok(format!("void")),
-                        "bool" => return Ok(format!("i1")),
-                        "i8" | "u8" => return Ok(format!("i8")),
-                        "i16" | "u16" => return Ok(format!("i16")),
-                        "i32" | "u32" => return Ok(format!("i32")),
-                        "i64" | "u64" => return Ok(format!("i64")),
-                        "f32" => return Ok(format!("f32")),
-                        "f64" => return Ok(format!("f64")),
-                        n => return Ok(format!("%struct.{}", n))
-                    }
-                }
-                if self.declared_types.contains_key(&true_path) {
-                    return Ok(format!("%struct.{}", true_path))
-                }
-                Err(format!("Implementation of \"{:?}\" was not found in current context '{}/{}', lfpt", parser_type, self.current_function_path, self.current_function_name))
-            }
-            ParserType::Pointer(x) =>{
-                if x.is_void() {
-                    return Ok(format!("i8*"));
-                }
-                let mut inside_value = self.get_llvm_representation_from_parser_type(x)?;
-                inside_value.push('*');
-                return Ok(inside_value);
-            }
-            ParserType::NamespaceLink(x, y) => {
-                return Ok(format!("%struct.{}.{}", x, y.to_string()))
-            }
+impl<'a> CodeGenContext<'a> {
+    pub fn new(symbols: &'a SymbolTable, function: &Function) -> Self {
+        Self {
+            symbols,
+            current_function_path: function.path.clone(),
+            current_function_name: function.name.clone(),
+            scope: Scope::default(),
+            temp_value_counter: Cell::new(0),
+            logic_counter: Cell::new(0),
+            const_vectors_counter: Cell::new(0),
         }
     }
-    pub fn get_struct_representaition_from_parser_type(&self, parser_type: &ParserType) -> Result<&(String, Vec<(String,ParserType)>, Vec<(String,(ParserType, Vec<ParserType>))>),String>{
-        match parser_type {
-            ParserType::Function(_, _) => Err(format!("Functions do not posses ablility to be structures")),
-            ParserType::Pointer(_) => Err(format!("Pointers are not structures")),
-            ParserType::Named(struct_name) =>{
-                if self.structures_of_types.contains_key(struct_name) {
-                    return Ok(&self.structures_of_types[struct_name]);
-                }
-                let true_path = parser_type.get_absolute_path_or(&self.current_function_path);
-                if self.structures_of_types.contains_key(&true_path) {
-                    return Ok(&self.structures_of_types[&true_path]);
-                }
-                Err(format!("Structural implementation of {} was not found in current context", struct_name))
-            }
-            ParserType::NamespaceLink(_, _) => {
-                let abs_path = parser_type.get_absolute_path_or(&self.current_function_path);
-                if self.structures_of_types.contains_key(&abs_path) {
-                    return Ok(&self.structures_of_types[&abs_path]);
-                }
-                Err(format!("Structural implementation of {} was not found in current context", abs_path))
-            }
+    pub fn get_current_function(&self) -> CompileResult<&'a Function> {
+        self.symbols.get_function(&self.current_function_name, &self.current_function_path)
+    }
+    pub fn fully_qualified_name(&self, name: &str) -> String {
+        if self.current_function_path.is_empty() {
+            name.to_string()
+        } else {
+            format!("{}.{}", self.current_function_path, name)
         }
     }
-    pub fn get_sizeof(&self, parser_type: &ParserType) -> Result<u32, String> {
-        match parser_type {
-            ParserType::Pointer(_) => return Ok(8),
-            ParserType::Function(_, _) => unreachable!(),
-            ParserType::Named(type_name) =>{
-                if self.declared_types.contains_key(type_name) {
-                    match type_name.as_str() {
-                        "void" => unreachable!(),
-                        "bool" => return Ok(1),
-                        "i8" | "u8" => return Ok(1),
-                        "i16" | "u16" => return Ok(2),
-                        "i32" | "u32" => return Ok(4),
-                        "i64" | "u64" => return Ok(8),
-                        "f32" => return Ok(4),
-                        "f64" => return Ok(8),
-                        _ => {
-                            //TODO: make it calculate with alligment https://stackoverflow.com/questions/23927837/compute-size-of-object-if-it-has-to-be-aligned-as-a-specific-type
-                            let x = self.get_struct_representaition_from_parser_type(parser_type)?;
-                            return Ok(x.1.iter().map(|x| self.get_sizeof(&x.1)).collect::<Result<Vec<_>,String>>()?.iter().sum());
-                        }
-                    }
-                }
-                let absolute_path = parser_type.get_absolute_path_or(&self.current_function_path);
-                if self.declared_types.contains_key(&absolute_path) {
-                    let x = self.get_struct_representaition_from_parser_type(parser_type)?;
-                    return Ok(x.1.iter().map(|x| self.get_sizeof(&x.1)).collect::<Result<Vec<_>,String>>()?.iter().sum());
-                }
-                return Err(format!("Type '{}' was not found in current context, szof", type_name));
-            }
-            ParserType::NamespaceLink(_, _) => {
-                let absolute_path = parser_type.get_absolute_path_or(&self.current_function_path);
-                if self.declared_types.contains_key(&absolute_path) {
-                    let x = self.get_struct_representaition_from_parser_type(parser_type)?;
-                    return Ok(x.1.iter().map(|x| self.get_sizeof(&x.1)).collect::<Result<Vec<_>,String>>()?.iter().sum());
-                }
-                return Err(format!("Type '{}' was not found in current context, szof", absolute_path));
-            }
-        }
-    }
-    
     pub fn aquire_unique_temp_value_counter(&self) -> u32{
         self.temp_value_counter.replace(self.temp_value_counter.get() + 1)
     }
@@ -484,5 +397,188 @@ impl CompilerState {
     pub fn aquire_unique_const_vector_counter(&mut self) -> u32{
         self.const_vectors_counter.replace(self.const_vectors_counter.get() + 1)
     }
+}
+impl SymbolTable {
+    pub fn new() -> Self {
+        let mut table = Self::default();
+        populate_default_types(&mut table);
+        table
+    }
+    pub fn get_function(&self, fqn: &str, current_namespace: &str) -> CompileResult<&Function> {
+        if let Some(r#fn) = self.functions.get(&format!("{}.{}", current_namespace, fqn)) {
+            return Ok(r#fn);
+        }
+        if let Some(r#fn) = self.functions.get(fqn) {
+            return Ok(r#fn);
+        }
+        return Err(CompileError::SymbolNotFound(format!("Function '{}' was not found in namespace '{}'", fqn, current_namespace)));
+    }
+    pub fn get_type(&self, fqn: &str) -> CompileResult<&Struct> {
+        self.types.get(fqn).ok_or_else(|| CompileError::SymbolNotFound(fqn.to_string()))
+    }
+    pub fn get_abs_path(struct_type: &ParserType, current_namespace: &str) -> String {
+        debug_assert!(!struct_type.is_primitive_type());
+        debug_assert!(!struct_type.is_pointer());
+        if let ParserType::NamespaceLink(s, y) = struct_type {
+            return format!("{}.{}", s, y.to_string());
+        }
+        if let ParserType::Named(n) = struct_type{
+            if current_namespace.is_empty() {
+                return n.to_string();
+            }else {
+                return format!("{}.{}", current_namespace, n);
+            }
+        };
+        unreachable!()
+    }
+    pub fn get_struct_representation(&self, struct_type: &ParserType, current_namespace: &str) -> CompileResult<(&Box<str>, &Box<[(String, ParserType)]>)> {
+        debug_assert!(!struct_type.is_primitive_type());
+        debug_assert!(!struct_type.is_pointer());
+        let x = self.types.get(&SymbolTable::get_abs_path(struct_type, current_namespace)).ok_or(CompileError::SymbolNotFound(format!("Type:{:?}, Namespace {}",struct_type, current_namespace)))?;
+        return Ok((&x.name, &x.fields));
+    }
+}
 
+pub struct SymbolCollector<'a> {
+    symbols: &'a mut SymbolTable,
+    current_path: String,
+}
+impl<'a> SymbolCollector<'a> {
+    pub fn collect(stmts: &[Stmt], symbols: &'a mut SymbolTable) -> CompileResult<()> {
+        let mut collector = Self {
+            symbols,
+            current_path: "".to_string(),
+        };
+        collector.walk_statements(stmts)?;
+        Ok(())
+    }
+
+    fn walk_statements(&mut self, stmts: &[Stmt]) -> CompileResult<()> {
+        for (i, statement) in stmts.iter().enumerate() {
+            if matches!(statement, Stmt::Hint(_, _)) {
+                continue;
+            }
+
+            let attributes = self.collect_preceding_attributes(stmts, i);      
+            match statement {
+                Stmt::Function(n, a, r, b) => self.collect_function(n, a, r, b, attributes)?,
+                Stmt::Struct(n, a) => self.collect_struct(n, a, attributes)?,
+                Stmt::Enum(n, base, entries) => self.collect_enum(n, base, entries, attributes)?,
+                Stmt::Namespace(n, body) => {
+                    let new_path = if self.current_path.is_empty() { n.clone() } else { format!("{}.{}", self.current_path, n) };
+                    let old_path = std::mem::replace(&mut self.current_path, new_path);
+                    self.walk_statements(body)?;
+                    self.current_path = old_path;
+                }
+                _ => return Err(CompileError::InvalidStatementInContext(format!("{:?}", statement))),
+            }
+        }
+        Ok(())
+    }
+    fn collect_preceding_attributes(&self, stmts: &[Stmt], item_index: usize) -> Box<[Attribute]> {
+        stmts[..item_index]
+            .iter()
+            .rev()
+            .take_while(|stmt| matches!(stmt, Stmt::Hint(_, _)))
+            .filter_map(|stmt| {
+                if let Stmt::Hint(name, args) = stmt {
+                    Some(Attribute::new(name.clone().into(), args.to_vec()))
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+    fn collect_function(&mut self, name: &str, args: &[(String, ParserType)], ret: &ParserType, body: &[Stmt], attribs: Box<[Attribute]>) -> CompileResult<()> {
+        let fqn = if self.current_path.is_empty() { name.to_string() } else { format!("{}.{}", self.current_path, name) };
+        if self.symbols.functions.contains_key(&fqn) {
+            return Err(CompileError::DuplicateSymbol(fqn));
+        }
+        let qualified_return_type = self.qualify_type(ret);
+        let qualified_args = args.iter()
+            .map(|(arg_name, arg_type)| (arg_name.clone(), self.qualify_type(arg_type)))
+            .collect::<Vec<_>>()
+            .into_boxed_slice();
+
+        let function = Function::new(
+            self.current_path.clone(),
+            name.to_string(),
+            qualified_args,
+            qualified_return_type,
+            body.to_vec().into_boxed_slice(),
+            attribs,
+        );
+        self.symbols.functions.insert(fqn, function);
+        Ok(())
+    }
+    fn collect_struct(&mut self, name: &str, fields: &[(String, ParserType)], attribs: Box<[Attribute]>) -> CompileResult<()> {
+        let fqn = if self.current_path.is_empty() { name.to_string() } else { format!("{}.{}", self.current_path, name) };
+        if self.symbols.types.contains_key(&fqn) {
+            return Err(CompileError::DuplicateSymbol(fqn));
+        }
+        let qualified_fields = fields.iter()
+            .map(|(field_name, field_type)| (field_name.clone(), self.qualify_type(field_type)))
+            .collect::<Vec<_>>()
+            .into_boxed_slice();
+        let new_struct = Struct::new(
+            self.current_path.clone().into(),
+            name.to_string().into(),
+            qualified_fields,
+            attribs
+        );
+        self.symbols.types.insert(fqn, new_struct);
+        Ok(())
+    }
+    fn collect_enum(&mut self, name: &str, base: &Option<ParserType>, entries: &[(String, Expr)], attributes: Box<[Attribute]>) -> CompileResult<()> {
+        let fqn = if self.current_path.is_empty() { name.to_string() } else { format!("{}.{}", self.current_path, name) };
+        if self.symbols.types.contains_key(&fqn) {
+            return Err(CompileError::DuplicateSymbol(fqn));
+        }
+        if base.as_ref().map(|x| !x.is_integer()).unwrap_or(false) {
+            return Err(CompileError::InvalidEnumBaseType(format!("Enum '{}' base type must be (un)signed integer", name)));
+        }
+        let new_enum = Enum::new(
+            self.current_path.clone().into(),
+            name.to_string().into(),
+            base.as_ref().unwrap_or(&ParserType::Named(format!("i64"))).clone(),
+            entries.iter().map(|x| (x.0.clone(), constant_integer_expression_compiler(&x.1, &self.symbols).unwrap())).collect::<Vec<_>>().into_boxed_slice(),
+            attributes
+        );
+        self.symbols.enums.insert(fqn, new_enum);
+        Ok(())
+    }
+
+
+    fn qualify_type(&self, ty: &ParserType) -> ParserType {
+        if self.current_path.is_empty() {
+            return ty.clone();
+        }
+
+        match ty {
+            ParserType::Named(_) => {
+                if ty.is_primitive_type() {
+                    ty.clone()
+                } else {
+                    self.nest_type_in_namespace_path(&self.current_path, ty.clone())
+                }
+            }
+            ParserType::Pointer(inner) => {
+                ParserType::Pointer(Box::new(self.qualify_type(inner)))
+            }
+            ParserType::Function(ret_type, param_types) => {
+                let qualified_ret = self.qualify_type(ret_type);
+                let qualified_params = param_types.iter()
+                    .map(|p| self.qualify_type(p))
+                    .collect();
+                ParserType::Function(Box::new(qualified_ret), qualified_params)
+            }
+            ParserType::NamespaceLink(_, _) => ty.clone(),
+        }
+    }
+    fn nest_type_in_namespace_path(&self, path: &str, base_type: ParserType) -> ParserType {
+        path.rsplit('.')
+            .fold(base_type, |inner_type, path_part| {
+                ParserType::NamespaceLink(path_part.to_string(), Box::new(inner_type))
+            })
+    }
 }

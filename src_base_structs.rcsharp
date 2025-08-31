@@ -17,7 +17,7 @@ namespace process{
         let string : string::String = get_executable_path();
         let index : i32 = string.len as i32 - 1;
         loop {
-            if *(string.data + index as i64) == '\\' || index < 0 {
+            if string.data[index] == '\\' || index < 0 {
                 break;
             }
             index = index - 1;
@@ -56,7 +56,7 @@ namespace mem{
             if i >= len{
                 break;
             }
-            *(dest + i) = *(src + i);
+            dest[i] = src[i];
             i = i + 1;
         }
     }
@@ -69,7 +69,7 @@ namespace mem{
             if i >= len{
                 break;
             }
-            *(dest + i) = val;
+            dest[i] = val;
             i = i + 1;
         }
     }
@@ -167,7 +167,7 @@ namespace vector{
                     if i >= vec.length {
                         break;
                     }
-                    *(new_array + i as i64) = *(vec.array + i as i64);
+                    new_array[i] = vec.array[i];
                     i = i + 1 as u32;
                 }
                 mem::free(vec.array as &i8);
@@ -175,7 +175,7 @@ namespace vector{
             vec.array = new_array;
             vec.capacity = new_capacity;
         }
-        *(vec.array + vec.length as i64) = data;
+        vec.array[vec.length] = data;
         vec.length = vec.length + 1 as u32;
     }
     #[ExtentionOf(Vec)]
@@ -185,7 +185,7 @@ namespace vector{
             if index >= data_len{
                 break;
             }
-            push(vec,*(data + index as i64));
+            push(vec,data[index]);
             index = index + 1;
         }
     }
@@ -291,9 +291,9 @@ namespace console{
             if (i >= j) {
                 break;
             }
-            let temp: i8 = *(buffer.array + i as i64);
-            *(buffer.array + i as i64) = *(buffer.array + j as i64);
-            *(buffer.array + j as i64) = temp;
+            let temp: i8 = buffer.array[i];
+            buffer.array[i] = buffer.array[j];
+            buffer.array[j] = temp;
 
             i = i + 1;
             j = j - 1;
@@ -351,7 +351,7 @@ namespace string{
             if iter < 0 {
                 break;
             }
-            if *(first.data + iter as i64) != *(second.data + iter as i64) {
+            if  first.data[iter] != second.data[iter] {
                 return 0 as bool;
             }
             iter = iter - 1;
@@ -372,13 +372,13 @@ namespace string_utils{
         mem::copy(src1, output, index as i64);
         mem::copy(src2, (output + index), len2 as i64);
         mem::copy((src1 + index), (output + index + len2), (len1 - index) as i64);
-        *(output + len1 + len2) = 0;
+        output[len1 + len2] = 0;
         return output;
     }
     fn c_str_len(str: &i8) : i32{
         let len : i32 = 0;
         loop{
-            if *(str + len) == 0{
+            if str[len] == 0{
                 break;
             }
             len = len + 1;
@@ -534,7 +534,7 @@ namespace tests{
         
         let c_string : &i8 = stalloc(sizeof(i8) * (new_file_path.len + 1) as i64);
         mem::copy(new_file_path.data, c_string, new_file_path.len as i64);
-        *(c_string + new_file_path.len as i64) = 0;
+        c_string[new_file_path.len] = 0;
 
         fs::create_file(c_string);
         fs::delete_file(c_string);
@@ -559,7 +559,7 @@ namespace tests{
             if *iterator >= file.len {
                 break;
             }
-            let char : i8 = *(file.data + *iterator);
+            let char : i8 = file.data[*iterator];
             if (*condition)(char) {
                 *iterator = *iterator + 1;
             } else {
@@ -588,14 +588,14 @@ namespace tests{
             if iterator >= file.len {
                 break;
             }
-            char = *(file.data + iterator);
+            char = file.data[iterator];
             if (char == ' ' || char == '\t' || char == '\n' || char == '\r') && 1 as bool{
                 iterator = iterator + 1;
                 continue;
             }
 
             if (iterator + 1) < file.len{
-                next_char = *(file.data + (iterator + 1));
+                next_char = file.data[iterator + 1];
             }else{
                 next_char = 0;
             }
@@ -639,7 +639,7 @@ namespace tests{
                     if iterator >= file.len {
                         break;
                     }
-                    char = *(file.data + iterator);
+                    char = file.data[iterator];
                     if char != '"'{
                         continue;
                     }

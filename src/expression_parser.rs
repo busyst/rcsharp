@@ -13,7 +13,7 @@ pub enum Expr {
     MemberAccess(Box<Expr>, String), 
     StaticAccess(Box<Expr>, String), 
     StringConst(String),
-    Call(Box<Expr>, Vec<Expr>),
+    Call(Box<Expr>, Box<[Expr]>),
     Index(Box<Expr>, Box<Expr>),
 }
 
@@ -59,7 +59,7 @@ impl<'a> ExpressionParser<'a> {
     pub fn is_at_end(&self) -> bool {
         self.cursor >= self.tokens.len()
     }
-    pub fn peek(&self) -> &TokenData {
+    fn peek(&self) -> &TokenData {
         const DUMMY_EOF: TokenData = TokenData { 
             token: Token::DummyToken,
             span: 0..0,
@@ -67,13 +67,13 @@ impl<'a> ExpressionParser<'a> {
         };
         self.tokens.get(self.cursor).unwrap_or(&DUMMY_EOF)
     }
-    pub fn advance(&mut self) -> &TokenData {
+    fn advance(&mut self) -> &TokenData {
         if !self.is_at_end() {
             self.cursor += 1;
         }
         &self.tokens[self.cursor - 1]
     }
-    pub fn consume(&mut self, expected: &Token) -> Result<&TokenData, String> {
+    fn consume(&mut self, expected: &Token) -> Result<&TokenData, String> {
         let token_data = self.peek();
         if &token_data.token != expected {
             return Err(format!(
@@ -185,7 +185,7 @@ impl<'a> ExpressionParser<'a> {
                 let right = self.parse_expression_with_precedence(precedence)?;
                 return Ok(Expr::Assign(Box::new(left), Box::new(right)));
             }
-            _ => panic!("{:?} is not valid binary operator", op_token),
+            _ => return Err(format!("{:?} is not valid binary operator", op_token)),
         };
         
         let right = self.parse_expression_with_precedence(precedence)?;
@@ -207,7 +207,7 @@ impl<'a> ExpressionParser<'a> {
         }
 
         self.consume(&Token::RParen)?;
-        Ok(Expr::Call(Box::new(callee), args))
+        Ok(Expr::Call(Box::new(callee), args.into_boxed_slice()))
     }
     fn parse_index(&mut self, left: Expr) -> Result<Expr, String> {
     self.consume(&Token::LSquareBrace)?;
@@ -229,7 +229,7 @@ impl<'a> ExpressionParser<'a> {
         self.consume(&Token::KeywordAs)?;
         Ok(Expr::Cast(Box::new(left), self.parse_type()?))
     }
-    fn parse_type(&mut self) -> Result<ParserType, String> {
+    pub fn parse_type(&mut self) -> Result<ParserType, String> {
         if self.peek().token == Token::LogicAnd {
             self.advance();
             Ok(ParserType::Pointer(Box::new(ParserType::Pointer(Box::new(self.parse_type()?)))))
@@ -261,7 +261,7 @@ impl<'a> ExpressionParser<'a> {
             self.consume(&Token::RParen)?;
             self.consume(&Token::Colon)?;
             return_type = Box::new(self.parse_type()?);
-            Ok(ParserType::Function(return_type, arguments))
+            Ok(ParserType::Function(return_type, arguments.into_boxed_slice()))
         }
         else {
             let link_or_name = self.advance().expect_name_token()?;
@@ -275,15 +275,17 @@ impl<'a> ExpressionParser<'a> {
             Ok(ParserType::Named(link_or_name))
         }
     }
-    pub fn position(&self) -> usize {
-        self.cursor
-    }
-    
     fn parse_static_access(&mut self, left: Expr) -> Result<Expr, String> {
         self.consume(&Token::DoubleColon)?;
 
         let member_name = self.advance().expect_name_token()?;
 
         Ok(Expr::StaticAccess(Box::new(left), member_name))
+    }
+    pub fn cursor(&self) -> usize {
+        self.cursor
+    }
+    pub fn set_cursor(&mut self, cursor: usize) {
+        self.cursor = cursor;
     }
 }

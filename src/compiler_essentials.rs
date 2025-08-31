@@ -2,8 +2,27 @@ use std::cell::Cell;
 
 use ordered_hash_map::OrderedHashMap;
 
-use crate::{expression_parser::Expr, parser::{ParserType, Stmt}};
+use crate::{compiler::{CompileResult, SymbolTable, POINTER_SIZE_IN_BYTES}, expression_parser::Expr, parser::{ParserType, Stmt}};
 
+// ------------------------------------------------------------------------------------
+#[derive(Debug, Clone)]
+pub struct Enum {
+    pub path: Box<str>,
+    pub name: Box<str>,
+    pub base_type: ParserType,
+    pub fields: Box<[(String, i128)]>,
+    
+    pub attribs: Box<[Attribute]>, 
+    pub flags: Cell<u8>
+}
+
+impl Enum {
+    pub fn new(path: Box<str>, name: Box<str>, base_type: ParserType, fields: Box<[(String, i128)]>, attribs: Box<[Attribute]>) -> Self {
+        Self { path, name, base_type, fields, attribs, flags: Cell::new(0) }
+    }
+}
+
+// ------------------------------------------------------------------------------------
 #[derive(Debug, Clone)]
 pub struct Attribute {
     name: Box<str>,
@@ -21,6 +40,8 @@ impl Attribute {
         self.arguments.get(0).and_then(|x| if self.arguments.len() == 1 {Some(x)} else {None}).ok_or(format!("Atribute {} should have only one argument, it has {} arguments", self.name, self.arguments.len()))
     }
 }
+
+// ------------------------------------------------------------------------------------
 pub enum StructFlags {
     Generic = 64,
     PrimitiveType = 128,
@@ -29,19 +50,19 @@ pub enum StructFlags {
 pub struct Struct {
     pub path: Box<str>,
     pub name: Box<str>,
-    pub fields: Vec<(String, ParserType)>,
+    pub fields: Box<[(String, ParserType)]>,
     
-    pub attribs: Vec<Attribute>, 
+    pub attribs: Box<[Attribute]>, 
     pub flags: Cell<u8>
 }
 impl Struct {
-    pub fn new(path: Box<str>, name: Box<str>, fields: Vec<(String, ParserType)>, attribs: Vec<Attribute>, flags: Cell<u8>) -> Self {
-        Self { path, name, fields, attribs, flags }
+    pub fn new(path: Box<str>, name: Box<str>, fields: Box<[(String, ParserType)]>, attribs: Box<[Attribute]>) -> Self {
+        Self { path, name, fields, attribs, flags: Cell::new(0) }
     }
     pub fn new_primitive(name: &str) -> Self {
-        Self { path : "".to_string().into_boxed_str(), name: name.to_string().into_boxed_str(), fields : vec![], attribs: vec![], flags: Cell::new(StructFlags::PrimitiveType as u8) }
+        Self { path : "".to_string().into_boxed_str(), name: name.to_string().into_boxed_str(), fields : Box::new([]), attribs: Box::new([]), flags: Cell::new(StructFlags::PrimitiveType as u8) }
     }
-    pub fn new_generic(path: Box<str>, name: Box<str>, fields: Vec<(String, ParserType)>, attribs: Vec<Attribute>) -> Self {
+    pub fn new_generic(path: Box<str>, name: Box<str>, fields: Box<[(String, ParserType)]>, attribs: Box<[Attribute]>) -> Self {
         Self { path, name, fields, attribs, flags: Cell::new(StructFlags::Generic as u8) }
     }
     pub fn is_primitive(&self) -> bool { self.flags.get() & StructFlags::PrimitiveType as u8 != 0 }
@@ -57,24 +78,59 @@ impl Struct {
             }
         }
     }
+    pub fn get_size_of(&self, symbols: &SymbolTable) -> CompileResult<u32>{
+        match self.name.as_ref() {
+            "i8" | "u8" => Ok(1),
+            "i16" | "u16" => Ok(2),
+            "i32" | "u32" => Ok(4),
+            "i64" | "u64" => Ok(8),
+            _ => {
+                let mut sum = 0;
+                for field in &self.fields {
+                    if field.1.is_pointer() {
+                        sum += POINTER_SIZE_IN_BYTES;
+                        continue;
+                    }
+                    if field.1.is_primitive_type() {
+                        sum += match field.1.to_string().as_str() {
+                            "void" => panic!("Size of void type is unknown, obviously"),
+                            "i8" | "u8" | "bool" => 1,
+                            "i16" | "u16" => 2,
+                            "i32" | "u32" => 4,
+                            "i64" | "u64" => 8,
+                            _ => unreachable!(),
+                        };
+                        continue;
+                    }
+                    if let Ok(r#struct) = symbols.get_type(&field.1.to_string()) {
+                        sum += r#struct.get_size_of(symbols)?;
+                        continue;
+                    }
+                    panic!("{:?}", field)
+                }
+                return Ok(sum);
+            }
+        }
+    }
 }
 
+// ------------------------------------------------------------------------------------
 pub enum FunctionFlags {
     Imported = 128,
 }
 #[derive(Debug, Clone)]
 pub struct Function {
-    pub path: String, 
-    pub name: String, 
-    pub args: Vec<(String, ParserType)>, 
+    pub path: String,
+    pub name: String,
+    pub args: Box<[(String, ParserType)]>, 
     pub return_type: ParserType,
-    pub body: Vec<Stmt>,
-    pub attribs: Vec<Attribute>, 
+    pub body: Box<[Stmt]>,
+    pub attribs: Box<[Attribute]>, 
     flags: Cell<u8>
 }
 impl Function {
-    pub fn new(path: String, name: String, args: Vec<(String, ParserType)>, return_type: ParserType, body: Vec<Stmt>, attribs: Vec<Attribute>, flags: Cell<u8>) -> Self {
-        Self { path, name, args, return_type, body, attribs, flags }
+    pub fn new(path: String, name: String, args: Box<[(String, ParserType)]>, return_type: ParserType, body: Box<[Stmt]>, attribs: Box<[Attribute]>) -> Self {
+        Self { path, name, args, return_type, body, attribs, flags: Cell::new(0) }
     }
     
     pub fn effective_name(&self) -> String {
@@ -88,12 +144,32 @@ impl Function {
         };
         return output;
     }
+    
     pub fn is_imported(&self) -> bool { self.flags.get() & FunctionFlags::Imported as u8 != 0 }
     pub fn set_as_imported(&self) { self.flags.set(self.flags.get() | FunctionFlags::Imported as u8);}
     pub fn flags(&self) -> u8 { self.flags.get() }
+    
+    pub(crate) fn get_type(&self) -> ParserType {
+        ParserType::Function(Box::new(self.return_type.clone()), self.args.iter().map(|x| x.1.clone()).collect::<Vec<_>>().into_boxed_slice())
+    }
+    
+    pub fn path(&self) -> &str {
+        &self.path
+    }
+    
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+    pub fn get_llvm_repr(&self) -> String {
+        if self.is_imported(){
+            self.name.clone()
+        }else{
+            self.effective_name()
+        }
+    }
 }
-#[derive(Debug, Clone)]
-pub struct CompilerType { pub parser_type: ParserType }
+
+// ------------------------------------------------------------------------------------
 pub enum VariableFlags {
     HasRead = 1,
     HasWrote = 2,
@@ -103,17 +179,17 @@ pub enum VariableFlags {
 }
 #[derive(Debug, Clone)]
 pub struct Variable{
-    pub compiler_type: CompilerType,
+    pub compiler_type: ParserType,
     pub flags: Cell<u8>
 }
 impl Variable {
-    pub fn new(comp_type: CompilerType) -> Self {
+    pub fn new(comp_type: ParserType) -> Self {
         Self { compiler_type: comp_type, flags: Cell::new(0) }
     }
-    pub fn new_argument(comp_type: CompilerType) -> Self {
+    pub fn new_argument(comp_type: ParserType) -> Self {
         Self { compiler_type: comp_type, flags: Cell::new(VariableFlags::Argument as u8) }
     }
-    pub fn get_type(&self, write: bool, modify_content: bool) -> &CompilerType{
+    pub fn get_type(&self, write: bool, modify_content: bool) -> &ParserType{
         if write {
             self.flags.replace(self.flags.get() | VariableFlags::HasWrote as u8);
         }else {
@@ -154,16 +230,20 @@ impl Variable {
         return output;
     }
 }
+
+// ------------------------------------------------------------------------------------
 #[derive(Debug, Clone, Default)]
 pub struct Scope{
     upper_scope_variables: OrderedHashMap<String, Variable>,
     current_scope_variables: OrderedHashMap<String, Variable>,
-    loop_index: Option<u32>
+    loop_index: Option<u32>,
 }
 impl Scope {
-    pub fn new(upper_scope_variables: OrderedHashMap<String, Variable>, current_scope_variables: OrderedHashMap<String, Variable>) -> Self {
-        Self { upper_scope_variables, current_scope_variables, loop_index: None }
+    pub fn new(upper_scope_variables: OrderedHashMap<String, Variable>, current_scope_variables: OrderedHashMap<String, Variable>, loop_index: Option<u32>) -> Self {
+        Self { upper_scope_variables, current_scope_variables, loop_index }
     }
+
+
     pub fn empty() -> Self {
         Self { upper_scope_variables: OrderedHashMap::new(), current_scope_variables: OrderedHashMap::new(), loop_index: None }
     }

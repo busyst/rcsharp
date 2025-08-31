@@ -1,16 +1,16 @@
 use crate::{expression_parser::{Expr, ExpressionParser}, token::{Token, TokenData}};
 #[derive(Debug, Clone, PartialEq)]
 pub enum Stmt {
-    Hint(String, Vec<Expr>), // #[...]
+    Hint(String, Box<[Expr]>), // #[...]
     
     Let(String, ParserType, Option<Expr>), // let x : ...
     
     Expr(Expr), // a = 1 + b
     
     
-    If(Expr, Vec<Stmt>, Vec<Stmt>), // if 1 == 1 {} `else `if` {}`
+    If(Expr, Box<[Stmt]>, Box<[Stmt]>), // if 1 == 1 {} `else `if` {}`
 
-    Loop(Vec<Stmt>), // loop { ... }
+    Loop(Box<[Stmt]>), // loop { ... }
 
     Break, // break
     Continue, // continue
@@ -18,10 +18,10 @@ pub enum Stmt {
     
     DirectInsertion(String), // continue
     
-    Function(String, Vec<(String, ParserType)>, ParserType, Vec<Stmt>), // fn foo(bar: i8, ...) ... { ... }
-    Struct(String, Vec<(String, ParserType)>), // struct foo { bar : i8, ... }
-    Enum(String, Option<ParserType>, Vec<(String, Expr)>), // enum foo 'base_type' { bar = ..., ... }
-    Namespace(String, Vec<Stmt>), // namespace foo { fn bar() ... {...} ... }
+    Function(String, Box<[(String, ParserType)]>, ParserType, Box<[Stmt]>), // fn foo(bar: i8, ...) ... { ... }
+    Struct(String, Box<[(String, ParserType)]>), // struct foo { bar : i8, ... }
+    Enum(String, Option<ParserType>, Box<[(String, Expr)]>), // enum foo 'base_type' { bar = ..., ... }
+    Namespace(String, Box<[Stmt]>), // namespace foo { fn bar() ... {...} ... }
 }
 impl Stmt {
     pub fn recursive_statement_count(&self) -> u64{
@@ -47,10 +47,9 @@ pub enum ParserType {
     Named(String),
     Pointer(Box<ParserType>),
     // return type, arguments
-    Function(Box<ParserType>,Vec<ParserType>),
-    NamespaceLink(String,Box<ParserType>),
+    Function(Box<ParserType>,Box<[ParserType]>),
+    NamespaceLink(String, Box<ParserType>),
 }
-
 impl PartialEq for ParserType {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
@@ -64,7 +63,6 @@ impl PartialEq for ParserType {
         }
     }
 }
-
 #[allow(dead_code)]
 impl ParserType {
     pub fn is_primitive_type(&self) -> bool {
@@ -82,12 +80,12 @@ impl ParserType {
 
     pub fn is_integer(&self) -> bool {
         if let ParserType::Named(name) = self {
-            matches!(name.as_str(), "i8" | "u8" | "i16" | "u16" | "i32" | "u32" | "i64" | "u64")
-        } else {
-            false
+            return matches!(name.as_str(), "i8" | "u8" | "i16" | "u16" | "i32" | "u32" | "i64" | "u64");
         }
+        false
     }
-    pub fn both_integers(&self, other: &ParserType) -> Option<(u32, u32)> {
+    
+    pub fn is_both_integers(&self, other: &ParserType) -> Option<(u32, u32)> {
         if self.is_integer() && other.is_integer() {
             let ln = self.try_to_string_core().unwrap()[1..].parse::<u32>().unwrap();
             let rn = other.try_to_string_core().unwrap()[1..].parse::<u32>().unwrap();
@@ -96,50 +94,45 @@ impl ParserType {
         None
     }
     pub fn is_bool(&self) -> bool{
-        if let ParserType::Named(name) = self {
-            matches!(name.as_str(), "bool")
-        } else {
-            false
-        }
+        return *self == ParserType::Named(format!("bool"));
     }
     pub fn is_unsigned_integer(&self) -> bool {
         if let ParserType::Named(name) = self {
-            matches!(name.as_str(), "u8" | "u16" | "u32" | "u64" )
-        } else {
-            false
+            return matches!(name.as_str(), "u8" | "u16" | "u32" | "u64" );
         }
+        false
     }
-    
     pub fn is_signed_integer(&self) -> bool {
         if let ParserType::Named(name) = self {
-            matches!(name.as_str(), "i8" | "i16" | "i32" | "i64" )
-        } else {
-            false
+            return matches!(name.as_str(), "i8" | "i16" | "i32" | "i64" );
         }
+        false
     }
+    
     pub fn is_float(&self) -> bool {
         if let ParserType::Named(name) = self {
-            matches!(name.as_str(), "f32" | "f64")
-        } else {
-            false
+            return matches!(name.as_str(), "f32" | "f64");
         }
+        false
     }
     pub fn is_void(&self) -> bool {
         if let ParserType::Named(name) = self {
-            matches!(name.as_str(), "void")
-        } else {
-            false
+            return matches!(name.as_str(), "void");
         }
+        false
     }
     pub fn is_pointer(&self) -> bool{
         return matches!(self, ParserType::Pointer(_));
     }
-    pub fn unpointer(&self) -> ParserType{
+    
+    pub fn unpointer(&self) -> &ParserType{
         match self {
             ParserType::Pointer(x) => return x.unpointer(),
-            _ => return self.clone()
+            _ => return &self
         }
     }
+    
+
     pub fn to_string(&self) -> String{
         let mut output = String::new();
         match self {
@@ -150,7 +143,6 @@ impl ParserType {
         }
         return output;
     }
-    
     pub fn try_to_string_core(&self) -> Result<String, String>{
         match self {
             ParserType::Named(x) => return Ok(x.clone()),
@@ -199,22 +191,6 @@ impl ParserType {
                 }
             }
             _ => return current_fallback.to_string(),
-        }
-    }
-    pub fn as_absolute_path_or(&self, current_fallback: &str) -> ParserType{
-        match self {
-            ParserType::Named(_) =>{
-                let paths = current_fallback.split(|x| x == '.').rev();
-                let mut output = self.clone();
-                for x in paths {
-                    if x.is_empty() {
-                        continue;
-                    }
-                    output = ParserType::NamespaceLink(x.to_string(), Box::new(output));
-                }
-                return output;
-            }
-            _ => return self.clone(),
         }
     }
 }
@@ -287,7 +263,7 @@ impl<'a> GeneralParser<'a> {
         if self.peek().token == Token::LParen {
             self.advance();
             while self.peek().token != Token::RParen && !self.is_at_end() {
-                args.push(self.parse_sub_expression()?);
+                args.push(self.parse_expression()?);
                 if self.peek().token == Token::Comma {
                     self.advance(); 
                 } else {
@@ -297,7 +273,7 @@ impl<'a> GeneralParser<'a> {
             self.consume(&Token::RParen)?;
         }
         self.consume(&Token::RSquareBrace)?;
-        Ok(Stmt::Hint(name, args))
+        Ok(Stmt::Hint(name, args.into_boxed_slice()))
     } 
     fn parse_function(&mut self) -> Result<Stmt, String> {
         self.consume(&Token::KeywordFunction)?;
@@ -324,10 +300,10 @@ impl<'a> GeneralParser<'a> {
         }
         if self.peek().token == Token::SemiColon {
             self.advance();
-            return Ok(Stmt::Function(name, args, return_type, vec![]));
+            return Ok(Stmt::Function(name, args.into_boxed_slice(), return_type, Box::new([])));
         }
         let body = self.parse_block_body()?;
-        Ok(Stmt::Function(name, args, return_type, body))
+        Ok(Stmt::Function(name, args.into_boxed_slice(), return_type, body))
     }  
     fn parse_struct(&mut self) -> Result<Stmt, String> {
         self.consume(&Token::KeywordStruct)?;
@@ -348,7 +324,7 @@ impl<'a> GeneralParser<'a> {
             }
         }
         self.consume(&Token::RBrace)?;
-        Ok(Stmt::Struct(name, fields))
+        Ok(Stmt::Struct(name, fields.into_boxed_slice()))
     }    
     fn parse_namespace(&mut self) -> Result<Stmt, String> {
         self.consume(&Token::KeywordNamespace)?;
@@ -362,7 +338,7 @@ impl<'a> GeneralParser<'a> {
             body.push(self.parse_toplevel_item()?);
         }
         self.consume(&Token::RBrace)?;
-        return Ok(Stmt::Namespace(x, body));
+        return Ok(Stmt::Namespace(x, body.into_boxed_slice()));
     }
     fn parse_enum(&mut self) -> Result<Stmt, String> {
         self.consume(&Token::KeywordEnum)?;
@@ -386,7 +362,7 @@ impl<'a> GeneralParser<'a> {
                 self.advance();
                 let mut prsr= ExpressionParser::new(&self.tokens[self.cursor..]);
                 let expr = prsr.parse_expression()?;
-                self.cursor += prsr.position();
+                self.cursor += prsr.cursor();
                 values.push((name, expr));
                 if self.peek().token == Token::Comma {
                     self.advance();
@@ -402,53 +378,7 @@ impl<'a> GeneralParser<'a> {
             }
         }
         self.consume(&Token::RBrace)?;
-        Ok(Stmt::Enum(name, enum_base_type, values))
-    }
-    fn parse_type(&mut self) -> Result<ParserType, String> {
-        if self.peek().token == Token::LogicAnd {
-            self.advance();
-            Ok(ParserType::Pointer(Box::new(ParserType::Pointer(Box::new(self.parse_type()?)))))
-        }
-        else if self.peek().token == Token::BinaryAnd {
-            self.advance();
-            Ok(ParserType::Pointer(Box::new(self.parse_type()?)))
-        }
-        else if self.peek().token == Token::Multiply && crate::USE_MULTIPLY_AS_POINTER_IN_TYPES {
-            self.advance();
-            Ok(ParserType::Pointer(Box::new(self.parse_type()?)))
-        } 
-        else if self.peek().token == Token::KeywordFunction {
-            self.advance();
-            self.consume(&Token::LParen)?;
-
-            let mut arguments = vec![];
-            let return_type;
-            
-            if self.peek().token != Token::RParen {
-                loop {
-                    arguments.push(self.parse_type()?);
-                    if self.peek().token == Token::RParen {
-                        break;
-                    }
-                    self.consume(&Token::Comma)?;
-                }
-            }
-            self.consume(&Token::RParen)?;
-            self.consume(&Token::Colon)?;
-            return_type = Box::new(self.parse_type()?);
-            Ok(ParserType::Function(return_type, arguments))
-        }
-        else {
-            let link_or_name = self.advance().expect_name_token()?;
-            if self.peek().token == Token::DoubleColon {
-                self.advance();
-                return Ok(ParserType::NamespaceLink(link_or_name, Box::new(self.parse_type()?)))
-            }
-            else if self.peek().token == Token::LogicLess{
-                todo!("Generic structures / functions, not yet implemented")
-            }
-            Ok(ParserType::Named(link_or_name))
-        }
+        Ok(Stmt::Enum(name, enum_base_type, values.into_boxed_slice()))
     }
     fn parse_statement(&mut self) -> Result<Stmt, String> {
         match &self.peek().token {
@@ -469,6 +399,7 @@ impl<'a> GeneralParser<'a> {
             Token::LBrace | Token::RBrace | Token::SemiColon => {unreachable!("Congratulations! I broke parser!")},
             _ => { 
                 let expr = self.parse_expression()?;
+                self.consume(&Token::SemiColon)?;
                 Ok(Stmt::Expr(expr))
             }
         }
@@ -482,7 +413,7 @@ impl<'a> GeneralParser<'a> {
         let mut initializer: Option<Expr> = None;
         if self.peek().token == Token::Equal {
             self.consume(&Token::Equal)?;
-            let rhs = self.parse_sub_expression()?;
+            let rhs = self.parse_expression()?;
             initializer = Some(rhs);
         }
 
@@ -491,20 +422,22 @@ impl<'a> GeneralParser<'a> {
     }
     fn parse_if_statement(&mut self) -> Result<Stmt, String> {
         self.consume(&Token::KeywordIf)?;
-        let condition = self.parse_sub_expression()?;
+        let condition = self.parse_expression()?;
         let then_body = self.parse_block_body()?;
-        let mut else_branch= vec![];
+        let else_branch =
         if self.peek().token == Token::KeywordElse {
             self.advance();
             
             if self.peek().token == Token::KeywordIf {
                 let else_if_stmt = self.parse_if_statement()?;
-                else_branch = vec![else_if_stmt];
+                Box::new([else_if_stmt])
             } else {
                 let else_body = self.parse_block_body()?;
-                else_branch = else_body;
+                else_body
             }
-        }
+        }else{
+            Box::new([])
+        };
         Ok(Stmt::If(condition, then_body, else_branch))
     }
     fn parse_loop_statement(&mut self) -> Result<Stmt, String> {
@@ -517,26 +450,25 @@ impl<'a> GeneralParser<'a> {
         let mut return_expr: Option<Expr> = None;
         
         if self.peek().token != Token::SemiColon {
-            return_expr = Some(self.parse_sub_expression()?);
+            return_expr = Some(self.parse_expression()?);
         }
         
         self.consume(&Token::SemiColon)?;
         Ok(Stmt::Return(return_expr))
     }
-    fn parse_expression(&mut self) -> Result<Expr, String> {
-        let mut prsr= ExpressionParser::new(&self.tokens[self.cursor..]);
-        let x = prsr.parse_expression()?;
-        self.cursor += prsr.position();
-        self.consume(&Token::SemiColon)?;
-        return Ok(x);
+    fn parse_type(&mut self) -> Result<ParserType, String> {
+        let mut ep = ExpressionParser::new(&self.tokens[self.cursor..]);
+        let pt = ep.parse_type();
+        self.cursor += ep.cursor();
+        return pt;
     }
-    fn parse_sub_expression(&mut self) -> Result<Expr, String> {
+    fn parse_expression(&mut self) -> Result<Expr, String> {
         let mut expr_parser = ExpressionParser::new(&self.tokens[self.cursor..]);
         let expr = expr_parser.parse_expression()?;
-        self.cursor += expr_parser.position();
+        self.cursor += expr_parser.cursor();
         Ok(expr)
     }
-    fn parse_block_body(&mut self) -> Result<Vec<Stmt>, String> {
+    fn parse_block_body(&mut self) -> Result<Box<[Stmt]>, String> {
         self.consume(&Token::LBrace)?;
         let mut stmts = Vec::new();
         while self.peek().token != Token::RBrace && !self.is_at_end() {
@@ -547,7 +479,7 @@ impl<'a> GeneralParser<'a> {
             stmts.push(self.parse_statement()?);
         }
         self.consume(&Token::RBrace)?;
-        Ok(stmts)
+        Ok(stmts.into_boxed_slice())
     }
 
 }

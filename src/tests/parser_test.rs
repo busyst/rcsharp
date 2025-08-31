@@ -20,17 +20,17 @@ mod parser_tests {
         let h1 = parse("#[hint(a)]")?;
         let h2 = parse("#[hint(a + 1)]")?;
         let h3 = parse("#[hint(a + 1, 2, 3)]")?;
-        assert_eq!(hb[0], Stmt::Hint(format!("hint"), vec![]));
-        assert_eq!(h1[0], Stmt::Hint(format!("hint"), vec![Expr::Name(format!("a"))]));
-        assert_eq!(h2[0], Stmt::Hint(format!("hint"), vec![Expr::BinaryOp(Box::new(Expr::Name(format!("a"))), BinaryOp::Add, Box::new(Expr::Integer(format!("1"))))]));
-        assert_eq!(h3[0], Stmt::Hint(format!("hint"), vec![Expr::BinaryOp(Box::new(Expr::Name(format!("a"))), BinaryOp::Add, Box::new(Expr::Integer(format!("1")))), Expr::Integer(format!("2")), Expr::Integer(format!("3"))]));
+        assert_eq!(hb[0], Stmt::Hint(format!("hint"), Box::new([])));
+        assert_eq!(h1[0], Stmt::Hint(format!("hint"), Box::new([Expr::Name(format!("a"))])));
+        assert_eq!(h2[0], Stmt::Hint(format!("hint"), Box::new([Expr::BinaryOp(Box::new(Expr::Name(format!("a"))), BinaryOp::Add, Box::new(Expr::Integer(format!("1"))))])));
+        assert_eq!(h3[0], Stmt::Hint(format!("hint"), Box::new([Expr::BinaryOp(Box::new(Expr::Name(format!("a"))), BinaryOp::Add, Box::new(Expr::Integer(format!("1")))), Expr::Integer(format!("2")), Expr::Integer(format!("3"))])));
         Ok(())
     }
     #[test]
     fn basic_function() -> Result<(), String> {
         let fb = parse("fn foo(){}")?;
         let fb1 = parse("fn foo(): void{}")?;
-        assert_eq!(fb[0],Stmt::Function(format!("foo"), vec![], ParserType::Named(format!("void")), vec![]));
+        assert_eq!(fb[0], Stmt::Function(format!("foo"), Box::new([]), ParserType::Named(format!("void")), Box::new([])));
         assert_eq!(fb, fb1);
         Ok(())
     }
@@ -38,8 +38,8 @@ mod parser_tests {
     fn basic_struct() -> Result<(), String> {
         let fb = parse("struct bar{x:i8}")?;
         let fb1 = parse("struct bar{x:&i8, y: i32}")?;
-        assert_eq!(fb[0],Stmt::Struct(format!("bar"), vec![(format!("x"), ParserType::Named(format!("i8")))]));
-        assert_eq!(fb1[0],Stmt::Struct(format!("bar"), vec![(format!("x"), ParserType::Pointer(Box::new(ParserType::Named(format!("i8"))))), (format!("y"), ParserType::Named(format!("i32")))]));
+        assert_eq!(fb[0],Stmt::Struct(format!("bar"), Box::new([(format!("x"), ParserType::Named(format!("i8")))])));
+        assert_eq!(fb1[0],Stmt::Struct(format!("bar"), Box::new([(format!("x"), ParserType::Pointer(Box::new(ParserType::Named(format!("i8"))))), (format!("y"), ParserType::Named(format!("i32")))])));
         Ok(())
     }
     
@@ -50,9 +50,9 @@ mod parser_tests {
 
         let expected = Stmt::Function(
             "DoSomething".to_string(),
-            vec![("val".to_string(), ParserType::Named("i32".to_string()))],
+            Box::new([("val".to_string(), ParserType::Named("i32".to_string()))]),
             ParserType::Pointer(Box::new(ParserType::Named("i8".to_string()))),
-            vec![]
+            Box::new([])
         );
 
         assert_eq!(ast.len(), 1);
@@ -113,8 +113,8 @@ mod parser_tests {
                 BinaryOp::Equals,
                 Box::new(Expr::Integer("1".to_string()))
             ),
-            vec![Stmt::Return(None)],
-            vec![]
+            Box::new([Stmt::Return(None)]),
+            Box::new([])
         );
         if let Stmt::Function(_, _, _, body) = &ast1[0] {
             assert_eq!(body[0], expected_if1);
@@ -124,13 +124,13 @@ mod parser_tests {
 
         let expected_if2 = Stmt::If(
             Expr::Name("a".to_string()),
-            vec![],
-            vec![
+            Box::new([]),
+            Box::new([
                 Stmt::Expr(Expr::Assign(
                     Box::new(Expr::Name("a".to_string())),
                     Box::new(Expr::Integer("1".to_string()))
                 ))
-            ]
+            ])
         );
          if let Stmt::Function(_, _, _, body) = &ast2[0] {
             assert_eq!(body[0], expected_if2);
@@ -140,12 +140,12 @@ mod parser_tests {
         
         let expected_if3 = Stmt::If(
             Expr::Name("a".to_string()),
-            vec![],
-            vec![Stmt::If(
+            Box::new([]),
+            Box::new([Stmt::If(
                 Expr::Name("b".to_string()),
-                vec![],
-                vec![]
-            )]
+                Box::new([]),
+                Box::new([])
+            )])
         );
         if let Stmt::Function(_, _, _, body) = &ast3[0] {
             assert_eq!(body[0], expected_if3);
@@ -160,10 +160,10 @@ mod parser_tests {
         let src = "fn f() { loop { break; continue; } }";
         let ast = parse(src)?;
 
-        let expected = Stmt::Loop(vec![
+        let expected = Stmt::Loop(Box::new([
             Stmt::Break,
             Stmt::Continue
-        ]);
+        ]));
 
         if let Stmt::Function(_, _, _, body) = &ast[0] {
             assert_eq!(body.len(), 1);
@@ -221,10 +221,10 @@ mod parser_tests {
 
         let expected_expr2 = Stmt::Expr(Expr::Call(
             Box::new(Expr::Name("my_func".to_string())),
-            vec![
+            Box::new([
                 Expr::Name("a".to_string()),
                 Expr::Integer("1".to_string())
-            ]
+            ])
         ));
         if let Stmt::Function(_, _, _, body) = &ast2[0] {
             assert_eq!(body[0], expected_expr2);
