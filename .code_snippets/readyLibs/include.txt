@@ -1,1 +1,1 @@
-.code_snippets\readyLibs\kernel32.Lib .code_snippets\readyLibs\User32.Lib
+.code_snippets\readyLibs\kernel32.Lib .code_snippets\readyLibs\User32.Lib .code_snippets\readyLibs\opengl32.lib .code_snippets\readyLibs\gdi32.lib 

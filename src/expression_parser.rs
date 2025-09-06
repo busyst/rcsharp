@@ -269,8 +269,22 @@ impl<'a> ExpressionParser<'a> {
                 self.advance();
                 return Ok(ParserType::NamespaceLink(link_or_name, Box::new(self.parse_type()?)))
             }
-            else if self.peek().token == Token::LogicLess{
-                todo!("Generic structures / functions, not yet implemented")
+            if self.peek().token == Token::LogicLess {
+                self.advance();
+                let mut template_typenames_implementation = vec![];
+                loop {
+                    if self.peek().token == Token::LogicGreater{
+                        self.advance();
+                        break;
+                    }
+                    let mut x = ExpressionParser::new(&self.tokens[self.cursor..]);
+                    template_typenames_implementation.push(x.parse_type()?);
+                    self.cursor += x.cursor;
+                    if self.peek().token == Token::Comma {
+                        self.advance();
+                    }
+                }
+                println!("{:?}", template_typenames_implementation);
             }
             Ok(ParserType::Named(link_or_name))
         }

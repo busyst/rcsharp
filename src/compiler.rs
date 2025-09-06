@@ -50,7 +50,6 @@ pub fn rcsharp_compile_to_file(stmts: &[Stmt]) -> Result<(), String> {
 }
 
 pub fn rcsharp_compile(stmts: &[Stmt]) -> CompileResult<String>  {
-    
     let mut symbols = SymbolTable::new();
     let mut output = LLVMOutputHandler::default();
     output.push_str_header("target triple = \"x86_64-pc-windows-msvc\"\n");
@@ -104,7 +103,8 @@ fn compile_attributes(symbols: &SymbolTable, output: &mut LLVMOutputHandler) -> 
 
 fn compile_functions(symbols: &SymbolTable, output: &mut LLVMOutputHandler) -> CompileResult<()>{
     let functions_to_compile = symbols.functions.values()
-        .filter(|f| !f.is_imported());
+        .filter(|f| !f.is_imported() && !f.is_inline());
+
     let mut cvc = 0;
     for function in functions_to_compile {
         let mut ctx = CodeGenContext::new(symbols, function);
@@ -146,7 +146,7 @@ fn compile_single_function(
         ctx.scope.add_variable(arg_name.clone(), Variable::new_argument(arg_type.clone(), ptr_name));
     }*/
     for (arg_name, arg_type) in function.args.iter() {
-        ctx.scope.add_variable(arg_name.clone(), Variable::new_argument(arg_type.clone()));
+        ctx.scope.add_variable(arg_name.clone(), Variable::new_argument(arg_type.clone()), 0);
     }
     for stmt in function.body.iter(){
         compile_statement(stmt, ctx, output)
@@ -165,12 +165,13 @@ fn compile_single_function(
     Ok(())
 }
 
-fn compile_statement(stmt: &Stmt, ctx: &mut CodeGenContext, output: &mut LLVMOutputHandler) -> CompileResult<()>{
+pub fn compile_statement(stmt: &Stmt, ctx: &mut CodeGenContext, output: &mut LLVMOutputHandler) -> CompileResult<()>{
     match &stmt {
         Stmt::Let(name, var_type, expr) => {
             let llvm_type = get_llvm_type_str(var_type, ctx.symbols, &ctx.current_function_path)?;
-            output.push_str(&format!("    %{} = alloca {}\n", name, llvm_type));
-            ctx.scope.add_variable(name.clone(), Variable::new(var_type.clone()));
+            let x = ctx.aquire_unique_temp_value_counter();
+            ctx.scope.add_variable(name.clone(), Variable::new(var_type.clone()), x);
+            output.push_str(&format!("    %v{} = alloca {}; var: {}\n", x, llvm_type, name));
 
             if let Some(init_expr) = expr {
                 let assignment = Expr::Assign(
@@ -285,8 +286,8 @@ pub fn get_llvm_type_str(
             "i16" | "u16" => Ok("i16".to_string()),
             "i32" | "u32" => Ok("i32".to_string()),
             "i64" | "u64" => Ok("i64".to_string()),
-            "f32" => Ok("f32".to_string()),
-            "f64" => Ok("f64".to_string()),
+            "f32" => Ok("float".to_string()),
+            "f64" => Ok("double".to_string()),
             _ => {
                 let fqn = ptype.get_absolute_path_or(current_namespace);
                 if symbols.types.contains_key(&fqn) {
@@ -461,7 +462,7 @@ impl<'a> SymbolCollector<'a> {
 
             let attributes = self.collect_preceding_attributes(stmts, i);      
             match statement {
-                Stmt::Function(n, a, r, b) => self.collect_function(n, a, r, b, attributes)?,
+                Stmt::Function(n, a, r, b, f) => self.collect_function(n, a, r, b, *f, attributes)?,
                 Stmt::Struct(n, a) => self.collect_struct(n, a, attributes)?,
                 Stmt::Enum(n, base, entries) => self.collect_enum(n, base, entries, attributes)?,
                 Stmt::Namespace(n, body) => {
@@ -489,7 +490,7 @@ impl<'a> SymbolCollector<'a> {
             })
             .collect()
     }
-    fn collect_function(&mut self, name: &str, args: &[(String, ParserType)], ret: &ParserType, body: &[Stmt], attribs: Box<[Attribute]>) -> CompileResult<()> {
+    fn collect_function(&mut self, name: &str, args: &[(String, ParserType)], ret: &ParserType, body: &[Stmt], flags: u8, attribs: Box<[Attribute]>) -> CompileResult<()> {
         let fqn = if self.current_path.is_empty() { name.to_string() } else { format!("{}.{}", self.current_path, name) };
         if self.symbols.functions.contains_key(&fqn) {
             return Err(CompileError::DuplicateSymbol(fqn));
@@ -506,6 +507,7 @@ impl<'a> SymbolCollector<'a> {
             qualified_args,
             qualified_return_type,
             body.to_vec().into_boxed_slice(),
+            Cell::new(flags),
             attribs,
         );
         self.symbols.functions.insert(fqn, function);

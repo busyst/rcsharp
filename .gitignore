@@ -1,5 +1,5 @@
 /target
-.code_snippets/gendef/gendef.exe
-.code_snippets/readyLibs/kernel32.Lib
-.code_snippets/readyLibs/User32.Lib
+.code_snippets/gendef/
+.code_snippets/readyLibs
 output.obj
+/src/lib.rs

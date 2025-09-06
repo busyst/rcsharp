@@ -35,6 +35,7 @@
 //   These flags (for now) are hints for unused variables, not strict correctness checks.
 // - Replace `#[DllImport]` with a more idiomatic `extern fn ...` once FFI design stabilizes.
 // Note: under current calling convention, function arguments are treated as immutable.
+
 fn main(): i32 {
     console::AllocConsole();
     tests::run();
@@ -45,7 +46,8 @@ fn main(): i32 {
 
 namespace window{
     // Down from here, ai assisted code
-    /// https://program-day.tistory.com/22
+    
+    // https://program-day.tistory.com/22
     enum WM : u32 {
         NULL = 0x0000,
         CREATE = 0x0001,
@@ -371,6 +373,7 @@ namespace window{
         MENUHILIGHT = 29,
         MENUBAR = 30,
     }
+
     struct WNDCLASSEXA {
         cbSize: u32,                            // UINT
         style: u32,                             // UINT
@@ -410,6 +413,9 @@ namespace window{
     fn UpdateWindow(hWnd: &i8): i32; // BOOL is int, so i32
     #[DllImport("user32.dll")]
     fn GetMessageA(lpMsg: &MSG, hWnd: &i8, wMsgFilterMin: u32, wMsgFilterMax: u32): i32; // BOOL is int, so i32
+    #[DllImport("user32.dll")]
+    fn PeekMessageA(lpMsg: &MSG, hWnd: &i8, wMsgFilterMin: u32, wMsgFilterMax: u32, wRemoveMsg: u32): i32; // BOOL is int, so i32
+    
     #[DllImport("user32.dll")]
     fn TranslateMessage(lpMsg: &MSG): i32; // BOOL is int, so i32
     #[DllImport("user32.dll")]
@@ -503,12 +509,12 @@ namespace window{
 
         let msg: MSG;
         loop {
-            let result: i32 = GetMessageA(&msg, 0 as &i8, 0, 0);
-            if (result > 0) {
+            if PeekMessageA(&msg, 0 as &i8, 0, 0, 1) != 0{
+                if msg.message == WM::QUIT{
+                    break;
+                }
                 TranslateMessage(&msg);
                 DispatchMessageA(&msg);
-            } else {
-                break; 
             }
         }
 
@@ -516,5 +522,3 @@ namespace window{
     }
 
 }
-
-

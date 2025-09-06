@@ -91,6 +91,12 @@ pub enum Token {
     #[token("<<")] BinaryShiftL,
     #[token(">>")] BinaryShiftR,
 
+    #[token("pub")] KeywordPub,
+    #[token("inline")] KeywordInline,
+    #[token("const")] KeywordConst,
+    #[token("constexpr")] KeywordConstExpr,
+    #[token("match")] KeywordMatch,
+    
     #[token("fn")] KeywordFunction,
     #[token("let")] KeywordVariableDeclaration,
     #[token("as")] KeywordAs,
@@ -105,6 +111,8 @@ pub enum Token {
     #[token("this")] KeywordThis,
     #[token("operator")] KeywordOperator,
     #[token("namespace")] KeywordNamespace,
+    #[token("true")] KeywordTrue,
+    #[token("false")] KeywordFalse,
     DummyToken,
     #[regex(r"[a-zA-Z_]\w*", |lex| lex.slice().to_string().into_boxed_str())]
     Name(Box<str>),
@@ -115,7 +123,7 @@ pub enum Token {
     #[regex(r#""([^"\\]|\\.)*""#, unescape_string)]
     String(Box<str>),
     
-    #[regex(r"'([^'\\]|\\.)'", unescape_char)]
+    #[regex(r"'([^'\\]|\\.)*'", unescape_char)]
     Char(Box<str>),
 }
 
@@ -192,14 +200,30 @@ fn unescape_string(lex: &mut logos::Lexer<Token>) -> Box<str> {
                 Some('r') => unescaped.push('\r'),
                 Some('\\') => unescaped.push('\\'),
                 Some('"') => unescaped.push('"'),
-                Some(other) => unescaped.push(other),
+                Some('\'') => unescaped.push('\''),
+                Some('x') => {
+                    let mut hex = String::with_capacity(2);
+                    if let Some(h1) = chars.next() { hex.push(h1); }
+                    if let Some(h2) = chars.next() { hex.push(h2); }
+
+                    if let Ok(byte) = u8::from_str_radix(&hex, 16) {
+                        unescaped.push(byte as char);
+                    } else {
+                        unescaped.push('\\');
+                        unescaped.push('x');
+                        unescaped.push_str(&hex);
+                    }
+                }
+                Some(other) => {
+                    unescaped.push('\\');
+                    unescaped.push(other);
+                }
                 None => break,
             }
         } else {
             unescaped.push(c);
         }
     }
-
     unescaped.into_boxed_str()
 }
 fn unescape_char(lex: &mut logos::Lexer<Token>) -> Box<str> {
@@ -217,14 +241,32 @@ fn unescape_char(lex: &mut logos::Lexer<Token>) -> Box<str> {
                 Some('r') => unescaped.push('\r'),
                 Some('\\') => unescaped.push('\\'),
                 Some('"') => unescaped.push('"'),
+                Some('\'') => unescaped.push('\''),
+                Some('x') => {
+                    let mut hex = String::with_capacity(2);
+                    if let Some(h1) = chars.next() { hex.push(h1); }
+                    if let Some(h2) = chars.next() { hex.push(h2); }
+
+                    if let Ok(byte) = u8::from_str_radix(&hex, 16) {
+                        unescaped.push(byte as char);
+                    } else {
+                        unescaped.push('\\');
+                        unescaped.push('x');
+                        unescaped.push_str(&hex);
+                    }
+                }
                 Some(other) => unescaped.push(other),
                 None => break,
             }
+            break;
         } else {
             unescaped.push(c);
+            break;
         }
     }
-
+    if chars.next() != None {
+        panic!("Character literal may only contain one character")
+    }
     unescaped.into_boxed_str()
 }
 fn unhex_num(lex: &mut logos::Lexer<Token>) -> Box<str> {

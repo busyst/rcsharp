@@ -30,7 +30,7 @@ mod parser_tests {
     fn basic_function() -> Result<(), String> {
         let fb = parse("fn foo(){}")?;
         let fb1 = parse("fn foo(): void{}")?;
-        assert_eq!(fb[0], Stmt::Function(format!("foo"), Box::new([]), ParserType::Named(format!("void")), Box::new([])));
+        assert_eq!(fb[0], Stmt::Function(format!("foo"), Box::new([]), ParserType::Named(format!("void")), Box::new([]), 0));
         assert_eq!(fb, fb1);
         Ok(())
     }
@@ -52,7 +52,8 @@ mod parser_tests {
             "DoSomething".to_string(),
             Box::new([("val".to_string(), ParserType::Named("i32".to_string()))]),
             ParserType::Pointer(Box::new(ParserType::Named("i8".to_string()))),
-            Box::new([])
+            Box::new([]),
+            0
         );
 
         assert_eq!(ast.len(), 1);
@@ -72,7 +73,7 @@ mod parser_tests {
             ParserType::Named("i32".to_string()),
             None
         );
-        if let Stmt::Function(_, _, _, body) = &ast1[0] {
+        if let Stmt::Function(_, _, _, body, _) = &ast1[0] {
             assert_eq!(body.len(), 1);
             assert_eq!(body[0], expected_stmt1);
         } else {
@@ -88,7 +89,7 @@ mod parser_tests {
                 Box::new(Expr::Integer("2".to_string()))
             ))
         );
-        if let Stmt::Function(_, _, _, body) = &ast2[0] {
+        if let Stmt::Function(_, _, _, body, _) = &ast2[0] {
             assert_eq!(body.len(), 1);
             assert_eq!(body[0], expected_stmt2);
         } else {
@@ -116,7 +117,7 @@ mod parser_tests {
             Box::new([Stmt::Return(None)]),
             Box::new([])
         );
-        if let Stmt::Function(_, _, _, body) = &ast1[0] {
+        if let Stmt::Function(_, _, _, body, _) = &ast1[0] {
             assert_eq!(body[0], expected_if1);
         } else {
             return Err(format!("Expected Function, got {:?}", ast1[0]));
@@ -132,7 +133,7 @@ mod parser_tests {
                 ))
             ])
         );
-         if let Stmt::Function(_, _, _, body) = &ast2[0] {
+         if let Stmt::Function(_, _, _, body, _) = &ast2[0] {
             assert_eq!(body[0], expected_if2);
         } else {
             return Err(format!("Expected Function, got {:?}", ast2[0]));
@@ -147,7 +148,7 @@ mod parser_tests {
                 Box::new([])
             )])
         );
-        if let Stmt::Function(_, _, _, body) = &ast3[0] {
+        if let Stmt::Function(_, _, _, body, _) = &ast3[0] {
             assert_eq!(body[0], expected_if3);
         } else {
             return Err(format!("Expected Function, got {:?}", ast3[0]));
@@ -165,7 +166,7 @@ mod parser_tests {
             Stmt::Continue
         ]));
 
-        if let Stmt::Function(_, _, _, body) = &ast[0] {
+        if let Stmt::Function(_, _, _, body, _) = &ast[0] {
             assert_eq!(body.len(), 1);
             assert_eq!(body[0], expected);
         } else {
@@ -182,7 +183,7 @@ mod parser_tests {
         let ast2 = parse(s2_src)?;
 
         let expected_return1 = Stmt::Return(None);
-        if let Stmt::Function(_, _, _, body) = &ast1[0] {
+        if let Stmt::Function(_, _, _, body, _) = &ast1[0] {
             assert_eq!(body[0], expected_return1);
         } else {
             return Err(format!("Expected Function, got {:?}", ast1[0]));
@@ -193,7 +194,7 @@ mod parser_tests {
             BinaryOp::Add,
             Box::new(Expr::Integer("1".to_string()))
         )));
-        if let Stmt::Function(_, _, _, body) = &ast2[0] {
+        if let Stmt::Function(_, _, _, body, _) = &ast2[0] {
             assert_eq!(body[0], expected_return2);
         } else {
             return Err(format!("Expected Function, got {:?}", ast2[0]));
@@ -213,7 +214,7 @@ mod parser_tests {
             Box::new(Expr::Name("a".to_string())),
             Box::new(Expr::Name("b".to_string()))
         ));
-        if let Stmt::Function(_, _, _, body) = &ast1[0] {
+        if let Stmt::Function(_, _, _, body, _) = &ast1[0] {
             assert_eq!(body[0], expected_expr1);
         } else {
             return Err(format!("Expected Function, got {:?}", ast1[0]));
@@ -226,7 +227,7 @@ mod parser_tests {
                 Expr::Integer("1".to_string())
             ])
         ));
-        if let Stmt::Function(_, _, _, body) = &ast2[0] {
+        if let Stmt::Function(_, _, _, body, _) = &ast2[0] {
             assert_eq!(body[0], expected_expr2);
         } else {
             return Err(format!("Expected Function, got {:?}", ast2[0]));
@@ -243,7 +244,7 @@ mod parser_tests {
         let ast2 = parse(s2_src)?;
 
         let expected_type1 = ParserType::Pointer(Box::new(ParserType::Named("i32".to_string())));
-        if let Stmt::Function(_, args, _, _) = &ast1[0] {
+        if let Stmt::Function(_, args, _, _, _) = &ast1[0] {
             assert_eq!(args[0].1, expected_type1);
         } else {
             return Err(format!("Expected Function, got {:?}", ast1[0]));
@@ -254,7 +255,7 @@ mod parser_tests {
                 ParserType::Named("i32".to_string())
             ))
         ));
-        if let Stmt::Function(_, args, _, _) = &ast2[0] {
+        if let Stmt::Function(_, args, _, _, _) = &ast2[0] {
             assert_eq!(args[0].1, expected_type2);
         } else {
             return Err(format!("Expected Function, got {:?}", ast2[0]));
@@ -279,7 +280,7 @@ mod parser_tests {
             )
         );
 
-        if let Stmt::Function(_, _, _, body) = &ast[0] {
+        if let Stmt::Function(_, _, _, body, _) = &ast[0] {
             assert_eq!(body[0], expected_stmt);
         } else {
             return Err(format!("Expected Function, got {:?}", ast[0]));

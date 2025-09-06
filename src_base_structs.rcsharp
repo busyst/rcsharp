@@ -1,5 +1,4 @@
 fn __chkstk() : void{ /*I dont get it, more research needed*/}
-
 namespace process{
     #[DllImport("kernel32.dll")]
     fn ExitProcess(code:i32): void;
@@ -221,7 +220,7 @@ namespace console{
     fn get_stdout() : &i8 {
         let stdout_handle: &i8 = GetStdHandle(-11 as i32);
         if (stdout_handle == -1 as &i8) {
-            process::ExitProcess(-1 as i32);
+            process::throw("stdout handle was invalid");
         }
         return stdout_handle;
     }
@@ -362,6 +361,11 @@ namespace string{
     fn free(str: &String){
         mem::free(str.data);
         str.len = 0;
+    }
+    // Use data only inside function where it was called, because stack will be "freed" upon leaving function and data will be corrupted
+    inline fn as_c_string_stalloc(string: &String, stallocd_buffer: &i8){
+        mem::copy(string.data, stallocd_buffer, string.len as i64);
+        stallocd_buffer[string.len] = 0;
     }
 }
 namespace string_utils{
@@ -524,17 +528,18 @@ namespace fs{
 namespace tests{
     fn run(){
         fs_test();
-        funny();
+        
+        
+        //funny();
     }
     fn fs_test(){
         console::write("fs_test: ", 9);
         let data : string::String = string::from_c_string("The quick brown fox jumps over crazy lost dog.");
         let env_path : string::String = process::get_executable_env_path();
         let new_file_path: string::String = string::concat_with_c_string(&env_path, "test.txt");
-        
+
         let c_string : &i8 = stalloc(sizeof(i8) * (new_file_path.len + 1) as i64);
-        mem::copy(new_file_path.data, c_string, new_file_path.len as i64);
-        c_string[new_file_path.len] = 0;
+        string::as_c_string_stalloc(&new_file_path, c_string);
 
         fs::create_file(c_string);
         fs::delete_file(c_string);
@@ -583,13 +588,21 @@ namespace tests{
         let next_char: i8;
         let index: i32;
         let temp_string: string::String;
+        let line: i32 = 0;
+        let line_index: i32 = 0;
         // Loop situation is crazy, fix it with scope
         loop{
             if iterator >= file.len {
                 break;
             }
             char = file.data[iterator];
-            if (char == ' ' || char == '\t' || char == '\n' || char == '\r') && 1 as bool{
+            if char == '\n'{
+                line = line + 1;
+                line_index = iterator;
+                iterator = iterator + 1;
+                continue;
+            }
+            if (char == ' ' || char == '\t' || char == '\r') && 1 as bool{
                 iterator = iterator + 1;
                 continue;
             }
@@ -770,6 +783,9 @@ namespace tests{
             }
 
             console::print_char(char);
+            console::print_char('\n');
+            console::println_u64(line as u64);
+            console::println_u64((iterator - line_index) as u64);
             iterator = iterator + 1;
         }
 

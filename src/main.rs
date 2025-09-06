@@ -9,6 +9,7 @@ pub mod compiler;
 pub mod compiler_essentials;
 mod tests;
 
+
 pub const ALLOW_EXTENTION_FUNCTIONS: bool = false;
 pub const USE_MULTIPLY_AS_POINTER_IN_TYPES: bool = true;
 
@@ -25,6 +26,9 @@ fn lex_with_context(source: &str, filename: &str) -> Result<Vec<TokenData>, Stri
 }
 
 fn main() -> Result<(), String> {
+	//rcsharp::generate_lib_with_dlltool(r"c:\Windows\System32\opengl32.dll", r"./opengl32.lib");
+	//rcsharp::generate_lib_with_dlltool(r"c:\Windows\System32\gdi32.dll", r"./gdi32.lib");
+	
 	let args: Vec<_> = std::env::args().collect();
 	if args.contains(&format!("-Q")) {
 		let quick_source = {

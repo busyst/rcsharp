@@ -115,8 +115,12 @@ impl Struct {
 }
 
 // ------------------------------------------------------------------------------------
+#[repr(u8)]
 pub enum FunctionFlags {
     Imported = 128,
+    ConstExpression = 64,
+    Inline = 32,
+    Public = 16,
 }
 #[derive(Debug, Clone)]
 pub struct Function {
@@ -129,8 +133,8 @@ pub struct Function {
     flags: Cell<u8>
 }
 impl Function {
-    pub fn new(path: String, name: String, args: Box<[(String, ParserType)]>, return_type: ParserType, body: Box<[Stmt]>, attribs: Box<[Attribute]>) -> Self {
-        Self { path, name, args, return_type, body, attribs, flags: Cell::new(0) }
+    pub fn new(path: String, name: String, args: Box<[(String, ParserType)]>, return_type: ParserType, body: Box<[Stmt]>, flags: Cell<u8>, attribs: Box<[Attribute]>,) -> Self {
+        Self { path, name, args, return_type, body, attribs, flags }
     }
     
     pub fn effective_name(&self) -> String {
@@ -146,6 +150,7 @@ impl Function {
     }
     
     pub fn is_imported(&self) -> bool { self.flags.get() & FunctionFlags::Imported as u8 != 0 }
+    pub fn is_inline(&self) -> bool { self.flags.get() & FunctionFlags::Inline as u8 != 0 }
     pub fn set_as_imported(&self) { self.flags.set(self.flags.get() | FunctionFlags::Imported as u8);}
     pub fn flags(&self) -> u8 { self.flags.get() }
     
@@ -174,13 +179,14 @@ pub enum VariableFlags {
     HasRead = 1,
     HasWrote = 2,
     ModifiedContent = 4,
+    AliasValue = 32,
     Constant = 64,
     Argument = 128,
 }
 #[derive(Debug, Clone)]
 pub struct Variable{
     pub compiler_type: ParserType,
-    pub flags: Cell<u8>
+    pub flags: Cell<u8>,
 }
 impl Variable {
     pub fn new(comp_type: ParserType) -> Self {
@@ -188,6 +194,9 @@ impl Variable {
     }
     pub fn new_argument(comp_type: ParserType) -> Self {
         Self { compiler_type: comp_type, flags: Cell::new(VariableFlags::Argument as u8) }
+    }
+    pub fn new_alias(comp_type: ParserType) -> Self {
+        Self { compiler_type: comp_type, flags: Cell::new(VariableFlags::Argument as u8 | VariableFlags::AliasValue as u8) }
     }
     pub fn get_type(&self, write: bool, modify_content: bool) -> &ParserType{
         if write {
@@ -204,6 +213,11 @@ impl Variable {
     pub fn is_argument(&self) -> bool {
         self.flags.get() & VariableFlags::Argument as u8 != 0
     }
+    // Used only in inlining
+    pub fn is_alias_value(&self) -> bool {
+        self.flags.get() & VariableFlags::AliasValue as u8 != 0
+    }
+
     pub fn has_read(&self) -> bool{
         self.flags.get() & VariableFlags::HasRead as u8 != 0
     }
@@ -234,20 +248,23 @@ impl Variable {
 // ------------------------------------------------------------------------------------
 #[derive(Debug, Clone, Default)]
 pub struct Scope{
-    upper_scope_variables: OrderedHashMap<String, Variable>,
-    current_scope_variables: OrderedHashMap<String, Variable>,
+    upper_scope_variables: OrderedHashMap<String, (Variable, u32)>,
+    current_scope_variables: OrderedHashMap<String, (Variable, u32)>,
     loop_index: Option<u32>,
 }
 impl Scope {
-    pub fn new(upper_scope_variables: OrderedHashMap<String, Variable>, current_scope_variables: OrderedHashMap<String, Variable>, loop_index: Option<u32>) -> Self {
+    pub fn new(upper_scope_variables: OrderedHashMap<String, (Variable, u32)>, current_scope_variables: OrderedHashMap<String, (Variable, u32)>, loop_index: Option<u32>) -> Self {
         Self { upper_scope_variables, current_scope_variables, loop_index }
     }
-
-
     pub fn empty() -> Self {
         Self { upper_scope_variables: OrderedHashMap::new(), current_scope_variables: OrderedHashMap::new(), loop_index: None }
     }
-    pub fn get_variable(&self, name: &str) -> Result<&Variable,String>{
+    
+    pub fn clear(&mut self){
+        self.current_scope_variables.clear();
+        self.upper_scope_variables.clear();
+    }
+    pub fn get_variable(&self, name: &str) -> Result<&(Variable, u32),String>{
         if self.current_scope_variables.contains_key(name) {
             return Ok(&self.current_scope_variables[name]);
         }
@@ -256,28 +273,28 @@ impl Scope {
         }
         return Err(format!("Variable \"{}\" was not found inside current scope",name));
     }
-    pub fn add_variable(&mut self, name: String, variable: Variable) {
+    pub fn add_variable(&mut self, name: String, variable: Variable, unique_value_tag: u32) {
         if self.current_scope_variables.contains_key(&name) {
             let var = self.current_scope_variables.remove(&name).unwrap();
             self.leave_scope((&name, &var));
         }
-        self.current_scope_variables.insert(name, variable);
+        self.current_scope_variables.insert(name, (variable, unique_value_tag));
     }
-    pub fn leave_scope(&self, variable: (&String, &Variable)){
-        if variable.1.unusual_flags_to_string().is_empty() {
+    pub fn leave_scope(&self, variable: (&String, &(Variable, u32))){
+        if variable.1.0.unusual_flags_to_string().is_empty() {
             return;
         }
-        println!("Variable {}, has left scope.\nFlags:\t{}", variable.0, variable.1.unusual_flags_to_string());
+        println!("Variable {}, has left scope.\nFlags:\t{}", variable.0, variable.1.0.unusual_flags_to_string());
     }
     
     pub fn swap_and_exit(&mut self, original_scope: Scope) {
         for var in &self.upper_scope_variables {
             let original_flags = if original_scope.upper_scope_variables.contains_key(var.0) {
-                &original_scope.upper_scope_variables[var.0].flags
+                &original_scope.upper_scope_variables[var.0].0.flags
             }else{
-                &original_scope.current_scope_variables[var.0].flags
+                &original_scope.current_scope_variables[var.0].0.flags
             };
-            original_flags.set(original_flags.get() | var.1.flags.get());
+            original_flags.set(original_flags.get() | var.1.0.flags.get());
         }
 
         for var in self.current_scope_variables.iter().rev() {
@@ -298,7 +315,6 @@ impl Scope {
         }
         self.upper_scope_variables = new_scope;
         self.current_scope_variables.clear();
-        
         return sc;
     }
     
