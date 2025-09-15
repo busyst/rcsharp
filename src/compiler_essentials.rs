@@ -51,22 +51,26 @@ pub struct Struct {
     pub path: Box<str>,
     pub name: Box<str>,
     pub fields: Box<[(String, ParserType)]>,
-    
-    pub attribs: Box<[Attribute]>, 
-    pub flags: Cell<u8>
+    pub generic_params: Box<[String]>,
+
+    pub attribs: Box<[Attribute]>,
+    pub flags: Cell<u8>,
 }
 impl Struct {
-    pub fn new(path: Box<str>, name: Box<str>, fields: Box<[(String, ParserType)]>, attribs: Box<[Attribute]>) -> Self {
-        Self { path, name, fields, attribs, flags: Cell::new(0) }
+    pub fn new(path: Box<str>, name: Box<str>, fields: Box<[(String, ParserType)]>, attribs: Box<[Attribute]>, generic_params: Box<[String]>) -> Self {
+        let flags = if !generic_params.is_empty() {
+            StructFlags::Generic as u8
+        } else {
+            0
+        };
+        Self { path, name, fields, attribs, flags: Cell::new(flags), generic_params }
     }
     pub fn new_primitive(name: &str) -> Self {
-        Self { path : "".to_string().into_boxed_str(), name: name.to_string().into_boxed_str(), fields : Box::new([]), attribs: Box::new([]), flags: Cell::new(StructFlags::PrimitiveType as u8) }
-    }
-    pub fn new_generic(path: Box<str>, name: Box<str>, fields: Box<[(String, ParserType)]>, attribs: Box<[Attribute]>) -> Self {
-        Self { path, name, fields, attribs, flags: Cell::new(StructFlags::Generic as u8) }
+        Self { path : "".to_string().into_boxed_str(), name: name.to_string().into_boxed_str(), fields : Box::new([]), attribs: Box::new([]), flags: Cell::new(StructFlags::PrimitiveType as u8), generic_params: Box::new([]) }
     }
     pub fn is_primitive(&self) -> bool { self.flags.get() & StructFlags::PrimitiveType as u8 != 0 }
     pub fn is_generic(&self) -> bool { self.flags.get() & StructFlags::Generic as u8 != 0 }
+    pub fn set_as_generic(&self) { self.flags.set(self.flags.get() | StructFlags::Generic as u8);}
     pub fn llvm_representation(&self) -> String { 
         if self.is_primitive() {
             self.name.to_string()

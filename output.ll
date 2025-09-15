@@ -22,7 +22,7 @@ declare dllimport i32 @ReadFile(i8*,i8*,i32,i32*,i8*)
 declare dllimport i32 @GetFileSizeEx(i8*,i64*)
 declare dllimport i32 @CloseHandle(i8*)
 declare dllimport i32 @DeleteFileA(i8*)
-declare dllimport i16 @RegisterClassExA(%struct.window.WNDCLASSEXA*)
+declare dllimport i6 @RegisterClassExA(%struct.window.WNDCLASSEXA*)
 declare dllimport i8* @CreateWindowExA(i32,i8*,i8*,i32,i32,i32,i32,i32,i8*,i8*,i8*,i8*)
 declare dllimport i32 @ShowWindow(i8*,i32)
 declare dllimport i32 @UpdateWindow(i8*)
@@ -35,17 +35,16 @@ declare dllimport void @PostQuitMessage(i32)
 declare dllimport i8* @GetModuleHandleA(i8*)
 @.str.0 = private unnamed_addr constant [12 x i8] c"Exception: \00"
 @.str.1 = private unnamed_addr constant [26 x i8] c"stdout handle was invalid\00"
-@.str.2 = private unnamed_addr constant [2 x i8] c"-\00"
-@.str.3 = private unnamed_addr constant [20 x i8] c"File  was not found\00"
-@.str.4 = private unnamed_addr constant [17 x i8] c"File read failed\00"
-@.str.5 = private unnamed_addr constant [10 x i8] c"fs_test: \00"
-@.str.6 = private unnamed_addr constant [47 x i8] c"The quick brown fox jumps over crazy lost dog.\00"
-@.str.7 = private unnamed_addr constant [9 x i8] c"test.txt\00"
-@.str.8 = private unnamed_addr constant [38 x i8] c"Filesystem test failed, data mismatch\00"
-@.str.9 = private unnamed_addr constant [3 x i8] c"OK\00"
-@.str.10 = private unnamed_addr constant [32 x i8] c"D:\Projects\rcsharp\src.rcsharp\00"
-@.str.11 = private unnamed_addr constant [14 x i8] c"MyWindowClass\00"
-@.str.12 = private unnamed_addr constant [14 x i8] c"Hello, World!\00"
+@.str.2 = private unnamed_addr constant [20 x i8] c"File  was not found\00"
+@.str.3 = private unnamed_addr constant [17 x i8] c"File read failed\00"
+@.str.4 = private unnamed_addr constant [10 x i8] c"fs_test: \00"
+@.str.5 = private unnamed_addr constant [47 x i8] c"The quick brown fox jumps over crazy lost dog.\00"
+@.str.6 = private unnamed_addr constant [9 x i8] c"test.txt\00"
+@.str.7 = private unnamed_addr constant [38 x i8] c"Filesystem test failed, data mismatch\00"
+@.str.8 = private unnamed_addr constant [3 x i8] c"OK\00"
+@.str.9 = private unnamed_addr constant [45 x i8] c"D:\Projects\rcsharp\src_base_structs.rcsharp\00"
+@.str.10 = private unnamed_addr constant [14 x i8] c"MyWindowClass\00"
+@.str.11 = private unnamed_addr constant [14 x i8] c"Hello, World!\00"
 
 
 define void @__chkstk() {
@@ -550,10 +549,9 @@ then0:
     call void @console.println_u64(i64 %n)
     br label %endif0
 else0:
-    %tmp2 = getelementptr inbounds [2 x i8], [2 x i8]* @.str.2, i64 0, i64 0
-    call void @console.write(i8* %tmp2, i32 1)
-    %tmp3 = sub i64 0, %n
-    call void @console.println_u64(i64 %tmp3)
+    call void @console.print_char(i8 45)
+    %tmp2 = sub i64 0, %n
+    call void @console.println_u64(i64 %tmp2)
     br label %endif0
 endif0:
     ret void
@@ -971,7 +969,7 @@ define %struct.string.String @fs.read_full_file_as_string(i8* %path) {
     %tmp12 = icmp eq ptr %tmp10, %tmp11
     br i1 %tmp12, label %then0, label %endif0
 then0:
-    %tmp13 = getelementptr inbounds [20 x i8], [20 x i8]* @.str.3, i64 0, i64 0
+    %tmp13 = getelementptr inbounds [20 x i8], [20 x i8]* @.str.2, i64 0, i64 0
     %tmp14 = call i8* @string_utils.insert(i8* %tmp13, i8* %path, i32 5)
     call void @process.throw(i8* %tmp14)
     br label %endif0
@@ -1017,7 +1015,7 @@ endif1:
     br i1 %tmp41, label %then2, label %endif2
 then2:
     call void @string.free(%struct.string.String* %v21)
-    %tmp42 = getelementptr inbounds [17 x i8], [17 x i8]* @.str.4, i64 0, i64 0
+    %tmp42 = getelementptr inbounds [17 x i8], [17 x i8]* @.str.3, i64 0, i64 0
     call void @process.throw(i8* %tmp42)
     br label %endif2
 endif2:
@@ -1065,21 +1063,22 @@ define i32 @fs.delete_file(i8* %path) {
 
 define void @tests.run() {
     call void @tests.fs_test()
+    call void @tests.funny()
     ret void
 }
 
 define void @tests.fs_test() {
-    %tmp0 = getelementptr inbounds [10 x i8], [10 x i8]* @.str.5, i64 0, i64 0
+    %tmp0 = getelementptr inbounds [10 x i8], [10 x i8]* @.str.4, i64 0, i64 0
     call void @console.write(i8* %tmp0, i32 9)
     %v1 = alloca %struct.string.String; var: data
-    %tmp2 = getelementptr inbounds [47 x i8], [47 x i8]* @.str.6, i64 0, i64 0
+    %tmp2 = getelementptr inbounds [47 x i8], [47 x i8]* @.str.5, i64 0, i64 0
     %tmp3 = call %struct.string.String @string.from_c_string(i8* %tmp2)
     store %struct.string.String %tmp3, %struct.string.String* %v1
     %v4 = alloca %struct.string.String; var: env_path
     %tmp5 = call %struct.string.String @process.get_executable_env_path()
     store %struct.string.String %tmp5, %struct.string.String* %v4
     %v6 = alloca %struct.string.String; var: new_file_path
-    %tmp7 = getelementptr inbounds [9 x i8], [9 x i8]* @.str.7, i64 0, i64 0
+    %tmp7 = getelementptr inbounds [9 x i8], [9 x i8]* @.str.6, i64 0, i64 0
     %tmp8 = call %struct.string.String @string.concat_with_c_string(%struct.string.String* %v4, i8* %tmp7)
     store %struct.string.String %tmp8, %struct.string.String* %v6
     %v9 = alloca i8*; var: c_string
@@ -1124,7 +1123,7 @@ inline_exit0:
     %tmp40 = xor i1 %tmp39, 1
     br i1 %tmp40, label %then1, label %endif1
 then1:
-    %tmp41 = getelementptr inbounds [38 x i8], [38 x i8]* @.str.8, i64 0, i64 0
+    %tmp41 = getelementptr inbounds [38 x i8], [38 x i8]* @.str.7, i64 0, i64 0
     call void @process.throw(i8* %tmp41)
     br label %endif1
 endif1:
@@ -1134,7 +1133,7 @@ endif1:
     call void @string.free(%struct.string.String* %v6)
     call void @string.free(%struct.string.String* %v4)
     call void @string.free(%struct.string.String* %v1)
-    %tmp43 = getelementptr inbounds [3 x i8], [3 x i8]* @.str.9, i64 0, i64 0
+    %tmp43 = getelementptr inbounds [3 x i8], [3 x i8]* @.str.8, i64 0, i64 0
     call void @console.writeln(i8* %tmp43, i32 2)
     ret void
 }
@@ -1200,7 +1199,7 @@ define i1 @tests.is_valid_number_token(i8 %c) {
 
 define void @tests.funny() {
     %v0 = alloca i8*; var: path
-    %tmp1 = getelementptr inbounds [32 x i8], [32 x i8]* @.str.10, i64 0, i64 0
+    %tmp1 = getelementptr inbounds [45 x i8], [45 x i8]* @.str.9, i64 0, i64 0
     store i8* %tmp1, i8** %v0
     %v2 = alloca %struct.string.String; var: file
     %tmp3 = load i8*, i8** %v0
@@ -1425,7 +1424,7 @@ loop_body10_exit:
     br label %endif9
 endif9:
     %tmp130 = load i8, i8* %v7
-    %tmp131 = icmp eq i8 %tmp130, 40
+    %tmp131 = icmp eq i8 %tmp130, 39
     br i1 %tmp131, label %then13, label %endif13
 then13:
     %tmp132 = load i32, i32* %v6
@@ -1435,7 +1434,7 @@ then13:
     br label %endif13
 endif13:
     %tmp134 = load i8, i8* %v7
-    %tmp135 = icmp eq i8 %tmp134, 41
+    %tmp135 = icmp eq i8 %tmp134, 40
     br i1 %tmp135, label %then14, label %endif14
 then14:
     %tmp136 = load i32, i32* %v6
@@ -1445,7 +1444,7 @@ then14:
     br label %endif14
 endif14:
     %tmp138 = load i8, i8* %v7
-    %tmp139 = icmp eq i8 %tmp138, 123
+    %tmp139 = icmp eq i8 %tmp138, 41
     br i1 %tmp139, label %then15, label %endif15
 then15:
     %tmp140 = load i32, i32* %v6
@@ -1455,7 +1454,7 @@ then15:
     br label %endif15
 endif15:
     %tmp142 = load i8, i8* %v7
-    %tmp143 = icmp eq i8 %tmp142, 125
+    %tmp143 = icmp eq i8 %tmp142, 123
     br i1 %tmp143, label %then16, label %endif16
 then16:
     %tmp144 = load i32, i32* %v6
@@ -1465,7 +1464,7 @@ then16:
     br label %endif16
 endif16:
     %tmp146 = load i8, i8* %v7
-    %tmp147 = icmp eq i8 %tmp146, 91
+    %tmp147 = icmp eq i8 %tmp146, 125
     br i1 %tmp147, label %then17, label %endif17
 then17:
     %tmp148 = load i32, i32* %v6
@@ -1475,7 +1474,7 @@ then17:
     br label %endif17
 endif17:
     %tmp150 = load i8, i8* %v7
-    %tmp151 = icmp eq i8 %tmp150, 93
+    %tmp151 = icmp eq i8 %tmp150, 91
     br i1 %tmp151, label %then18, label %endif18
 then18:
     %tmp152 = load i32, i32* %v6
@@ -1485,137 +1484,137 @@ then18:
     br label %endif18
 endif18:
     %tmp154 = load i8, i8* %v7
-    %tmp155 = icmp eq i8 %tmp154, 61
+    %tmp155 = icmp eq i8 %tmp154, 93
     br i1 %tmp155, label %then19, label %endif19
 then19:
-    %tmp156 = load i8, i8* %v8
-    %tmp157 = icmp eq i8 %tmp156, 61
-    br i1 %tmp157, label %then20, label %endif20
-then20:
-    %tmp158 = load i32, i32* %v6
-    %tmp159 = add i32 %tmp158, 2
-    store i32 %tmp159, i32* %v6
-    br label %loop_body0
-    br label %endif20
-endif20:
-    %tmp160 = load i32, i32* %v6
-    %tmp161 = add i32 %tmp160, 1
-    store i32 %tmp161, i32* %v6
+    %tmp156 = load i32, i32* %v6
+    %tmp157 = add i32 %tmp156, 1
+    store i32 %tmp157, i32* %v6
     br label %loop_body0
     br label %endif19
 endif19:
-    %tmp162 = load i8, i8* %v7
-    %tmp163 = icmp eq i8 %tmp162, 58
-    br i1 %tmp163, label %then21, label %endif21
+    %tmp158 = load i8, i8* %v7
+    %tmp159 = icmp eq i8 %tmp158, 61
+    br i1 %tmp159, label %then20, label %endif20
+then20:
+    %tmp160 = load i8, i8* %v8
+    %tmp161 = icmp eq i8 %tmp160, 61
+    br i1 %tmp161, label %then21, label %endif21
 then21:
-    %tmp164 = load i8, i8* %v8
-    %tmp165 = icmp eq i8 %tmp164, 58
-    br i1 %tmp165, label %then22, label %endif22
-then22:
-    %tmp166 = load i32, i32* %v6
-    %tmp167 = add i32 %tmp166, 2
-    store i32 %tmp167, i32* %v6
-    br label %loop_body0
-    br label %endif22
-endif22:
-    %tmp168 = load i32, i32* %v6
-    %tmp169 = add i32 %tmp168, 1
-    store i32 %tmp169, i32* %v6
+    %tmp162 = load i32, i32* %v6
+    %tmp163 = add i32 %tmp162, 2
+    store i32 %tmp163, i32* %v6
     br label %loop_body0
     br label %endif21
 endif21:
-    %tmp170 = load i8, i8* %v7
-    %tmp171 = icmp eq i8 %tmp170, 124
-    br i1 %tmp171, label %then23, label %endif23
-then23:
-    %tmp172 = load i8, i8* %v8
-    %tmp173 = icmp eq i8 %tmp172, 124
-    br i1 %tmp173, label %then24, label %endif24
-then24:
-    %tmp174 = load i32, i32* %v6
-    %tmp175 = add i32 %tmp174, 2
-    store i32 %tmp175, i32* %v6
+    %tmp164 = load i32, i32* %v6
+    %tmp165 = add i32 %tmp164, 1
+    store i32 %tmp165, i32* %v6
     br label %loop_body0
-    br label %endif24
-endif24:
-    %tmp176 = load i32, i32* %v6
-    %tmp177 = add i32 %tmp176, 1
-    store i32 %tmp177, i32* %v6
+    br label %endif20
+endif20:
+    %tmp166 = load i8, i8* %v7
+    %tmp167 = icmp eq i8 %tmp166, 58
+    br i1 %tmp167, label %then22, label %endif22
+then22:
+    %tmp168 = load i8, i8* %v8
+    %tmp169 = icmp eq i8 %tmp168, 58
+    br i1 %tmp169, label %then23, label %endif23
+then23:
+    %tmp170 = load i32, i32* %v6
+    %tmp171 = add i32 %tmp170, 2
+    store i32 %tmp171, i32* %v6
     br label %loop_body0
     br label %endif23
 endif23:
-    %tmp178 = load i8, i8* %v7
-    %tmp179 = icmp eq i8 %tmp178, 38
-    br i1 %tmp179, label %then25, label %endif25
-then25:
-    %tmp180 = load i8, i8* %v8
-    %tmp181 = icmp eq i8 %tmp180, 38
-    br i1 %tmp181, label %then26, label %endif26
-then26:
-    %tmp182 = load i32, i32* %v6
-    %tmp183 = add i32 %tmp182, 2
-    store i32 %tmp183, i32* %v6
+    %tmp172 = load i32, i32* %v6
+    %tmp173 = add i32 %tmp172, 1
+    store i32 %tmp173, i32* %v6
     br label %loop_body0
-    br label %endif26
-endif26:
-    %tmp184 = load i32, i32* %v6
-    %tmp185 = add i32 %tmp184, 1
-    store i32 %tmp185, i32* %v6
+    br label %endif22
+endif22:
+    %tmp174 = load i8, i8* %v7
+    %tmp175 = icmp eq i8 %tmp174, 124
+    br i1 %tmp175, label %then24, label %endif24
+then24:
+    %tmp176 = load i8, i8* %v8
+    %tmp177 = icmp eq i8 %tmp176, 124
+    br i1 %tmp177, label %then25, label %endif25
+then25:
+    %tmp178 = load i32, i32* %v6
+    %tmp179 = add i32 %tmp178, 2
+    store i32 %tmp179, i32* %v6
     br label %loop_body0
     br label %endif25
 endif25:
-    %tmp186 = load i8, i8* %v7
-    %tmp187 = icmp eq i8 %tmp186, 62
-    br i1 %tmp187, label %then27, label %endif27
-then27:
-    %tmp188 = load i8, i8* %v8
-    %tmp189 = icmp eq i8 %tmp188, 61
-    br i1 %tmp189, label %then28, label %endif28
-then28:
-    %tmp190 = load i32, i32* %v6
-    %tmp191 = add i32 %tmp190, 2
-    store i32 %tmp191, i32* %v6
+    %tmp180 = load i32, i32* %v6
+    %tmp181 = add i32 %tmp180, 1
+    store i32 %tmp181, i32* %v6
     br label %loop_body0
-    br label %endif28
-endif28:
-    %tmp192 = load i32, i32* %v6
-    %tmp193 = add i32 %tmp192, 1
-    store i32 %tmp193, i32* %v6
+    br label %endif24
+endif24:
+    %tmp182 = load i8, i8* %v7
+    %tmp183 = icmp eq i8 %tmp182, 38
+    br i1 %tmp183, label %then26, label %endif26
+then26:
+    %tmp184 = load i8, i8* %v8
+    %tmp185 = icmp eq i8 %tmp184, 38
+    br i1 %tmp185, label %then27, label %endif27
+then27:
+    %tmp186 = load i32, i32* %v6
+    %tmp187 = add i32 %tmp186, 2
+    store i32 %tmp187, i32* %v6
     br label %loop_body0
     br label %endif27
 endif27:
-    %tmp194 = load i8, i8* %v7
-    %tmp195 = icmp eq i8 %tmp194, 60
-    br i1 %tmp195, label %then29, label %endif29
-then29:
-    %tmp196 = load i8, i8* %v8
-    %tmp197 = icmp eq i8 %tmp196, 61
-    br i1 %tmp197, label %then30, label %endif30
-then30:
-    %tmp198 = load i32, i32* %v6
-    %tmp199 = add i32 %tmp198, 2
-    store i32 %tmp199, i32* %v6
+    %tmp188 = load i32, i32* %v6
+    %tmp189 = add i32 %tmp188, 1
+    store i32 %tmp189, i32* %v6
     br label %loop_body0
-    br label %endif30
-endif30:
-    %tmp200 = load i32, i32* %v6
-    %tmp201 = add i32 %tmp200, 1
-    store i32 %tmp201, i32* %v6
+    br label %endif26
+endif26:
+    %tmp190 = load i8, i8* %v7
+    %tmp191 = icmp eq i8 %tmp190, 62
+    br i1 %tmp191, label %then28, label %endif28
+then28:
+    %tmp192 = load i8, i8* %v8
+    %tmp193 = icmp eq i8 %tmp192, 61
+    br i1 %tmp193, label %then29, label %endif29
+then29:
+    %tmp194 = load i32, i32* %v6
+    %tmp195 = add i32 %tmp194, 2
+    store i32 %tmp195, i32* %v6
     br label %loop_body0
     br label %endif29
 endif29:
-    %tmp202 = load i8, i8* %v7
-    %tmp203 = icmp eq i8 %tmp202, 35
-    br i1 %tmp203, label %then31, label %endif31
+    %tmp196 = load i32, i32* %v6
+    %tmp197 = add i32 %tmp196, 1
+    store i32 %tmp197, i32* %v6
+    br label %loop_body0
+    br label %endif28
+endif28:
+    %tmp198 = load i8, i8* %v7
+    %tmp199 = icmp eq i8 %tmp198, 60
+    br i1 %tmp199, label %then30, label %endif30
+then30:
+    %tmp200 = load i8, i8* %v8
+    %tmp201 = icmp eq i8 %tmp200, 61
+    br i1 %tmp201, label %then31, label %endif31
 then31:
+    %tmp202 = load i32, i32* %v6
+    %tmp203 = add i32 %tmp202, 2
+    store i32 %tmp203, i32* %v6
+    br label %loop_body0
+    br label %endif31
+endif31:
     %tmp204 = load i32, i32* %v6
     %tmp205 = add i32 %tmp204, 1
     store i32 %tmp205, i32* %v6
     br label %loop_body0
-    br label %endif31
-endif31:
+    br label %endif30
+endif30:
     %tmp206 = load i8, i8* %v7
-    %tmp207 = icmp eq i8 %tmp206, 59
+    %tmp207 = icmp eq i8 %tmp206, 35
     br i1 %tmp207, label %then32, label %endif32
 then32:
     %tmp208 = load i32, i32* %v6
@@ -1625,7 +1624,7 @@ then32:
     br label %endif32
 endif32:
     %tmp210 = load i8, i8* %v7
-    %tmp211 = icmp eq i8 %tmp210, 46
+    %tmp211 = icmp eq i8 %tmp210, 59
     br i1 %tmp211, label %then33, label %endif33
 then33:
     %tmp212 = load i32, i32* %v6
@@ -1635,7 +1634,7 @@ then33:
     br label %endif33
 endif33:
     %tmp214 = load i8, i8* %v7
-    %tmp215 = icmp eq i8 %tmp214, 44
+    %tmp215 = icmp eq i8 %tmp214, 46
     br i1 %tmp215, label %then34, label %endif34
 then34:
     %tmp216 = load i32, i32* %v6
@@ -1645,7 +1644,7 @@ then34:
     br label %endif34
 endif34:
     %tmp218 = load i8, i8* %v7
-    %tmp219 = icmp eq i8 %tmp218, 43
+    %tmp219 = icmp eq i8 %tmp218, 44
     br i1 %tmp219, label %then35, label %endif35
 then35:
     %tmp220 = load i32, i32* %v6
@@ -1655,7 +1654,7 @@ then35:
     br label %endif35
 endif35:
     %tmp222 = load i8, i8* %v7
-    %tmp223 = icmp eq i8 %tmp222, 45
+    %tmp223 = icmp eq i8 %tmp222, 43
     br i1 %tmp223, label %then36, label %endif36
 then36:
     %tmp224 = load i32, i32* %v6
@@ -1665,7 +1664,7 @@ then36:
     br label %endif36
 endif36:
     %tmp226 = load i8, i8* %v7
-    %tmp227 = icmp eq i8 %tmp226, 42
+    %tmp227 = icmp eq i8 %tmp226, 45
     br i1 %tmp227, label %then37, label %endif37
 then37:
     %tmp228 = load i32, i32* %v6
@@ -1675,7 +1674,7 @@ then37:
     br label %endif37
 endif37:
     %tmp230 = load i8, i8* %v7
-    %tmp231 = icmp eq i8 %tmp230, 47
+    %tmp231 = icmp eq i8 %tmp230, 42
     br i1 %tmp231, label %then38, label %endif38
 then38:
     %tmp232 = load i32, i32* %v6
@@ -1685,7 +1684,7 @@ then38:
     br label %endif38
 endif38:
     %tmp234 = load i8, i8* %v7
-    %tmp235 = icmp eq i8 %tmp234, 37
+    %tmp235 = icmp eq i8 %tmp234, 47
     br i1 %tmp235, label %then39, label %endif39
 then39:
     %tmp236 = load i32, i32* %v6
@@ -1695,7 +1694,7 @@ then39:
     br label %endif39
 endif39:
     %tmp238 = load i8, i8* %v7
-    %tmp239 = icmp eq i8 %tmp238, 33
+    %tmp239 = icmp eq i8 %tmp238, 37
     br i1 %tmp239, label %then40, label %endif40
 then40:
     %tmp240 = load i32, i32* %v6
@@ -1705,7 +1704,7 @@ then40:
     br label %endif40
 endif40:
     %tmp242 = load i8, i8* %v7
-    %tmp243 = icmp eq i8 %tmp242, 126
+    %tmp243 = icmp eq i8 %tmp242, 33
     br i1 %tmp243, label %then41, label %endif41
 then41:
     %tmp244 = load i32, i32* %v6
@@ -1715,19 +1714,39 @@ then41:
     br label %endif41
 endif41:
     %tmp246 = load i8, i8* %v7
-    call void @console.print_char(i8 %tmp246)
+    %tmp247 = icmp eq i8 %tmp246, 126
+    br i1 %tmp247, label %then42, label %endif42
+then42:
+    %tmp248 = load i32, i32* %v6
+    %tmp249 = add i32 %tmp248, 1
+    store i32 %tmp249, i32* %v6
+    br label %loop_body0
+    br label %endif42
+endif42:
+    %tmp250 = load i8, i8* %v7
+    %tmp251 = icmp eq i8 %tmp250, 92
+    br i1 %tmp251, label %then43, label %endif43
+then43:
+    %tmp252 = load i32, i32* %v6
+    %tmp253 = add i32 %tmp252, 1
+    store i32 %tmp253, i32* %v6
+    br label %loop_body0
+    br label %endif43
+endif43:
+    %tmp254 = load i8, i8* %v7
+    call void @console.print_char(i8 %tmp254)
     call void @console.print_char(i8 10)
-    %tmp247 = load i32, i32* %v11
-    %tmp248 = sext i32 %tmp247 to i64
-    call void @console.println_u64(i64 %tmp248)
-    %tmp249 = load i32, i32* %v6
-    %tmp250 = load i32, i32* %v12
-    %tmp251 = sub i32 %tmp249, %tmp250
-    %tmp252 = sext i32 %tmp251 to i64
-    call void @console.println_u64(i64 %tmp252)
-    %tmp253 = load i32, i32* %v6
-    %tmp254 = add i32 %tmp253, 1
-    store i32 %tmp254, i32* %v6
+    %tmp255 = load i32, i32* %v11
+    %tmp256 = sext i32 %tmp255 to i64
+    call void @console.println_u64(i64 %tmp256)
+    %tmp257 = load i32, i32* %v6
+    %tmp258 = load i32, i32* %v12
+    %tmp259 = sub i32 %tmp257, %tmp258
+    %tmp260 = sext i32 %tmp259 to i64
+    call void @console.println_u64(i64 %tmp260)
+    %tmp261 = load i32, i32* %v6
+    %tmp262 = add i32 %tmp261, 1
+    store i32 %tmp262, i32* %v6
     br label %loop_body0
 loop_body0_exit:
     ret void
@@ -1738,6 +1757,8 @@ define i32 @main() {
     call void @tests.run()
     call i32 @window.start()
     call i32 @FreeConsole()
+    br label %inline_exit0
+inline_exit0:
     ret i32 0
 }
 
@@ -1794,7 +1815,7 @@ then0:
     br label %endif0
 endif0:
     %v6 = alloca i8*; var: className
-    %tmp7 = getelementptr inbounds [14 x i8], [14 x i8]* @.str.11, i64 0, i64 0
+    %tmp7 = getelementptr inbounds [14 x i8], [14 x i8]* @.str.10, i64 0, i64 0
     store i8* %tmp7, i8** %v6
     %v8 = alloca %struct.window.WNDCLASSEXA; var: wc
     %tmp9 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v8, i32 0, i32 0
@@ -1826,15 +1847,15 @@ endif0:
     store i8* %tmp24, i8** %tmp23
     %tmp25 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v8, i32 0, i32 11
     store i8* null, i8** %tmp25
-    %tmp26 = call i16 @RegisterClassExA(%struct.window.WNDCLASSEXA* %v8)
-    %tmp27 = icmp eq i16 %tmp26, 0
+    %tmp26 = call i6 @RegisterClassExA(%struct.window.WNDCLASSEXA* %v8)
+    %tmp27 = icmp eq i6 %tmp26, 0
     br i1 %tmp27, label %then1, label %endif1
 then1:
     ret i32 2
     br label %endif1
 endif1:
     %v28 = alloca i8*; var: windowTitle
-    %tmp29 = getelementptr inbounds [14 x i8], [14 x i8]* @.str.12, i64 0, i64 0
+    %tmp29 = getelementptr inbounds [14 x i8], [14 x i8]* @.str.11, i64 0, i64 0
     store i8* %tmp29, i8** %v28
     %v30 = alloca i8*; var: hWnd
     %tmp31 = load i8*, i8** %v6

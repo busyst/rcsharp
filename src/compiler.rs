@@ -1,8 +1,13 @@
 use core::str;
 use std::cell::Cell;
+use std::str::FromStr;
+use std::{io::Read};
 use ordered_hash_map::OrderedHashMap;
+use crate::parser::{LLVM_PRIMITIVE_TYPES, PRIMITIVE_TYPES};
 use crate::{compiler_essentials::{Attribute, Enum, Function, Scope, Struct, Variable}, expression_compiler::{compile_expression, constant_integer_expression_compiler, Expected}, expression_parser::Expr, parser::{ParserType, Stmt}};
+
 pub const POINTER_SIZE_IN_BYTES : u32 = 8;
+
 #[derive(Debug)]
 pub enum CompileError {
     Io(std::io::Error),
@@ -39,43 +44,35 @@ impl From<std::io::Error> for CompileError {
 
 pub type CompileResult<T> = Result<T, CompileError>;
 
-pub fn rcsharp_compile_to_file(stmts: &[Stmt]) -> Result<(), String> {
-    match rcsharp_compile(stmts) {
+pub fn rcsharp_compile_to_file(stmts: &[Stmt], full_path: &str) -> Result<(), String> {
+    match rcsharp_compile(stmts, full_path) {
         Ok(llvm_ir) => {
-            std::fs::write("output.ll", llvm_ir)
+            std::fs::write("output.ll", llvm_ir.build())
                 .map_err(|e| e.to_string())
         }
         Err(e) => Err(e.to_string()),
     }
 }
 
-pub fn rcsharp_compile(stmts: &[Stmt]) -> CompileResult<String>  {
+pub fn rcsharp_compile(stmts: &[Stmt], absolute_file_path: &str) -> CompileResult<LLVMOutputHandler>  {
     let mut symbols = SymbolTable::new();
     let mut output = LLVMOutputHandler::default();
     output.push_str_header("target triple = \"x86_64-pc-windows-msvc\"\n");
-    SymbolCollector::collect(stmts, &mut symbols).unwrap();
+    SymbolCollector::collect(stmts, &mut symbols, absolute_file_path).unwrap();
 
     compile_structs(&symbols, &mut output)?;
     compile_attributes(&symbols, &mut output)?;
     compile_functions(&symbols, &mut output)?;
-    
-    Ok(output.build())
-}
 
+    Ok(output)
+}
 fn populate_default_types(table: &mut SymbolTable) {
-    table.types.insert("i8".to_string(), Struct::new_primitive("i8"));
-    table.types.insert("u8".to_string(), Struct::new_primitive("u8"));
-    table.types.insert("i16".to_string(), Struct::new_primitive("i16"));
-    table.types.insert("u16".to_string(), Struct::new_primitive("u16"));
-    table.types.insert("i32".to_string(), Struct::new_primitive("i32"));
-    table.types.insert("u32".to_string(), Struct::new_primitive("u32"));
-    table.types.insert("i64".to_string(), Struct::new_primitive("i64"));
-    table.types.insert("u64".to_string(), Struct::new_primitive("u64"));
-    table.types.insert("bool".to_string(), Struct::new_primitive("bool"));
-    table.types.insert("void".to_string(), Struct::new_primitive("void"));
+    for primitive in PRIMITIVE_TYPES {
+        table.types.insert(primitive.to_string(), Struct::new_primitive(primitive));
+    }
 }
 fn compile_structs(symbols: &SymbolTable, output: &mut LLVMOutputHandler) -> CompileResult<()> {
-    let user_defined_structs = symbols.types.values().filter(|s: &&Struct| !s.is_primitive());
+    let user_defined_structs = symbols.types.values().filter(|s: &&Struct| !s.is_primitive() && !s.is_generic());
     for s in user_defined_structs {
         let field_types: Vec<String> = s.fields
             .iter()
@@ -266,12 +263,9 @@ pub fn compile_statement(stmt: &Stmt, ctx: &mut CodeGenContext, output: &mut LLV
         Stmt::Function(..) | Stmt::Struct(..) | Stmt::Enum(..) | Stmt::Namespace(..) | Stmt::Hint(..) => {
             return Err(CompileError::InvalidStatementInContext(format!("{:?}", stmt)));
         }
-        _ => panic!("{:?}", stmt),
     }
     Ok(())
 }
-
-
 
 pub fn get_llvm_type_str(
     ptype: &ParserType,
@@ -279,35 +273,25 @@ pub fn get_llvm_type_str(
     current_namespace: &str,
 ) -> CompileResult<String> {
     match ptype {
-        ParserType::Named(name) => match name.as_str() {
-            "void" => Ok("void".to_string()),
-            "bool" => Ok("i1".to_string()),
-            "i8" | "u8" => Ok("i8".to_string()),
-            "i16" | "u16" => Ok("i16".to_string()),
-            "i32" | "u32" => Ok("i32".to_string()),
-            "i64" | "u64" => Ok("i64".to_string()),
-            "f32" => Ok("float".to_string()),
-            "f64" => Ok("double".to_string()),
-            _ => {
-                let fqn = ptype.get_absolute_path_or(current_namespace);
-                if symbols.types.contains_key(&fqn) {
-                    Ok(format!("%struct.{}", fqn))
-                } else if symbols.enums.contains_key(&fqn) {
-                    let enum_info = &symbols.enums[&fqn];
-                    get_llvm_type_str(&enum_info.base_type, symbols, current_namespace)
-                }
-                else {
-                    Err(CompileError::SymbolNotFound(fqn))
-                }
+        ParserType::Named(name) => {
+            let index = PRIMITIVE_TYPES.iter().position(|x| x == &name.as_str());
+            if let Some(index) = index {
+                return Ok(LLVM_PRIMITIVE_TYPES[index].to_string());
             }
-        },
+            let fqn = ptype.get_absolute_path_or(current_namespace);
+            if symbols.types.contains_key(&fqn) {
+                return Ok(format!("%struct.{}", fqn))
+            }
+            if symbols.enums.contains_key(&fqn) {
+                return get_llvm_type_str(&symbols.enums[&fqn].base_type, symbols, current_namespace)
+            }
+            Err(CompileError::SymbolNotFound(fqn))
+        }
         ParserType::Pointer(inner_type) => {
             if inner_type.is_void() {
-                Ok("i8*".to_string())
-            } else {
-                let inner_llvm_type = get_llvm_type_str(inner_type, symbols, current_namespace)?;
-                Ok(format!("{}*", inner_llvm_type))
+                return Ok("i8*".to_string());
             }
+            Ok(format!("{}*", get_llvm_type_str(inner_type, symbols, current_namespace)?))
         }
         ParserType::Function(return_type, param_types) => {
             let ret_llvm = get_llvm_type_str(return_type, symbols, current_namespace)?;
@@ -320,14 +304,12 @@ pub fn get_llvm_type_str(
         ParserType::NamespaceLink(_, _) => {
             let fqn = ptype.get_absolute_path_or(current_namespace);
             if symbols.types.contains_key(&fqn) {
-                Ok(format!("%struct.{}", fqn))
-            } else if symbols.enums.contains_key(&fqn) {
-                let enum_info = &symbols.enums[&fqn];
-                get_llvm_type_str(&enum_info.base_type, symbols, current_namespace)
+                return Ok(format!("%struct.{}", fqn));
             }
-            else {
-                Err(CompileError::SymbolNotFound(fqn))
+            if symbols.enums.contains_key(&fqn) {
+                return get_llvm_type_str(&symbols.enums[&fqn].base_type, symbols, current_namespace);
             }
+            Err(CompileError::SymbolNotFound(fqn))
         }
     }
 }
@@ -443,13 +425,16 @@ impl SymbolTable {
 pub struct SymbolCollector<'a> {
     symbols: &'a mut SymbolTable,
     current_path: String,
+    traversed_paths: Vec<String>
 }
 impl<'a> SymbolCollector<'a> {
-    pub fn collect(stmts: &[Stmt], symbols: &'a mut SymbolTable) -> CompileResult<()> {
+    pub fn collect(stmts: &[Stmt], symbols: &'a mut SymbolTable, absolute_file_path: &str) -> CompileResult<()> {
         let mut collector = Self {
             symbols,
             current_path: "".to_string(),
+            traversed_paths: Vec::new()
         };
+        collector.traversed_paths.push(absolute_file_path.to_string());
         collector.walk_statements(stmts)?;
         Ok(())
     }
@@ -476,8 +461,8 @@ impl<'a> SymbolCollector<'a> {
         }
         Ok(())
     }
-    fn collect_preceding_attributes(&self, stmts: &[Stmt], item_index: usize) -> Box<[Attribute]> {
-        stmts[..item_index]
+    fn collect_preceding_attributes(&mut self, stmts: &[Stmt], item_index: usize) -> Box<[Attribute]> {
+        let x = stmts[..item_index]
             .iter()
             .rev()
             .take_while(|stmt| matches!(stmt, Stmt::Hint(_, _)))
@@ -488,7 +473,33 @@ impl<'a> SymbolCollector<'a> {
                     None
                 }
             })
-            .collect()
+            .collect::<Box<_>>();
+        if let Some(attr) = self.compiler_attributes(&x) {
+            return attr;
+        }
+        return x;
+    }
+    fn compiler_attributes(&mut self, attributes: &[Attribute]) -> Option<Box<[Attribute]>>{
+        if let Some(pos) = attributes.iter().position(|x| x.name_equals("include")) {
+            if let Expr::StringConst(file_path) = attributes[pos].one_argument().unwrap() {
+                let full_path = std::fs::canonicalize(std::path::PathBuf::from_str(file_path).unwrap()).unwrap().to_str().unwrap().to_string();
+                if self.traversed_paths.contains(&full_path) {
+                    return Some(attributes.iter().filter(|x| !x.name_equals("include")).cloned().collect());
+                }
+                let source = {
+                    let mut buf = String::new();
+                    std::fs::File::open(&full_path).map_err(|e| e.to_string()).unwrap().read_to_string(&mut buf).unwrap();
+                    buf
+                };
+                let tokens = crate::token::Lexer::new(&source)
+		            .collect::<Result<Vec<_>, crate::token::LexingError>>().unwrap();
+                let parsed_tokens = crate::parser::GeneralParser::new(&tokens).parse_all().unwrap();
+                SymbolCollector::collect(&parsed_tokens, self.symbols, &full_path).unwrap();
+                self.traversed_paths.push(full_path);
+                return Some(attributes.iter().filter(|x| !x.name_equals("include")).cloned().collect());
+            }
+        }
+        None
     }
     fn collect_function(&mut self, name: &str, args: &[(String, ParserType)], ret: &ParserType, body: &[Stmt], flags: u8, attribs: Box<[Attribute]>) -> CompileResult<()> {
         let fqn = if self.current_path.is_empty() { name.to_string() } else { format!("{}.{}", self.current_path, name) };
@@ -526,8 +537,10 @@ impl<'a> SymbolCollector<'a> {
             self.current_path.clone().into(),
             name.to_string().into(),
             qualified_fields,
-            attribs
+            attribs,
+            Box::new([])
         );
+
         self.symbols.types.insert(fqn, new_struct);
         Ok(())
     }

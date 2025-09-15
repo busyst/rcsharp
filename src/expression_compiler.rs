@@ -5,6 +5,7 @@ pub enum Expected<'a> {
     Anything,
     NoReturn,
 }
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum CompiledValue {
     Value {
@@ -48,16 +49,13 @@ impl CompiledValue {
         }
     }
     
-    pub fn with_type(&self, new_type: ParserType) -> Self {
+    pub fn clone_with_type(&self, new_type: ParserType) -> Self {
         match self {
             Self::Value { llvm_repr, .. } => Self::Value { llvm_repr: llvm_repr.clone(), ptype: new_type },
             Self::Pointer { llvm_repr, .. } => Self::Pointer { llvm_repr: llvm_repr.clone(), ptype: new_type },
             Self::Function { effective_name, .. } => Self::Function { effective_name: effective_name.clone(), ptype: new_type },
             Self::NoReturn => panic!("with_type is not applicable to NoReturn"),
         }
-    }
-    pub fn is_literal_number(&self) -> bool {
-        matches!(self, Self::Value { llvm_repr, .. } if llvm_repr.chars().all(|c| c.is_ascii_digit() || c == '-'))
     }
     pub fn llvm_repr_ref(&self) -> &str {
         match self {
@@ -66,11 +64,21 @@ impl CompiledValue {
             _ => panic!("Cannot get literal LLVM representation"),
         }
     }
+    pub fn is_literal_number(&self) -> bool {
+        matches!(self, Self::Value { llvm_repr, .. } if llvm_repr.chars().all(|c| c.is_ascii_digit() || c == '-'))
+    }
+    pub fn no_return_check(&self) -> CompileResult<()>{
+        if *self == Self::NoReturn {
+            return Err(CompileError::InvalidExpression(format!("Tried to use void value")));
+        }
+        Ok(())
+    }
 }
 
 pub fn compile_expression(expr: &Expr, expected: Expected, ctx: &mut CodeGenContext, output: &mut LLVMOutputHandler) -> CompileResult<CompiledValue> {
     ExpressionCompiler::new(ctx, output).compile_rvalue(expr, expected)
 }
+
 struct ExpressionCompiler<'a, 'b> {
     ctx: &'a mut CodeGenContext<'b>,
     output: &'a mut LLVMOutputHandler,
@@ -118,7 +126,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             && (matches!(op, BinaryOp::Add | BinaryOp::Multiply | BinaryOp::BitAnd | BinaryOp::BitOr | BinaryOp::BitXor | BinaryOp::And | BinaryOp::Or | BinaryOp::Equals)) 
             && r.get_type().dereference_full().is_integer() {
             (r, l) = (l, r);
-            r = r.with_type(l.get_type().clone());
+            r = r.clone_with_type(l.get_type().clone());
         }
         if l.get_type() != r.get_type() {
             if l.get_type().is_pointer() && r.get_type().is_integer() && *op == BinaryOp::Add {  // *(array_pointer + iterator)
@@ -201,6 +209,12 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             let func = self.ctx.symbols.get_function(&effective_name, &self.ctx.current_function_path)?;
             let return_type_repr = get_llvm_type_str(&return_type, self.ctx.symbols, &func.path)?;
             if func.is_inline() {
+                if func.body.is_empty() {
+                    if func.return_type.is_void() {
+                        return Ok(CompiledValue::NoReturn);
+                    }
+                    return Err(CompileError::Generic(format!("Inline function '{}' body was empty but return type is not void", func.name)));
+                }
                 let inline_exit = self.ctx.aquire_unique_logic_counter();
                 let return_tmp = self.ctx.aquire_unique_temp_value_counter();
                 if !func.return_type.is_void() {
@@ -242,7 +256,6 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
                 self.ctx.current_function_path = func.path.clone();
                 let ls = self.ctx.scope.clone();
                 self.ctx.scope.clear();
-                println!("{:?}", prepared_args);
                 for arg in prepared_args {
                     self.ctx.scope.add_variable(arg.0.to_string(), Variable::new_alias(arg.1.clone()), arg.2);
                 }
@@ -328,6 +341,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
 
     fn compile_name_rvalue(&mut self, name: &str, _expected: Expected) -> CompileResult<CompiledValue> {
         if let Ok((variable, id)) = self.ctx.scope.get_variable(name) {
+            variable.get_type(false, false);
             let ptype = variable.compiler_type.clone();
             if variable.is_argument() {
                 let llvm_repr = if variable.is_alias_value() {
@@ -420,7 +434,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             }
             UnaryOp::Pointer => {
                 let lvalue = self.compile_lvalue(operand_expr)?;
-                let ptype = lvalue.get_type().reference_once();
+                let ptype = lvalue.get_type().clone().reference_once();
                 Ok(CompiledValue::Value { llvm_repr: lvalue.get_llvm_repr(), ptype })
             }
             UnaryOp::Negate => {
@@ -479,6 +493,57 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
         let ptr_str = ptr.get_llvm_repr_with_type(self.ctx)?;
         self.output.push_str(&format!("    %tmp{} = load {}, {}\n", temp_id, type_str, ptr_str));
         Ok(CompiledValue::Value { llvm_repr: format!("%tmp{}", temp_id), ptype })
+    }
+    fn compile_string_literal(&mut self, str_val: &str) -> CompileResult<CompiledValue> { // ---
+        let str_len = str_val.len() + 1;
+        let const_id = self.ctx.aquire_unique_const_vector_counter();
+        let const_name = format!("@.str.{}", const_id);
+        let escaped_val = str_val.replace("\"", "\\22")
+            .replace("\n", "\\0A")
+            .replace("\r", "\\0D")
+            .replace("\t", "\\09");
+        self.output.push_str_header(&format!(
+            "{} = private unnamed_addr constant [{} x i8] c\"{}\\00\"\n",
+            const_name, str_len, escaped_val
+        ));
+        let ptr_id = self.ctx.aquire_unique_temp_value_counter();
+        self.output.push_str(&format!("    %tmp{} = getelementptr inbounds [{} x i8], [{} x i8]* {}, i64 0, i64 0\n", ptr_id, str_len, str_len, const_name));
+        Ok(CompiledValue::Value {
+            llvm_repr: format!("%tmp{}", ptr_id),
+            ptype: ParserType::Pointer(Box::new(ParserType::Named("i8".to_string()))),
+        })
+    }
+    fn compiler_function_calls(&mut self, callee: &Expr, given_args: &[Expr], expected: &Expected) -> Option<CompileResult<CompiledValue>>{ // --
+
+        if let Expr::Name(x) = callee {
+            match x.as_str() {
+                "sizeof" =>{
+                    debug_assert!(*expected != Expected::NoReturn);
+                    if given_args.len() != 1 { return Some(Err(CompileError::Generic(format!("sizeof expects exactly 1 type argument. Example: sizeof(i32);"))));}
+                    if let Ok(sizeof) = self.sizeof_from_expression(&given_args[0]){
+                        if let Expected::Type(pt) = expected {
+                            if pt.is_integer() {
+                                return Some(Ok(CompiledValue::Value { llvm_repr: sizeof.to_string(), ptype: (*pt).clone() }));
+                            }
+                        }
+                        return Some(Ok(CompiledValue::Value { llvm_repr: sizeof.to_string(), ptype: ParserType::Named(format!("i64")) }));
+                    }
+                    return Some(Err(CompileError::Generic(format!("Unable to calculate sizeof structure given by this expression '{:?}'", given_args[0]))));
+                }
+                "stalloc" =>{
+                    debug_assert!(*expected != Expected::NoReturn);
+                    if given_args.len() != 1 { return Some(Err(CompileError::Generic(format!("sizeof expects exactly 1 type argument. Example: sizeof(i32);"))));}
+                    if let Ok(r_val) = self.compile_rvalue(&given_args[0], Expected::Type(&ParserType::Named(format!("i64")))) {
+                        let utvc = self.ctx.aquire_unique_temp_value_counter();
+                        self.output.push_str(&format!("    %tmp{} = alloca i8, i64 {}\n",utvc, r_val.get_llvm_repr()));
+                        return Some(Ok(CompiledValue::Value { llvm_repr: format!("%tmp{}", utvc), ptype: ParserType::Pointer(Box::new(ParserType::Named(format!("i8")))) }));
+                    }
+                    return Some(Err(CompileError::Generic(format!("Unable to get i64 from this expression '{:?}'", given_args[0]))));
+                }
+                _ => {}
+            }
+        }
+        None
     }
     // ----------------------======++$$@LVALUE@$$++======-----------------
     fn compile_name_lvalue(&mut self, name: &str) -> CompileResult<CompiledValue> {
@@ -571,55 +636,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
 
         Ok(CompiledValue::Pointer { llvm_repr: gep_ptr_reg, ptype: base_type })
     }
-    fn compile_string_literal(&mut self, str_val: &str) -> CompileResult<CompiledValue> { // ---
-        let str_len = str_val.len() + 1;
-        let const_id = self.ctx.aquire_unique_const_vector_counter();
-        let const_name = format!("@.str.{}", const_id);
-        let escaped_val = str_val.replace("\"", "\\22");
-
-        self.output.push_str_header(&format!(
-            "{} = private unnamed_addr constant [{} x i8] c\"{}\\00\"\n",
-            const_name, str_len, escaped_val
-        ));
-        let ptr_id = self.ctx.aquire_unique_temp_value_counter();
-        self.output.push_str(&format!("    %tmp{} = getelementptr inbounds [{} x i8], [{} x i8]* {}, i64 0, i64 0\n", ptr_id, str_len, str_len, const_name));
-        Ok(CompiledValue::Value {
-            llvm_repr: format!("%tmp{}", ptr_id),
-            ptype: ParserType::Pointer(Box::new(ParserType::Named("i8".to_string()))),
-        })
-    }
-    fn compiler_function_calls(&mut self, callee: &Expr, given_args: &[Expr], expected: &Expected) -> Option<CompileResult<CompiledValue>>{ // --
-
-        if let Expr::Name(x) = callee {
-            match x.as_str() {
-                "sizeof" =>{
-                    debug_assert!(*expected != Expected::NoReturn);
-                    if given_args.len() != 1 { return Some(Err(CompileError::Generic(format!("sizeof expects exactly 1 type argument. Example: sizeof(i32);"))));}
-                    if let Ok(sizeof) = self.sizeof_from_expression(&given_args[0]){
-                        if let Expected::Type(pt) = expected {
-                            if pt.is_integer() {
-                                return Some(Ok(CompiledValue::Value { llvm_repr: sizeof.to_string(), ptype: (*pt).clone() }));
-                            }
-                        }
-                        return Some(Ok(CompiledValue::Value { llvm_repr: sizeof.to_string(), ptype: ParserType::Named(format!("i64")) }));
-                    }
-                    return Some(Err(CompileError::Generic(format!("Unable to calculate sizeof structure given by this expression '{:?}'", given_args[0]))));
-                }
-                "stalloc" =>{
-                    debug_assert!(*expected != Expected::NoReturn);
-                    if given_args.len() != 1 { return Some(Err(CompileError::Generic(format!("sizeof expects exactly 1 type argument. Example: sizeof(i32);"))));}
-                    if let Ok(r_val) = self.compile_rvalue(&given_args[0], Expected::Type(&ParserType::Named(format!("i64")))) {
-                        let utvc = self.ctx.aquire_unique_temp_value_counter();
-                        self.output.push_str(&format!("    %tmp{} = alloca i8, i64 {}\n",utvc, r_val.get_llvm_repr()));
-                        return Some(Ok(CompiledValue::Value { llvm_repr: format!("%tmp{}", utvc), ptype: ParserType::Pointer(Box::new(ParserType::Named(format!("i8")))) }));
-                    }
-                    return Some(Err(CompileError::Generic(format!("Unable to get i64 from this expression '{:?}'", given_args[0]))));
-                }
-                _ => {}
-            }
-        }
-        None
-    }
+    
     fn sizeof_from_expression(&mut self, expr: &Expr) -> CompileResult<u32>{
         match expr {
             Expr::Name(name) =>{
@@ -686,6 +703,8 @@ pub fn constant_integer_expression_compiler(expression: &Expr, symbols: &SymbolT
             let right_val = constant_integer_expression_compiler(r, symbols)?;
             match op {
                 BinaryOp::BitOr => Ok(left_val | right_val),
+                BinaryOp::BitAnd => Ok(left_val & right_val),
+                BinaryOp::BitXor => Ok(left_val ^ right_val),
                 BinaryOp::Add => Ok(left_val + right_val),
                 BinaryOp::Subtract => Ok(left_val - right_val),
                 BinaryOp::Multiply => Ok(left_val * right_val),
@@ -711,7 +730,7 @@ fn explicit_cast(
         (ParserType::Named(_), ParserType::Named(_)) => {
             if let Some((from_bits, to_bits)) = from_type.is_both_integers(to_type) {
                 if from_bits == to_bits {
-                    return Ok(value.with_type(to_type.clone()));
+                    return Ok(value.clone_with_type(to_type.clone()));
                 }
                 let op = if from_bits < to_bits {
                     if from_type.is_unsigned_integer() { "zext" } else { "sext" }

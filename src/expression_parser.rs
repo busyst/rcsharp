@@ -1,4 +1,4 @@
-use crate::{parser::ParserType, token::{Location, Token, TokenData}};
+use crate::{parser::ParserType, token::{Token, TokenData}};
 
 #[derive(Debug, Clone, PartialEq)] 
 pub enum Expr {
@@ -63,7 +63,8 @@ impl<'a> ExpressionParser<'a> {
         const DUMMY_EOF: TokenData = TokenData { 
             token: Token::DummyToken,
             span: 0..0,
-            loc: Location { row: 0, col: 0 } 
+            row: 0,
+            col: 0
         };
         self.tokens.get(self.cursor).unwrap_or(&DUMMY_EOF)
     }
@@ -80,8 +81,8 @@ impl<'a> ExpressionParser<'a> {
                 "Expected token {:?}, found {:?} at row {}, col {}",
                 expected,
                 token_data.token,
-                token_data.loc.row,
-                token_data.loc.col
+                token_data.row,
+                token_data.col
             ));
         }
         Ok(self.advance())
@@ -102,7 +103,7 @@ impl<'a> ExpressionParser<'a> {
         let token_data = self.advance();
         match &token_data.token {
             Token::Integer(val) => Ok(Expr::Integer(val.to_string())),
-            Token::Char(val) => {  Ok(Expr::Integer(({val.parse::<char>().unwrap() as u64}).to_string()))},
+            Token::Char(val) => {  Ok(Expr::Integer(val.to_string()))},
             Token::String(val) => Ok(Expr::StringConst(val.to_string())),
             Token::Name(name) => Ok(Expr::Name(name.to_string())),
 
@@ -122,7 +123,7 @@ impl<'a> ExpressionParser<'a> {
 
             _ => Err(format!(
                 "Unexpected token {:?} in expression at row {}, col {}",
-                token_data.token, token_data.loc.row, token_data.loc.col
+                token_data.token, token_data.row, token_data.col
             )),
         }
     }
@@ -152,8 +153,8 @@ impl<'a> ExpressionParser<'a> {
             _ => Err(format!(
                 "Unexpected token {:?} in expression at row {}, col {}",
                 token,
-                self.peek().loc.row,
-                self.peek().loc.col
+                self.peek().row,
+                self.peek().col
             )),
         }
     }
@@ -270,21 +271,8 @@ impl<'a> ExpressionParser<'a> {
                 return Ok(ParserType::NamespaceLink(link_or_name, Box::new(self.parse_type()?)))
             }
             if self.peek().token == Token::LogicLess {
-                self.advance();
-                let mut template_typenames_implementation = vec![];
-                loop {
-                    if self.peek().token == Token::LogicGreater{
-                        self.advance();
-                        break;
-                    }
-                    let mut x = ExpressionParser::new(&self.tokens[self.cursor..]);
-                    template_typenames_implementation.push(x.parse_type()?);
-                    self.cursor += x.cursor;
-                    if self.peek().token == Token::Comma {
-                        self.advance();
-                    }
-                }
-                println!("{:?}", template_typenames_implementation);
+                self.consume(&Token::LogicLess)?;
+                todo!("Generic types not yet implemented");
             }
             Ok(ParserType::Named(link_or_name))
         }
@@ -298,8 +286,5 @@ impl<'a> ExpressionParser<'a> {
     }
     pub fn cursor(&self) -> usize {
         self.cursor
-    }
-    pub fn set_cursor(&mut self, cursor: usize) {
-        self.cursor = cursor;
     }
 }

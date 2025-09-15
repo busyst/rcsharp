@@ -258,7 +258,7 @@ namespace console{
         if n >= 0{
             println_u64(n as u64);
         }else{
-            write("-", 1);
+            print_char('-');
             println_u64(-n as u64);
         }
     }
@@ -528,9 +528,7 @@ namespace fs{
 namespace tests{
     fn run(){
         fs_test();
-        
-        
-        //funny();
+        funny();
     }
     fn fs_test(){
         console::write("fs_test: ", 9);
@@ -577,7 +575,7 @@ namespace tests{
     fn is_valid_number_token(c:i8) : bool { return string_utils::is_ascii_num(c) || string_utils::is_ascii_hex(c) || c == '_'; }
     // No.
     fn funny(){
-        let path: &i8 = "D:\\Projects\\rcsharp\\src.rcsharp";
+        let path: &i8 = "D:\\Projects\\rcsharp\\src_base_structs.rcsharp";
         let file: string::String = fs::read_full_file_as_string(path);
         // Need to implement generics for structs <T>;
         let tokens: vector::Vec;
@@ -590,7 +588,6 @@ namespace tests{
         let temp_string: string::String;
         let line: i32 = 0;
         let line_index: i32 = 0;
-        // Loop situation is crazy, fix it with scope
         loop{
             if iterator >= file.len {
                 break;
@@ -663,6 +660,10 @@ namespace tests{
                 temp_string = string::with_size(iterator - index);
                 mem::copy(file.data + index, temp_string.data, temp_string.len as i64);
                 string::free(&temp_string);
+                continue;
+            }
+            if char == '\''{
+                iterator = iterator + 1;
                 continue;
             }
             if char == '('{
@@ -781,7 +782,10 @@ namespace tests{
                 iterator = iterator + 1;
                 continue;
             }
-
+            if char == '\\'{
+                iterator = iterator + 1;
+                continue;
+            }
             console::print_char(char);
             console::print_char('\n');
             console::println_u64(line as u64);

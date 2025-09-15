@@ -1,7 +1,0 @@
-struct x<T>{
-    x: T
-}
-fn main() : i32{
-    let x: x<i32>;
-    
-}

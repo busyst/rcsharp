@@ -1,46 +1,13 @@
-/// General language specs /// SOME NOT YET IMPLEMENTED
-// Rust basic syntax. (Less characters to lex through:fn,let. Easier to parse: let val_name : type = expression; fn name(args) type {body})
-// C memory access and handholding level. (Pointers everywhere, no refereces through)
-// C# (Generic type params fn x<T>(), Properties )
-// those specs are incomplete as current state of language is bare C with rust-like syntax.
+#[include("./src_base_structs.rcsharp")]
 
-/// Planned features
-// Compile-Time Type Overlay (aka `constant_mask`) for fixed index-based typed overlays on arrays.
-// For constant indices in `array[const]`, substitute a concrete type at compile-time.
-// Example:
-// let x: &&void;
-// constant_mask!(x, &i32, &bool);
-// OR //
-// #[constant_mask(&i32, &bool)]
-// let x: &&void;
-// x = malloc(sizeof(&void) * 4) as &&void;
-// let i : i32 = 0;
-//
-// x[0] = &i; // OK
-// x[0] = 0 as &void; // Compile time error, must cast to &i32
-// let val : i32 = *x[0]; // OK
-// let val : i32 = *x[*val]; // Compile time error, cant cast void to int
-//
-// let iterator: i32 = 0; // when it isnt number constant_mask does not work
-// x[iterator] = &i; // Compile time error, must cast to &void
-// x[iterator] = 0 as &void; // OK
-//
-// WHY DO I NEED THIS: 
-// I needed this functionality once, long time ago. It probably was my C++ game engine project and first type in ECS reference array was always Transform.
-// I ended up (Transform*)ing all over the place. Probably constexpr function to staticly cast pointer would have been better.
-// ALSO can be used to create "'growing' structures" and interfaces to exposed arrays without needeng to create structures, because it could be overlayed at Vec array 
-// -------------------------------------------------------------------------------------------------------------------------------------------------------------------
-// Known issues:
-// - Variable flags do not detect external mutation via function calls, e.g.: `let x: i32; mod_x(&x);` still marks `x` as unmodified.
-//   These flags (for now) are hints for unused variables, not strict correctness checks.
-// - Replace `#[DllImport]` with a more idiomatic `extern fn ...` once FFI design stabilizes.
-// Note: under current calling convention, function arguments are treated as immutable.
-
-fn main(): i32 {
+inline fn basic_functions(){
     console::AllocConsole();
     tests::run();
     window::start();
     console::FreeConsole();
+}
+fn main(): i32 {
+    basic_functions();
     return 0;
 }
 

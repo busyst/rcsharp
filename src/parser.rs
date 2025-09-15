@@ -1,4 +1,24 @@
+use std::ops::Range;
+
 use crate::{compiler_essentials::FunctionFlags, expression_parser::{Expr, ExpressionParser}, token::{Token, TokenData}};
+pub const PRIMITIVE_TYPES: &[&str] = &[
+    "void", "bool",
+    "i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64",
+    "f32", "f64"
+];
+pub const LLVM_PRIMITIVE_TYPES: &[&str] = &[
+    "void", "i1",
+    "i8", "i16", "i32", "i64", "i8", "i6", "i32", "i64",
+    "float", "double"
+];
+pub const INTEGERS_TYPES: Range<usize> = 2..10;
+pub const SIGNED_TYPES: Range<usize> = 2..6;
+pub const UNSIGNED_TYPES: Range<usize> = 6..10;
+pub const FLOAT_TYPES: Range<usize> = 10..12;
+
+pub const VOID_TYPE: &&'static str = &PRIMITIVE_TYPES[0];
+pub const BOOL_TYPE: &&'static str = &PRIMITIVE_TYPES[1];
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Stmt {
     Hint(String, Box<[Expr]>), // #[...]
@@ -7,7 +27,6 @@ pub enum Stmt {
     
     Expr(Expr), // a = 1 + b
     
-    
     If(Expr, Box<[Stmt]>, Box<[Stmt]>), // if 1 == 1 {} `else `if` {}`
 
     Loop(Box<[Stmt]>), // loop { ... }
@@ -15,9 +34,7 @@ pub enum Stmt {
     Break, // break
     Continue, // continue
     Return(Option<Expr>), // return ...
-    
-    DirectInsertion(String), // continue
-    
+
     Function(String, Box<[(String, ParserType)]>, ParserType, Box<[Stmt]>, u8), // fn foo(bar: i8, ...) ... { ... }
     Struct(String, Box<[(String, ParserType)]>), // struct foo { bar : i8, ... }
     Enum(String, Option<ParserType>, Box<[(String, Expr)]>), // enum foo 'base_type' { bar = ..., ... }
@@ -28,16 +45,15 @@ impl Stmt {
         match self {
             Self::Break => 1,
             Self::Continue => 1,
-            Self::DirectInsertion(_) => 1,
             Self::Enum(_, _, _) => 1,
             Self::Hint(_, _) => 1,
             Self::Let(_, _, _) => 1,
             Self::Expr(_) => 1,
-            Self::If(_, x, y) => { x.iter().map(|x| x.recursive_statement_count()).sum::<u64>() + y.iter().map(|x| x.recursive_statement_count()).sum::<u64>()}
-            Self::Loop(x) => { x.iter().map(|x| x.recursive_statement_count()).sum::<u64>()}
-            Self::Namespace(_, x) => { x.iter().map(|x| x.recursive_statement_count()).sum::<u64>()}
+            Self::If(_, x, y) => { 1 + x.iter().map(|x| x.recursive_statement_count()).sum::<u64>() + y.iter().map(|x| x.recursive_statement_count()).sum::<u64>()}
+            Self::Loop(x) => { 1 + x.iter().map(|x| x.recursive_statement_count()).sum::<u64>()}
+            Self::Namespace(_, x) => { 1 + x.iter().map(|x| x.recursive_statement_count()).sum::<u64>()}
             Self::Return(_) => 1,
-            Self::Function(_,_,_,x, _) => { x.iter().map(|x| x.recursive_statement_count()).sum::<u64>()}
+            Self::Function(_,_,_,x, _) => { 1 + x.iter().map(|x| x.recursive_statement_count()).sum::<u64>()}
             Self::Struct(_, _) => 1,
         }
     }
@@ -57,99 +73,71 @@ impl PartialEq for ParserType {
             (Self::Pointer(l0), Self::Pointer(r0)) => l0 == r0,
             (Self::Function(l0, l1), Self::Function(r0, r1)) => l0 == r0 && l1 == r1,
             (Self::NamespaceLink(l0, l1), Self::NamespaceLink(r0, r1)) => l0 == r0 && l1 == r1,
-            (l, Self::NamespaceLink(_, r)) => l.eq(&r),
-            (Self::NamespaceLink(_, l), r) => r.eq(&l),
+            (Self::NamespaceLink(_, l), r) => r.eq(l),
+            (l, Self::NamespaceLink(_, r)) => l.eq(r),
             _ => false,
         }
     }
 }
-#[allow(dead_code)]
+
 impl ParserType {
     pub fn is_primitive_type(&self) -> bool {
         if let ParserType::Named(name) = self {
-            matches!(name.as_str(),
-                "bool" |
-                "void" |
-                "i8" | "u8" | "i16" | "u16" | "i32" | "u32" | "i64" | "u64" |
-                "f32" | "f64"
-            )
-        } else {
-            false
+            return PRIMITIVE_TYPES.contains(&name.as_str());
         }
+        false
     }
 
     pub fn is_integer(&self) -> bool {
         if let ParserType::Named(name) = self {
-            return matches!(name.as_str(), "i8" | "u8" | "i16" | "u16" | "i32" | "u32" | "i64" | "u64");
+            return PRIMITIVE_TYPES[INTEGERS_TYPES].contains(&name.as_str());
         }
         false
     }
-    
-    pub fn is_both_integers(&self, other: &ParserType) -> Option<(u32, u32)> {
-        if self.is_integer() && other.is_integer() {
-            let ln = self.try_to_string_core().unwrap()[1..].parse::<u32>().unwrap();
-            let rn = other.try_to_string_core().unwrap()[1..].parse::<u32>().unwrap();
-            return Some((ln, rn));
-        }
-        None
-    }
-    pub fn is_bool(&self) -> bool{
-        return *self == ParserType::Named(format!("bool"));
-    }
     pub fn is_unsigned_integer(&self) -> bool {
         if let ParserType::Named(name) = self {
-            return matches!(name.as_str(), "u8" | "u16" | "u32" | "u64" );
+            return PRIMITIVE_TYPES[UNSIGNED_TYPES].contains(&name.as_str());
         }
         false
     }
     pub fn is_signed_integer(&self) -> bool {
         if let ParserType::Named(name) = self {
-            return matches!(name.as_str(), "i8" | "i16" | "i32" | "i64" );
+            return PRIMITIVE_TYPES[SIGNED_TYPES].contains(&name.as_str());
         }
         false
     }
-    
     pub fn is_float(&self) -> bool {
         if let ParserType::Named(name) = self {
-            return matches!(name.as_str(), "f32" | "f64");
+            return PRIMITIVE_TYPES[FLOAT_TYPES].contains(&name.as_str());
+        }
+        false
+    }
+    pub fn is_bool(&self) -> bool{
+        if let ParserType::Named(name) = self {
+            return name == BOOL_TYPE;
         }
         false
     }
     pub fn is_void(&self) -> bool {
         if let ParserType::Named(name) = self {
-            return matches!(name.as_str(), "void");
+            return name == VOID_TYPE;
         }
         false
     }
     pub fn is_pointer(&self) -> bool{
         return matches!(self, ParserType::Pointer(_));
     }
-    
-    pub fn unpointer(&self) -> &ParserType{
-        match self {
-            ParserType::Pointer(x) => return x.unpointer(),
-            _ => return &self
-        }
-    }
-    
 
-    pub fn to_string(&self) -> String{
-        let mut output = String::new();
-        match self {
-            ParserType::Named(x) => output.push_str(x),
-            ParserType::Pointer(x) => {output.push_str(&x.to_string()); output.push('*');},
-            ParserType::Function(return_type, _) => {output.push_str(&return_type.to_string());},
-            ParserType::NamespaceLink(x, y) => {output.push_str(&format!("{}.{}", x, y.to_string()));}
+    pub fn is_both_integers(&self, other: &ParserType) -> Option<(u32, u32)> {
+        if self.is_integer() && other.is_integer() {
+            let ln = self.to_string()[1..].parse::<u32>().unwrap();
+            let rn = other.to_string()[1..].parse::<u32>().unwrap();
+            return Some((ln, rn));
         }
-        return output;
+        None
     }
-    pub fn try_to_string_core(&self) -> Result<String, String>{
-        match self {
-            ParserType::Named(x) => return Ok(x.clone()),
-            ParserType::Pointer(x) => {return x.try_to_string_core();},
-            ParserType::Function(_, _) => {return Err(format!("Tried to get type name of function TODO"));},
-            ParserType::NamespaceLink(_, _) => unreachable!()
-        }
+    pub fn reference_once(self) -> ParserType{
+        ParserType::Pointer(Box::new(self))
     }
     pub fn dereference_once(&self) -> ParserType{
         match self {
@@ -161,22 +149,20 @@ impl ParserType {
     }
     pub fn dereference_full(&self) -> &ParserType{
         match self {
-            ParserType::Named(_) => return self,
-            ParserType::Pointer(x) => return &x,
-            ParserType::Function(_, _) => return self,
-            ParserType::NamespaceLink(_, _) => return self
+            ParserType::Pointer(x) => &x,
+            _ => return self,
         }
     }
-    pub fn replace_name(&self, name: String) -> ParserType{
+
+    pub fn to_string(&self) -> String{
+        let mut output = String::new();
         match self {
-            ParserType::Named(_) => return ParserType::Named(name),
-            ParserType::Pointer(x) => return ParserType::Pointer(Box::new(x.replace_name(name))),
-            ParserType::Function(_, _) => unreachable!(),
-            ParserType::NamespaceLink(_, _) => unreachable!()
+            ParserType::Named(x) => output.push_str(x),
+            ParserType::Pointer(x) => {output.push_str(&x.to_string()); output.push('*');},
+            ParserType::Function(return_type, _) => {output.push_str(&return_type.to_string());},
+            ParserType::NamespaceLink(x, y) => {output.push_str(&format!("{}.{}", x, y.to_string()));}
         }
-    }
-    pub fn reference_once(&self) -> ParserType{
-        ParserType::Pointer(Box::new(self.clone()))
+        return output;
     }
     pub fn get_absolute_path_or(&self, current_fallback: &str) -> String{
         match self {
@@ -190,7 +176,7 @@ impl ParserType {
                     return format!("{}.{}",current_fallback, x.clone());
                 }
             }
-            _ => return current_fallback.to_string(),
+            _ => self.to_string(),
         }
     }
 }
@@ -211,7 +197,8 @@ impl<'a> GeneralParser<'a> {
         const DUMMY_EOF: TokenData = TokenData { 
             token: Token::DummyToken,
             span: 0..0,
-            loc: crate::token::Location { row: 0, col: 0 } 
+            col: 0,
+            row: 0
         };
         self.tokens.get(self.cursor).unwrap_or(&DUMMY_EOF)
     }
@@ -228,8 +215,8 @@ impl<'a> GeneralParser<'a> {
                 "Expected token {:?}, found {:?} at row {}, col {}",
                 expected,
                 token_data.token,
-                token_data.loc.row,
-                token_data.loc.col
+                token_data.row,
+                token_data.col
             ));
         }
         Ok(self.advance())
@@ -249,7 +236,6 @@ impl<'a> GeneralParser<'a> {
             Token::KeywordStruct => self.parse_struct(),
             Token::KeywordEnum => self.parse_enum(),
             Token::KeywordNamespace => self.parse_namespace(),
-            // Token::KeywordConstExpr | Token::KeywordPub | Token::KeywordInline
             Token::KeywordInline =>{
                 self.advance();
                 let mut x = self.parse_toplevel_item()?;
@@ -259,9 +245,27 @@ impl<'a> GeneralParser<'a> {
                 }
                 Err(format!("Keyword Inline only applicable to functions"))
             }
+            Token::KeywordConstExpr =>{
+                self.advance();
+                let mut x = self.parse_toplevel_item()?;
+                if let Stmt::Function(_, _, _, _, flags) = &mut x {
+                    *flags |= FunctionFlags::ConstExpression as u8;
+                    return Ok(x);
+                }
+                Err(format!("Keyword Inline only applicable to functions"))
+            }
+            Token::KeywordPub =>{
+                self.advance();
+                let mut x = self.parse_toplevel_item()?;
+                if let Stmt::Function(_, _, _, _, flags) = &mut x {
+                    *flags |= FunctionFlags::Public as u8;
+                    return Ok(x);
+                }
+                Err(format!("Keyword Inline only applicable to functions"))
+            }
             _ => Err(format!(
-                    "Unexpected token {:?} at {:?} in top-level scope. Only functions, structs, and hints are allowed.",
-                    self.peek().token, self.peek().loc
+                    "Unexpected token {:?} at {}:{} in top-level scope. Only functions, structs, and hints are allowed.",
+                    self.peek().token, self.peek().row, self.peek().col
                 )),
         }
     }
@@ -320,17 +324,7 @@ impl<'a> GeneralParser<'a> {
         let name = self.advance().expect_name_token()?;
         if self.peek().token == Token::LogicLess {
             self.advance();
-            let mut template_typenames = vec![];
-            loop {
-                if self.peek().token == Token::LogicGreater{
-                    self.advance();
-                    break;
-                }
-                template_typenames.push(self.advance().expect_name_token());
-                if self.peek().token == Token::Comma {
-                    self.advance();
-                }
-            }
+            todo!("Generic types are not yet supported")
         }
         self.consume(&Token::LBrace)?;
         
@@ -505,5 +499,4 @@ impl<'a> GeneralParser<'a> {
         self.consume(&Token::RBrace)?;
         Ok(stmts.into_boxed_slice())
     }
-
 }
