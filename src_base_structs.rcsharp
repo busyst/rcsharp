@@ -47,7 +47,7 @@ namespace mem{
     #[DllImport("kernel32.dll")]
     fn HeapSize(hHeap: &i32,dwFlags : i32,lpMem : &void) : i64;
 
-    fn malloc(size:i64) : &i8{return HeapAlloc(GetProcessHeap(), 0 as i32, size);}
+    fn malloc(size:i64) : &i8{return HeapAlloc(GetProcessHeap(), 0, size);}
     fn free(ptr: &i8) : void {HeapFree(GetProcessHeap(), 0, ptr);}
     fn copy(src: &i8, dest:&i8, len: i64) {
         let i: i64 = 0;
@@ -82,8 +82,8 @@ namespace list{
     }
     // Linked list node
     struct ListNode{
-        next_node: &ListNode,
         data: i32,
+        next_node: &ListNode,
     }
     fn new(list: &List){
         list.head = 0 as &ListNode;
@@ -95,18 +95,16 @@ namespace list{
         list.data = 0 as i32;
     }
     fn extend(list: &List, data: i32){
-        let new_node: &ListNode = mem::malloc(sizeof(ListNode)) as &ListNode;
-        
-        new_node.next_node = 0 as &ListNode;
-        new_node.data = data;
+        let node_to_add: &ListNode = mem::malloc(sizeof(ListNode)) as &ListNode;
+        node_to_add.next_node = 0 as &ListNode;
+        node_to_add.data = data;
 
         if list.head == 0 as &ListNode {
-            list.head = new_node;
-            list.foot = new_node;
+            list.head = node_to_add;
+            list.foot = node_to_add;
         } else {
-            // Append to the end of the list.
-            list.foot.next_node = new_node;
-            list.foot = new_node;
+            list.foot.next_node = node_to_add;
+            list.foot = node_to_add;
         }
         list.length = list.length + 1 as u32;
     }
@@ -527,8 +525,203 @@ namespace fs{
 
 namespace tests{
     fn run(){
+        mem_test();
+        string_utils_test();
+        string_test();
+        vector_test();
+        list_test();
+        process_test();
+        console_test();
         fs_test();
+
         funny();
+    }
+    fn mem_test(){
+        console::write("mem_test: ", 10);
+        
+        let size: i64 = 16;
+        let buffer1: &i8 = mem::malloc(size);
+        if buffer1 == 0 as &i8 { process::throw("mem_test: malloc failed"); }
+        
+        // Test fill
+        mem::fill('X', buffer1, size);
+        let i: i64 = 0;
+        loop {
+            if i >= size { break; }
+            if buffer1[i] != 'X' { process::throw("mem_test: fill verification failed"); }
+            i = i + 1;
+        }
+        
+        // Test zerofill
+        mem::zerofill(0, buffer1, size); // First argument is ignored
+        i = 0;
+        loop {
+            if i >= size { break; }
+            if buffer1[i] != 0 { process::throw("mem_test: zerofill verification failed"); }
+            i = i + 1;
+        }
+        
+        // Test copy
+        let buffer2: &i8 = mem::malloc(size);
+        if buffer2 == 0 as &i8 { process::throw("mem_test: malloc for copy failed"); }
+        mem::fill('Y', buffer2, size);
+        mem::copy(buffer2, buffer1, size);
+        i = 0;
+        loop {
+            if i >= size { break; }
+            if buffer1[i] != 'Y' { process::throw("mem_test: copy verification failed"); }
+            i = i + 1;
+        }
+
+        mem::free(buffer1);
+        mem::free(buffer2);
+        
+        console::writeln("OK", 2);
+    }
+    fn string_utils_test() {
+        console::write("string_utils_test: ", 19);
+
+        if string_utils::c_str_len("test") != 4 { process::throw("string_utils_test: c_str_len failed"); }
+        if string_utils::c_str_len("") != 0 { process::throw("string_utils_test: c_str_len empty failed"); }
+
+        if !string_utils::is_ascii_num('7') || string_utils::is_ascii_num('b') { process::throw("string_utils_test: is_ascii_num failed"); }
+        if !string_utils::is_ascii_char('a') || string_utils::is_ascii_char('9') { process::throw("string_utils_test: is_ascii_char failed"); }
+        if !string_utils::is_ascii_hex('F') || string_utils::is_ascii_hex('G') { process::throw("string_utils_test: is_ascii_hex failed"); }
+
+        let inserted: &i8 = string_utils::insert("ac", "b", 1);
+        let expected: &i8 = "abc";
+        let i: i32 = 0;
+        loop {
+            if inserted[i] == 0 && expected[i] == 0 { break; }
+            if inserted[i] != expected[i] { process::throw("string_utils_test: insert failed"); }
+            i = i + 1;
+        }
+        mem::free(inserted);
+
+        console::writeln("OK", 2);
+    }
+    
+    fn string_test(){
+        console::write("string_test: ", 13);
+
+        let s1: string::String = string::from_c_string("hello");
+        let s2: string::String = string::from_c_string("hello");
+        let s3: string::String = string::from_c_string("world");
+
+        if s1.len != 5 { process::throw("string_test: from_c_string length failed"); }
+        if !string::equal(&s1, &s2) { process::throw("string_test: equal positive case failed"); }
+        if string::equal(&s1, &s3) { process::throw("string_test: equal negative case failed"); }
+
+        let s4: string::String = string::concat_with_c_string(&s1, " world");
+        let s5: string::String = string::from_c_string("hello world");
+        
+        if s4.len != 11 { process::throw("string_test: concat length failed"); }
+        if !string::equal(&s4, &s5) { process::throw("string_test: concat content failed"); }
+
+        string::free(&s1);
+        string::free(&s2);
+        string::free(&s3);
+        string::free(&s4);
+        string::free(&s5);
+
+        console::writeln("OK", 2);
+    }
+    
+    fn vector_test() {
+        console::write("vector_test: ", 13);
+        
+        let v: vector::Vec;
+        vector::new(&v);
+        
+        if v.length != 0 || v.capacity != 0 { process::throw("vector_test: new failed"); }
+
+        vector::push(&v, 10); vector::push(&v, 20); vector::push(&v, 30); vector::push(&v, 40);
+
+        if v.length != 4 || v.capacity != 4 { process::throw("vector_test: initial push failed"); }
+        if v.array[0] != 10 || v.array[3] != 40 { process::throw("vector_test: initial content failed"); }
+        
+        vector::push(&v, 50); // Trigger reallocation
+
+        if v.length != 5 || v.capacity != 8 { process::throw("vector_test: realloc failed"); }
+        if v.array[4] != 50 || v.array[0] != 10 { process::throw("vector_test: realloc content failed"); }
+        
+        let data_to_push: &i8 = "AB";
+        vector::push_bulk(&v, data_to_push, 2);
+        if v.length != 7 { process::throw("vector_test: push_bulk length failed"); }
+        if v.array[5] != 'A' || v.array[6] != 'B' { process::throw("vector_test: push_bulk content failed"); }
+        
+        vector::free(&v);
+        if v.length != 0 || v.capacity != 0 || v.array != 0 as &i8 { process::throw("vector_test: free failed"); }
+        
+        console::writeln("OK", 2);
+    }
+    fn list_test() {
+        console::write("list_test: ", 11);
+
+        let l: list::List;
+        list::new(&l);
+        if l.length != 0 || l.head != 0 as &list::ListNode { process::throw("list_test: new failed"); }
+
+        list::extend(&l, 100);
+        list::extend(&l, 200);
+        list::extend(&l, 300);
+
+        if l.length != 3 { process::throw("list_test: length incorrect after extend"); }
+        if list::walk(&l) != 3 { process::throw("list_test: walk length incorrect"); }
+
+        let current: &list::ListNode = l.head;
+        if current.data != 100 { process::throw("list_test: data mismatch for node 1"); }
+        current = current.next_node;
+        if current.data != 200 { process::throw("list_test: data mismatch for node 2"); }
+        current = current.next_node;
+        if current.data != 300 { process::throw("list_test: data mismatch for node 3"); }
+        if current != l.foot { process::throw("list_test: foot pointer mismatch"); }
+        
+        list::free(&l);
+        if l.length != 0 || l.head != 0 as &list::ListNode { process::throw("list_test: free failed"); }
+
+        console::writeln("OK", 2);
+    }
+    fn process_test() {
+        console::write("process_test: ", 14);
+        
+        let full_path: string::String = process::get_executable_path();
+        let env_path: string::String = process::get_executable_env_path();
+        
+        if full_path.len <= 0 { process::throw("process_test: get_executable_path returned empty"); }
+        if env_path.len <= 0 { process::throw("process_test: get_executable_env_path returned empty"); }
+        if env_path.len >= full_path.len { process::throw("process_test: env path is not shorter than full path"); }
+        if env_path.data[env_path.len - 1] != '\\' { process::throw("process_test: env path does not end with a backslash"); }
+        
+        console::write("Executable Path: ", 17);
+        console::writeln(full_path.data, full_path.len);
+        console::write("Environment Path: ", 18);
+        console::writeln(env_path.data, env_path.len);
+
+        string::free(&full_path);
+        string::free(&env_path);
+
+        console::writeln("OK", 2);
+    }
+    
+    fn console_test() {
+        console::writeln("\nconsole_test:", 14);
+        console::writeln("--- VISUAL TEST START ---", 25);
+
+        console::write("Printing i64(12345): ", 21);
+        console::println_i64(12345);
+
+        console::write("Printing i64(-67890): ", 22);
+        console::println_i64(-67890);
+        
+        console::write("Printing i64(0): ", 17);
+        console::println_i64(0);
+
+        console::write("Printing u64(9876543210): ", 26);
+        console::println_u64(9876543210);
+
+        console::writeln("--- VISUAL TEST END ---", 23);
+        console::writeln("OK", 2);
     }
     fn fs_test(){
         console::write("fs_test: ", 9);
@@ -577,11 +770,9 @@ namespace tests{
     fn funny(){
         let path: &i8 = "D:\\Projects\\rcsharp\\src_base_structs.rcsharp";
         let file: string::String = fs::read_full_file_as_string(path);
-        // Need to implement generics for structs <T>;
         let tokens: vector::Vec;
         vector::new(&tokens); 
         let iterator: i32 = 0;
-        // Need to automaticly solve problem with variables inside loop, causing stack overflow, beacause prealocating is insane.
         let char: i8;
         let next_char: i8;
         let index: i32;
@@ -792,7 +983,6 @@ namespace tests{
             console::println_u64((iterator - line_index) as u64);
             iterator = iterator + 1;
         }
-
-        //console::write_string(&file);
+        
     }
 }

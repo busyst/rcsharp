@@ -430,7 +430,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
                 let type_str = get_llvm_type_str(&pointed_to_type, self.ctx.symbols, &self.ctx.current_function_path)?;
                 let temp_id = self.ctx.aquire_unique_temp_value_counter();
                 self.output.push_str(&format!("    %tmp{} = load {}, {}* {}\n", temp_id, type_str, type_str, value.get_llvm_repr()));
-                Ok(CompiledValue::Value { llvm_repr: format!("%tmp{}", temp_id), ptype: pointed_to_type })
+                Ok(CompiledValue::Value { llvm_repr: format!("%tmp{}", temp_id), ptype: pointed_to_type.clone() })
             }
             UnaryOp::Pointer => {
                 let lvalue = self.compile_lvalue(operand_expr)?;
@@ -572,24 +572,38 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
         Err(CompileError::SymbolNotFound(format!("Static symbol '{}' not found", path)))
     }
     fn compile_member_access_lvalue(&mut self, obj: &Expr, member: &str) -> CompileResult<CompiledValue> {
-        let base_ptr = self.compile_lvalue(obj)?;
-        let struct_type = base_ptr.get_type().dereference_full();
+        let obj_lvalue = self.compile_lvalue(obj)?;
 
-        let (struct_fqn, fields) = self.ctx.symbols.get_struct_representation(&struct_type, &self.ctx.current_function_path)?;
+        let (base_ptr_repr, struct_type_to_index) = if obj_lvalue.get_type().is_pointer() {
+            let obj_rvalue = self.compile_rvalue(obj, Expected::Anything)?;
+            let struct_type = obj_rvalue.get_type().dereference_once().clone();
+            (obj_rvalue.get_llvm_repr(), struct_type)
+        } else {
+            let struct_type = obj_lvalue.get_type().clone();
+            (obj_lvalue.get_llvm_repr(), struct_type)
+        };
+        let (struct_fqn, fields) = self.ctx.symbols.get_struct_representation(&struct_type_to_index, &self.ctx.current_function_path)?;
         let field_index = fields.iter().position(|(name, _)| name == member)
             .ok_or_else(|| CompileError::Generic(format!("Member '{}' not found in struct '{}'", member, struct_fqn)))?;
         
         let field_ptype = &fields[field_index].1;
-        let llvm_struct_type = get_llvm_type_str(&struct_type, self.ctx.symbols, &self.ctx.current_function_path)?;
-        let temp_id = self.ctx.aquire_unique_temp_value_counter();
-        let gep_ptr_reg = format!("%tmp{}", temp_id);
+        let llvm_struct_type = get_llvm_type_str(&struct_type_to_index, self.ctx.symbols, &self.ctx.current_function_path)?;
+        
+        let gep_id = self.ctx.aquire_unique_temp_value_counter();
+        let gep_result_reg = format!("%tmp{}", gep_id);
+        
+        let llvm_struct_ptr_type = format!("{}*", llvm_struct_type);
 
         self.output.push_str(&format!(
-            "    {} = getelementptr inbounds {}, {}* {}, i32 0, i32 {}\n",
-            gep_ptr_reg, llvm_struct_type, llvm_struct_type, base_ptr.get_llvm_repr(), field_index
+            "    {} = getelementptr inbounds {}, {} {}, i32 0, i32 {}\n",
+            gep_result_reg, 
+            llvm_struct_type,
+            llvm_struct_ptr_type,
+            base_ptr_repr,
+            field_index
         ));
 
-        Ok(CompiledValue::Pointer { llvm_repr: gep_ptr_reg, ptype: field_ptype.clone() })
+        Ok(CompiledValue::Pointer { llvm_repr: gep_result_reg, ptype: field_ptype.clone() })
     }
     fn compile_deref_lvalue(&mut self, operand: &Expr) -> CompileResult<CompiledValue> {
         let pointer_rval = self.compile_rvalue(operand, Expected::Anything)?;
@@ -597,12 +611,12 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             return Err(CompileError::Generic(format!("Cannot dereference non-pointer type: {:?}", pointer_rval.get_type())));
         }
         let ptype = pointer_rval.get_type().dereference_once();
-        Ok(CompiledValue::Pointer { llvm_repr: pointer_rval.get_llvm_repr(), ptype })
+        Ok(CompiledValue::Pointer { llvm_repr: pointer_rval.get_llvm_repr(), ptype:ptype.clone() })
     }
     fn compile_index_lvalue(&mut self, array_expr: &Expr, index_expr: &Expr) -> CompileResult<CompiledValue> {
-        let array_ptr = self.compile_rvalue(array_expr, Expected::Anything)?;
-        if !array_ptr.get_type().is_pointer() {
-            return Err(CompileError::InvalidExpression(format!("Cannot index non-pointer type {:?}", array_ptr.get_type())));
+        let array_rval = self.compile_rvalue(array_expr, Expected::Anything)?; 
+        if !array_rval.get_type().is_pointer() {
+            return Err(CompileError::InvalidExpression(format!("Cannot index non-pointer type {:?}", array_rval.get_type())));
         }
 
         let index_val = self.compile_rvalue(index_expr, Expected::Type(&ParserType::Named("i64".to_string())))?;
@@ -610,31 +624,21 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             return Err(CompileError::InvalidExpression(format!("Index must be an integer, but got {:?}", index_val.get_type())));
         }
 
-        let base_type = array_ptr.get_type().dereference_once();
+        let base_type = array_rval.get_type().dereference_once();
         let llvm_base_type = get_llvm_type_str(&base_type, self.ctx.symbols, &self.ctx.current_function_path)?;
         
-        let scaled_index_repr = {
-            let item_size = self.sizeof_from_type(&base_type)?;
-            if item_size > 1 {
-                let scaled_id = self.ctx.aquire_unique_temp_value_counter();
-                let index_str = index_val.get_llvm_repr_with_type(self.ctx)?;
-                self.output.push_str(&format!("    %tmp{} = mul {}, {}\n", scaled_id, index_str, item_size));
-                let scaled_ptype = index_val.get_type().clone();
-                let scaled_val = CompiledValue::Value { llvm_repr: format!("%tmp{}", scaled_id), ptype: scaled_ptype };
-                scaled_val.get_llvm_repr_with_type(self.ctx)?
-            } else {
-                index_val.get_llvm_repr_with_type(self.ctx)?
-            }
-        };
-
         let temp_id = self.ctx.aquire_unique_temp_value_counter();
         let gep_ptr_reg = format!("%tmp{}", temp_id);
+        
         self.output.push_str(&format!(
             "    {} = getelementptr inbounds {}, {}* {}, {}\n",
-            gep_ptr_reg, llvm_base_type, llvm_base_type, array_ptr.get_llvm_repr(), scaled_index_repr
+            gep_ptr_reg, 
+            llvm_base_type, 
+            llvm_base_type, 
+            array_rval.get_llvm_repr(), 
+            index_val.get_llvm_repr_with_type(self.ctx)?
         ));
-
-        Ok(CompiledValue::Pointer { llvm_repr: gep_ptr_reg, ptype: base_type })
+        Ok(CompiledValue::Pointer { llvm_repr: gep_ptr_reg, ptype: base_type.clone() })
     }
     
     fn sizeof_from_expression(&mut self, expr: &Expr) -> CompileResult<u32>{
@@ -662,28 +666,6 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             _ => {}
         }
         return Err(CompileError::InvalidExpression(format!("Unable to get size of type behind expression: {:?}", expr)));
-    }
-    fn sizeof_from_type(&mut self, parser_type: &ParserType) -> CompileResult<u32>{
-        match parser_type {
-            ParserType::Pointer(..) => return Ok(POINTER_SIZE_IN_BYTES),
-            ParserType::Function(..) => return Err(CompileError::Generic(format!(""))),
-            ParserType::Named(name) => {
-                match name.as_str() {
-                    "i8" | "u8" => return Ok(1),
-                    "i16" | "u16" => return Ok(2),
-                    "i32" | "u32" => return Ok(4),
-                    "i64" | "u64" => return Ok(8),
-                    _ => {}
-                }
-                let x = self.ctx.symbols.get_type(&self.ctx.fully_qualified_name(name))?;
-                return x.get_size_of(self.ctx.symbols);
-            }
-            ParserType::NamespaceLink(..) => {
-                let path = parser_type.get_absolute_path_or(&self.ctx.current_function_path);
-                let x = self.ctx.symbols.get_type(&path)?;
-                return x.get_size_of(self.ctx.symbols);
-            }
-        }
     }
 }
 

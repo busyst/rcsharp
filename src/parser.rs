@@ -139,17 +139,15 @@ impl ParserType {
     pub fn reference_once(self) -> ParserType{
         ParserType::Pointer(Box::new(self))
     }
-    pub fn dereference_once(&self) -> ParserType{
+    pub fn dereference_once(&self) -> &ParserType{
         match self {
-            ParserType::Named(_) => panic!("ParserType is Named {:?} that is not dereferencable", self),
-            ParserType::Pointer(x) => return *x.clone(),
-            ParserType::Function(_, _) => {todo!()},
-            ParserType::NamespaceLink(_, _) => unreachable!()
+            ParserType::Pointer(x) => &x,
+            _ => return self,
         }
     }
     pub fn dereference_full(&self) -> &ParserType{
         match self {
-            ParserType::Pointer(x) => &x,
+            ParserType::Pointer(x) => &x.dereference_full(),
             _ => return self,
         }
     }
