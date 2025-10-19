@@ -6,6 +6,12 @@ inline fn basic_functions(){
     window::start();
     console::FreeConsole();
 }
+struct A{
+    x: SubA
+}
+struct SubA{
+    y: i32
+}
 fn main(): i32 {
     basic_functions();
     return 0;

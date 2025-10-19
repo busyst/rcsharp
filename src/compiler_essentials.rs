@@ -26,10 +26,10 @@ impl Enum {
 #[derive(Debug, Clone)]
 pub struct Attribute {
     name: Box<str>,
-    arguments: Vec<Expr>
+    arguments: Box<[Expr]>
 }
 impl Attribute {
-    pub fn new(name: Box<str>, arguments: Vec<Expr>) -> Self {
+    pub fn new(name: Box<str>, arguments: Box<[Expr]>) -> Self {
         Self { name, arguments }
     }
     pub fn name_equals(&self, to: &str) -> bool{
@@ -128,8 +128,8 @@ pub enum FunctionFlags {
 }
 #[derive(Debug, Clone)]
 pub struct Function {
-    pub path: String,
-    pub name: String,
+    pub path: Box<str>,
+    pub name: Box<str>,
     pub args: Box<[(String, ParserType)]>, 
     pub return_type: ParserType,
     pub body: Box<[Stmt]>,
@@ -137,18 +137,18 @@ pub struct Function {
     flags: Cell<u8>
 }
 impl Function {
-    pub fn new(path: String, name: String, args: Box<[(String, ParserType)]>, return_type: ParserType, body: Box<[Stmt]>, flags: Cell<u8>, attribs: Box<[Attribute]>,) -> Self {
+    pub fn new(path: Box<str>, name: Box<str>, args: Box<[(String, ParserType)]>, return_type: ParserType, body: Box<[Stmt]>, flags: Cell<u8>, attribs: Box<[Attribute]>,) -> Self {
         Self { path, name, args, return_type, body, attribs, flags }
     }
     
-    pub fn effective_name(&self) -> String {
+    pub fn effective_name(&self) -> Box<str> {
         let output = if self.path.is_empty() {
             self.name.clone()
         }else{
-            let mut o = self.path.clone();
+            let mut o = self.path.to_string();
             o.push('.');
             o.push_str(&self.name);
-            o
+            o.into_boxed_str()
         };
         return output;
     }
@@ -169,7 +169,7 @@ impl Function {
     pub fn name(&self) -> &str {
         &self.name
     }
-    pub fn get_llvm_repr(&self) -> String {
+    pub fn get_llvm_repr(&self) -> Box<str> {
         if self.is_imported(){
             self.name.clone()
         }else{

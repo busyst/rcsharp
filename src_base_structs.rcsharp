@@ -1,4 +1,5 @@
-fn __chkstk() : void{ /*I dont get it, more research needed*/}
+fn __chkstk() : void{ /*Needed*/}
+fn _fltused() : i32{ return 0; /*Needed*/}
 namespace process{
     #[DllImport("kernel32.dll")]
     fn ExitProcess(code:i32): void;
@@ -38,16 +39,34 @@ namespace process{
     }
 }
 namespace mem{
+    struct PROCESS_HEAP_ENTRY {
+        lpData: &void,
+        cbData: u32,
+        cbOverhead: u8,
+        iRegionIndex: u8,
+        wFlags: u16,
+        Block_hMem: &void,
+        Block_dwReserved0: u32,
+        Block_dwReserved1: u32,
+        Block_dwReserved2: u32,
+    }
     #[DllImport("kernel32.dll")]
     fn GetProcessHeap(): &i32;
     #[DllImport("kernel32.dll")]
-    fn HeapAlloc(hHeap: &i32, dwFlags: i32, dwBytes: i64): &i8;
+    fn HeapAlloc(hHeap: &i32, dwFlags: i32, dwBytes: i64): &void;
     #[DllImport("kernel32.dll")]
     fn HeapFree(hHeap: &i32, dwFlags: i32, lpMem: &i8): i32;
     #[DllImport("kernel32.dll")]
-    fn HeapSize(hHeap: &i32,dwFlags : i32,lpMem : &void) : i64;
+    fn HeapSize(hHeap: &i32,dwFlags : i32, lpMem : &i8) : i64;
+    #[DllImport("kernel32.dll")]
+    
+    fn HeapWalk(hHeap: &i32, lpEntry: &PROCESS_HEAP_ENTRY) : i32;
+    #[DllImport("kernel32.dll")]
+    fn HeapLock(hHeap: &i32) : i32;
+    #[DllImport("kernel32.dll")]
+    fn HeapUnlock(hHeap: &i32) : i32;
 
-    fn malloc(size:i64) : &i8{return HeapAlloc(GetProcessHeap(), 0, size);}
+    fn malloc(size:i64) : &void{return HeapAlloc(GetProcessHeap(), 0, size);}
     fn free(ptr: &i8) : void {HeapFree(GetProcessHeap(), 0, ptr);}
     fn copy(src: &i8, dest:&i8, len: i64) {
         let i: i64 = 0;
@@ -59,7 +78,7 @@ namespace mem{
             i = i + 1;
         }
     }
-    fn zerofill(val: i8, dest:&i8, len: i64) {
+    fn zero_fill(dest:&i8, len: i64) {
         fill(0, dest, len);
     }
     fn fill(val: i8, dest:&i8, len: i64) {
@@ -71,6 +90,29 @@ namespace mem{
             dest[i] = val;
             i = i + 1;
         }
+    }
+    fn get_total_allocated_memory_external() : i64 {
+        let hHeap: &i32 = GetProcessHeap();
+        let total_size: i64 = 0;
+
+        let entry: PROCESS_HEAP_ENTRY;
+        entry.lpData = 0 as &void; 
+
+        if HeapLock(hHeap) == 0 {
+            process::throw("Failed to lock heap for walking.");
+        }
+
+        loop {
+            if HeapWalk(hHeap, &entry) == 0 {
+                break;
+            }
+            if (entry.wFlags & 0x00000004) != 0 {
+                total_size = total_size + (entry.cbData as i64);
+            }
+        }
+        HeapUnlock(hHeap);
+
+        return total_size;
     }
 }
 namespace list{
@@ -325,13 +367,13 @@ namespace string{
     fn with_size(size: i32) : String{
         let x: String;
         x.len = size;
-        x.data = mem::malloc(sizeof(i8) * size as i64);
+        x.data = mem::malloc(sizeof(i8) * size as i64) as &i8;
         return x;
     }
 
     fn concat_with_c_string(src_string: &String, c_string: &i8) : String{
         let c_string_len : i32 = string_utils::c_str_len(c_string);
-        let combined : &i8 = mem::malloc(sizeof(i8) * (c_string_len + src_string.len) as i64);
+        let combined : &i8 = mem::malloc(sizeof(i8) * (c_string_len + src_string.len) as i64)  as &i8;
         mem::copy(src_string.data, combined, src_string.len as i64);
         mem::copy(c_string, (combined + src_string.len as i64), c_string_len as i64);
         let str: String;
@@ -370,7 +412,7 @@ namespace string_utils{
     fn insert(src1: &i8, src2: &i8, index: i32) : &i8{
         let len1 : i32 = c_str_len(src1);
         let len2 : i32 = c_str_len(src2);
-        let output : &i8 = mem::malloc((len1 + len2 + 1) as i64);
+        let output : &i8 = mem::malloc((len1 + len2 + 1) as i64) as &i8;
         mem::copy(src1, output, index as i64);
         mem::copy(src2, (output + index), len2 as i64);
         mem::copy((src1 + index), (output + index + len2), (len1 - index) as i64);
@@ -525,6 +567,7 @@ namespace fs{
 
 namespace tests{
     fn run(){
+        let pre_test_mem: i64 = mem::get_total_allocated_memory_external();
         mem_test();
         string_utils_test();
         string_test();
@@ -535,12 +578,16 @@ namespace tests{
         fs_test();
 
         funny();
+        let post_test_mem: i64 = mem::get_total_allocated_memory_external();
+        let delta: i64 = post_test_mem - pre_test_mem;
+        console::write("test malloc delta: ", 19);
+        console::println_i64(delta);
     }
     fn mem_test(){
         console::write("mem_test: ", 10);
         
         let size: i64 = 16;
-        let buffer1: &i8 = mem::malloc(size);
+        let buffer1: &i8 = mem::malloc(size) as &i8;
         if buffer1 == 0 as &i8 { process::throw("mem_test: malloc failed"); }
         
         // Test fill
@@ -551,18 +598,17 @@ namespace tests{
             if buffer1[i] != 'X' { process::throw("mem_test: fill verification failed"); }
             i = i + 1;
         }
-        
-        // Test zerofill
-        mem::zerofill(0, buffer1, size); // First argument is ignored
+        // Test zero_fill
+        mem::zero_fill(buffer1, size); // First argument is ignored
         i = 0;
         loop {
             if i >= size { break; }
-            if buffer1[i] != 0 { process::throw("mem_test: zerofill verification failed"); }
+            if buffer1[i] != 0 { process::throw("mem_test: zero_fill verification failed"); }
             i = i + 1;
         }
         
         // Test copy
-        let buffer2: &i8 = mem::malloc(size);
+        let buffer2: &i8 = mem::malloc(size) as &i8;
         if buffer2 == 0 as &i8 { process::throw("mem_test: malloc for copy failed"); }
         mem::fill('Y', buffer2, size);
         mem::copy(buffer2, buffer1, size);
@@ -983,6 +1029,7 @@ namespace tests{
             console::println_u64((iterator - line_index) as u64);
             iterator = iterator + 1;
         }
-        
+        vector::free(&tokens);
+        string::free(&file);
     }
 }

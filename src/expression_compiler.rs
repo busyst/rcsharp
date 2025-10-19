@@ -253,7 +253,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
                 }
 
                 let lp = self.ctx.current_function_path.clone();
-                self.ctx.current_function_path = func.path.clone();
+                self.ctx.current_function_path = func.path.to_string();
                 let ls = self.ctx.scope.clone();
                 self.ctx.scope.clear();
                 for arg in prepared_args {
@@ -261,6 +261,20 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
                 }
                 for x in &func.body {
                     match x {
+                        Stmt::Let(name, var_type, expr) =>{
+                            let llvm_type = get_llvm_type_str(var_type, self.ctx.symbols, &self.ctx.current_function_path)?;
+                            let x = self.ctx.aquire_unique_temp_value_counter() + u32::MAX / 2; // Hack
+                            self.ctx.scope.add_variable(name.clone(), Variable::new(var_type.clone()), x); 
+                            self.output.push_str(&format!("    %v{} = alloca {}; var: {}\n", x, llvm_type, name));
+
+                            if let Some(init_expr) = expr {
+                                let assignment = Expr::Assign(
+                                    Box::new(Expr::Name(name.clone())),
+                                    Box::new(init_expr.clone())
+                                );
+                                compile_expression(&assignment, Expected::NoReturn, self.ctx, self.output)?;
+                            }
+                        }
                         Stmt::Return(x) =>{
                             assert!(!(!x.is_none() && func.return_type.is_void()));
                             assert!(!(x.is_none() && !func.return_type.is_void()));
@@ -360,7 +374,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
         
         if let Ok(function) = self.ctx.symbols.get_function(name, &self.ctx.current_function_path) {
             return Ok(CompiledValue::Function {
-                effective_name: function.effective_name(),
+                effective_name: function.effective_name().to_string(),
                 ptype: function.get_type(),
             });
         }
@@ -392,7 +406,6 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
         if left_ptr.get_type() != right_val.get_type() {
             return Err(CompileError::InvalidExpression(format!("Type mismatch in assignment: {:?} and {:?}", left_ptr.get_type(), right_val.get_type())));
         }
-
         let left_str = left_ptr.get_llvm_repr_with_type(self.ctx)?;
         let right_str = right_val.get_llvm_repr_with_type(self.ctx)?;
         self.output.push_str(&format!("    store {}, {}\n", right_str, left_str));
@@ -471,7 +484,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
         }
         
         if let Ok(function) = self.ctx.symbols.get_function(&path, &self.ctx.current_function_path) {
-            return Ok(CompiledValue::Function { effective_name: function.effective_name(), ptype: function.get_type() });
+            return Ok(CompiledValue::Function { effective_name: function.effective_name().to_string(), ptype: function.get_type() });
         }
 
         if let Some((enum_path, member_name)) = path.rsplit_once('.') {
@@ -557,7 +570,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             return Ok(CompiledValue::Pointer { llvm_repr, ptype });
         }
         if let Ok(function) = self.ctx.symbols.get_function(name, &self.ctx.current_function_path) {
-            return Ok(CompiledValue::Function { effective_name: function.effective_name(), ptype: function.get_type() });
+            return Ok(CompiledValue::Function { effective_name: function.effective_name().to_string(), ptype: function.get_type() });
         }
         Err(CompileError::SymbolNotFound(format!("Lvalue '{}' not found", name)))
     }
@@ -567,7 +580,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             return Ok(CompiledValue::Pointer { llvm_repr: format!("%{}", &path), ptype: variable.compiler_type.clone() });
         }
         if let Ok(function) = self.ctx.symbols.get_function(&path, &self.ctx.current_function_path) {
-            return Ok(CompiledValue::Function { effective_name: function.effective_name(), ptype: function.get_type() });
+            return Ok(CompiledValue::Function { effective_name: function.effective_name().to_string(), ptype: function.get_type() });
         }
         Err(CompileError::SymbolNotFound(format!("Static symbol '{}' not found", path)))
     }
