@@ -2,7 +2,7 @@ use std::cell::Cell;
 
 use ordered_hash_map::OrderedHashMap;
 
-use crate::{compiler::{CompileResult, SymbolTable, POINTER_SIZE_IN_BYTES}, expression_parser::Expr, parser::{ParserType, Stmt}};
+use crate::{compiler::{CompileError, CompileResult, SymbolTable, POINTER_SIZE_IN_BYTES}, expression_parser::Expr, parser::{ParserType, Stmt, PRIMITIVE_TYPES, PRIMITIVE_TYPES_SIZE}};
 
 // ------------------------------------------------------------------------------------
 #[derive(Debug, Clone)]
@@ -35,9 +35,18 @@ impl Attribute {
     pub fn name_equals(&self, to: &str) -> bool{
         self.name == to.into()
     }
-    /// Ensures that attribute has only one argument, and returns it
-    pub fn one_argument(&self) -> Result<&Expr, String>{
-        self.arguments.get(0).and_then(|x| if self.arguments.len() == 1 {Some(x)} else {None}).ok_or(format!("Atribute {} should have only one argument, it has {} arguments", self.name, self.arguments.len()))
+
+    /// Ensures that attribute has only one argument, and returns it.
+    pub fn one_argument(&self) -> Result<&Expr, String> {
+        if self.arguments.len() == 1 {
+            Ok(&self.arguments[0])
+        } else {
+            Err(format!(
+                "Attribute {} should have only one argument, but it has {}",
+                self.name,
+                self.arguments.len()
+            ))
+        }
     }
 }
 
@@ -58,63 +67,57 @@ pub struct Struct {
 }
 impl Struct {
     pub fn new(path: Box<str>, name: Box<str>, fields: Box<[(String, ParserType)]>, attribs: Box<[Attribute]>, generic_params: Box<[String]>) -> Self {
-        let flags = if !generic_params.is_empty() {
-            StructFlags::Generic as u8
-        } else {
-            0
-        };
+        let flags = if !generic_params.is_empty() {StructFlags::Generic as u8} else {0};
         Self { path, name, fields, attribs, flags: Cell::new(flags), generic_params }
     }
     pub fn new_primitive(name: &str) -> Self {
-        Self { path : "".to_string().into_boxed_str(), name: name.to_string().into_boxed_str(), fields : Box::new([]), attribs: Box::new([]), flags: Cell::new(StructFlags::PrimitiveType as u8), generic_params: Box::new([]) }
+        Self { path : "".into(), name: name.into(), fields : Box::new([]), attribs: Box::new([]), flags: Cell::new(StructFlags::PrimitiveType as u8), generic_params: Box::new([]) }
     }
     pub fn is_primitive(&self) -> bool { self.flags.get() & StructFlags::PrimitiveType as u8 != 0 }
     pub fn is_generic(&self) -> bool { self.flags.get() & StructFlags::Generic as u8 != 0 }
     pub fn set_as_generic(&self) { self.flags.set(self.flags.get() | StructFlags::Generic as u8);}
-    pub fn llvm_representation(&self) -> String { 
+    pub fn llvm_representation(&self) -> String {
         if self.is_primitive() {
             self.name.to_string()
-        }else {
-            if self.path.is_empty() {
-                format!("%struct.{}", self.name)
-            }else {
-                format!("%struct.{}.{}", self.path, self.name)
-            }
+        } else if self.path.is_empty() {
+            format!("%struct.{}", self.name)
+        } else {
+            format!("%struct.{}.{}", self.path, self.name)
         }
     }
     pub fn get_size_of(&self, symbols: &SymbolTable) -> CompileResult<u32>{
-        match self.name.as_ref() {
-            "i8" | "u8" => Ok(1),
-            "i16" | "u16" => Ok(2),
-            "i32" | "u32" => Ok(4),
-            "i64" | "u64" => Ok(8),
-            _ => {
-                let mut sum = 0;
-                for field in &self.fields {
-                    if field.1.is_pointer() {
-                        sum += POINTER_SIZE_IN_BYTES;
-                        continue;
-                    }
-                    if field.1.is_primitive_type() {
-                        sum += match field.1.to_string().as_str() {
-                            "void" => panic!("Size of void type is unknown, obviously"),
-                            "i8" | "u8" | "bool" => 1,
-                            "i16" | "u16" => 2,
-                            "i32" | "u32" => 4,
-                            "i64" | "u64" => 8,
-                            _ => unreachable!(),
-                        };
-                        continue;
-                    }
-                    if let Ok(r#struct) = symbols.get_type(&field.1.to_string()) {
-                        sum += r#struct.get_size_of(symbols)?;
-                        continue;
-                    }
-                    panic!("{:?}", field)
-                }
-                return Ok(sum);
-            }
+        if self.is_generic() {
+            return Err(CompileError::Generic("Cannot get the size of a generic type template.".to_string()));
         }
+        if let Some(idx) = PRIMITIVE_TYPES.iter().position(|&x| x == self.name.as_ref()) {
+            let size = PRIMITIVE_TYPES_SIZE[idx];
+            if size == 0 {
+                return Err(CompileError::Generic(format!("Trying to get size of zero-sized type '{}'", self.name)));
+            }
+            return Ok(size);
+        }
+        let mut sum = 0;
+        for (field_name, field_type) in &self.fields {
+            if field_type.is_pointer() {
+                sum += POINTER_SIZE_IN_BYTES;
+            } 
+            else if let Some(pt) = field_type.as_primitive_type() {
+                if let Some(idx) = PRIMITIVE_TYPES.iter().position(|x| *x == pt) {
+                    let size = PRIMITIVE_TYPES_SIZE[idx];
+                    if size == 0 {
+                        return Err(CompileError::Generic(format!("Trying to get size of zero-sized type '{}'", self.name)));
+                    }
+                    sum += size;
+                }
+            }
+            else {
+                let r#struct = symbols.get_type(&field_type.to_string())
+                .map_err(|e| CompileError::Generic(format!("In struct '{}', cannot resolve type for field '{}': {}", self.name, field_name, e)))?;
+                sum += r#struct.get_size_of(symbols)?;
+            }
+
+        }
+        return Ok(sum);
     }
 }
 
@@ -179,6 +182,7 @@ impl Function {
 }
 
 // ------------------------------------------------------------------------------------
+#[repr(u8)]
 pub enum VariableFlags {
     HasRead = 1,
     HasWrote = 2,
@@ -193,8 +197,9 @@ pub struct Variable{
     pub flags: Cell<u8>,
 }
 impl Variable {
-    pub fn new(comp_type: ParserType) -> Self {
-        Self { compiler_type: comp_type, flags: Cell::new(0) }
+    pub fn new(comp_type: ParserType, is_const: bool) -> Self {
+        let flags = if is_const { VariableFlags::Constant as u8 } else { 0 };
+        Self { compiler_type: comp_type, flags: Cell::new(flags) }
     }
     pub fn new_argument(comp_type: ParserType) -> Self {
         Self { compiler_type: comp_type, flags: Cell::new(VariableFlags::Argument as u8) }

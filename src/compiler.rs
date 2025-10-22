@@ -365,7 +365,7 @@ pub fn compile_statement(stmt: &Stmt, ctx: &mut CodeGenContext, output: &mut LLV
     match &stmt {
         Stmt::Let(name, var_type, expr) => {
             let x = ctx.aquire_unique_variable_index();
-            ctx.scope.add_variable(name.clone(), Variable::new(var_type.clone()), x);
+            ctx.scope.add_variable(name.clone(), Variable::new(var_type.clone(), false), x);
             // output.push_str(&format!("    %v{} = alloca {}; var: {}\n", x, llvm_type, name));
 
             if let Some(init_expr) = expr {
@@ -381,6 +381,9 @@ pub fn compile_statement(stmt: &Stmt, ctx: &mut CodeGenContext, output: &mut LLV
         }
         Stmt::Return(expression) => {
             let func = ctx.get_current_function()?;
+            if expression.is_some() && func.return_type.is_void() {
+                return Err(CompileError::Generic(format!("Function {} does not return anything", func.name())));
+            }
             if let Some(expr) = expression {
                 let expected_type = &func.return_type;
                 let value = compile_expression(expr, Expected::Type(expected_type), ctx, output)?;

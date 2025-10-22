@@ -433,14 +433,14 @@ namespace window{
     }
     enum StartError: i32 { Ok = 0, GetModuleHandleFailed = 1, RegisterClassFailed = 2, CreateWindowFailed = 3 }
     
-    fn is_null(p: &i8): bool { return p == 0 as &i8; }
+    inline fn is_null(p: &i8): bool { return p == 0 as &i8; }
 
-    fn start() : i32{
+    fn start(){
         // CW apparently stands for Control Word. https://stackoverflow.com/questions/48079439/winapi-cw-usedefault-vs-cw-default
         let CW_USEDEFAULT: i32 = 0x80000000;
 
         let hInstance: &i8 = GetModuleHandleA(0 as &i8) as &i8;
-        if is_null(hInstance) { return StartError::GetModuleHandleFailed; }
+        if is_null(hInstance) { process::throw("Window error: StartError::GetModuleHandleFailed"); }
 
         let className: &i8 = "MyWindowClass";
         let wc: WNDCLASSEXA;
@@ -457,7 +457,7 @@ namespace window{
         wc.lpszClassName = className;
         wc.hIconSm = 0 as &i8;
 
-        if RegisterClassExA(&wc) == 0 { return StartError::RegisterClassFailed as i32; }
+        if RegisterClassExA(&wc) == 0 { process::throw("Window error: StartError::RegisterClassFailed"); }
 
         let windowTitle: &i8 = "Hello, World!";
         let hWnd: &i8 = CreateWindowExA(
@@ -475,7 +475,7 @@ namespace window{
             0 as &i8                // Additional application data
         );
 
-        if is_null(hWnd) { return StartError::CreateWindowFailed as i32; }
+        if is_null(hWnd) { process::throw("Window error: StartError::CreateWindowFailed"); }
 
         ShowWindow(hWnd, SW::SHOWNORMAL);
         UpdateWindow(hWnd);
@@ -490,8 +490,7 @@ namespace window{
                 DispatchMessageA(&msg);
             }
         }
-
-        return msg.wParam as i32;
+        
     }
 
 }

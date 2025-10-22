@@ -264,7 +264,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
                         Stmt::Let(name, var_type, expr) =>{
                             let llvm_type = get_llvm_type_str(var_type, self.ctx.symbols, &self.ctx.current_function_path)?;
                             let x = self.ctx.aquire_unique_temp_value_counter() + u32::MAX / 2; // Hack
-                            self.ctx.scope.add_variable(name.clone(), Variable::new(var_type.clone()), x); 
+                            self.ctx.scope.add_variable(name.clone(), Variable::new(var_type.clone(), false), x); 
                             self.output.push_str(&format!("    %v{} = alloca {}; var: {}\n", x, llvm_type, name));
 
                             if let Some(init_expr) = expr {

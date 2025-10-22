@@ -3,12 +3,19 @@ use std::ops::Range;
 use crate::{compiler_essentials::FunctionFlags, expression_parser::{Expr, ExpressionParser}, token::{Token, TokenData}};
 pub const PRIMITIVE_TYPES: &[&str] = &[
     "void", "bool",
-    "i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64",
+    "i8", "i16", "i32", "i64",
+    "u8", "u16", "u32", "u64",
     "f32", "f64"
+];
+pub const PRIMITIVE_TYPES_SIZE: &[u32] = &[
+    0, 1,
+    1, 2, 4, 8, 1, 2, 4, 8,
+    4, 8
 ];
 pub const LLVM_PRIMITIVE_TYPES: &[&str] = &[
     "void", "i1",
-    "i8", "i16", "i32", "i64", "i8", "i6", "i32", "i64",
+    "i8", "i16", "i32", "i64", 
+    "i8", "i16", "i32", "i64",
     "float", "double"
 ];
 pub const INTEGERS_TYPES: Range<usize> = 2..10;
@@ -86,6 +93,14 @@ impl ParserType {
             return PRIMITIVE_TYPES.contains(&name.as_str());
         }
         false
+    }
+    pub fn as_primitive_type(&self) -> Option<&str> {
+        if let ParserType::Named(name) = self {
+            if PRIMITIVE_TYPES.contains(&name.as_str()) {
+                return Some(name.as_str());
+            }
+        }
+        None
     }
 
     pub fn is_integer(&self) -> bool {
