@@ -1,6 +1,6 @@
 use core::str;
 use std::cell::Cell;
-use std::collections::{HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::{io::Read};
 use ordered_hash_map::OrderedHashMap;
 use crate::compiler_essentials::FunctionFlags;
@@ -77,11 +77,90 @@ pub fn rcsharp_compile(stmts: &[Stmt], absolute_file_path: &str) -> CompileResul
     handle_enums(enums, &mut symbols, &mut output)?;
     handle_functions(functions, &mut symbols, &mut output)?;
     compile(&mut symbols, &mut output)?;
+    handle_generics(&mut symbols, &mut output)?;
     Ok(output)
+}
+pub fn substitute_generic_type(template_type: &ParserType, type_map: &HashMap<String, ParserType>) -> ParserType {
+    match template_type {
+        ParserType::Named(name) => {
+            if let Some(concrete_type) = type_map.get(name) {
+                concrete_type.clone()
+            } else {
+                template_type.clone()
+            }
+        }
+        ParserType::Pointer(inner) => {
+            ParserType::Pointer(Box::new(substitute_generic_type(inner, type_map)))
+        }
+        ParserType::Generic(name, args) => {
+            let concrete_args = args.iter()
+            .map(|arg| substitute_generic_type(arg, type_map))
+            .collect::<Box<[_]>>();
+            ParserType::Generic(name.clone(), concrete_args)
+        }
+        ParserType::Function(ret_type, param_types) => {
+            let sub_ret = substitute_generic_type(ret_type, type_map);
+            let sub_params = param_types.iter().map(|p| substitute_generic_type(p, type_map)).collect();
+            ParserType::Function(Box::new(sub_ret), sub_params)
+        }
+        ParserType::NamespaceLink(name, q) => {
+            let sub = substitute_generic_type(q, type_map);
+            if sub.is_primitive_type() {
+                return sub;
+            }
+            if matches!(sub, ParserType::NamespaceLink(_, _)) {
+                return sub;
+            }
+            ParserType::NamespaceLink(name.clone(), Box::new(sub))
+        }
+    }
+}
+
+fn handle_generics(symbols: &mut SymbolTable, output: &mut LLVMOutputHandler) -> CompileResult<()> {
+    let mut implemented = vec![];
+    loop {
+        let mut new = false;
+        for (name, r#struct) in symbols.types.iter().filter(|x| x.1.is_generic()) {
+            let gi = r#struct.generic_implementations.borrow().clone();
+            for x in &gi {
+                if implemented.iter().any(|c: &(String, Box<[ParserType]>)| c.0 == *name && c.1 == *x) {
+                    continue;
+                }
+                if r#struct.generic_params.len() != x.len() {
+                    return Err(CompileError::Generic(format!(
+                        "Generic struct '{}' expects {} type arguments, but {} were provided.",
+                        name, r#struct.generic_params.len(), x.len()
+                    )));
+                }
+                new = true;
+                let mut type_map = HashMap::new();
+                let mut ind = 0;
+                for prm in &r#struct.generic_params {
+                    type_map.insert(prm.clone(), x[ind].clone());
+                    ind +=  1;
+                }
+                let current_path = r#struct.path.to_string();
+                let struct_name = r#struct.name.to_string();
+                let full_path = if current_path.is_empty() { struct_name.clone() } else { format!("{}.{}", current_path, struct_name) };
+                let llvm_struct_name = format!("{}<{}>", full_path, x.iter().map(|x| get_llvm_type_str(x, symbols, &current_path)).collect::<CompileResult<Vec<_>>>()?.join(", "));
+                let l = r#struct.fields.iter().map(|x| get_llvm_type_str(&substitute_generic_type(&x.1, &type_map), symbols, &current_path)).collect::<CompileResult<Vec<_>>>()?.join(", ");
+                
+                let type_definition = format!("%\"struct.{}\" = type {{ {} }}\n", llvm_struct_name, l);
+                output.header.push_str(&type_definition);
+                implemented.push((name.clone(), x.clone()));
+            }
+        }
+        
+        if !new {
+            break;
+        }
+    }
+
+    Ok(())
 }
 fn collect(stmts: &[Stmt], 
     enums: &mut Vec<(String, Box<[Attribute]>, (String, ParserType, Box<[(String, Expr)]>))>, 
-    structs : &mut Vec<(String, Box<[Attribute]>, (String, Box<[(String, ParserType)]>))>, 
+    structs : &mut Vec<(String, Box<[Attribute]>, (String, Box<[(String, ParserType)]>), Box<[String]>)>, 
     functions : &mut Vec<(String, Box<[Attribute]>, (String, Box<[(String, ParserType)]>, ParserType, Box<[Stmt]>, u8))>
 ) -> CompileResult<()>{
     let mut statements: VecDeque<Stmt> = stmts.to_vec().into();
@@ -129,8 +208,8 @@ fn collect(stmts: &[Stmt],
                 }
                 continue;
             }
-            if let Stmt::Struct(struct_name, fields) = x {
-                structs.push((current_path.join("."), stack_hints.clone().into_boxed_slice(), (struct_name, fields)));
+            if let Stmt::Struct(struct_name, fields, generic_args) = x {
+                structs.push((current_path.join("."), stack_hints.clone().into_boxed_slice(), (struct_name, fields), generic_args));
                 stack_hints.clear();
                 continue;
             }
@@ -149,39 +228,39 @@ fn collect(stmts: &[Stmt],
     }
     Ok(())
 }
-fn handle_types(structs : Vec<(String, Box<[Attribute]>, (String, Box<[(String, ParserType)]>))>, symbols: &mut SymbolTable, output: &mut LLVMOutputHandler) -> CompileResult<()>{ 
+fn handle_types(structs : Vec<(String, Box<[Attribute]>, (String, Box<[(String, ParserType)]>), Box<[String]>)>, symbols: &mut SymbolTable, output: &mut LLVMOutputHandler) -> CompileResult<()>{ 
     let mut registered_types = vec![];
-    for s in &structs {
-        //let full_path = if s.0.is_empty() { s.2.0.clone() } else { format!("{}.{}", s.0, s.2.0) };
-        registered_types.push((s.0.clone(), s.2.0.clone()));
-        //output.push_str(&format!("{}\n", full_path));
+    for (path, _, (struct_name, _), _) in &structs {
+        registered_types.push((path.clone(), struct_name.clone()));
     }
-    for (current_path, attrs, (struct_name, fields)) in structs {
+    for (current_path, attrs, (struct_name, fields), generics) in structs {
         let mut compiler_struct_fields = vec![];
         let full_path = if current_path.is_empty() { struct_name.clone() } else { format!("{}.{}", current_path, struct_name) };
         for (name, attr_type) in fields {
-            let derefd = attr_type.dereference_full();
-            if !derefd.is_primitive_type() {
-                if let ParserType::Named(named) = derefd {
-                    let mut found = false;
-                    if registered_types.iter().any(|(p, n)| *p == *current_path && n == named) {
-                        found = true;
-                    }
-                    if registered_types.iter().any(|(p, n)| p.is_empty() && n == named) {
-                        found = true;
-                    }
-                    if !found {
-                        return Err(CompileError::SymbolNotFound(format!("Type {:?} was not found in {}", derefd, struct_name)));
+            let dereferenced_type = attr_type.dereference_full();
+            if !dereferenced_type.is_primitive_type() {
+                if let ParserType::Named(named) = dereferenced_type {
+                    let is_found = registered_types.iter().any(|(p, n)| {
+                        (p == &current_path && n == named) || (p.is_empty() && n == named)
+                    });
+
+                    if !is_found && generics.len() == 0 {
+                        return Err(CompileError::SymbolNotFound(format!(
+                            "Type '{}' for field '{}' in struct '{}' was not found.",
+                            named, name, struct_name
+                        )));
                     }
                 }
 
             }
-            compiler_struct_fields.push((name, qualify_type(&attr_type, &current_path)));
+            compiler_struct_fields.push((name, qualify_type(&attr_type, &current_path) ));
         }
-        symbols.types.insert(full_path, Struct::new(current_path.into_boxed_str(), struct_name.into_boxed_str(), compiler_struct_fields.into_boxed_slice(), attrs, Box::new([])));
+        symbols.types.insert(full_path, Struct::new(current_path.into(), struct_name.into(), compiler_struct_fields.into(), attrs, generics.clone()));
     }
     
-    let user_defined_structs = symbols.types.values().filter(|s: &&Struct| !s.is_primitive() && !s.is_generic());
+    let user_defined_structs: Vec<&Struct> = symbols.types.values()
+        .filter(|s: &&Struct| !s.is_primitive() && !s.is_generic())
+        .collect();
     for s in user_defined_structs {
         let field_types: Vec<String> = s.fields
             .iter()
@@ -248,7 +327,7 @@ fn qualify_type(ty: &ParserType, current_path: &str) -> ParserType {
     }
 
     match ty {
-        ParserType::Named(_) => {
+        ParserType::Named(_) | ParserType::Generic(_, _) => {
             if ty.is_primitive_type() {
                 ty.clone()
             } else {
@@ -279,6 +358,23 @@ fn populate_default_types(table: &mut SymbolTable) {
         table.types.insert(primitive.to_string(), Struct::new_primitive(primitive));
     }
 }
+fn collect_local_variables<'a>(stmts: &'a [Stmt], vars: &mut Vec<(&'a String, &'a ParserType)>) {
+    for stmt in stmts {
+        match stmt {
+            Stmt::Let(name, var_type, _) => {
+                vars.push((name, var_type));
+            }
+            Stmt::If(_, then_body, else_body) => {
+                collect_local_variables(then_body, vars);
+                collect_local_variables(else_body, vars);
+            }
+            Stmt::Loop(body) => {
+                collect_local_variables(body, vars);
+            }
+            _ => {}
+        }
+    }
+}
 fn compile(symbols: &mut SymbolTable, output: &mut LLVMOutputHandler) -> CompileResult<()>{    
     for (_, function) in symbols.functions.iter().filter(|x| x.1.is_imported()) {
         // declare dllimport i32 @GetModuleFileNameA(i8*,i8*,i32)
@@ -301,36 +397,13 @@ fn compile(symbols: &mut SymbolTable, output: &mut LLVMOutputHandler) -> Compile
         .collect::<CompileResult<Vec<_>>>()?
         .join(", ");
         output.push_str(&format!("define {} @{}({}){{\n", rt, full_path , args_str)); 
-        let mut stacticly_declared_vars = vec![];
+        let mut statically_declared_vars = vec![];
 
-        let mut statements: VecDeque<&Stmt> = function.body.iter().map(|x| x).collect::<Vec<_>>().into();
-        let mut index = 0;
-        while let Some(b) = statements.get(index).cloned() {
-            match b {
-                Stmt::Let(n, t, _) =>{
-                    stacticly_declared_vars.push((n, t));
-                }
-                Stmt::Loop(e) =>{
-                    for e in e.iter().rev() {
-                        statements.insert(index + 1, e);
-                    }
-                }
-                Stmt::If(_, b, e) =>{
-                    for e in e.iter().rev() {
-                        statements.insert(index + 1, e);
-                    }
-                    for e in b.iter().rev() {
-                        statements.insert(index + 1, e);
-                    }
-                }
-                _ => {}
-            }
-            index += 1;
-        }
+        collect_local_variables(&function.body, &mut statically_declared_vars);
         for (arg_name, arg_type) in function.args.iter() {
             ctx.scope.add_variable(arg_name.clone(), Variable::new_argument(arg_type.clone()), 0);
         }
-        for x in stacticly_declared_vars.iter().enumerate() {
+        for x in statically_declared_vars.iter().enumerate() {
             let llvm_type = get_llvm_type_str(x.1.1, &symbols, &function.path())?;
             output.push_str(&format!("    %v{} = alloca {}; var: {}\n", x.0, llvm_type, x.1.0));
         }
@@ -474,9 +547,22 @@ pub fn get_llvm_type_str(
     current_namespace: &str,
 ) -> CompileResult<String> {
     match ptype {
+        ParserType::Pointer(inner_type) => {
+            if inner_type.is_void() {
+                return Ok("i8*".to_string());
+            }
+            return Ok(format!("{}*", get_llvm_type_str(inner_type, symbols, current_namespace)?));
+        }
+        ParserType::Function(return_type, param_types) => {
+            let ret_llvm = get_llvm_type_str(return_type, symbols, current_namespace)?;
+            let params_llvm: Vec<String> = param_types
+                .iter()
+                .map(|param_type| get_llvm_type_str(param_type, symbols, current_namespace))
+                .collect::<CompileResult<Vec<String>>>()?;
+            return Ok(format!("{} ({})*", ret_llvm, params_llvm.join(", ")));
+        }
         ParserType::Named(name) => {
-            let index = PRIMITIVE_TYPES.iter().position(|x| x == &name.as_str());
-            if let Some(index) = index {
+            if let Some(index) = PRIMITIVE_TYPES.iter().position(|x| x == &name.as_str()) {
                 return Ok(LLVM_PRIMITIVE_TYPES[index].to_string());
             }
             let fqn = ptype.get_absolute_path_or(current_namespace);
@@ -486,33 +572,31 @@ pub fn get_llvm_type_str(
             if symbols.enums.contains_key(&fqn) {
                 return get_llvm_type_str(&symbols.enums[&fqn].base_type, symbols, current_namespace)
             }
-            Err(CompileError::SymbolNotFound(fqn))
         }
-        ParserType::Pointer(inner_type) => {
-            if inner_type.is_void() {
-                return Ok("i8*".to_string());
-            }
-            Ok(format!("{}*", get_llvm_type_str(inner_type, symbols, current_namespace)?))
-        }
-        ParserType::Function(return_type, param_types) => {
-            let ret_llvm = get_llvm_type_str(return_type, symbols, current_namespace)?;
-            let params_llvm: Vec<String> = param_types
-                .iter()
-                .map(|param_type| get_llvm_type_str(param_type, symbols, current_namespace))
-                .collect::<CompileResult<Vec<String>>>()?;
-            Ok(format!("{} ({})*", ret_llvm, params_llvm.join(", ")))
-        }
-        ParserType::NamespaceLink(_, _) => {
+        ParserType::NamespaceLink(_, c) => {
             let fqn = ptype.get_absolute_path_or(current_namespace);
-            if symbols.types.contains_key(&fqn) {
-                return Ok(format!("%struct.{}", fqn));
+            if let Ok(x) = symbols.get_type(&fqn) {
+                if x.is_generic() {
+                    return get_llvm_type_str(&c.delink(), symbols, &x.path);
+                }
+                return Ok(x.llvm_representation());
             }
             if symbols.enums.contains_key(&fqn) {
                 return get_llvm_type_str(&symbols.enums[&fqn].base_type, symbols, current_namespace);
             }
-            Err(CompileError::SymbolNotFound(fqn))
+        }
+        ParserType::Generic(_, imp) => {
+            let fqn = ptype.get_absolute_path_or(current_namespace);
+            if symbols.types.contains_key(&fqn) {
+                symbols.types[&fqn].generic_implementations.borrow_mut().push(imp.clone());
+                return Ok(format!("%\"struct.{}<{}>\"", fqn, imp.iter().map(|x| get_llvm_type_str(x, symbols, current_namespace)).collect::<CompileResult<Vec<_>>>()?.join(", ")));
+            }
+            if symbols.enums.contains_key(&fqn) {
+                return get_llvm_type_str(&symbols.enums[&fqn].base_type, symbols, current_namespace);
+            }
         }
     }
+    return Err(CompileError::Generic(format!("{:?}", ptype)));
 }
 
 
@@ -540,6 +624,54 @@ pub struct SymbolTable {
     pub types: OrderedHashMap<String, Struct>,
     pub enums: OrderedHashMap<String, Enum>,
 }
+impl SymbolTable {
+    pub fn new() -> Self {
+        let mut table = Self::default();
+        populate_default_types(&mut table);
+        table
+    }
+    pub fn get_function(&self, fqn: &str, current_namespace: &str) -> CompileResult<&Function> {
+        if let Some(r#fn) = self.functions.get(&format!("{}.{}", current_namespace, fqn)) {
+            return Ok(r#fn);
+        }
+        if let Some(r#fn) = self.functions.get(fqn) {
+            return Ok(r#fn);
+        }
+        return Err(CompileError::SymbolNotFound(format!("Function '{}' was not found in namespace '{}'", fqn, current_namespace)));
+    }
+    pub fn get_type(&self, fqn: &str) -> CompileResult<&Struct> {
+        self.types.get(fqn).ok_or_else(|| CompileError::SymbolNotFound(fqn.to_string()))
+    }
+    pub fn get_abs_path(struct_type: &ParserType, current_namespace: &str) -> String {
+        debug_assert!(!struct_type.is_primitive_type());
+        debug_assert!(!struct_type.is_pointer());
+        if let ParserType::NamespaceLink(s, y) = struct_type {
+            return format!("{}.{}", s, y.to_string());
+        }
+        if let ParserType::Named(n) = struct_type{
+            if current_namespace.is_empty() {
+                return n.to_string();
+            }else {
+                return format!("{}.{}", current_namespace, n);
+            }
+        };
+        if let ParserType::Generic(n, _) = struct_type{
+            if current_namespace.is_empty() {
+                return n.to_string();
+            }else {
+                return format!("{}.{}", current_namespace, n);
+            }
+        };
+        todo!()
+    }
+    pub fn get_struct_representation(&self, struct_type: &ParserType, current_namespace: &str) -> CompileResult<(&Box<str>, &Box<[(String, ParserType)]>)> {
+        debug_assert!(!struct_type.is_primitive_type());
+        debug_assert!(!struct_type.is_pointer());
+        let x = self.types.get(&SymbolTable::get_abs_path(struct_type, current_namespace)).ok_or(CompileError::SymbolNotFound(format!("Type:{:?}, Namespace {}",struct_type, current_namespace)))?;
+        return Ok((&x.name, &x.fields));
+    }
+}
+
 pub struct CodeGenContext<'a> {
     pub symbols: &'a SymbolTable,
     pub current_function_path: String,
@@ -585,45 +717,5 @@ impl<'a> CodeGenContext<'a> {
     }
     pub fn aquire_unique_const_vector_counter(&mut self) -> u32{
         self.const_vectors_counter.replace(self.const_vectors_counter.get() + 1)
-    }
-}
-impl SymbolTable {
-    pub fn new() -> Self {
-        let mut table = Self::default();
-        populate_default_types(&mut table);
-        table
-    }
-    pub fn get_function(&self, fqn: &str, current_namespace: &str) -> CompileResult<&Function> {
-        if let Some(r#fn) = self.functions.get(&format!("{}.{}", current_namespace, fqn)) {
-            return Ok(r#fn);
-        }
-        if let Some(r#fn) = self.functions.get(fqn) {
-            return Ok(r#fn);
-        }
-        return Err(CompileError::SymbolNotFound(format!("Function '{}' was not found in namespace '{}'", fqn, current_namespace)));
-    }
-    pub fn get_type(&self, fqn: &str) -> CompileResult<&Struct> {
-        self.types.get(fqn).ok_or_else(|| CompileError::SymbolNotFound(fqn.to_string()))
-    }
-    pub fn get_abs_path(struct_type: &ParserType, current_namespace: &str) -> String {
-        debug_assert!(!struct_type.is_primitive_type());
-        debug_assert!(!struct_type.is_pointer());
-        if let ParserType::NamespaceLink(s, y) = struct_type {
-            return format!("{}.{}", s, y.to_string());
-        }
-        if let ParserType::Named(n) = struct_type{
-            if current_namespace.is_empty() {
-                return n.to_string();
-            }else {
-                return format!("{}.{}", current_namespace, n);
-            }
-        };
-        unreachable!()
-    }
-    pub fn get_struct_representation(&self, struct_type: &ParserType, current_namespace: &str) -> CompileResult<(&Box<str>, &Box<[(String, ParserType)]>)> {
-        debug_assert!(!struct_type.is_primitive_type());
-        debug_assert!(!struct_type.is_pointer());
-        let x = self.types.get(&SymbolTable::get_abs_path(struct_type, current_namespace)).ok_or(CompileError::SymbolNotFound(format!("Type:{:?}, Namespace {}",struct_type, current_namespace)))?;
-        return Ok((&x.name, &x.fields));
     }
 }

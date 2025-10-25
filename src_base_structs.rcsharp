@@ -600,7 +600,7 @@ namespace tests{
         }
         // Test zero_fill
         mem::zero_fill(buffer1, size); // First argument is ignored
-        i = 0;
+        let i: i64 = 0;
         loop {
             if i >= size { break; }
             if buffer1[i] != 0 { process::throw("mem_test: zero_fill verification failed"); }

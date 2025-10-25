@@ -1,4 +1,6 @@
-use crate::{compiler::{get_llvm_type_str, CodeGenContext, CompileError, CompileResult, LLVMOutputHandler, SymbolTable, POINTER_SIZE_IN_BYTES}, compiler_essentials::Variable, expression_parser::{BinaryOp, Expr, UnaryOp}, parser::{ParserType, Stmt}};
+use std::collections::HashMap;
+
+use crate::{compiler::{get_llvm_type_str, substitute_generic_type, CodeGenContext, CompileError, CompileResult, LLVMOutputHandler, SymbolTable, POINTER_SIZE_IN_BYTES}, compiler_essentials::Variable, expression_parser::{BinaryOp, Expr, UnaryOp}, parser::{ParserType, Stmt}};
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expected<'a> {
     Type(&'a ParserType),
@@ -598,8 +600,23 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
         let (struct_fqn, fields) = self.ctx.symbols.get_struct_representation(&struct_type_to_index, &self.ctx.current_function_path)?;
         let field_index = fields.iter().position(|(name, _)| name == member)
             .ok_or_else(|| CompileError::Generic(format!("Member '{}' not found in struct '{}'", member, struct_fqn)))?;
-        
-        let field_ptype = &fields[field_index].1;
+
+        let mut type_map = HashMap::new();
+        if let ParserType::Generic(n, x) = &struct_type_to_index {
+            let strct = self.ctx.symbols.get_type(&n)?;
+            if strct.generic_params.len() != x.len() {
+                return Err(CompileError::Generic(format!(
+                    "Generic struct '{}' expects {} type arguments, but {} were provided.",
+                    struct_fqn, strct.generic_params.len(), x.len()
+                )));
+            }
+            let mut ind = 0;
+            for prm in &strct.generic_params {
+                type_map.insert(prm.clone(), x[ind].clone());
+                ind +=  1;
+            }
+        }
+        let field_ptype = &substitute_generic_type(&fields[field_index].1, &type_map);
         let llvm_struct_type = get_llvm_type_str(&struct_type_to_index, self.ctx.symbols, &self.ctx.current_function_path)?;
         
         let gep_id = self.ctx.aquire_unique_temp_value_counter();

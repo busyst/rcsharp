@@ -272,7 +272,23 @@ impl<'a> ExpressionParser<'a> {
             }
             if self.peek().token == Token::LogicLess {
                 self.consume(&Token::LogicLess)?;
-                todo!("Generic types not yet implemented");
+                let mut generic_types = vec![];
+                loop {
+                    if self.peek().token == Token::LogicGreater {
+                        self.advance();
+                        break;
+                    }
+                    if self.peek().token == Token::BinaryShiftR {
+                        todo!()
+                    }
+                    let t= self.parse_type()?;
+                    generic_types.push(t);
+                    if self.peek().token == Token::Comma {
+                        self.advance();
+                    }
+                    
+                }
+                return Ok(ParserType::Generic(link_or_name, generic_types.into_boxed_slice()));
             }
             Ok(ParserType::Named(link_or_name))
         }

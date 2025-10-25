@@ -38,8 +38,8 @@ mod parser_tests {
     fn basic_struct() -> Result<(), String> {
         let fb = parse("struct bar{x:i8}")?;
         let fb1 = parse("struct bar{x:&i8, y: i32}")?;
-        assert_eq!(fb[0],Stmt::Struct(format!("bar"), Box::new([(format!("x"), ParserType::Named(format!("i8")))])));
-        assert_eq!(fb1[0],Stmt::Struct(format!("bar"), Box::new([(format!("x"), ParserType::Pointer(Box::new(ParserType::Named(format!("i8"))))), (format!("y"), ParserType::Named(format!("i32")))])));
+        assert_eq!(fb[0],Stmt::Struct(format!("bar"), Box::new([(format!("x"), ParserType::Named(format!("i8")))]), Box::new([])));
+        assert_eq!(fb1[0],Stmt::Struct(format!("bar"), Box::new([(format!("x"), ParserType::Pointer(Box::new(ParserType::Named(format!("i8"))))), (format!("y"), ParserType::Named(format!("i32")))]), Box::new([])));
         Ok(())
     }
     

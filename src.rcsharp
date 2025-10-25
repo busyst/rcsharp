@@ -6,13 +6,29 @@ inline fn basic_functions(){
     window::start();
     console::FreeConsole();
 }
-struct A{
-    x: SubA
+namespace geg{
+    struct vec<T>{
+        data: &vec<string::String>,
+        x: &T,
+        len: i32,
+        capacity: i32,
+    }
 }
-struct SubA{
-    y: i32
+namespace kej{
+    struct vecq<T>{
+        data: &kej::vecq<string::String>,
+        x: &T,
+        len: i32,
+        capacity: i32,
+    }
 }
 fn main(): i32 {
+    let x : kej::vecq<i64>;
+    let y : kej::vecq<string::String>;
+    x.data = &y;
+    x.data.len = 1;
+    x.len = 3;
+    x.capacity = 2;
     basic_functions();
     return 0;
 }

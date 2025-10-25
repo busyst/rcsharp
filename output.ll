@@ -5,8 +5,6 @@ target triple = "x86_64-pc-windows-msvc"
 %struct.list.ListNode = type { i32, %struct.list.ListNode* }
 %struct.vector.Vec = type { i8*, i32, i32 }
 %struct.string.String = type { i8*, i32 }
-%struct.A = type { %struct.SubA }
-%struct.SubA = type { i32 }
 %struct.window.WNDCLASSEXA = type { i32, i32, i64 (i8*, i32, i64, i64)**, i32, i32, i8*, i8*, i8*, i8*, i8*, i8*, i8* }
 %struct.window.POINT = type { i32, i32 }
 %struct.window.MSG = type { i8*, i32, i64, i64, i32, %struct.window.POINT }
@@ -126,6 +124,8 @@ declare dllimport i8* @GetModuleHandleA(i8*)
 @.str.83 = private unnamed_addr constant [46 x i8] c"Window error: StartError::RegisterClassFailed\00"
 @.str.84 = private unnamed_addr constant [14 x i8] c"Hello, World!\00"
 @.str.85 = private unnamed_addr constant [45 x i8] c"Window error: StartError::CreateWindowFailed\00"
+%"struct.kej.vecq<i64>" = type { %"struct.kej.vecq<%struct.string.String>"*, i64*, i32, i32 }
+%"struct.kej.vecq<%struct.string.String>" = type { %"struct.kej.vecq<%struct.string.String>"*, %struct.string.String*, i32, i32 }
 
 define void @__chkstk(){
     ret void
@@ -1195,7 +1195,8 @@ define void @tests.mem_test(){
     %v0 = alloca i64; var: size
     %v1 = alloca i8*; var: buffer1
     %v2 = alloca i64; var: i
-    %v3 = alloca i8*; var: buffer2
+    %v3 = alloca i64; var: i
+    %v4 = alloca i8*; var: buffer2
     %tmp0 = getelementptr inbounds [11 x i8], [11 x i8]* @.str.6, i64 0, i64 0
     call void @console.write(i8* %tmp0, i32 10)
     store i64 16, i64* %v0
@@ -1244,10 +1245,10 @@ loop_body1_exit:
     %tmp20 = load i8*, i8** %v1
     %tmp21 = load i64, i64* %v0
     call void @mem.zero_fill(i8* %tmp20, i64 %tmp21)
-    store i64 0, i64* %v2
+    store i64 0, i64* %v3
     br label %loop_body4
 loop_body4:
-    %tmp22 = load i64, i64* %v2
+    %tmp22 = load i64, i64* %v3
     %tmp23 = load i64, i64* %v0
     %tmp24 = icmp sge i64 %tmp22, %tmp23
     br i1 %tmp24, label %then5, label %endif5
@@ -1256,7 +1257,7 @@ then5:
     br label %endif5
 endif5:
     %tmp25 = load i8*, i8** %v1
-    %tmp26 = load i64, i64* %v2
+    %tmp26 = load i64, i64* %v3
     %tmp27 = getelementptr inbounds i8, i8* %tmp25, i64 %tmp26
     %tmp28 = load i8, i8* %tmp27
     %tmp29 = icmp ne i8 %tmp28, 0
@@ -1266,16 +1267,16 @@ then6:
     call void @process.throw(i8* %tmp30)
     br label %endif6
 endif6:
-    %tmp31 = load i64, i64* %v2
+    %tmp31 = load i64, i64* %v3
     %tmp32 = add i64 %tmp31, 1
-    store i64 %tmp32, i64* %v2
+    store i64 %tmp32, i64* %v3
     br label %loop_body4
 loop_body4_exit:
     %tmp33 = load i64, i64* %v0
     %tmp34 = call i8* @mem.malloc(i64 %tmp33)
     %tmp35 = bitcast i8* %tmp34 to i8*
-    store i8* %tmp35, i8** %v3
-    %tmp36 = load i8*, i8** %v3
+    store i8* %tmp35, i8** %v4
+    %tmp36 = load i8*, i8** %v4
     %tmp37 = icmp eq ptr %tmp36, null
     br i1 %tmp37, label %then7, label %endif7
 then7:
@@ -1283,17 +1284,17 @@ then7:
     call void @process.throw(i8* %tmp38)
     br label %endif7
 endif7:
-    %tmp39 = load i8*, i8** %v3
+    %tmp39 = load i8*, i8** %v4
     %tmp40 = load i64, i64* %v0
     call void @mem.fill(i8 89, i8* %tmp39, i64 %tmp40)
-    %tmp41 = load i8*, i8** %v3
+    %tmp41 = load i8*, i8** %v4
     %tmp42 = load i8*, i8** %v1
     %tmp43 = load i64, i64* %v0
     call void @mem.copy(i8* %tmp41, i8* %tmp42, i64 %tmp43)
-    store i64 0, i64* %v2
+    store i64 0, i64* %v3
     br label %loop_body8
 loop_body8:
-    %tmp44 = load i64, i64* %v2
+    %tmp44 = load i64, i64* %v3
     %tmp45 = load i64, i64* %v0
     %tmp46 = icmp sge i64 %tmp44, %tmp45
     br i1 %tmp46, label %then9, label %endif9
@@ -1302,7 +1303,7 @@ then9:
     br label %endif9
 endif9:
     %tmp47 = load i8*, i8** %v1
-    %tmp48 = load i64, i64* %v2
+    %tmp48 = load i64, i64* %v3
     %tmp49 = getelementptr inbounds i8, i8* %tmp47, i64 %tmp48
     %tmp50 = load i8, i8* %tmp49
     %tmp51 = icmp ne i8 %tmp50, 89
@@ -1312,14 +1313,14 @@ then10:
     call void @process.throw(i8* %tmp52)
     br label %endif10
 endif10:
-    %tmp53 = load i64, i64* %v2
+    %tmp53 = load i64, i64* %v3
     %tmp54 = add i64 %tmp53, 1
-    store i64 %tmp54, i64* %v2
+    store i64 %tmp54, i64* %v3
     br label %loop_body8
 loop_body8_exit:
     %tmp55 = load i8*, i8** %v1
     call void @mem.free(i8* %tmp55)
-    %tmp56 = load i8*, i8** %v3
+    %tmp56 = load i8*, i8** %v4
     call void @mem.free(i8* %tmp56)
     %tmp57 = getelementptr inbounds [3 x i8], [3 x i8]* @.str.12, i64 0, i64 0
     call void @console.writeln(i8* %tmp57, i32 2)
@@ -2524,6 +2525,19 @@ loop_body0_exit:
     ret void
 }
 define i32 @main(){
+    %v0 = alloca %"struct.kej.vecq<i64>"; var: x
+    %v1 = alloca %"struct.kej.vecq<%struct.string.String>"; var: y
+    %tmp0 = getelementptr inbounds %"struct.kej.vecq<i64>", %"struct.kej.vecq<i64>"* %v0, i32 0, i32 0
+    store %"struct.kej.vecq<%struct.string.String>"* %v1, %"struct.kej.vecq<%struct.string.String>"** %tmp0
+    %tmp1 = getelementptr inbounds %"struct.kej.vecq<i64>", %"struct.kej.vecq<i64>"* %v0, i32 0, i32 0
+    %tmp2 = getelementptr inbounds %"struct.kej.vecq<i64>", %"struct.kej.vecq<i64>"* %v0, i32 0, i32 0
+    %tmp3 = load %"struct.kej.vecq<%struct.string.String>"*, %"struct.kej.vecq<%struct.string.String>"** %tmp2
+    %tmp4 = getelementptr inbounds %"struct.kej.vecq<%struct.string.String>", %"struct.kej.vecq<%struct.string.String>"* %tmp3, i32 0, i32 2
+    store i32 1, i32* %tmp4
+    %tmp5 = getelementptr inbounds %"struct.kej.vecq<i64>", %"struct.kej.vecq<i64>"* %v0, i32 0, i32 2
+    store i32 3, i32* %tmp5
+    %tmp6 = getelementptr inbounds %"struct.kej.vecq<i64>", %"struct.kej.vecq<i64>"* %v0, i32 0, i32 3
+    store i32 2, i32* %tmp6
     call i32 @AllocConsole()
     call void @tests.run()
     call void @window.start()

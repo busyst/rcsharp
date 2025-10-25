@@ -1,4 +1,4 @@
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 
 use ordered_hash_map::OrderedHashMap;
 
@@ -61,6 +61,7 @@ pub struct Struct {
     pub name: Box<str>,
     pub fields: Box<[(String, ParserType)]>,
     pub generic_params: Box<[String]>,
+    pub generic_implementations: RefCell<Vec<Box<[ParserType]>>>,
 
     pub attribs: Box<[Attribute]>,
     pub flags: Cell<u8>,
@@ -68,10 +69,10 @@ pub struct Struct {
 impl Struct {
     pub fn new(path: Box<str>, name: Box<str>, fields: Box<[(String, ParserType)]>, attribs: Box<[Attribute]>, generic_params: Box<[String]>) -> Self {
         let flags = if !generic_params.is_empty() {StructFlags::Generic as u8} else {0};
-        Self { path, name, fields, attribs, flags: Cell::new(flags), generic_params }
+        Self { path, name, fields, attribs, flags: Cell::new(flags), generic_params, generic_implementations: RefCell::new(vec![]) }
     }
     pub fn new_primitive(name: &str) -> Self {
-        Self { path : "".into(), name: name.into(), fields : Box::new([]), attribs: Box::new([]), flags: Cell::new(StructFlags::PrimitiveType as u8), generic_params: Box::new([]) }
+        Self { path : "".into(), name: name.into(), fields : Box::new([]), attribs: Box::new([]), flags: Cell::new(StructFlags::PrimitiveType as u8), generic_params: Box::new([]), generic_implementations: RefCell::new(vec![]) }
     }
     pub fn is_primitive(&self) -> bool { self.flags.get() & StructFlags::PrimitiveType as u8 != 0 }
     pub fn is_generic(&self) -> bool { self.flags.get() & StructFlags::Generic as u8 != 0 }

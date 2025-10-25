@@ -43,7 +43,7 @@ pub enum Stmt {
     Return(Option<Expr>), // return ...
 
     Function(String, Box<[(String, ParserType)]>, ParserType, Box<[Stmt]>, u8), // fn foo(bar: i8, ...) ... { ... }
-    Struct(String, Box<[(String, ParserType)]>), // struct foo { bar : i8, ... }
+    Struct(String, Box<[(String, ParserType)]>, Box<[String]>), // struct foo <T> { bar : i8, ... }
     Enum(String, Option<ParserType>, Box<[(String, Expr)]>), // enum foo 'base_type' { bar = ..., ... }
     Namespace(String, Box<[Stmt]>), // namespace foo { fn bar() ... {...} ... }
 }
@@ -61,7 +61,7 @@ impl Stmt {
             Self::Namespace(_, x) => { 1 + x.iter().map(|x| x.recursive_statement_count()).sum::<u64>()}
             Self::Return(_) => 1,
             Self::Function(_,_,_,x, _) => { 1 + x.iter().map(|x| x.recursive_statement_count()).sum::<u64>()}
-            Self::Struct(_, _) => 1,
+            Self::Struct(_, _, _) => 1,
         }
     }
 }
@@ -72,6 +72,7 @@ pub enum ParserType {
     // return type, arguments
     Function(Box<ParserType>,Box<[ParserType]>),
     NamespaceLink(String, Box<ParserType>),
+    Generic(String, Box<[ParserType]>),
 }
 impl PartialEq for ParserType {
     fn eq(&self, other: &Self) -> bool {
@@ -80,6 +81,7 @@ impl PartialEq for ParserType {
             (Self::Pointer(l0), Self::Pointer(r0)) => l0 == r0,
             (Self::Function(l0, l1), Self::Function(r0, r1)) => l0 == r0 && l1 == r1,
             (Self::NamespaceLink(l0, l1), Self::NamespaceLink(r0, r1)) => l0 == r0 && l1 == r1,
+            (Self::Generic(l0, l1), Self::Generic(r0, r1)) => l0 == r0 && l1 == r1,
             (Self::NamespaceLink(_, l), r) => r.eq(l),
             (l, Self::NamespaceLink(_, r)) => l.eq(r),
             _ => false,
@@ -166,7 +168,12 @@ impl ParserType {
             _ => return self,
         }
     }
-
+    pub fn delink(&self) -> &ParserType {
+        match self {
+            ParserType::NamespaceLink(_, c) => c.delink(),
+            _ => return self,
+        }
+    }
     pub fn to_string(&self) -> String{
         let mut output = String::new();
         match self {
@@ -174,6 +181,7 @@ impl ParserType {
             ParserType::Pointer(x) => {output.push_str(&x.to_string()); output.push('*');},
             ParserType::Function(return_type, _) => {output.push_str(&return_type.to_string());},
             ParserType::NamespaceLink(x, y) => {output.push_str(&format!("{}.{}", x, y.to_string()));}
+            ParserType::Generic(x, _) => {output.push_str(&format!("{}", x));}
         }
         return output;
     }
@@ -189,9 +197,18 @@ impl ParserType {
                     return format!("{}.{}",current_fallback, x.clone());
                 }
             }
+            ParserType::Generic(x, _) =>{
+                if current_fallback.is_empty() || self.is_primitive_type() {
+                    return format!("{}", x.clone());
+                }else {
+                    return format!("{}.{}",current_fallback, x.clone());
+                }
+            }
             _ => self.to_string(),
         }
     }
+    
+
 }
 
 pub struct GeneralParser<'a> {
@@ -335,9 +352,24 @@ impl<'a> GeneralParser<'a> {
     fn parse_struct(&mut self) -> Result<Stmt, String> {
         self.consume(&Token::KeywordStruct)?;
         let name = self.advance().expect_name_token()?;
+        let mut generic_types = vec![];
         if self.peek().token == Token::LogicLess {
             self.advance();
-            todo!("Generic types are not yet supported")
+            loop {
+                if self.peek().token == Token::LogicGreater {
+                    self.advance();
+                    break;
+                }
+                if self.peek().token == Token::BinaryShiftR {
+                    todo!()
+                }
+                let t= self.advance().expect_name_token()?;
+                generic_types.push(t);
+                if self.peek().token == Token::Comma {
+                    self.advance();
+                }
+                
+            }
         }
         self.consume(&Token::LBrace)?;
         
@@ -355,7 +387,7 @@ impl<'a> GeneralParser<'a> {
             }
         }
         self.consume(&Token::RBrace)?;
-        Ok(Stmt::Struct(name, fields.into_boxed_slice()))
+        Ok(Stmt::Struct(name, fields.into_boxed_slice(), generic_types.into_boxed_slice()))
     }    
     fn parse_namespace(&mut self) -> Result<Stmt, String> {
         self.consume(&Token::KeywordNamespace)?;
