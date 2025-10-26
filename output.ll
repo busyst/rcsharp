@@ -124,16 +124,16 @@ declare dllimport i8* @GetModuleHandleA(i8*)
 @.str.83 = private unnamed_addr constant [46 x i8] c"Window error: StartError::RegisterClassFailed\00"
 @.str.84 = private unnamed_addr constant [14 x i8] c"Hello, World!\00"
 @.str.85 = private unnamed_addr constant [45 x i8] c"Window error: StartError::CreateWindowFailed\00"
-%"struct.kej.vecq<i64>" = type { %"struct.kej.vecq<%struct.string.String>"*, i64*, i32, i32 }
-%"struct.kej.vecq<%struct.string.String>" = type { %"struct.kej.vecq<%struct.string.String>"*, %struct.string.String*, i32, i32 }
+%"struct.Pair<%struct.string.String, i32>" = type { %struct.string.String, i32 }
+%"struct.Pair<i32, %struct.string.String>" = type { i32, %struct.string.String }
 
-define void @__chkstk(){
+define void @"__chkstk"(){
     ret void
 }
-define i32 @_fltused(){
+define i32 @"_fltused"(){
     ret i32 0
 }
-define %struct.string.String @process.get_executable_path(){
+define %struct.string.String @"process.get_executable_path"(){
     %v0 = alloca %struct.string.String; var: string
     %v1 = alloca i32; var: len
     %tmp0 = call %struct.string.String @string.with_size(i32 260)
@@ -150,7 +150,7 @@ define %struct.string.String @process.get_executable_path(){
     %tmp10 = load %struct.string.String, %struct.string.String* %v0
     ret %struct.string.String %tmp10
 }
-define %struct.string.String @process.get_executable_env_path(){
+define %struct.string.String @"process.get_executable_env_path"(){
     %v0 = alloca %struct.string.String; var: string
     %v1 = alloca i32; var: index
     %tmp0 = call %struct.string.String @process.get_executable_path()
@@ -187,7 +187,7 @@ loop_body0_exit:
     %tmp18 = load %struct.string.String, %struct.string.String* %v0
     ret %struct.string.String %tmp18
 }
-define void @process.throw(i8* %exception){
+define void @"process.throw"(i8* %exception){
     %v0 = alloca i32; var: len
     %v1 = alloca i32; var: chars_written
     %v2 = alloca i8*; var: stdout_handle
@@ -214,17 +214,17 @@ define void @process.throw(i8* %exception){
     call void @ExitProcess(i32 -1)
     ret void
 }
-define i8* @mem.malloc(i64 %size){
+define i8* @"mem.malloc"(i64 %size){
     %tmp0 = call i32* @GetProcessHeap()
     %tmp1 = call i8* @HeapAlloc(i32* %tmp0, i32 0, i64 %size)
     ret i8* %tmp1
 }
-define void @mem.free(i8* %ptr){
+define void @"mem.free"(i8* %ptr){
     %tmp0 = call i32* @GetProcessHeap()
     call i32 @HeapFree(i32* %tmp0, i32 0, i8* %ptr)
     ret void
 }
-define void @mem.copy(i8* %src, i8* %dest, i64 %len){
+define void @"mem.copy"(i8* %src, i8* %dest, i64 %len){
     %v0 = alloca i64; var: i
     store i64 0, i64* %v0
     br label %loop_body0
@@ -249,11 +249,11 @@ endif1:
 loop_body0_exit:
     ret void
 }
-define void @mem.zero_fill(i8* %dest, i64 %len){
+define void @"mem.zero_fill"(i8* %dest, i64 %len){
     call void @mem.fill(i8 0, i8* %dest, i64 %len)
     ret void
 }
-define void @mem.fill(i8 %val, i8* %dest, i64 %len){
+define void @"mem.fill"(i8 %val, i8* %dest, i64 %len){
     %v0 = alloca i64; var: i
     store i64 0, i64* %v0
     br label %loop_body0
@@ -275,7 +275,7 @@ endif1:
 loop_body0_exit:
     ret void
 }
-define i64 @mem.get_total_allocated_memory_external(){
+define i64 @"mem.get_total_allocated_memory_external"(){
     %v0 = alloca i32*; var: hHeap
     %v1 = alloca i64; var: total_size
     %v2 = alloca %struct.mem.PROCESS_HEAP_ENTRY; var: entry
@@ -324,7 +324,7 @@ loop_body1_exit:
     %tmp19 = load i64, i64* %v1
     ret i64 %tmp19
 }
-define void @list.new(%struct.list.List* %list){
+define void @"list.new"(%struct.list.List* %list){
     %tmp0 = getelementptr inbounds %struct.list.List, %struct.list.List* %list, i32 0, i32 0
     store %struct.list.ListNode* null, %struct.list.ListNode** %tmp0
     %tmp1 = getelementptr inbounds %struct.list.List, %struct.list.List* %list, i32 0, i32 1
@@ -333,14 +333,14 @@ define void @list.new(%struct.list.List* %list){
     store i32 0, i32* %tmp2
     ret void
 }
-define void @list.new_node(%struct.list.ListNode* %list){
+define void @"list.new_node"(%struct.list.ListNode* %list){
     %tmp0 = getelementptr inbounds %struct.list.ListNode, %struct.list.ListNode* %list, i32 0, i32 1
     store %struct.list.ListNode* null, %struct.list.ListNode** %tmp0
     %tmp1 = getelementptr inbounds %struct.list.ListNode, %struct.list.ListNode* %list, i32 0, i32 0
     store i32 0, i32* %tmp1
     ret void
 }
-define void @list.extend(%struct.list.List* %list, i32 %data){
+define void @"list.extend"(%struct.list.List* %list, i32 %data){
     %v0 = alloca %struct.list.ListNode*; var: node_to_add
     %tmp0 = call i8* @mem.malloc(i64 12)
     %tmp1 = bitcast i8* %tmp0 to %struct.list.ListNode*
@@ -382,7 +382,7 @@ endif0:
     store i32 %tmp23, i32* %tmp20
     ret void
 }
-define i32 @list.walk(%struct.list.List* %list){
+define i32 @"list.walk"(%struct.list.List* %list){
     %v0 = alloca i32; var: l
     %v1 = alloca %struct.list.ListNode*; var: ptr
     store i32 0, i32* %v0
@@ -410,7 +410,7 @@ loop_body0_exit:
     %tmp9 = load i32, i32* %v0
     ret i32 %tmp9
 }
-define void @list.free(%struct.list.List* %list){
+define void @"list.free"(%struct.list.List* %list){
     %v0 = alloca %struct.list.ListNode*; var: current
     %v1 = alloca %struct.list.ListNode*; var: next
     %tmp0 = getelementptr inbounds %struct.list.List, %struct.list.List* %list, i32 0, i32 0
@@ -444,7 +444,7 @@ loop_body0_exit:
     store i32 0, i32* %tmp12
     ret void
 }
-define void @vector.new(%struct.vector.Vec* %vec){
+define void @"vector.new"(%struct.vector.Vec* %vec){
     %tmp0 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 0
     store i8* null, i8** %tmp0
     %tmp1 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 1
@@ -453,7 +453,7 @@ define void @vector.new(%struct.vector.Vec* %vec){
     store i32 0, i32* %tmp2
     ret void
 }
-define void @vector.push(%struct.vector.Vec* %vec, i8 %data){
+define void @"vector.push"(%struct.vector.Vec* %vec, i8 %data){
     %v0 = alloca i32; var: new_capacity
     %v1 = alloca i8*; var: new_array
     %v2 = alloca i32; var: i
@@ -539,7 +539,7 @@ endif0:
     store i32 %tmp47, i32* %tmp44
     ret void
 }
-define void @vector.push_bulk(%struct.vector.Vec* %vec, i8* %data, i32 %data_len){
+define void @"vector.push_bulk"(%struct.vector.Vec* %vec, i8* %data, i32 %data_len){
     %v0 = alloca i32; var: index
     store i32 0, i32* %v0
     br label %loop_body0
@@ -562,7 +562,7 @@ endif1:
 loop_body0_exit:
     ret void
 }
-define void @vector.free(%struct.vector.Vec* %vec){
+define void @"vector.free"(%struct.vector.Vec* %vec){
     %tmp0 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 0
     %tmp1 = load i8*, i8** %tmp0
     %tmp2 = icmp ne ptr %tmp1, null
@@ -581,7 +581,7 @@ endif0:
     store i32 0, i32* %tmp7
     ret void
 }
-define i8* @console.get_stdout(){
+define i8* @"console.get_stdout"(){
     %v0 = alloca i8*; var: stdout_handle
     %tmp0 = call i8* @GetStdHandle(i32 -11)
     store i8* %tmp0, i8** %v0
@@ -597,7 +597,7 @@ endif0:
     %tmp5 = load i8*, i8** %v0
     ret i8* %tmp5
 }
-define void @console.write(i8* %buffer, i32 %len){
+define void @"console.write"(i8* %buffer, i32 %len){
     %v0 = alloca i32; var: chars_written
     %tmp0 = call i8* @console.get_stdout()
     call i32 @WriteConsoleA(i8* %tmp0, i8* %buffer, i32 %len, i32* %v0, i8* null)
@@ -610,7 +610,7 @@ then0:
 endif0:
     ret void
 }
-define void @console.write_string(%struct.string.String* %str){
+define void @"console.write_string"(%struct.string.String* %str){
     %v0 = alloca i32; var: chars_written
     %tmp0 = call i8* @console.get_stdout()
     %tmp1 = getelementptr inbounds %struct.string.String, %struct.string.String* %str, i32 0, i32 0
@@ -629,7 +629,7 @@ then0:
 endif0:
     ret void
 }
-define void @console.writeln(i8* %buffer, i32 %len){
+define void @"console.writeln"(i8* %buffer, i32 %len){
     %v0 = alloca i32; var: chars_written
     %v1 = alloca i8; var: nl
     %tmp0 = icmp eq i32 %len, 0
@@ -652,13 +652,13 @@ endif1:
     call i32 @WriteConsoleA(i8* %tmp4, i8* %v1, i32 1, i32* %v0, i8* null)
     ret void
 }
-define void @console.print_char(i8 %n){
+define void @"console.print_char"(i8 %n){
     %v0 = alloca i8; var: b
     store i8 %n, i8* %v0
     call void @console.write(i8* %v0, i32 1)
     ret void
 }
-define void @console.println_i64(i64 %n){
+define void @"console.println_i64"(i64 %n){
     %tmp0 = icmp sge i64 %n, 0
     br i1 %tmp0, label %then0, label %else0
 then0:
@@ -672,7 +672,7 @@ else0:
 endif0:
     ret void
 }
-define void @console.println_u64(i64 %n){
+define void @"console.println_u64"(i64 %n){
     %v0 = alloca %struct.vector.Vec; var: buffer
     %v1 = alloca i64; var: mut_n
     %v2 = alloca i8; var: digit_char
@@ -770,7 +770,7 @@ loop_body3_exit:
     call void @vector.free(%struct.vector.Vec* %v0)
     ret void
 }
-define %struct.string.String @string.from_c_string(i8* %c_string){
+define %struct.string.String @"string.from_c_string"(i8* %c_string){
     %v0 = alloca %struct.string.String; var: x
     %tmp0 = getelementptr inbounds %struct.string.String, %struct.string.String* %v0, i32 0, i32 1
     %tmp1 = call i32 @string_utils.c_str_len(i8* %c_string)
@@ -792,7 +792,7 @@ define %struct.string.String @string.from_c_string(i8* %c_string){
     %tmp14 = load %struct.string.String, %struct.string.String* %v0
     ret %struct.string.String %tmp14
 }
-define %struct.string.String @string.empty(){
+define %struct.string.String @"string.empty"(){
     %v0 = alloca %struct.string.String; var: x
     %tmp0 = getelementptr inbounds %struct.string.String, %struct.string.String* %v0, i32 0, i32 0
     store i8* null, i8** %tmp0
@@ -801,7 +801,7 @@ define %struct.string.String @string.empty(){
     %tmp2 = load %struct.string.String, %struct.string.String* %v0
     ret %struct.string.String %tmp2
 }
-define %struct.string.String @string.with_size(i32 %size){
+define %struct.string.String @"string.with_size"(i32 %size){
     %v0 = alloca %struct.string.String; var: x
     %tmp0 = getelementptr inbounds %struct.string.String, %struct.string.String* %v0, i32 0, i32 1
     store i32 %size, i32* %tmp0
@@ -814,7 +814,7 @@ define %struct.string.String @string.with_size(i32 %size){
     %tmp6 = load %struct.string.String, %struct.string.String* %v0
     ret %struct.string.String %tmp6
 }
-define %struct.string.String @string.concat_with_c_string(%struct.string.String* %src_string, i8* %c_string){
+define %struct.string.String @"string.concat_with_c_string"(%struct.string.String* %src_string, i8* %c_string){
     %v0 = alloca i32; var: c_string_len
     %v1 = alloca i8*; var: combined
     %v2 = alloca %struct.string.String; var: str
@@ -856,7 +856,7 @@ define %struct.string.String @string.concat_with_c_string(%struct.string.String*
     %tmp29 = load %struct.string.String, %struct.string.String* %v2
     ret %struct.string.String %tmp29
 }
-define i1 @string.equal(%struct.string.String* %first, %struct.string.String* %second){
+define i1 @"string.equal"(%struct.string.String* %first, %struct.string.String* %second){
     %v0 = alloca i32; var: iter
     %tmp0 = getelementptr inbounds %struct.string.String, %struct.string.String* %first, i32 0, i32 1
     %tmp1 = load i32, i32* %tmp0
@@ -904,7 +904,7 @@ endif3:
 loop_body1_exit:
     ret i1 1
 }
-define void @string.free(%struct.string.String* %str){
+define void @"string.free"(%struct.string.String* %str){
     %tmp0 = getelementptr inbounds %struct.string.String, %struct.string.String* %str, i32 0, i32 0
     %tmp1 = load i8*, i8** %tmp0
     call void @mem.free(i8* %tmp1)
@@ -912,7 +912,7 @@ define void @string.free(%struct.string.String* %str){
     store i32 0, i32* %tmp2
     ret void
 }
-define i8* @string_utils.insert(i8* %src1, i8* %src2, i32 %index){
+define i8* @"string_utils.insert"(i8* %src1, i8* %src2, i32 %index){
     %v0 = alloca i32; var: len1
     %v1 = alloca i32; var: len2
     %v2 = alloca i8*; var: output
@@ -954,7 +954,7 @@ define i8* @string_utils.insert(i8* %src1, i8* %src2, i32 %index){
     %tmp28 = load i8*, i8** %v2
     ret i8* %tmp28
 }
-define i32 @string_utils.c_str_len(i8* %str){
+define i32 @"string_utils.c_str_len"(i8* %str){
     %v0 = alloca i32; var: len
     store i32 0, i32* %v0
     br label %loop_body0
@@ -976,13 +976,13 @@ loop_body0_exit:
     %tmp6 = load i32, i32* %v0
     ret i32 %tmp6
 }
-define i1 @string_utils.is_ascii_num(i8 %char){
+define i1 @"string_utils.is_ascii_num"(i8 %char){
     %tmp0 = icmp sge i8 %char, 48
     %tmp1 = icmp sle i8 %char, 57
     %tmp2 = and i1 %tmp0, %tmp1
     ret i1 %tmp2
 }
-define i1 @string_utils.is_ascii_char(i8 %char){
+define i1 @"string_utils.is_ascii_char"(i8 %char){
     %tmp0 = icmp sge i8 %char, 65
     %tmp1 = icmp sle i8 %char, 90
     %tmp2 = and i1 %tmp0, %tmp1
@@ -992,7 +992,7 @@ define i1 @string_utils.is_ascii_char(i8 %char){
     %tmp6 = or i1 %tmp2, %tmp5
     ret i1 %tmp6
 }
-define i1 @string_utils.is_ascii_hex(i8 %char){
+define i1 @"string_utils.is_ascii_hex"(i8 %char){
     %tmp0 = icmp sge i8 %char, 48
     %tmp1 = icmp sle i8 %char, 57
     %tmp2 = and i1 %tmp0, %tmp1
@@ -1006,7 +1006,7 @@ define i1 @string_utils.is_ascii_hex(i8 %char){
     %tmp10 = or i1 %tmp6, %tmp9
     ret i1 %tmp10
 }
-define i32 @fs.write_to_file(i8* %path, i8* %content, i32 %content_len){
+define i32 @"fs.write_to_file"(i8* %path, i8* %content, i32 %content_len){
     %v0 = alloca i32; var: CREATE_ALWAYS
     %v1 = alloca i32; var: GENERIC_WRITE
     %v2 = alloca i32; var: FILE_ATTRIBUTE_NORMAL
@@ -1054,7 +1054,7 @@ then2:
 endif2:
     ret i32 1
 }
-define %struct.string.String @fs.read_full_file_as_string(i8* %path){
+define %struct.string.String @"fs.read_full_file_as_string"(i8* %path){
     %v0 = alloca i32; var: GENERIC_READ
     %v1 = alloca i32; var: FILE_ATTRIBUTE_NORMAL
     %v2 = alloca i32; var: OPEN_EXISTING
@@ -1132,7 +1132,7 @@ endif2:
     %tmp37 = load %struct.string.String, %struct.string.String* %v6
     ret %struct.string.String %tmp37
 }
-define i32 @fs.create_file(i8* %path){
+define i32 @"fs.create_file"(i8* %path){
     %v0 = alloca i32; var: CREATE_NEW
     %v1 = alloca i32; var: GENERIC_WRITE
     %v2 = alloca i32; var: FILE_ATTRIBUTE_NORMAL
@@ -1160,11 +1160,11 @@ endif0:
     call i32 @CloseHandle(i8* %tmp8)
     ret i32 1
 }
-define i32 @fs.delete_file(i8* %path){
+define i32 @"fs.delete_file"(i8* %path){
     %tmp0 = call i32 @DeleteFileA(i8* %path)
     ret i32 %tmp0
 }
-define void @tests.run(){
+define void @"tests.run"(){
     %v0 = alloca i64; var: pre_test_mem
     %v1 = alloca i64; var: post_test_mem
     %v2 = alloca i64; var: delta
@@ -1191,7 +1191,7 @@ define void @tests.run(){
     call void @console.println_i64(i64 %tmp6)
     ret void
 }
-define void @tests.mem_test(){
+define void @"tests.mem_test"(){
     %v0 = alloca i64; var: size
     %v1 = alloca i8*; var: buffer1
     %v2 = alloca i64; var: i
@@ -1326,7 +1326,7 @@ loop_body8_exit:
     call void @console.writeln(i8* %tmp57, i32 2)
     ret void
 }
-define void @tests.string_utils_test(){
+define void @"tests.string_utils_test"(){
     %v0 = alloca i8*; var: inserted
     %v1 = alloca i8*; var: expected
     %v2 = alloca i32; var: i
@@ -1431,7 +1431,7 @@ loop_body5_exit:
     call void @console.writeln(i8* %tmp52, i32 2)
     ret void
 }
-define void @tests.string_test(){
+define void @"tests.string_test"(){
     %v0 = alloca %struct.string.String; var: s1
     %v1 = alloca %struct.string.String; var: s2
     %v2 = alloca %struct.string.String; var: s3
@@ -1504,7 +1504,7 @@ endif4:
     call void @console.writeln(i8* %tmp27, i32 2)
     ret void
 }
-define void @tests.vector_test(){
+define void @"tests.vector_test"(){
     %v0 = alloca %struct.vector.Vec; var: v
     %v1 = alloca i8*; var: data_to_push
     %tmp0 = getelementptr inbounds [14 x i8], [14 x i8]* @.str.38, i64 0, i64 0
@@ -1640,7 +1640,7 @@ endif7:
     call void @console.writeln(i8* %tmp79, i32 2)
     ret void
 }
-define void @tests.list_test(){
+define void @"tests.list_test"(){
     %v0 = alloca %struct.list.List; var: l
     %v1 = alloca %struct.list.ListNode*; var: current
     %tmp0 = getelementptr inbounds [12 x i8], [12 x i8]* @.str.49, i64 0, i64 0
@@ -1748,7 +1748,7 @@ endif7:
     call void @console.writeln(i8* %tmp52, i32 2)
     ret void
 }
-define void @tests.process_test(){
+define void @"tests.process_test"(){
     %v0 = alloca %struct.string.String; var: full_path
     %v1 = alloca %struct.string.String; var: env_path
     %tmp0 = getelementptr inbounds [15 x i8], [15 x i8]* @.str.59, i64 0, i64 0
@@ -1820,7 +1820,7 @@ endif3:
     call void @console.writeln(i8* %tmp36, i32 2)
     ret void
 }
-define void @tests.console_test(){
+define void @"tests.console_test"(){
     %tmp0 = getelementptr inbounds [15 x i8], [15 x i8]* @.str.67, i64 0, i64 0
     call void @console.writeln(i8* %tmp0, i32 14)
     %tmp1 = getelementptr inbounds [26 x i8], [26 x i8]* @.str.68, i64 0, i64 0
@@ -1843,7 +1843,7 @@ define void @tests.console_test(){
     call void @console.writeln(i8* %tmp7, i32 2)
     ret void
 }
-define void @tests.fs_test(){
+define void @"tests.fs_test"(){
     %v0 = alloca %struct.string.String; var: data
     %v1 = alloca %struct.string.String; var: env_path
     %v2 = alloca %struct.string.String; var: new_file_path
@@ -1913,7 +1913,7 @@ endif1:
     call void @console.writeln(i8* %tmp38, i32 2)
     ret void
 }
-define void @tests.consume_while(%struct.string.String* %file, i32* %iterator, i1 (i8)** %condition){
+define void @"tests.consume_while"(%struct.string.String* %file, i32* %iterator, i1 (i8)** %condition){
     %v0 = alloca i8; var: char
     br label %loop_body0
 loop_body0:
@@ -1948,11 +1948,11 @@ endif2:
 loop_body0_exit:
     ret void
 }
-define i1 @tests.not_new_line(i8 %c){
+define i1 @"tests.not_new_line"(i8 %c){
     %tmp0 = icmp ne i8 %c, 10
     ret i1 %tmp0
 }
-define i1 @tests.valid_name_token(i8 %c){
+define i1 @"tests.valid_name_token"(i8 %c){
     %tmp0 = call i1 @string_utils.is_ascii_char(i8 %c)
     %tmp1 = call i1 @string_utils.is_ascii_num(i8 %c)
     %tmp2 = or i1 %tmp0, %tmp1
@@ -1960,7 +1960,7 @@ define i1 @tests.valid_name_token(i8 %c){
     %tmp4 = or i1 %tmp2, %tmp3
     ret i1 %tmp4
 }
-define i1 @tests.is_valid_number_token(i8 %c){
+define i1 @"tests.is_valid_number_token"(i8 %c){
     %tmp0 = call i1 @string_utils.is_ascii_num(i8 %c)
     %tmp1 = call i1 @string_utils.is_ascii_hex(i8 %c)
     %tmp2 = or i1 %tmp0, %tmp1
@@ -1968,7 +1968,7 @@ define i1 @tests.is_valid_number_token(i8 %c){
     %tmp4 = or i1 %tmp2, %tmp3
     ret i1 %tmp4
 }
-define void @tests.funny(){
+define void @"tests.funny"(){
     %v0 = alloca i8*; var: path
     %v1 = alloca %struct.string.String; var: file
     %v2 = alloca %struct.vector.Vec; var: tokens
@@ -2524,20 +2524,12 @@ loop_body0_exit:
     call void @string.free(%struct.string.String* %v1)
     ret void
 }
-define i32 @main(){
-    %v0 = alloca %"struct.kej.vecq<i64>"; var: x
-    %v1 = alloca %"struct.kej.vecq<%struct.string.String>"; var: y
-    %tmp0 = getelementptr inbounds %"struct.kej.vecq<i64>", %"struct.kej.vecq<i64>"* %v0, i32 0, i32 0
-    store %"struct.kej.vecq<%struct.string.String>"* %v1, %"struct.kej.vecq<%struct.string.String>"** %tmp0
-    %tmp1 = getelementptr inbounds %"struct.kej.vecq<i64>", %"struct.kej.vecq<i64>"* %v0, i32 0, i32 0
-    %tmp2 = getelementptr inbounds %"struct.kej.vecq<i64>", %"struct.kej.vecq<i64>"* %v0, i32 0, i32 0
-    %tmp3 = load %"struct.kej.vecq<%struct.string.String>"*, %"struct.kej.vecq<%struct.string.String>"** %tmp2
-    %tmp4 = getelementptr inbounds %"struct.kej.vecq<%struct.string.String>", %"struct.kej.vecq<%struct.string.String>"* %tmp3, i32 0, i32 2
-    store i32 1, i32* %tmp4
-    %tmp5 = getelementptr inbounds %"struct.kej.vecq<i64>", %"struct.kej.vecq<i64>"* %v0, i32 0, i32 2
-    store i32 3, i32* %tmp5
-    %tmp6 = getelementptr inbounds %"struct.kej.vecq<i64>", %"struct.kej.vecq<i64>"* %v0, i32 0, i32 3
-    store i32 2, i32* %tmp6
+define i32 @"main"(){
+    %v0 = alloca %"struct.Pair<%struct.string.String, i32>"; var: p
+    %v1 = alloca %"struct.Pair<i32, %struct.string.String>"; var: pair
+    %tmp0 = call %"struct.Pair<i32, %struct.string.String>" @"x<i32>"()
+    store %"struct.Pair<i32, %struct.string.String>" %tmp0, %"struct.Pair<i32, %struct.string.String>"* %v1
+    ret i32 16
     call i32 @AllocConsole()
     call void @tests.run()
     call void @window.start()
@@ -2546,7 +2538,7 @@ define i32 @main(){
 inline_exit0:
     ret i32 0
 }
-define i64 @window.WindowProc(i8* %hWnd, i32 %uMsg, i64 %wParam, i64 %lParam){
+define i64 @"window.WindowProc"(i8* %hWnd, i32 %uMsg, i64 %wParam, i64 %lParam){
     %tmp0 = icmp eq i32 %uMsg, 16
     br i1 %tmp0, label %then0, label %endif0
 then0:
@@ -2578,7 +2570,7 @@ endif2:
     %tmp5 = call i64 @DefWindowProcA(i8* %hWnd, i32 %uMsg, i64 %wParam, i64 %lParam)
     ret i64 %tmp5
 }
-define void @window.start(){
+define void @"window.start"(){
     %v0 = alloca i32; var: CW_USEDEFAULT
     %v1 = alloca i8*; var: hInstance
     %v2 = alloca i8*; var: className
@@ -2689,4 +2681,17 @@ endif6:
     br label %loop_body5
 loop_body5_exit:
     ret void
+}
+define %"struct.Pair<i32, %struct.string.String>" @"x<i32>"(){
+    %v0 = alloca %"struct.Pair<i32, %struct.string.String>"; var: p
+    %v1 = alloca %struct.string.String; var: str
+    %tmp0 = getelementptr inbounds %"struct.Pair<i32, %struct.string.String>", %"struct.Pair<i32, %struct.string.String>"* %v0, i32 0, i32 0
+    store i32 43, i32* %tmp0
+    %tmp1 = call %struct.string.String @string.empty()
+    store %struct.string.String %tmp1, %struct.string.String* %v1
+    %tmp2 = getelementptr inbounds %"struct.Pair<i32, %struct.string.String>", %"struct.Pair<i32, %struct.string.String>"* %v0, i32 0, i32 1
+    %tmp3 = load %struct.string.String, %struct.string.String* %v1
+    store %struct.string.String %tmp3, %struct.string.String* %tmp2
+    %tmp4 = load %"struct.Pair<i32, %struct.string.String>", %"struct.Pair<i32, %struct.string.String>"* %v0
+    ret %"struct.Pair<i32, %struct.string.String>" %tmp4
 }

@@ -23,7 +23,7 @@ impl Enum {
 }
 
 // ------------------------------------------------------------------------------------
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Attribute {
     name: Box<str>,
     arguments: Box<[Expr]>
@@ -129,6 +129,7 @@ pub enum FunctionFlags {
     ConstExpression = 64,
     Inline = 32,
     Public = 16,
+    Generic = 8,
 }
 #[derive(Debug, Clone)]
 pub struct Function {
@@ -138,11 +139,14 @@ pub struct Function {
     pub return_type: ParserType,
     pub body: Box<[Stmt]>,
     pub attribs: Box<[Attribute]>, 
-    flags: Cell<u8>
+    flags: Cell<u8>,
+
+    pub generic_params: Box<[String]>,
+    pub generic_implementations: RefCell<Vec<Box<[ParserType]>>>,
 }
 impl Function {
-    pub fn new(path: Box<str>, name: Box<str>, args: Box<[(String, ParserType)]>, return_type: ParserType, body: Box<[Stmt]>, flags: Cell<u8>, attribs: Box<[Attribute]>,) -> Self {
-        Self { path, name, args, return_type, body, attribs, flags }
+    pub fn new(path: Box<str>, name: Box<str>, args: Box<[(String, ParserType)]>, return_type: ParserType, body: Box<[Stmt]>, flags: Cell<u8>, attribs: Box<[Attribute]>, generic_params: Box<[String]>) -> Self {
+        Self { path, name, args, return_type, body, attribs, flags, generic_params, generic_implementations: RefCell::new(vec![]) }
     }
     
     pub fn effective_name(&self) -> Box<str> {
@@ -157,6 +161,7 @@ impl Function {
         return output;
     }
     
+    pub fn is_generic(&self) -> bool { self.flags.get() & FunctionFlags::Generic as u8 != 0 }
     pub fn is_imported(&self) -> bool { self.flags.get() & FunctionFlags::Imported as u8 != 0 }
     pub fn is_inline(&self) -> bool { self.flags.get() & FunctionFlags::Inline as u8 != 0 }
     pub fn set_as_imported(&self) { self.flags.set(self.flags.get() | FunctionFlags::Imported as u8);}
@@ -294,7 +299,7 @@ impl Scope {
         if variable.1.0.unusual_flags_to_string().is_empty() {
             return;
         }
-        println!("Variable {}, has left scope.\nFlags:\t{}", variable.0, variable.1.0.unusual_flags_to_string());
+        //println!("Variable {}, has left scope.\nFlags:\t{}", variable.0, variable.1.0.unusual_flags_to_string());
     }
     
     pub fn swap_and_exit(&mut self, original_scope: Scope) {

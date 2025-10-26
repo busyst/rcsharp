@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{compiler::{get_llvm_type_str, substitute_generic_type, CodeGenContext, CompileError, CompileResult, LLVMOutputHandler, SymbolTable, POINTER_SIZE_IN_BYTES}, compiler_essentials::Variable, expression_parser::{BinaryOp, Expr, UnaryOp}, parser::{ParserType, Stmt}};
+use crate::{compiler::{get_llvm_type_str, substitute_generic_type, CodeGenContext, CompileError, CompileResult, LLVMOutputHandler, SymbolTable, POINTER_SIZE_IN_BYTES}, compiler_essentials::Variable, expression_parser::{BinaryOp, Expr, UnaryOp}, parser::{ParserType, Stmt, LLVM_PRIMITIVE_TYPES, PRIMITIVE_TYPES, PRIMITIVE_TYPES_SIZE}};
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expected<'a> {
     Type(&'a ParserType),
@@ -22,6 +22,10 @@ pub enum CompiledValue {
         effective_name: String,
         ptype: ParserType,
     },
+    GenericFunction {
+        effective_name: String,
+        ptype: ParserType,
+    },
     NoReturn,
 }
 impl CompiledValue {
@@ -30,6 +34,7 @@ impl CompiledValue {
             Self::Value { ptype, .. } => ptype,
             Self::Pointer { ptype, .. } => ptype,
             Self::Function { ptype: ftype, .. } => ftype,
+            Self::GenericFunction { ptype: ftype, .. } => ftype,
             Self::NoReturn => panic!("Cannot get type of NoReturn value"),
         }
     }
@@ -38,6 +43,7 @@ impl CompiledValue {
             Self::Value { llvm_repr, .. } => llvm_repr.clone(),
             Self::Pointer { llvm_repr, .. } => llvm_repr.clone(),
             Self::Function { effective_name, .. } => format!("@{}", effective_name),
+            Self::GenericFunction { effective_name, .. } => format!("@{}", effective_name),
             Self::NoReturn => panic!("Cannot get LLVM representation of NoReturn value"),
         }
     }
@@ -56,6 +62,7 @@ impl CompiledValue {
             Self::Value { llvm_repr, .. } => Self::Value { llvm_repr: llvm_repr.clone(), ptype: new_type },
             Self::Pointer { llvm_repr, .. } => Self::Pointer { llvm_repr: llvm_repr.clone(), ptype: new_type },
             Self::Function { effective_name, .. } => Self::Function { effective_name: effective_name.clone(), ptype: new_type },
+            Self::GenericFunction { effective_name, .. } => Self::Function { effective_name: effective_name.clone(), ptype: new_type },
             Self::NoReturn => panic!("with_type is not applicable to NoReturn"),
         }
     }
@@ -96,6 +103,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             Expr::Integer(num_str) => self.compile_integer_literal(num_str, expected),
             Expr::Assign(lhs, rhs) => self.compile_assignment(lhs, rhs, expected),
             Expr::Call(callee, args) => self.compile_call(callee, args, expected),
+            Expr::CallGeneric(callee, args, generic) => self.compile_call_generic(callee, args, generic, expected),
             Expr::MemberAccess(..) => self.compile_member_access_rvalue(expr),
             Expr::Cast(expr, target_type) => self.compile_cast(expr, target_type, expected),
             Expr::BinaryOp(l, op, r) => self.compile_binary_op(l, op, r, expected),
@@ -103,6 +111,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             Expr::StaticAccess(..) => self.compile_static_access_rvalue(expr),
             Expr::StringConst(str_val) => self.compile_string_literal(str_val),
             Expr::Index(..) => self.compile_index_rvalue(expr),
+            Expr::Type(..) => unreachable!(),
         }
     }
     fn compile_lvalue(&mut self, expr: &Expr) -> CompileResult<CompiledValue> {
@@ -197,7 +206,61 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
         
         return Err(CompileError::Generic(format!("Binary operator \"{:?}\" was not implemted for types \"{:?}\"", op, l)));
     }
-    
+    fn compile_call_generic(&mut self, callee: &Expr, given_args: &[Expr], given_generic: &[ParserType], expected: Expected<'_>) -> Result<CompiledValue, CompileError> {
+        if let Some(x) = self.compiler_function_calls_generic(callee, given_args, given_generic, &expected) {
+            return x;
+        }
+        let l: CompiledValue = self.compile_lvalue(callee)?;
+        if let CompiledValue::GenericFunction { effective_name, ptype: ParserType::Function(return_type, required_arguments)} = &l {
+            if required_arguments.len() != given_args.len() {
+                return Err(CompileError::Generic(format!("Amount of arguments provided '{}' does not equal to amount requested by function '{}'", required_arguments.len(), given_args.len())));
+            }
+            let func = self.ctx.symbols.get_function(effective_name, &self.ctx.current_function_path)?;
+            if func.generic_params.len() != given_generic.len() {
+                return Err(CompileError::Generic(format!("Amount of generic params provided '{}' does not equal to amount requested by function '{}'", required_arguments.len(), given_args.len())));
+            }
+            let symbols = self.ctx.symbols;
+            let current_namespace = &self.ctx.current_function_path;
+
+            func.generic_implementations.borrow_mut().push(given_generic.to_vec().into());
+            let llvm_struct_name = format!("{}<{}>", func.get_llvm_repr(), given_generic.iter().map(|x| get_llvm_type_str(x, symbols, &current_namespace)).collect::<CompileResult<Vec<_>>>()?.join(", "));
+            let mut type_map = HashMap::new();
+            let mut ind = 0;
+            for prm in &func.generic_params {
+                type_map.insert(prm.clone(), given_generic[ind].clone());
+                ind +=  1;
+            }
+            let rt = substitute_generic_type(return_type, &type_map);
+            let return_type_repr = get_llvm_type_str(&rt, symbols, current_namespace)?;
+            let mut compiled_arguments = vec![];
+            for i in 0..required_arguments.len() {
+                let x = self.compile_rvalue(&given_args[i], Expected::Type(&required_arguments[i]))?;
+                if x.get_type() != &required_arguments[i] {
+                    return CompileResult::Err(CompileError::InvalidExpression(format!("{:?} vs {:?} type missmatch with {}th argument", x.get_type(), &required_arguments[i], i + 1)));
+                }
+                compiled_arguments.push(x.get_llvm_repr_with_type(self.ctx)?);
+            }
+            let arg_string = compiled_arguments.join(", ");
+
+            if rt.is_void() {
+                self.output.push_str(&format!("    call void @\"{}\"({})\n", llvm_struct_name, arg_string));
+                return Ok(CompiledValue::NoReturn);
+            }
+            if expected != Expected::NoReturn {
+                let utvc = self.ctx.aquire_unique_temp_value_counter();
+                self.output.push_str(&format!("    %tmp{} = call {} @\"{}\"({})\n", utvc, return_type_repr, llvm_struct_name, arg_string));
+                return Ok(CompiledValue::Value { llvm_repr: format!("%tmp{}", utvc), ptype: rt });
+            }
+            self.output.push_str(&format!("    call {} @\"{}\"({})\n", return_type_repr, llvm_struct_name, arg_string));
+            return Ok(CompiledValue::NoReturn);
+        }
+        println!("{:?}", callee);
+        println!("{:?}", l);
+        println!("{:?}", given_args);
+        println!("{:?}", given_generic);
+        println!("{:?}", expected);
+        Err(CompileError::Generic(format!("")))
+    }
     fn compile_call(&mut self, callee: &Expr, given_args: &[Expr], expected: Expected<'_>) -> Result<CompiledValue, CompileError> {
         if let Some(x) = self.compiler_function_calls(callee, given_args, &expected) {
             return x;
@@ -375,6 +438,9 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
         }
         
         if let Ok(function) = self.ctx.symbols.get_function(name, &self.ctx.current_function_path) {
+            if function.is_generic() {
+                return Ok(CompiledValue::GenericFunction { effective_name: function.effective_name().to_string(), ptype: function.get_type() });
+            }
             return Ok(CompiledValue::Function {
                 effective_name: function.effective_name().to_string(),
                 ptype: function.get_type(),
@@ -429,6 +495,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
     
     fn compile_cast(&mut self, expr: &Expr, target_type: &ParserType, expected: Expected) -> CompileResult<CompiledValue> {
         let value = self.compile_rvalue(expr, expected)?;
+        let target_type = &substitute_generic_type(target_type, &self.ctx.symbols.alias_types);
         if value.get_type() == target_type {
             return Ok(value);
         }
@@ -486,6 +553,9 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
         }
         
         if let Ok(function) = self.ctx.symbols.get_function(&path, &self.ctx.current_function_path) {
+            if function.is_generic() {
+                return Ok(CompiledValue::GenericFunction { effective_name: function.effective_name().to_string(), ptype: function.get_type() });
+            }
             return Ok(CompiledValue::Function { effective_name: function.effective_name().to_string(), ptype: function.get_type() });
         }
 
@@ -511,7 +581,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
     }
     fn compile_string_literal(&mut self, str_val: &str) -> CompileResult<CompiledValue> { // ---
         let str_len = str_val.len() + 1;
-        let const_id = self.ctx.aquire_unique_const_vector_counter();
+        let const_id = self.output.aquire_unique_const_vector_counter();
         let const_name = format!("@.str.{}", const_id);
         let escaped_val = str_val.replace("\"", "\\22")
             .replace("\n", "\\0A")
@@ -535,13 +605,14 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
                 "sizeof" =>{
                     debug_assert!(*expected != Expected::NoReturn);
                     if given_args.len() != 1 { return Some(Err(CompileError::Generic(format!("sizeof expects exactly 1 type argument. Example: sizeof(i32);"))));}
-                    if let Ok(sizeof) = self.sizeof_from_expression(&given_args[0]){
+                    if let Expr::Type(sizeof_type) = &given_args[0]{
+                        let mut t = size_of_from_parser_type(sizeof_type, self.ctx);
                         if let Expected::Type(pt) = expected {
                             if pt.is_integer() {
-                                return Some(Ok(CompiledValue::Value { llvm_repr: sizeof.to_string(), ptype: (*pt).clone() }));
+                                return Some(Ok(CompiledValue::Value { llvm_repr: t.to_string(), ptype: (*pt).clone() }));
                             }
                         }
-                        return Some(Ok(CompiledValue::Value { llvm_repr: sizeof.to_string(), ptype: ParserType::Named(format!("i64")) }));
+                        return Some(Ok(CompiledValue::Value { llvm_repr: t.to_string(), ptype: ParserType::Named(format!("i64")) }));
                     }
                     return Some(Err(CompileError::Generic(format!("Unable to calculate sizeof structure given by this expression '{:?}'", given_args[0]))));
                 }
@@ -560,6 +631,9 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
         }
         None
     }
+    fn compiler_function_calls_generic(&mut self, callee: &Expr, given_args: &[Expr], given_generic: &[ParserType], expected: &Expected) -> Option<CompileResult<CompiledValue>>{ // --
+        None
+    }
     // ----------------------======++$$@LVALUE@$$++======-----------------
     fn compile_name_lvalue(&mut self, name: &str) -> CompileResult<CompiledValue> {
         if let Ok((variable, id)) = self.ctx.scope.get_variable(name) {
@@ -572,6 +646,9 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             return Ok(CompiledValue::Pointer { llvm_repr, ptype });
         }
         if let Ok(function) = self.ctx.symbols.get_function(name, &self.ctx.current_function_path) {
+            if function.is_generic() {
+                return Ok(CompiledValue::GenericFunction { effective_name: function.effective_name().to_string(), ptype: function.get_type(),  });
+            }
             return Ok(CompiledValue::Function { effective_name: function.effective_name().to_string(), ptype: function.get_type() });
         }
         Err(CompileError::SymbolNotFound(format!("Lvalue '{}' not found", name)))
@@ -582,6 +659,9 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             return Ok(CompiledValue::Pointer { llvm_repr: format!("%{}", &path), ptype: variable.compiler_type.clone() });
         }
         if let Ok(function) = self.ctx.symbols.get_function(&path, &self.ctx.current_function_path) {
+            if function.is_generic() {
+                return Ok(CompiledValue::GenericFunction { effective_name: function.effective_name().to_string(), ptype: function.get_type() });
+            }
             return Ok(CompiledValue::Function { effective_name: function.effective_name().to_string(), ptype: function.get_type() });
         }
         Err(CompileError::SymbolNotFound(format!("Static symbol '{}' not found", path)))
@@ -670,33 +750,6 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
         ));
         Ok(CompiledValue::Pointer { llvm_repr: gep_ptr_reg, ptype: base_type.clone() })
     }
-    
-    fn sizeof_from_expression(&mut self, expr: &Expr) -> CompileResult<u32>{
-        match expr {
-            Expr::Name(name) =>{
-                let full_name = self.ctx.fully_qualified_name(name);
-                if let Ok(x) = self.ctx.symbols.get_type(&full_name) {
-                    return Ok(x.get_size_of(self.ctx.symbols)?);
-                }
-                if let Ok(x) = self.ctx.symbols.get_type(name) {
-                    return Ok(x.get_size_of(self.ctx.symbols)?);
-                }
-            }
-            Expr::StaticAccess(x, y) =>{
-                let full_name = if let Expr::Name(x) = &**x {
-                    format!("{}.{}",x, y)
-                }else{
-                    panic!("{:?}", x);
-                };
-                if let Ok(x) = self.ctx.symbols.get_type(&full_name) {
-                    return Ok(x.get_size_of(self.ctx.symbols)?);
-                }
-            }
-            Expr::UnaryOp(UnaryOp::Pointer, _) => return Ok(POINTER_SIZE_IN_BYTES),
-            _ => {}
-        }
-        return Err(CompileError::InvalidExpression(format!("Unable to get size of type behind expression: {:?}", expr)));
-    }
 }
 
 fn get_path_from_expr(expr: &Expr) -> String {
@@ -706,7 +759,37 @@ fn get_path_from_expr(expr: &Expr) -> String {
         _ => panic!("Cannot extract path from {:?}", expr),
     }
 }
-
+fn size_of_from_parser_type(ptype: &ParserType, ctx: &mut CodeGenContext) -> u32{
+    if ptype.is_pointer() {
+        return POINTER_SIZE_IN_BYTES;
+    }
+    if let Some(pt) = ptype.as_primitive_type() {
+        if let Some(idx) = PRIMITIVE_TYPES.iter().position(|&x| x == pt) {
+            let size = PRIMITIVE_TYPES_SIZE[idx];
+            if size == 0 {
+                panic!("{}", CompileError::Generic(format!("Trying to get size of zero-sized type '{}'", pt)));
+            }
+            return size;
+        }
+    }
+    if let Ok(struc) = ctx.symbols.get_type(&format!("{}.{}", ctx.current_function_path, ptype.to_string())).or(ctx.symbols.get_type(&ptype.to_string())) {
+        if struc.is_generic() {
+            if let ParserType::Generic(_, y) = ptype {
+                let mut type_map = HashMap::new();
+                let mut ind = 0;
+                for prm in &struc.generic_params {
+                    type_map.insert(prm.clone(), y[ind].clone());
+                    ind +=  1;
+                }
+                let q: u32 = struc.fields.iter().map(|x| size_of_from_parser_type(&substitute_generic_type(&x.1, &type_map), ctx)).sum();
+                return q;
+            }
+            panic!()
+        }
+        return struc.get_size_of(ctx.symbols).unwrap();
+    }
+    u32::MAX
+}
 pub fn constant_integer_expression_compiler(expression: &Expr, symbols: &SymbolTable) -> Result<i128, String> {
     match expression {
         Expr::Integer(x) => Ok(x.parse().expect("Invalid integer literal in const expression")),

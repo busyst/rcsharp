@@ -14,7 +14,9 @@ pub enum Expr {
     StaticAccess(Box<Expr>, String), 
     StringConst(String),
     Call(Box<Expr>, Box<[Expr]>),
+    CallGeneric(Box<Expr>, Box<[Expr]>, Box<[ParserType]>),
     Index(Box<Expr>, Box<Expr>),
+    Type(ParserType),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -120,7 +122,6 @@ impl<'a> ExpressionParser<'a> {
             Token::LogicAnd => {
                 return Ok(Expr::UnaryOp(UnaryOp::Pointer, Box::new(Expr::UnaryOp(UnaryOp::Pointer, Box::new(self.parse_prefix()?)))));
             },
-
             _ => Err(format!(
                 "Unexpected token {:?} in expression at row {}, col {}",
                 token_data.token, token_data.row, token_data.col
@@ -146,7 +147,7 @@ impl<'a> ExpressionParser<'a> {
             Token::LSquareBrace => self.parse_index(left),
             
             Token::Dot => self.parse_member_access(left),
-            Token::DoubleColon => self.parse_static_access(left),
+            Token::DoubleColon => self.parse_static_access_or_generic_call(left),
 
             Token::KeywordAs => self.parse_cast(left),
 
@@ -194,8 +195,12 @@ impl<'a> ExpressionParser<'a> {
     }
 
     fn parse_call(&mut self, callee: Expr) -> Result<Expr, String> {
-        self.advance(); 
-        
+        self.consume(&Token::LParen)?; 
+        if callee == Expr::Name(format!("sizeof")) {
+            let t = self.parse_type()?;
+            self.consume(&Token::RParen)?; 
+            return Ok(Expr::Call(Box::new(callee), Box::new([Expr::Type(t)])));
+        }
         let mut args = Vec::new();
         if self.peek().token != Token::RParen {
             loop {
@@ -209,6 +214,40 @@ impl<'a> ExpressionParser<'a> {
 
         self.consume(&Token::RParen)?;
         Ok(Expr::Call(Box::new(callee), args.into_boxed_slice()))
+    }
+    fn parse_generic_call(&mut self, callee: Expr) -> Result<Expr, String> {
+        self.advance();
+        self.consume(&Token::DoubleColon)?;
+        self.consume(&Token::LogicLess)?;
+        let mut generic_types = vec![];
+        loop {
+            if self.peek().token == Token::LogicGreater {
+                self.advance();
+                break;
+            }
+            if self.peek().token == Token::BinaryShiftR {
+                todo!()
+            }
+            let t= self.parse_type()?;
+            generic_types.push(t);
+            if self.peek().token == Token::Comma {
+                self.advance();
+            }
+        }
+        self.consume(&Token::LParen)?;
+        let mut args = Vec::new();
+        if self.peek().token != Token::RParen {
+            loop {
+                args.push(self.parse_expression()?);
+                if self.peek().token != Token::Comma {
+                    break;
+                }
+                self.advance();
+            }
+        }
+
+        self.consume(&Token::RParen)?;
+        Ok(Expr::CallGeneric(Box::new(callee), args.into(), generic_types.into()))
     }
     fn parse_index(&mut self, left: Expr) -> Result<Expr, String> {
     self.consume(&Token::LSquareBrace)?;
@@ -293,9 +332,12 @@ impl<'a> ExpressionParser<'a> {
             Ok(ParserType::Named(link_or_name))
         }
     }
-    fn parse_static_access(&mut self, left: Expr) -> Result<Expr, String> {
+    fn parse_static_access_or_generic_call(&mut self, left: Expr) -> Result<Expr, String> {
         self.consume(&Token::DoubleColon)?;
-
+        if self.peek().token == Token::LogicLess {
+            self.cursor -= 2;
+            return self.parse_generic_call(left);
+        }
         let member_name = self.advance().expect_name_token()?;
 
         Ok(Expr::StaticAccess(Box::new(left), member_name))

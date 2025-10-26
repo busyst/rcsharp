@@ -6,29 +6,19 @@ inline fn basic_functions(){
     window::start();
     console::FreeConsole();
 }
-namespace geg{
-    struct vec<T>{
-        data: &vec<string::String>,
-        x: &T,
-        len: i32,
-        capacity: i32,
-    }
-}
-namespace kej{
-    struct vecq<T>{
-        data: &kej::vecq<string::String>,
-        x: &T,
-        len: i32,
-        capacity: i32,
-    }
+
+struct Pair<T, U> { first: T, second: U }
+fn x<T>() : Pair<T,string::String>{
+    let p: Pair<T,string::String>;
+    p.first = 43 as T;
+    let str : string::String = string::empty();
+    p.second = str;
+
+    return p;
 }
 fn main(): i32 {
-    let x : kej::vecq<i64>;
-    let y : kej::vecq<string::String>;
-    x.data = &y;
-    x.data.len = 1;
-    x.len = 3;
-    x.capacity = 2;
+    let p: Pair<string::String, i32>;
+    let pair: Pair<i32, string::String> = x::<i32>();
     basic_functions();
     return 0;
 }

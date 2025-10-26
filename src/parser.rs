@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-use crate::{compiler_essentials::FunctionFlags, expression_parser::{Expr, ExpressionParser}, token::{Token, TokenData}};
+use crate::{compiler_essentials::{Attribute, FunctionFlags}, expression_parser::{Expr, ExpressionParser}, token::{Token, TokenData}};
 pub const PRIMITIVE_TYPES: &[&str] = &[
     "void", "bool",
     "i8", "i16", "i32", "i64",
@@ -25,7 +25,25 @@ pub const FLOAT_TYPES: Range<usize> = 10..12;
 
 pub const VOID_TYPE: &&'static str = &PRIMITIVE_TYPES[0];
 pub const BOOL_TYPE: &&'static str = &PRIMITIVE_TYPES[1];
-
+#[derive(Debug, Clone, PartialEq)]
+pub struct ParsedFunction {
+    pub path: Box<str>,
+    pub attributes: Box<[Attribute]>,
+    pub name: Box<str>,
+    pub args: Box<[(String, ParserType)]>,
+    pub return_type: ParserType,
+    pub body: Box<[Stmt]>,
+    pub flags: u8,
+    pub generic_params: Box<[String]>,
+}
+impl ParsedFunction {
+    pub fn new_parse(name: Box<str>, args: Box<[(String, ParserType)]>, return_type: ParserType, body: Box<[Stmt]>) -> ParsedFunction {
+        ParsedFunction { path: String::new().into(), attributes: Box::new([]), name, args, return_type, body, flags: 0, generic_params: Box::new([]) }
+    }
+    pub fn new_parse_generic(name: Box<str>, args: Box<[(String, ParserType)]>, return_type: ParserType, body: Box<[Stmt]>, generic_params: Box<[String]>) -> ParsedFunction {
+        ParsedFunction { path: String::new().into(), attributes: Box::new([]), name, args, return_type, body, flags: FunctionFlags::Generic as u8, generic_params }
+    }
+}
 #[derive(Debug, Clone, PartialEq)]
 pub enum Stmt {
     Hint(String, Box<[Expr]>), // #[...]
@@ -42,7 +60,7 @@ pub enum Stmt {
     Continue, // continue
     Return(Option<Expr>), // return ...
 
-    Function(String, Box<[(String, ParserType)]>, ParserType, Box<[Stmt]>, u8), // fn foo(bar: i8, ...) ... { ... }
+    Function(ParsedFunction), // fn foo(bar: i8, ...) ... { ... }
     Struct(String, Box<[(String, ParserType)]>, Box<[String]>), // struct foo <T> { bar : i8, ... }
     Enum(String, Option<ParserType>, Box<[(String, Expr)]>), // enum foo 'base_type' { bar = ..., ... }
     Namespace(String, Box<[Stmt]>), // namespace foo { fn bar() ... {...} ... }
@@ -60,7 +78,7 @@ impl Stmt {
             Self::Loop(x) => { 1 + x.iter().map(|x| x.recursive_statement_count()).sum::<u64>()}
             Self::Namespace(_, x) => { 1 + x.iter().map(|x| x.recursive_statement_count()).sum::<u64>()}
             Self::Return(_) => 1,
-            Self::Function(_,_,_,x, _) => { 1 + x.iter().map(|x| x.recursive_statement_count()).sum::<u64>()}
+            Self::Function(func) => { 1 + func.body.iter().map(|x| x.recursive_statement_count()).sum::<u64>()}
             Self::Struct(_, _, _) => 1,
         }
     }
@@ -269,8 +287,8 @@ impl<'a> GeneralParser<'a> {
             Token::KeywordInline =>{
                 self.advance();
                 let mut x = self.parse_toplevel_item()?;
-                if let Stmt::Function(_, _, _, _, flags) = &mut x {
-                    *flags |= FunctionFlags::Inline as u8;
+                if let Stmt::Function(func) = &mut x {
+                    func.flags |= FunctionFlags::Inline as u8;
                     return Ok(x);
                 }
                 Err(format!("Keyword Inline only applicable to functions"))
@@ -278,8 +296,8 @@ impl<'a> GeneralParser<'a> {
             Token::KeywordConstExpr =>{
                 self.advance();
                 let mut x = self.parse_toplevel_item()?;
-                if let Stmt::Function(_, _, _, _, flags) = &mut x {
-                    *flags |= FunctionFlags::ConstExpression as u8;
+                if let Stmt::Function(func) = &mut x {
+                    func.flags |= FunctionFlags::ConstExpression as u8;
                     return Ok(x);
                 }
                 Err(format!("Keyword Inline only applicable to functions"))
@@ -287,8 +305,8 @@ impl<'a> GeneralParser<'a> {
             Token::KeywordPub =>{
                 self.advance();
                 let mut x = self.parse_toplevel_item()?;
-                if let Stmt::Function(_, _, _, _, flags) = &mut x {
-                    *flags |= FunctionFlags::Public as u8;
+                if let Stmt::Function(func) = &mut x {
+                    func.flags |= FunctionFlags::ConstExpression as u8;
                     return Ok(x);
                 }
                 Err(format!("Keyword Inline only applicable to functions"))
@@ -322,6 +340,25 @@ impl<'a> GeneralParser<'a> {
     fn parse_function(&mut self) -> Result<Stmt, String> {
         self.consume(&Token::KeywordFunction)?;
         let name = self.advance().expect_name_token()?;
+        let mut generic_types = vec![];
+        if self.peek().token == Token::LogicLess {
+            self.advance();
+            loop {
+                if self.peek().token == Token::LogicGreater {
+                    self.advance();
+                    break;
+                }
+                if self.peek().token == Token::BinaryShiftR {
+                    todo!()
+                }
+                let t= self.advance().expect_name_token()?;
+                generic_types.push(t);
+                if self.peek().token == Token::Comma {
+                    self.advance();
+                }
+                
+            }
+        }
         self.consume(&Token::LParen)?;
         let mut args = Vec::new();
         if self.peek().token != Token::RParen {
@@ -344,10 +381,14 @@ impl<'a> GeneralParser<'a> {
         }
         if self.peek().token == Token::SemiColon {
             self.advance();
-            return Ok(Stmt::Function(name, args.into_boxed_slice(), return_type, Box::new([]), 0));
+            return Ok(Stmt::Function(ParsedFunction::new_parse(name.into_boxed_str(), args.into_boxed_slice(), return_type, Box::new([]))));
         } 
         let body = self.parse_block_body()?;
-        Ok(Stmt::Function(name, args.into_boxed_slice(), return_type, body, 0))
+        
+        if generic_types.len() != 0 {
+            return Ok(Stmt::Function(ParsedFunction::new_parse_generic(name.into(), args.into_boxed_slice(), return_type, body, generic_types.into())));
+        }
+        return Ok(Stmt::Function(ParsedFunction::new_parse(name.into(), args.into_boxed_slice(), return_type, body)));
     }  
     fn parse_struct(&mut self) -> Result<Stmt, String> {
         self.consume(&Token::KeywordStruct)?;
