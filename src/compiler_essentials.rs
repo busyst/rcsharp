@@ -113,7 +113,7 @@ impl Struct {
             }
             else {
                 let r#struct = symbols.get_type(&field_type.to_string())
-                .map_err(|e| CompileError::Generic(format!("In struct '{}', cannot resolve type for field '{}': {}", self.name, field_name, e)))?;
+                    .ok_or(CompileError::SymbolNotFound(format!("In struct '{}', cannot resolve type for field '{}'", self.name, field_name)))?;
                 sum += r#struct.get_size_of(symbols)?;
             }
 
@@ -279,14 +279,14 @@ impl Scope {
         self.current_scope_variables.clear();
         self.upper_scope_variables.clear();
     }
-    pub fn get_variable(&self, name: &str) -> Result<&(Variable, u32),String>{
+    pub fn get_variable(&self, name: &str) -> Option<&(Variable, u32)>{
         if self.current_scope_variables.contains_key(name) {
-            return Ok(&self.current_scope_variables[name]);
+            return Some(&self.current_scope_variables[name]);
         }
         if self.upper_scope_variables.contains_key(name) {
-            return Ok(&self.upper_scope_variables[name]);
+            return Some(&self.upper_scope_variables[name]);
         }
-        return Err(format!("Variable \"{}\" was not found inside current scope",name));
+        None
     }
     pub fn add_variable(&mut self, name: String, variable: Variable, unique_value_tag: u32) {
         if self.current_scope_variables.contains_key(&name) {

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{compiler::{get_llvm_type_str, substitute_generic_type, CodeGenContext, CompileError, CompileResult, LLVMOutputHandler, SymbolTable, POINTER_SIZE_IN_BYTES}, compiler_essentials::Variable, expression_parser::{BinaryOp, Expr, UnaryOp}, parser::{ParserType, Stmt, LLVM_PRIMITIVE_TYPES, PRIMITIVE_TYPES, PRIMITIVE_TYPES_SIZE}};
+use crate::{compiler::{get_llvm_type_str, substitute_generic_type, CodeGenContext, CompileError, CompileResult, LLVMOutputHandler, SymbolTable, POINTER_SIZE_IN_BYTES}, compiler_essentials::Variable, expression_parser::{BinaryOp, Expr, UnaryOp}, parser::{ParserType, Stmt, PRIMITIVE_TYPES, PRIMITIVE_TYPES_SIZE}};
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expected<'a> {
     Type(&'a ParserType),
@@ -215,7 +215,8 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             if required_arguments.len() != given_args.len() {
                 return Err(CompileError::Generic(format!("Amount of arguments provided '{}' does not equal to amount requested by function '{}'", required_arguments.len(), given_args.len())));
             }
-            let func = self.ctx.symbols.get_function(effective_name, &self.ctx.current_function_path)?;
+            let func = self.ctx.symbols.get_function(effective_name, &self.ctx.current_function_path)
+                .ok_or(CompileError::Generic(format!("Function (effective path):({}) couldnt be found inside:({}.{})",effective_name,self.ctx.current_function_path, self.ctx.current_function_name)))?;
             if func.generic_params.len() != given_generic.len() {
                 return Err(CompileError::Generic(format!("Amount of generic params provided '{}' does not equal to amount requested by function '{}'", required_arguments.len(), given_args.len())));
             }
@@ -233,9 +234,11 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             let rt = substitute_generic_type(return_type, &type_map);
             let return_type_repr = get_llvm_type_str(&rt, symbols, current_namespace)?;
             let mut compiled_arguments = vec![];
+            let required_arguments = required_arguments.iter().map(|x| substitute_generic_type(&x, &type_map)).collect::<Vec<_>>();
             for i in 0..required_arguments.len() {
                 let x = self.compile_rvalue(&given_args[i], Expected::Type(&required_arguments[i]))?;
                 if x.get_type() != &required_arguments[i] {
+                    println!("{:?}", required_arguments[i]);
                     return CompileResult::Err(CompileError::InvalidExpression(format!("{:?} vs {:?} type missmatch with {}th argument", x.get_type(), &required_arguments[i], i + 1)));
                 }
                 compiled_arguments.push(x.get_llvm_repr_with_type(self.ctx)?);
@@ -271,7 +274,8 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
                 return Err(CompileError::Generic(format!("Amount of arguments provided '{}' does not equal to amount requested by function '{}'", required_arguments.len(), given_args.len())));
             }
 
-            let func = self.ctx.symbols.get_function(&effective_name, &self.ctx.current_function_path)?;
+            let func = self.ctx.symbols.get_function(&effective_name, &self.ctx.current_function_path)
+                .ok_or(CompileError::Generic(format!("Function (effective name):({}) couldnt be found inside:({}.{})",effective_name,self.ctx.current_function_path, self.ctx.current_function_name)))?;
             let return_type_repr = get_llvm_type_str(&return_type, self.ctx.symbols, &func.path)?;
             if func.is_inline() {
                 if func.body.is_empty() {
@@ -419,7 +423,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
     }
 
     fn compile_name_rvalue(&mut self, name: &str, _expected: Expected) -> CompileResult<CompiledValue> {
-        if let Ok((variable, id)) = self.ctx.scope.get_variable(name) {
+        if let Some((variable, id)) = self.ctx.scope.get_variable(name) {
             variable.get_type(false, false);
             let ptype = variable.compiler_type.clone();
             if variable.is_argument() {
@@ -437,7 +441,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             return Ok(CompiledValue::Value { llvm_repr: format!("%tmp{}", temp_id), ptype });
         }
         
-        if let Ok(function) = self.ctx.symbols.get_function(name, &self.ctx.current_function_path) {
+        if let Some(function) = self.ctx.symbols.get_function(name, &self.ctx.current_function_path) {
             if function.is_generic() {
                 return Ok(CompiledValue::GenericFunction { effective_name: function.effective_name().to_string(), ptype: function.get_type() });
             }
@@ -469,7 +473,6 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
         if !matches!(left_ptr, CompiledValue::Pointer { .. }) {
             return Err(CompileError::InvalidExpression(format!("{:?} does not yield a valid lvalue", lhs)));
         }
-
         let right_val = self.compile_rvalue(rhs, Expected::Type(left_ptr.get_type()))?;
         if left_ptr.get_type() != right_val.get_type() {
             return Err(CompileError::InvalidExpression(format!("Type mismatch in assignment: {:?} and {:?}", left_ptr.get_type(), right_val.get_type())));
@@ -494,7 +497,13 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
     }
     
     fn compile_cast(&mut self, expr: &Expr, target_type: &ParserType, expected: Expected) -> CompileResult<CompiledValue> {
-        let value = self.compile_rvalue(expr, expected)?;
+        let value = match expected {
+            Expected::Type(t) => {
+                self.compile_rvalue(expr, Expected::Type(&substitute_generic_type(t, &self.ctx.symbols.alias_types)))?
+            }
+            _ => self.compile_rvalue(expr, expected)?,
+        };
+        
         let target_type = &substitute_generic_type(target_type, &self.ctx.symbols.alias_types);
         if value.get_type() == target_type {
             return Ok(value);
@@ -548,11 +557,11 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
     fn compile_static_access_rvalue(&mut self, expr: &Expr) -> CompileResult<CompiledValue> {
         let path = get_path_from_expr(expr);
         
-        if let Ok((variable, _)) = self.ctx.scope.get_variable(&path) {
+        if let Some((variable, _)) = self.ctx.scope.get_variable(&path) {
             return Ok(CompiledValue::Pointer { llvm_repr: format!("%{}", &path), ptype: variable.compiler_type.clone() });
         }
         
-        if let Ok(function) = self.ctx.symbols.get_function(&path, &self.ctx.current_function_path) {
+        if let Some(function) = self.ctx.symbols.get_function(&path, &self.ctx.current_function_path) {
             if function.is_generic() {
                 return Ok(CompiledValue::GenericFunction { effective_name: function.effective_name().to_string(), ptype: function.get_type() });
             }
@@ -606,7 +615,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
                     debug_assert!(*expected != Expected::NoReturn);
                     if given_args.len() != 1 { return Some(Err(CompileError::Generic(format!("sizeof expects exactly 1 type argument. Example: sizeof(i32);"))));}
                     if let Expr::Type(sizeof_type) = &given_args[0]{
-                        let mut t = size_of_from_parser_type(sizeof_type, self.ctx);
+                        let t = size_of_from_parser_type(sizeof_type, self.ctx);
                         if let Expected::Type(pt) = expected {
                             if pt.is_integer() {
                                 return Some(Ok(CompiledValue::Value { llvm_repr: t.to_string(), ptype: (*pt).clone() }));
@@ -631,12 +640,13 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
         }
         None
     }
+    #[allow(dead_code, unused)]
     fn compiler_function_calls_generic(&mut self, callee: &Expr, given_args: &[Expr], given_generic: &[ParserType], expected: &Expected) -> Option<CompileResult<CompiledValue>>{ // --
         None
     }
     // ----------------------======++$$@LVALUE@$$++======-----------------
     fn compile_name_lvalue(&mut self, name: &str) -> CompileResult<CompiledValue> {
-        if let Ok((variable, id)) = self.ctx.scope.get_variable(name) {
+        if let Some((variable, id)) = self.ctx.scope.get_variable(name) {
             let ptype = variable.compiler_type.clone();
             let llvm_repr = if variable.is_argument() {
                 if variable.is_alias_value() { format!("%tmp{}", id) } else { format!("%{}", name) }
@@ -645,7 +655,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             };
             return Ok(CompiledValue::Pointer { llvm_repr, ptype });
         }
-        if let Ok(function) = self.ctx.symbols.get_function(name, &self.ctx.current_function_path) {
+        if let Some(function) = self.ctx.symbols.get_function(name, &self.ctx.current_function_path) {
             if function.is_generic() {
                 return Ok(CompiledValue::GenericFunction { effective_name: function.effective_name().to_string(), ptype: function.get_type(),  });
             }
@@ -655,10 +665,10 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
     }
     fn compile_static_access_lvalue(&mut self, expr: &Expr) -> CompileResult<CompiledValue> {
         let path = get_path_from_expr(expr);
-        if let Ok((variable, _)) = self.ctx.scope.get_variable(&path) {
+        if let Some((variable, _)) = self.ctx.scope.get_variable(&path) {
             return Ok(CompiledValue::Pointer { llvm_repr: format!("%{}", &path), ptype: variable.compiler_type.clone() });
         }
-        if let Ok(function) = self.ctx.symbols.get_function(&path, &self.ctx.current_function_path) {
+        if let Some(function) = self.ctx.symbols.get_function(&path, &self.ctx.current_function_path) {
             if function.is_generic() {
                 return Ok(CompiledValue::GenericFunction { effective_name: function.effective_name().to_string(), ptype: function.get_type() });
             }
@@ -667,8 +677,8 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
         Err(CompileError::SymbolNotFound(format!("Static symbol '{}' not found", path)))
     }
     fn compile_member_access_lvalue(&mut self, obj: &Expr, member: &str) -> CompileResult<CompiledValue> {
+        
         let obj_lvalue = self.compile_lvalue(obj)?;
-
         let (base_ptr_repr, struct_type_to_index) = if obj_lvalue.get_type().is_pointer() {
             let obj_rvalue = self.compile_rvalue(obj, Expected::Anything)?;
             let struct_type = obj_rvalue.get_type().dereference_once().clone();
@@ -681,22 +691,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
         let field_index = fields.iter().position(|(name, _)| name == member)
             .ok_or_else(|| CompileError::Generic(format!("Member '{}' not found in struct '{}'", member, struct_fqn)))?;
 
-        let mut type_map = HashMap::new();
-        if let ParserType::Generic(n, x) = &struct_type_to_index {
-            let strct = self.ctx.symbols.get_type(&n)?;
-            if strct.generic_params.len() != x.len() {
-                return Err(CompileError::Generic(format!(
-                    "Generic struct '{}' expects {} type arguments, but {} were provided.",
-                    struct_fqn, strct.generic_params.len(), x.len()
-                )));
-            }
-            let mut ind = 0;
-            for prm in &strct.generic_params {
-                type_map.insert(prm.clone(), x[ind].clone());
-                ind +=  1;
-            }
-        }
-        let field_ptype = &substitute_generic_type(&fields[field_index].1, &type_map);
+        let field_ptype = &substitute_generic_type(&fields[field_index].1, &self.ctx.symbols.alias_types);
         let llvm_struct_type = get_llvm_type_str(&struct_type_to_index, self.ctx.symbols, &self.ctx.current_function_path)?;
         
         let gep_id = self.ctx.aquire_unique_temp_value_counter();
@@ -712,7 +707,6 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             base_ptr_repr,
             field_index
         ));
-
         Ok(CompiledValue::Pointer { llvm_repr: gep_result_reg, ptype: field_ptype.clone() })
     }
     fn compile_deref_lvalue(&mut self, operand: &Expr) -> CompileResult<CompiledValue> {
@@ -772,7 +766,7 @@ fn size_of_from_parser_type(ptype: &ParserType, ctx: &mut CodeGenContext) -> u32
             return size;
         }
     }
-    if let Ok(struc) = ctx.symbols.get_type(&format!("{}.{}", ctx.current_function_path, ptype.to_string())).or(ctx.symbols.get_type(&ptype.to_string())) {
+    if let Some(struc) = ctx.symbols.get_type(&format!("{}.{}", ctx.current_function_path, ptype.to_string())).or(ctx.symbols.get_type(&ptype.to_string())) {
         if struc.is_generic() {
             if let ParserType::Generic(_, y) = ptype {
                 let mut type_map = HashMap::new();

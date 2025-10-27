@@ -55,7 +55,7 @@ namespace mem{
     #[DllImport("kernel32.dll")]
     fn HeapAlloc(hHeap: &i32, dwFlags: i32, dwBytes: i64): &void;
     #[DllImport("kernel32.dll")]
-    fn HeapFree(hHeap: &i32, dwFlags: i32, lpMem: &i8): i32;
+    fn HeapFree(hHeap: &i32, dwFlags: i32, lpMem: &void): i32;
     #[DllImport("kernel32.dll")]
     fn HeapSize(hHeap: &i32,dwFlags : i32, lpMem : &i8) : i64;
     #[DllImport("kernel32.dll")]
@@ -66,8 +66,8 @@ namespace mem{
     #[DllImport("kernel32.dll")]
     fn HeapUnlock(hHeap: &i32) : i32;
 
-    fn malloc(size:i64) : &void{return HeapAlloc(GetProcessHeap(), 0, size);}
-    fn free(ptr: &i8) : void {HeapFree(GetProcessHeap(), 0, ptr);}
+    fn malloc(size:i64) : &void{ return HeapAlloc(GetProcessHeap(), 0, size); }
+    fn free(ptr: &void) : void { HeapFree(GetProcessHeap(), 0, ptr); }
     fn copy(src: &i8, dest:&i8, len: i64) {
         let i: i64 = 0;
         loop{
@@ -82,6 +82,16 @@ namespace mem{
         fill(0, dest, len);
     }
     fn fill(val: i8, dest:&i8, len: i64) {
+        let i: i64 = 0;
+        loop{
+            if i >= len{
+                break;
+            }
+            dest[i] = val;
+            i = i + 1;
+        }
+    }
+    fn default_fill<T>(val: T, dest:&T, len: i64) {
         let i: i64 = 0;
         loop{
             if i >= len{
@@ -169,7 +179,7 @@ namespace list{
                 break;
             }
             let next: &ListNode = current.next_node;
-            mem::free(current as &i8); 
+            mem::free(current as &void); 
             current = next; 
         }
         list.head = 0 as &ListNode;
@@ -209,7 +219,7 @@ namespace vector{
                     new_array[i] = vec.array[i];
                     i = i + 1 as u32;
                 }
-                mem::free(vec.array as &i8);
+                mem::free(vec.array as &void);
             }
             vec.array = new_array;
             vec.capacity = new_capacity;
@@ -231,7 +241,7 @@ namespace vector{
     #[ExtentionOf(Vec)]
     fn free(vec: &Vec) {
         if vec.array != 0 as &i8 {
-            mem::free(vec.array as &i8);
+            mem::free(vec.array as &void);
         }
         vec.array = 0 as &i8;
         vec.length = 0;
@@ -399,7 +409,7 @@ namespace string{
     }
 
     fn free(str: &String){
-        mem::free(str.data);
+        mem::free(str.data as &void);
         str.len = 0;
     }
     // Use data only inside function where it was called, because stack will be "freed" upon leaving function and data will be corrupted
@@ -619,8 +629,8 @@ namespace tests{
             i = i + 1;
         }
 
-        mem::free(buffer1);
-        mem::free(buffer2);
+        mem::free(buffer1 as &void);
+        mem::free(buffer2 as &void);
         
         console::writeln("OK", 2);
     }
@@ -642,7 +652,7 @@ namespace tests{
             if inserted[i] != expected[i] { process::throw("string_utils_test: insert failed"); }
             i = i + 1;
         }
-        mem::free(inserted);
+        mem::free(inserted as &void);
 
         console::writeln("OK", 2);
     }

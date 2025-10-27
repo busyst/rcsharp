@@ -124,8 +124,8 @@ declare dllimport i8* @GetModuleHandleA(i8*)
 @.str.83 = private unnamed_addr constant [46 x i8] c"Window error: StartError::RegisterClassFailed\00"
 @.str.84 = private unnamed_addr constant [14 x i8] c"Hello, World!\00"
 @.str.85 = private unnamed_addr constant [45 x i8] c"Window error: StartError::CreateWindowFailed\00"
-%"struct.Pair<%struct.string.String, i32>" = type { %struct.string.String, i32 }
-%"struct.Pair<i32, %struct.string.String>" = type { i32, %struct.string.String }
+%"struct.Pair<i64, %"struct.Pair<i8, %struct.string.String>">" = type { i64, %"struct.Pair<i8, %struct.string.String>" }
+%"struct.Pair<i8, %struct.string.String>" = type { i8, %struct.string.String }
 
 define void @"__chkstk"(){
     ret void
@@ -515,28 +515,29 @@ endif4:
 loop_body3_exit:
     %tmp33 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 0
     %tmp34 = load i8*, i8** %tmp33
-    call void @mem.free(i8* %tmp34)
+    %tmp35 = bitcast i8* %tmp34 to i8*
+    call void @mem.free(i8* %tmp35)
     br label %endif2
 endif2:
-    %tmp35 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 0
-    %tmp36 = load i8*, i8** %v1
-    store i8* %tmp36, i8** %tmp35
-    %tmp37 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 2
-    %tmp38 = load i32, i32* %v0
-    store i32 %tmp38, i32* %tmp37
+    %tmp36 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 0
+    %tmp37 = load i8*, i8** %v1
+    store i8* %tmp37, i8** %tmp36
+    %tmp38 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 2
+    %tmp39 = load i32, i32* %v0
+    store i32 %tmp39, i32* %tmp38
     br label %endif0
 endif0:
-    %tmp39 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 0
-    %tmp40 = load i8*, i8** %tmp39
-    %tmp41 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 1
-    %tmp42 = load i32, i32* %tmp41
-    %tmp43 = getelementptr inbounds i8, i8* %tmp40, i32 %tmp42
-    store i8 %data, i8* %tmp43
-    %tmp44 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 1
+    %tmp40 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 0
+    %tmp41 = load i8*, i8** %tmp40
+    %tmp42 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 1
+    %tmp43 = load i32, i32* %tmp42
+    %tmp44 = getelementptr inbounds i8, i8* %tmp41, i32 %tmp43
+    store i8 %data, i8* %tmp44
     %tmp45 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 1
-    %tmp46 = load i32, i32* %tmp45
-    %tmp47 = add i32 %tmp46, 1
-    store i32 %tmp47, i32* %tmp44
+    %tmp46 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 1
+    %tmp47 = load i32, i32* %tmp46
+    %tmp48 = add i32 %tmp47, 1
+    store i32 %tmp48, i32* %tmp45
     ret void
 }
 define void @"vector.push_bulk"(%struct.vector.Vec* %vec, i8* %data, i32 %data_len){
@@ -570,15 +571,16 @@ define void @"vector.free"(%struct.vector.Vec* %vec){
 then0:
     %tmp3 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 0
     %tmp4 = load i8*, i8** %tmp3
-    call void @mem.free(i8* %tmp4)
+    %tmp5 = bitcast i8* %tmp4 to i8*
+    call void @mem.free(i8* %tmp5)
     br label %endif0
 endif0:
-    %tmp5 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 0
-    store i8* null, i8** %tmp5
-    %tmp6 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 1
-    store i32 0, i32* %tmp6
-    %tmp7 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 2
+    %tmp6 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 0
+    store i8* null, i8** %tmp6
+    %tmp7 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 1
     store i32 0, i32* %tmp7
+    %tmp8 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 2
+    store i32 0, i32* %tmp8
     ret void
 }
 define i8* @"console.get_stdout"(){
@@ -907,9 +909,10 @@ loop_body1_exit:
 define void @"string.free"(%struct.string.String* %str){
     %tmp0 = getelementptr inbounds %struct.string.String, %struct.string.String* %str, i32 0, i32 0
     %tmp1 = load i8*, i8** %tmp0
-    call void @mem.free(i8* %tmp1)
-    %tmp2 = getelementptr inbounds %struct.string.String, %struct.string.String* %str, i32 0, i32 1
-    store i32 0, i32* %tmp2
+    %tmp2 = bitcast i8* %tmp1 to i8*
+    call void @mem.free(i8* %tmp2)
+    %tmp3 = getelementptr inbounds %struct.string.String, %struct.string.String* %str, i32 0, i32 1
+    store i32 0, i32* %tmp3
     ret void
 }
 define i8* @"string_utils.insert"(i8* %src1, i8* %src2, i32 %index){
@@ -1319,11 +1322,13 @@ endif10:
     br label %loop_body8
 loop_body8_exit:
     %tmp55 = load i8*, i8** %v1
-    call void @mem.free(i8* %tmp55)
-    %tmp56 = load i8*, i8** %v4
+    %tmp56 = bitcast i8* %tmp55 to i8*
     call void @mem.free(i8* %tmp56)
-    %tmp57 = getelementptr inbounds [3 x i8], [3 x i8]* @.str.12, i64 0, i64 0
-    call void @console.writeln(i8* %tmp57, i32 2)
+    %tmp57 = load i8*, i8** %v4
+    %tmp58 = bitcast i8* %tmp57 to i8*
+    call void @mem.free(i8* %tmp58)
+    %tmp59 = getelementptr inbounds [3 x i8], [3 x i8]* @.str.12, i64 0, i64 0
+    call void @console.writeln(i8* %tmp59, i32 2)
     ret void
 }
 define void @"tests.string_utils_test"(){
@@ -1426,9 +1431,10 @@ endif7:
     br label %loop_body5
 loop_body5_exit:
     %tmp51 = load i8*, i8** %v0
-    call void @mem.free(i8* %tmp51)
-    %tmp52 = getelementptr inbounds [3 x i8], [3 x i8]* @.str.25, i64 0, i64 0
-    call void @console.writeln(i8* %tmp52, i32 2)
+    %tmp52 = bitcast i8* %tmp51 to i8*
+    call void @mem.free(i8* %tmp52)
+    %tmp53 = getelementptr inbounds [3 x i8], [3 x i8]* @.str.25, i64 0, i64 0
+    call void @console.writeln(i8* %tmp53, i32 2)
     ret void
 }
 define void @"tests.string_test"(){
@@ -2525,11 +2531,18 @@ loop_body0_exit:
     ret void
 }
 define i32 @"main"(){
-    %v0 = alloca %"struct.Pair<%struct.string.String, i32>"; var: p
-    %v1 = alloca %"struct.Pair<i32, %struct.string.String>"; var: pair
-    %tmp0 = call %"struct.Pair<i32, %struct.string.String>" @"x<i32>"()
-    store %"struct.Pair<i32, %struct.string.String>" %tmp0, %"struct.Pair<i32, %struct.string.String>"* %v1
-    ret i32 16
+    %v0 = alloca i32*; var: x
+    call %"struct.Pair<i64, %"struct.Pair<i8, %struct.string.String>">" @"x<i64>"()
+    %tmp0 = mul i64 4, 512
+    %tmp1 = alloca i8, i64 %tmp0
+    %tmp2 = bitcast i8* %tmp1 to i32*
+    store i32* %tmp2, i32** %v0
+    %tmp3 = load i32*, i32** %v0
+    call void @"mem.default_fill<i32>"(i32 32, i32* %tmp3, i64 512)
+    %tmp4 = load i32*, i32** %v0
+    %tmp5 = getelementptr inbounds i32, i32* %tmp4, i64 511
+    %tmp6 = load i32, i32* %tmp5
+    ret i32 %tmp6
     call i32 @AllocConsole()
     call void @tests.run()
     call void @window.start()
@@ -2682,16 +2695,32 @@ endif6:
 loop_body5_exit:
     ret void
 }
-define %"struct.Pair<i32, %struct.string.String>" @"x<i32>"(){
-    %v0 = alloca %"struct.Pair<i32, %struct.string.String>"; var: p
-    %v1 = alloca %struct.string.String; var: str
-    %tmp0 = getelementptr inbounds %"struct.Pair<i32, %struct.string.String>", %"struct.Pair<i32, %struct.string.String>"* %v0, i32 0, i32 0
-    store i32 43, i32* %tmp0
-    %tmp1 = call %struct.string.String @string.empty()
-    store %struct.string.String %tmp1, %struct.string.String* %v1
-    %tmp2 = getelementptr inbounds %"struct.Pair<i32, %struct.string.String>", %"struct.Pair<i32, %struct.string.String>"* %v0, i32 0, i32 1
-    %tmp3 = load %struct.string.String, %struct.string.String* %v1
-    store %struct.string.String %tmp3, %struct.string.String* %tmp2
-    %tmp4 = load %"struct.Pair<i32, %struct.string.String>", %"struct.Pair<i32, %struct.string.String>"* %v0
-    ret %"struct.Pair<i32, %struct.string.String>" %tmp4
+define void @"mem.default_fill<i32>"(i32 %val, i32* %dest, i64 %len){
+    %v0 = alloca i64; var: i
+    store i64 0, i64* %v0
+    br label %loop_body0
+loop_body0:
+    %tmp0 = load i64, i64* %v0
+    %tmp1 = icmp sge i64 %tmp0, %len
+    br i1 %tmp1, label %then1, label %endif1
+then1:
+    br label %loop_body0_exit
+    br label %endif1
+endif1:
+    %tmp2 = load i64, i64* %v0
+    %tmp3 = getelementptr inbounds i32, i32* %dest, i64 %tmp2
+    store i32 %val, i32* %tmp3
+    %tmp4 = load i64, i64* %v0
+    %tmp5 = add i64 %tmp4, 1
+    store i64 %tmp5, i64* %v0
+    br label %loop_body0
+loop_body0_exit:
+    ret void
+}
+define %"struct.Pair<i64, %"struct.Pair<i8, %struct.string.String>">" @"x<i64>"(){
+    %v0 = alloca %"struct.Pair<i64, %"struct.Pair<i8, %struct.string.String>">"; var: p
+    %tmp0 = getelementptr inbounds %"struct.Pair<i64, %"struct.Pair<i8, %struct.string.String>">", %"struct.Pair<i64, %"struct.Pair<i8, %struct.string.String>">"* %v0, i32 0, i32 0
+    store i64 43, i64* %tmp0
+    %tmp1 = load %"struct.Pair<i64, %"struct.Pair<i8, %struct.string.String>">", %"struct.Pair<i64, %"struct.Pair<i8, %struct.string.String>">"* %v0
+    ret %"struct.Pair<i64, %"struct.Pair<i8, %struct.string.String>">" %tmp1
 }
