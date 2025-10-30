@@ -127,31 +127,33 @@ namespace mem{
 }
 namespace list{
     // Linked list
-    struct List{
-        head: &ListNode,
-        foot: &ListNode,
+    struct List<T>{
+        head: &ListNode<T>,
+        foot: &ListNode<T>,
         length: u32,
     }
     // Linked list node
-    struct ListNode{
+    struct ListNode<T>{
         data: i32,
-        next_node: &ListNode,
+        next_node: &ListNode<T>,
     }
-    fn new(list: &List){
-        list.head = 0 as &ListNode;
-        list.foot = 0 as &ListNode;
+    fn new<T>() : List<T>{
+        let list : List<T>;
+        list.head = 0 as &ListNode<T>;
+        list.foot = 0 as &ListNode<T>;
         list.length = 0 as u32;
+        return list;
     }
-    fn new_node(list: &ListNode){
-        list.next_node = 0 as &ListNode;
+    fn new_node<T>(list: &ListNode<T>){
+        list.next_node = 0 as &ListNode<T>;
         list.data = 0 as i32;
     }
-    fn extend(list: &List, data: i32){
-        let node_to_add: &ListNode = mem::malloc(sizeof(ListNode)) as &ListNode;
-        node_to_add.next_node = 0 as &ListNode;
+    fn extend<T>(list: &List<T>, data: i32){
+        let node_to_add: &ListNode<T> = mem::malloc(sizeof(ListNode<T>)) as &ListNode<T>;
+        node_to_add.next_node = 0 as &ListNode<T>;
         node_to_add.data = data;
 
-        if list.head == 0 as &ListNode {
+        if list.head == 0 as &ListNode<T> {
             list.head = node_to_add;
             list.foot = node_to_add;
         } else {
@@ -160,11 +162,11 @@ namespace list{
         }
         list.length = list.length + 1 as u32;
     }
-    fn walk(list: &List) : u32{
+    fn walk<T>(list: &List<T>) : u32{
         let l : u32 = 0 as u32;
-        let ptr : &ListNode = list.head;
+        let ptr : &ListNode<T> = list.head;
         loop {
-            if (ptr == 0 as &ListNode){
+            if (ptr == 0 as &ListNode<T>){
                 break;
             }
             l = l + 1 as u32;
@@ -172,45 +174,47 @@ namespace list{
         }
         return l;
     }
-    fn free(list: &List) {
-        let current: &ListNode = list.head;
+    fn free<T>(list: &List<T>) {
+        let current: &ListNode<T> = list.head;
         loop {
-            if (current == 0 as &ListNode) {
+            if (current == 0 as &ListNode<T>) {
                 break;
             }
-            let next: &ListNode = current.next_node;
+            let next: &ListNode<T> = current.next_node;
             mem::free(current as &void); 
             current = next; 
         }
-        list.head = 0 as &ListNode;
-        list.foot = 0 as &ListNode;
+        list.head = 0 as &ListNode<T>;
+        list.foot = 0 as &ListNode<T>;
         list.length = 0;
     }
 }
 namespace vector{
     // Dynamicly expanding array
-    struct Vec{
-        array: &i8,
+    struct Vec<T>{
+        array: &T,
         length: u32,
         capacity: u32,
     }
     #[ExtentionOf(Vec)]
-    fn new(vec: &Vec){
-        vec.array = 0 as &i8;
+    fn new<T>() : Vec<T>{
+        let vec : Vec<T>;
+        vec.array = 0 as &T;
         vec.length = 0;
         vec.capacity = 0;
+        return vec;
     }
     #[ExtentionOf(Vec)]
-    fn push(vec: &Vec, data: i8){
+    fn push<T>(vec: &Vec<T>, data: T){
         if vec.length >= vec.capacity {
             let new_capacity : u32 = 4;
             if vec.capacity != 0 as u32{
                 new_capacity = vec.capacity * 2 as u32;
             }
             
-            let new_array: &i8 = mem::malloc(sizeof(i8) * new_capacity as i64) as &i8;
+            let new_array: &T = mem::malloc(sizeof(T) * new_capacity as i64) as &T;
 
-            if vec.array != 0 as &i8 {
+            if vec.array != 0 as &T {
                 let i : u32 = 0;
                 loop{
                     if i >= vec.length {
@@ -228,22 +232,22 @@ namespace vector{
         vec.length = vec.length + 1 as u32;
     }
     #[ExtentionOf(Vec)]
-    fn push_bulk(vec: &Vec, data: &i8, data_len: i32){
+    fn push_bulk<T>(vec: &Vec<T>, data: &T, data_len: i32){
         let index : i32 = 0;
         loop{
             if index >= data_len{
                 break;
             }
-            push(vec,data[index]);
+            push::<T>(vec, data[index]);
             index = index + 1;
         }
     }
     #[ExtentionOf(Vec)]
-    fn free(vec: &Vec) {
+    fn free<T>(vec: &Vec<T>) {
         if vec.array != 0 as &i8 {
             mem::free(vec.array as &void);
         }
-        vec.array = 0 as &i8;
+        vec.array = 0 as &T;
         vec.length = 0;
         vec.capacity = 0;
     }
@@ -313,13 +317,12 @@ namespace console{
         }
     }
     fn println_u64(n: u64) {
-        let buffer: vector::Vec;
-        vector::new(&buffer);
+        let buffer: vector::Vec<i8> = vector::new::<i8>();
         if (n == 0) {
-            vector::push(&buffer, 48 as i8);
-            vector::push(&buffer, 10);
+            vector::push::<i8>(&buffer, 48 as i8);
+            vector::push::<i8>(&buffer, 10);
             write(buffer.array, buffer.length as i32);
-            vector::free(&buffer);
+            vector::free::<i8>(&buffer);
             return;
         }
 
@@ -330,7 +333,7 @@ namespace console{
                 break;
             }
             let digit_char: i8 = (mut_n % 10) as i8 + (48 as i8);
-            vector::push(&buffer, digit_char);
+            vector::push::<i8>(&buffer, digit_char);
             mut_n = mut_n / 10;
         }
 
@@ -348,10 +351,10 @@ namespace console{
             j = j - 1;
         }
 
-        vector::push(&buffer, 10); 
+        vector::push::<i8>(&buffer, 10); 
 
         write(buffer.array, buffer.length as i32);
-        vector::free(&buffer);
+        vector::free::<i8>(&buffer);
     }
 }
 namespace string{
@@ -686,27 +689,26 @@ namespace tests{
     fn vector_test() {
         console::write("vector_test: ", 13);
         
-        let v: vector::Vec;
-        vector::new(&v);
+        let v: vector::Vec<i8> = vector::new::<i8>();
         
         if v.length != 0 || v.capacity != 0 { process::throw("vector_test: new failed"); }
 
-        vector::push(&v, 10); vector::push(&v, 20); vector::push(&v, 30); vector::push(&v, 40);
+        vector::push::<i8>(&v, 10); vector::push::<i8>(&v, 20); vector::push::<i8>(&v, 30); vector::push::<i8>(&v, 40);
 
         if v.length != 4 || v.capacity != 4 { process::throw("vector_test: initial push failed"); }
         if v.array[0] != 10 || v.array[3] != 40 { process::throw("vector_test: initial content failed"); }
         
-        vector::push(&v, 50); // Trigger reallocation
+        vector::push::<i8>(&v, 50); // Trigger reallocation
 
         if v.length != 5 || v.capacity != 8 { process::throw("vector_test: realloc failed"); }
         if v.array[4] != 50 || v.array[0] != 10 { process::throw("vector_test: realloc content failed"); }
         
         let data_to_push: &i8 = "AB";
-        vector::push_bulk(&v, data_to_push, 2);
+        vector::push_bulk::<i8>(&v, data_to_push, 2);
         if v.length != 7 { process::throw("vector_test: push_bulk length failed"); }
         if v.array[5] != 'A' || v.array[6] != 'B' { process::throw("vector_test: push_bulk content failed"); }
         
-        vector::free(&v);
+        vector::free::<i8>(&v);
         if v.length != 0 || v.capacity != 0 || v.array != 0 as &i8 { process::throw("vector_test: free failed"); }
         
         console::writeln("OK", 2);
@@ -714,18 +716,18 @@ namespace tests{
     fn list_test() {
         console::write("list_test: ", 11);
 
-        let l: list::List;
-        list::new(&l);
-        if l.length != 0 || l.head != 0 as &list::ListNode { process::throw("list_test: new failed"); }
+        let l: list::List<i32> = list::new::<i32>();
+        
+        if l.length != 0 || l.head != 0 as &list::ListNode<i32> { process::throw("list_test: new failed"); }
 
-        list::extend(&l, 100);
-        list::extend(&l, 200);
-        list::extend(&l, 300);
+        list::extend::<i32>(&l, 100);
+        list::extend::<i32>(&l, 200);
+        list::extend::<i32>(&l, 300);
 
         if l.length != 3 { process::throw("list_test: length incorrect after extend"); }
-        if list::walk(&l) != 3 { process::throw("list_test: walk length incorrect"); }
+        if list::walk::<i32>(&l) != 3 { process::throw("list_test: walk length incorrect"); }
 
-        let current: &list::ListNode = l.head;
+        let current: &list::ListNode<i32> = l.head;
         if current.data != 100 { process::throw("list_test: data mismatch for node 1"); }
         current = current.next_node;
         if current.data != 200 { process::throw("list_test: data mismatch for node 2"); }
@@ -733,8 +735,8 @@ namespace tests{
         if current.data != 300 { process::throw("list_test: data mismatch for node 3"); }
         if current != l.foot { process::throw("list_test: foot pointer mismatch"); }
         
-        list::free(&l);
-        if l.length != 0 || l.head != 0 as &list::ListNode { process::throw("list_test: free failed"); }
+        list::free::<i32>(&l);
+        if l.length != 0 || l.head != 0 as &list::ListNode<i32> { process::throw("list_test: free failed"); }
 
         console::writeln("OK", 2);
     }
@@ -826,8 +828,7 @@ namespace tests{
     fn funny(){
         let path: &i8 = "D:\\Projects\\rcsharp\\src_base_structs.rcsharp";
         let file: string::String = fs::read_full_file_as_string(path);
-        let tokens: vector::Vec;
-        vector::new(&tokens); 
+        let tokens: vector::Vec<i8> = vector::new::<i8>();;
         let iterator: i32 = 0;
         let char: i8;
         let next_char: i8;
@@ -1039,7 +1040,7 @@ namespace tests{
             console::println_u64((iterator - line_index) as u64);
             iterator = iterator + 1;
         }
-        vector::free(&tokens);
+        vector::free::<i8>(&tokens);
         string::free(&file);
     }
 }

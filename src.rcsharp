@@ -16,10 +16,6 @@ fn x<T>() : Pair<T, Pair<i8, string::String> >{
     return p;
 }
 fn main(): i32 {
-    x::<i64>();
-    let x: &i32 = stalloc(sizeof(i32) * 512) as &i32;
-    mem::default_fill::<i32>(32, x, 512);
-    return x[511];
     basic_functions();
     return 0;
 }

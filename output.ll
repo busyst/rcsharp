@@ -1,9 +1,6 @@
 target triple = "x86_64-pc-windows-msvc"
 ;./src.rcsharp
 %struct.mem.PROCESS_HEAP_ENTRY = type { i8*, i32, i8, i8, i16, i8*, i32, i32, i32 }
-%struct.list.List = type { %struct.list.ListNode*, %struct.list.ListNode*, i32 }
-%struct.list.ListNode = type { i32, %struct.list.ListNode* }
-%struct.vector.Vec = type { i8*, i32, i32 }
 %struct.string.String = type { i8*, i32 }
 %struct.window.WNDCLASSEXA = type { i32, i32, i64 (i8*, i32, i64, i64)**, i32, i32, i8*, i8*, i8*, i8*, i8*, i8*, i8* }
 %struct.window.POINT = type { i32, i32 }
@@ -124,8 +121,9 @@ declare dllimport i8* @GetModuleHandleA(i8*)
 @.str.83 = private unnamed_addr constant [46 x i8] c"Window error: StartError::RegisterClassFailed\00"
 @.str.84 = private unnamed_addr constant [14 x i8] c"Hello, World!\00"
 @.str.85 = private unnamed_addr constant [45 x i8] c"Window error: StartError::CreateWindowFailed\00"
-%"struct.Pair<i64, struct.Pair<i8, %struct.string.String>>" = type { i64, %"struct.Pair<i8, %struct.string.String>" }
-%"struct.Pair<i8, %struct.string.String>" = type { i8, %struct.string.String }
+%"struct.list.List<i32>" = type { %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"*, i32 }
+%"struct.list.ListNode<i32>" = type { i32, %"struct.list.ListNode<i32>"* }
+%"struct.vector.Vec<i8>" = type { i8*, i32, i32 }
 
 define void @"__chkstk"(){
     ret void
@@ -324,265 +322,6 @@ loop_body1_exit:
     %tmp19 = load i64, i64* %v1
     ret i64 %tmp19
 }
-define void @"list.new"(%struct.list.List* %list){
-    %tmp0 = getelementptr inbounds %struct.list.List, %struct.list.List* %list, i32 0, i32 0
-    store %struct.list.ListNode* null, %struct.list.ListNode** %tmp0
-    %tmp1 = getelementptr inbounds %struct.list.List, %struct.list.List* %list, i32 0, i32 1
-    store %struct.list.ListNode* null, %struct.list.ListNode** %tmp1
-    %tmp2 = getelementptr inbounds %struct.list.List, %struct.list.List* %list, i32 0, i32 2
-    store i32 0, i32* %tmp2
-    ret void
-}
-define void @"list.new_node"(%struct.list.ListNode* %list){
-    %tmp0 = getelementptr inbounds %struct.list.ListNode, %struct.list.ListNode* %list, i32 0, i32 1
-    store %struct.list.ListNode* null, %struct.list.ListNode** %tmp0
-    %tmp1 = getelementptr inbounds %struct.list.ListNode, %struct.list.ListNode* %list, i32 0, i32 0
-    store i32 0, i32* %tmp1
-    ret void
-}
-define void @"list.extend"(%struct.list.List* %list, i32 %data){
-    %v0 = alloca %struct.list.ListNode*; var: node_to_add
-    %tmp0 = call i8* @mem.malloc(i64 12)
-    %tmp1 = bitcast i8* %tmp0 to %struct.list.ListNode*
-    store %struct.list.ListNode* %tmp1, %struct.list.ListNode** %v0
-    %tmp2 = load %struct.list.ListNode*, %struct.list.ListNode** %v0
-    %tmp3 = getelementptr inbounds %struct.list.ListNode, %struct.list.ListNode* %tmp2, i32 0, i32 1
-    store %struct.list.ListNode* null, %struct.list.ListNode** %tmp3
-    %tmp4 = load %struct.list.ListNode*, %struct.list.ListNode** %v0
-    %tmp5 = getelementptr inbounds %struct.list.ListNode, %struct.list.ListNode* %tmp4, i32 0, i32 0
-    store i32 %data, i32* %tmp5
-    %tmp6 = getelementptr inbounds %struct.list.List, %struct.list.List* %list, i32 0, i32 0
-    %tmp7 = load %struct.list.ListNode*, %struct.list.ListNode** %tmp6
-    %tmp8 = icmp eq ptr %tmp7, null
-    br i1 %tmp8, label %then0, label %else0
-then0:
-    %tmp9 = getelementptr inbounds %struct.list.List, %struct.list.List* %list, i32 0, i32 0
-    %tmp10 = load %struct.list.ListNode*, %struct.list.ListNode** %v0
-    store %struct.list.ListNode* %tmp10, %struct.list.ListNode** %tmp9
-    %tmp11 = getelementptr inbounds %struct.list.List, %struct.list.List* %list, i32 0, i32 1
-    %tmp12 = load %struct.list.ListNode*, %struct.list.ListNode** %v0
-    store %struct.list.ListNode* %tmp12, %struct.list.ListNode** %tmp11
-    br label %endif0
-else0:
-    %tmp13 = getelementptr inbounds %struct.list.List, %struct.list.List* %list, i32 0, i32 1
-    %tmp14 = getelementptr inbounds %struct.list.List, %struct.list.List* %list, i32 0, i32 1
-    %tmp15 = load %struct.list.ListNode*, %struct.list.ListNode** %tmp14
-    %tmp16 = getelementptr inbounds %struct.list.ListNode, %struct.list.ListNode* %tmp15, i32 0, i32 1
-    %tmp17 = load %struct.list.ListNode*, %struct.list.ListNode** %v0
-    store %struct.list.ListNode* %tmp17, %struct.list.ListNode** %tmp16
-    %tmp18 = getelementptr inbounds %struct.list.List, %struct.list.List* %list, i32 0, i32 1
-    %tmp19 = load %struct.list.ListNode*, %struct.list.ListNode** %v0
-    store %struct.list.ListNode* %tmp19, %struct.list.ListNode** %tmp18
-    br label %endif0
-endif0:
-    %tmp20 = getelementptr inbounds %struct.list.List, %struct.list.List* %list, i32 0, i32 2
-    %tmp21 = getelementptr inbounds %struct.list.List, %struct.list.List* %list, i32 0, i32 2
-    %tmp22 = load i32, i32* %tmp21
-    %tmp23 = add i32 %tmp22, 1
-    store i32 %tmp23, i32* %tmp20
-    ret void
-}
-define i32 @"list.walk"(%struct.list.List* %list){
-    %v0 = alloca i32; var: l
-    %v1 = alloca %struct.list.ListNode*; var: ptr
-    store i32 0, i32* %v0
-    %tmp0 = getelementptr inbounds %struct.list.List, %struct.list.List* %list, i32 0, i32 0
-    %tmp1 = load %struct.list.ListNode*, %struct.list.ListNode** %tmp0
-    store %struct.list.ListNode* %tmp1, %struct.list.ListNode** %v1
-    br label %loop_body0
-loop_body0:
-    %tmp2 = load %struct.list.ListNode*, %struct.list.ListNode** %v1
-    %tmp3 = icmp eq ptr %tmp2, null
-    br i1 %tmp3, label %then1, label %endif1
-then1:
-    br label %loop_body0_exit
-    br label %endif1
-endif1:
-    %tmp4 = load i32, i32* %v0
-    %tmp5 = add i32 %tmp4, 1
-    store i32 %tmp5, i32* %v0
-    %tmp6 = load %struct.list.ListNode*, %struct.list.ListNode** %v1
-    %tmp7 = getelementptr inbounds %struct.list.ListNode, %struct.list.ListNode* %tmp6, i32 0, i32 1
-    %tmp8 = load %struct.list.ListNode*, %struct.list.ListNode** %tmp7
-    store %struct.list.ListNode* %tmp8, %struct.list.ListNode** %v1
-    br label %loop_body0
-loop_body0_exit:
-    %tmp9 = load i32, i32* %v0
-    ret i32 %tmp9
-}
-define void @"list.free"(%struct.list.List* %list){
-    %v0 = alloca %struct.list.ListNode*; var: current
-    %v1 = alloca %struct.list.ListNode*; var: next
-    %tmp0 = getelementptr inbounds %struct.list.List, %struct.list.List* %list, i32 0, i32 0
-    %tmp1 = load %struct.list.ListNode*, %struct.list.ListNode** %tmp0
-    store %struct.list.ListNode* %tmp1, %struct.list.ListNode** %v0
-    br label %loop_body0
-loop_body0:
-    %tmp2 = load %struct.list.ListNode*, %struct.list.ListNode** %v0
-    %tmp3 = icmp eq ptr %tmp2, null
-    br i1 %tmp3, label %then1, label %endif1
-then1:
-    br label %loop_body0_exit
-    br label %endif1
-endif1:
-    %tmp4 = load %struct.list.ListNode*, %struct.list.ListNode** %v0
-    %tmp5 = getelementptr inbounds %struct.list.ListNode, %struct.list.ListNode* %tmp4, i32 0, i32 1
-    %tmp6 = load %struct.list.ListNode*, %struct.list.ListNode** %tmp5
-    store %struct.list.ListNode* %tmp6, %struct.list.ListNode** %v1
-    %tmp7 = load %struct.list.ListNode*, %struct.list.ListNode** %v0
-    %tmp8 = bitcast %struct.list.ListNode* %tmp7 to i8*
-    call void @mem.free(i8* %tmp8)
-    %tmp9 = load %struct.list.ListNode*, %struct.list.ListNode** %v1
-    store %struct.list.ListNode* %tmp9, %struct.list.ListNode** %v0
-    br label %loop_body0
-loop_body0_exit:
-    %tmp10 = getelementptr inbounds %struct.list.List, %struct.list.List* %list, i32 0, i32 0
-    store %struct.list.ListNode* null, %struct.list.ListNode** %tmp10
-    %tmp11 = getelementptr inbounds %struct.list.List, %struct.list.List* %list, i32 0, i32 1
-    store %struct.list.ListNode* null, %struct.list.ListNode** %tmp11
-    %tmp12 = getelementptr inbounds %struct.list.List, %struct.list.List* %list, i32 0, i32 2
-    store i32 0, i32* %tmp12
-    ret void
-}
-define void @"vector.new"(%struct.vector.Vec* %vec){
-    %tmp0 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 0
-    store i8* null, i8** %tmp0
-    %tmp1 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 1
-    store i32 0, i32* %tmp1
-    %tmp2 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 2
-    store i32 0, i32* %tmp2
-    ret void
-}
-define void @"vector.push"(%struct.vector.Vec* %vec, i8 %data){
-    %v0 = alloca i32; var: new_capacity
-    %v1 = alloca i8*; var: new_array
-    %v2 = alloca i32; var: i
-    %tmp0 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 1
-    %tmp1 = load i32, i32* %tmp0
-    %tmp2 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 2
-    %tmp3 = load i32, i32* %tmp2
-    %tmp4 = icmp uge i32 %tmp1, %tmp3
-    br i1 %tmp4, label %then0, label %endif0
-then0:
-    store i32 4, i32* %v0
-    %tmp5 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 2
-    %tmp6 = load i32, i32* %tmp5
-    %tmp7 = icmp ne i32 %tmp6, 0
-    br i1 %tmp7, label %then1, label %endif1
-then1:
-    %tmp8 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 2
-    %tmp9 = load i32, i32* %tmp8
-    %tmp10 = mul i32 %tmp9, 2
-    store i32 %tmp10, i32* %v0
-    br label %endif1
-endif1:
-    %tmp11 = load i32, i32* %v0
-    %tmp12 = zext i32 %tmp11 to i64
-    %tmp13 = mul i64 %tmp12, 1
-    %tmp14 = call i8* @mem.malloc(i64 %tmp13)
-    %tmp15 = bitcast i8* %tmp14 to i8*
-    store i8* %tmp15, i8** %v1
-    %tmp16 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 0
-    %tmp17 = load i8*, i8** %tmp16
-    %tmp18 = icmp ne ptr %tmp17, null
-    br i1 %tmp18, label %then2, label %endif2
-then2:
-    store i32 0, i32* %v2
-    br label %loop_body3
-loop_body3:
-    %tmp19 = load i32, i32* %v2
-    %tmp20 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 1
-    %tmp21 = load i32, i32* %tmp20
-    %tmp22 = icmp uge i32 %tmp19, %tmp21
-    br i1 %tmp22, label %then4, label %endif4
-then4:
-    br label %loop_body3_exit
-    br label %endif4
-endif4:
-    %tmp23 = load i8*, i8** %v1
-    %tmp24 = load i32, i32* %v2
-    %tmp25 = getelementptr inbounds i8, i8* %tmp23, i32 %tmp24
-    %tmp26 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 0
-    %tmp27 = load i8*, i8** %tmp26
-    %tmp28 = load i32, i32* %v2
-    %tmp29 = getelementptr inbounds i8, i8* %tmp27, i32 %tmp28
-    %tmp30 = load i8, i8* %tmp29
-    store i8 %tmp30, i8* %tmp25
-    %tmp31 = load i32, i32* %v2
-    %tmp32 = add i32 %tmp31, 1
-    store i32 %tmp32, i32* %v2
-    br label %loop_body3
-loop_body3_exit:
-    %tmp33 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 0
-    %tmp34 = load i8*, i8** %tmp33
-    %tmp35 = bitcast i8* %tmp34 to i8*
-    call void @mem.free(i8* %tmp35)
-    br label %endif2
-endif2:
-    %tmp36 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 0
-    %tmp37 = load i8*, i8** %v1
-    store i8* %tmp37, i8** %tmp36
-    %tmp38 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 2
-    %tmp39 = load i32, i32* %v0
-    store i32 %tmp39, i32* %tmp38
-    br label %endif0
-endif0:
-    %tmp40 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 0
-    %tmp41 = load i8*, i8** %tmp40
-    %tmp42 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 1
-    %tmp43 = load i32, i32* %tmp42
-    %tmp44 = getelementptr inbounds i8, i8* %tmp41, i32 %tmp43
-    store i8 %data, i8* %tmp44
-    %tmp45 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 1
-    %tmp46 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 1
-    %tmp47 = load i32, i32* %tmp46
-    %tmp48 = add i32 %tmp47, 1
-    store i32 %tmp48, i32* %tmp45
-    ret void
-}
-define void @"vector.push_bulk"(%struct.vector.Vec* %vec, i8* %data, i32 %data_len){
-    %v0 = alloca i32; var: index
-    store i32 0, i32* %v0
-    br label %loop_body0
-loop_body0:
-    %tmp0 = load i32, i32* %v0
-    %tmp1 = icmp sge i32 %tmp0, %data_len
-    br i1 %tmp1, label %then1, label %endif1
-then1:
-    br label %loop_body0_exit
-    br label %endif1
-endif1:
-    %tmp2 = load i32, i32* %v0
-    %tmp3 = getelementptr inbounds i8, i8* %data, i32 %tmp2
-    %tmp4 = load i8, i8* %tmp3
-    call void @vector.push(%struct.vector.Vec* %vec, i8 %tmp4)
-    %tmp5 = load i32, i32* %v0
-    %tmp6 = add i32 %tmp5, 1
-    store i32 %tmp6, i32* %v0
-    br label %loop_body0
-loop_body0_exit:
-    ret void
-}
-define void @"vector.free"(%struct.vector.Vec* %vec){
-    %tmp0 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 0
-    %tmp1 = load i8*, i8** %tmp0
-    %tmp2 = icmp ne ptr %tmp1, null
-    br i1 %tmp2, label %then0, label %endif0
-then0:
-    %tmp3 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 0
-    %tmp4 = load i8*, i8** %tmp3
-    %tmp5 = bitcast i8* %tmp4 to i8*
-    call void @mem.free(i8* %tmp5)
-    br label %endif0
-endif0:
-    %tmp6 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 0
-    store i8* null, i8** %tmp6
-    %tmp7 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 1
-    store i32 0, i32* %tmp7
-    %tmp8 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %vec, i32 0, i32 2
-    store i32 0, i32* %tmp8
-    ret void
-}
 define i8* @"console.get_stdout"(){
     %v0 = alloca i8*; var: stdout_handle
     %tmp0 = call i8* @GetStdHandle(i32 -11)
@@ -675,101 +414,102 @@ endif0:
     ret void
 }
 define void @"console.println_u64"(i64 %n){
-    %v0 = alloca %struct.vector.Vec; var: buffer
+    %v0 = alloca %"struct.vector.Vec<i8>"; var: buffer
     %v1 = alloca i64; var: mut_n
     %v2 = alloca i8; var: digit_char
     %v3 = alloca i32; var: i
     %v4 = alloca i32; var: j
     %v5 = alloca i8; var: temp
-    call void @vector.new(%struct.vector.Vec* %v0)
-    %tmp0 = icmp eq i64 %n, 0
-    br i1 %tmp0, label %then0, label %endif0
+    %tmp0 = call %"struct.vector.Vec<i8>" @"vector.new<i8>"()
+    store %"struct.vector.Vec<i8>" %tmp0, %"struct.vector.Vec<i8>"* %v0
+    %tmp1 = icmp eq i64 %n, 0
+    br i1 %tmp1, label %then0, label %endif0
 then0:
-    call void @vector.push(%struct.vector.Vec* %v0, i8 48)
-    call void @vector.push(%struct.vector.Vec* %v0, i8 10)
-    %tmp1 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %v0, i32 0, i32 0
-    %tmp2 = load i8*, i8** %tmp1
-    %tmp3 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %v0, i32 0, i32 1
-    %tmp4 = load i32, i32* %tmp3
-    call void @console.write(i8* %tmp2, i32 %tmp4)
-    call void @vector.free(%struct.vector.Vec* %v0)
+    call void @"vector.push<i8>"(%"struct.vector.Vec<i8>"* %v0, i8 48)
+    call void @"vector.push<i8>"(%"struct.vector.Vec<i8>"* %v0, i8 10)
+    %tmp2 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %v0, i32 0, i32 0
+    %tmp3 = load i8*, i8** %tmp2
+    %tmp4 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %v0, i32 0, i32 1
+    %tmp5 = load i32, i32* %tmp4
+    call void @console.write(i8* %tmp3, i32 %tmp5)
+    call void @"vector.free<i8>"(%"struct.vector.Vec<i8>"* %v0)
     ret void
     br label %endif0
 endif0:
     store i64 %n, i64* %v1
     br label %loop_body1
 loop_body1:
-    %tmp6 = load i64, i64* %v1
-    %tmp7 = icmp eq i64 %tmp6, 0
-    br i1 %tmp7, label %then2, label %endif2
+    %tmp7 = load i64, i64* %v1
+    %tmp8 = icmp eq i64 %tmp7, 0
+    br i1 %tmp8, label %then2, label %endif2
 then2:
     br label %loop_body1_exit
     br label %endif2
 endif2:
-    %tmp8 = load i64, i64* %v1
-    %tmp9 = urem i64 %tmp8, 10
-    %tmp10 = trunc i64 %tmp9 to i8
-    %tmp11 = add i8 %tmp10, 48
-    store i8 %tmp11, i8* %v2
-    %tmp12 = load i8, i8* %v2
-    call void @vector.push(%struct.vector.Vec* %v0, i8 %tmp12)
-    %tmp13 = load i64, i64* %v1
-    %tmp14 = udiv i64 %tmp13, 10
-    store i64 %tmp14, i64* %v1
+    %tmp9 = load i64, i64* %v1
+    %tmp10 = urem i64 %tmp9, 10
+    %tmp11 = trunc i64 %tmp10 to i8
+    %tmp12 = add i8 %tmp11, 48
+    store i8 %tmp12, i8* %v2
+    %tmp13 = load i8, i8* %v2
+    call void @"vector.push<i8>"(%"struct.vector.Vec<i8>"* %v0, i8 %tmp13)
+    %tmp14 = load i64, i64* %v1
+    %tmp15 = udiv i64 %tmp14, 10
+    store i64 %tmp15, i64* %v1
     br label %loop_body1
 loop_body1_exit:
     store i32 0, i32* %v3
-    %tmp15 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %v0, i32 0, i32 1
-    %tmp16 = load i32, i32* %tmp15
-    %tmp17 = sub i32 %tmp16, 1
-    store i32 %tmp17, i32* %v4
+    %tmp16 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %v0, i32 0, i32 1
+    %tmp17 = load i32, i32* %tmp16
+    %tmp18 = sub i32 %tmp17, 1
+    store i32 %tmp18, i32* %v4
     br label %loop_body3
 loop_body3:
-    %tmp18 = load i32, i32* %v3
-    %tmp19 = load i32, i32* %v4
-    %tmp20 = icmp uge i32 %tmp18, %tmp19
-    br i1 %tmp20, label %then4, label %endif4
+    %tmp19 = load i32, i32* %v3
+    %tmp20 = load i32, i32* %v4
+    %tmp21 = icmp uge i32 %tmp19, %tmp20
+    br i1 %tmp21, label %then4, label %endif4
 then4:
     br label %loop_body3_exit
     br label %endif4
 endif4:
-    %tmp21 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %v0, i32 0, i32 0
-    %tmp22 = load i8*, i8** %tmp21
-    %tmp23 = load i32, i32* %v3
-    %tmp24 = getelementptr inbounds i8, i8* %tmp22, i32 %tmp23
-    %tmp25 = load i8, i8* %tmp24
-    store i8 %tmp25, i8* %v5
-    %tmp26 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %v0, i32 0, i32 0
-    %tmp27 = load i8*, i8** %tmp26
-    %tmp28 = load i32, i32* %v3
-    %tmp29 = getelementptr inbounds i8, i8* %tmp27, i32 %tmp28
-    %tmp30 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %v0, i32 0, i32 0
-    %tmp31 = load i8*, i8** %tmp30
-    %tmp32 = load i32, i32* %v4
-    %tmp33 = getelementptr inbounds i8, i8* %tmp31, i32 %tmp32
-    %tmp34 = load i8, i8* %tmp33
-    store i8 %tmp34, i8* %tmp29
-    %tmp35 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %v0, i32 0, i32 0
-    %tmp36 = load i8*, i8** %tmp35
-    %tmp37 = load i32, i32* %v4
-    %tmp38 = getelementptr inbounds i8, i8* %tmp36, i32 %tmp37
-    %tmp39 = load i8, i8* %v5
-    store i8 %tmp39, i8* %tmp38
-    %tmp40 = load i32, i32* %v3
-    %tmp41 = add i32 %tmp40, 1
-    store i32 %tmp41, i32* %v3
-    %tmp42 = load i32, i32* %v4
-    %tmp43 = sub i32 %tmp42, 1
-    store i32 %tmp43, i32* %v4
+    %tmp22 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %v0, i32 0, i32 0
+    %tmp23 = load i8*, i8** %tmp22
+    %tmp24 = load i32, i32* %v3
+    %tmp25 = getelementptr inbounds i8, i8* %tmp23, i32 %tmp24
+    %tmp26 = load i8, i8* %tmp25
+    store i8 %tmp26, i8* %v5
+    %tmp27 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %v0, i32 0, i32 0
+    %tmp28 = load i8*, i8** %tmp27
+    %tmp29 = load i32, i32* %v3
+    %tmp30 = getelementptr inbounds i8, i8* %tmp28, i32 %tmp29
+    %tmp31 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %v0, i32 0, i32 0
+    %tmp32 = load i8*, i8** %tmp31
+    %tmp33 = load i32, i32* %v4
+    %tmp34 = getelementptr inbounds i8, i8* %tmp32, i32 %tmp33
+    %tmp35 = load i8, i8* %tmp34
+    store i8 %tmp35, i8* %tmp30
+    %tmp36 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %v0, i32 0, i32 0
+    %tmp37 = load i8*, i8** %tmp36
+    %tmp38 = load i32, i32* %v4
+    %tmp39 = getelementptr inbounds i8, i8* %tmp37, i32 %tmp38
+    %tmp40 = load i8, i8* %v5
+    store i8 %tmp40, i8* %tmp39
+    %tmp41 = load i32, i32* %v3
+    %tmp42 = add i32 %tmp41, 1
+    store i32 %tmp42, i32* %v3
+    %tmp43 = load i32, i32* %v4
+    %tmp44 = sub i32 %tmp43, 1
+    store i32 %tmp44, i32* %v4
     br label %loop_body3
 loop_body3_exit:
-    call void @vector.push(%struct.vector.Vec* %v0, i8 10)
-    %tmp44 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %v0, i32 0, i32 0
-    %tmp45 = load i8*, i8** %tmp44
-    %tmp46 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %v0, i32 0, i32 1
-    %tmp47 = load i32, i32* %tmp46
-    call void @console.write(i8* %tmp45, i32 %tmp47)
-    call void @vector.free(%struct.vector.Vec* %v0)
+    call void @"vector.push<i8>"(%"struct.vector.Vec<i8>"* %v0, i8 10)
+    %tmp45 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %v0, i32 0, i32 0
+    %tmp46 = load i8*, i8** %tmp45
+    %tmp47 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %v0, i32 0, i32 1
+    %tmp48 = load i32, i32* %tmp47
+    call void @console.write(i8* %tmp46, i32 %tmp48)
+    call void @"vector.free<i8>"(%"struct.vector.Vec<i8>"* %v0)
     ret void
 }
 define %struct.string.String @"string.from_c_string"(i8* %c_string){
@@ -1511,247 +1251,249 @@ endif4:
     ret void
 }
 define void @"tests.vector_test"(){
-    %v0 = alloca %struct.vector.Vec; var: v
+    %v0 = alloca %"struct.vector.Vec<i8>"; var: v
     %v1 = alloca i8*; var: data_to_push
     %tmp0 = getelementptr inbounds [14 x i8], [14 x i8]* @.str.38, i64 0, i64 0
     call void @console.write(i8* %tmp0, i32 13)
-    call void @vector.new(%struct.vector.Vec* %v0)
-    %tmp1 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %v0, i32 0, i32 1
-    %tmp2 = load i32, i32* %tmp1
-    %tmp3 = icmp ne i32 %tmp2, 0
-    %tmp4 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %v0, i32 0, i32 2
-    %tmp5 = load i32, i32* %tmp4
-    %tmp6 = icmp ne i32 %tmp5, 0
-    %tmp7 = or i1 %tmp3, %tmp6
-    br i1 %tmp7, label %then0, label %endif0
+    %tmp1 = call %"struct.vector.Vec<i8>" @"vector.new<i8>"()
+    store %"struct.vector.Vec<i8>" %tmp1, %"struct.vector.Vec<i8>"* %v0
+    %tmp2 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %v0, i32 0, i32 1
+    %tmp3 = load i32, i32* %tmp2
+    %tmp4 = icmp ne i32 %tmp3, 0
+    %tmp5 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %v0, i32 0, i32 2
+    %tmp6 = load i32, i32* %tmp5
+    %tmp7 = icmp ne i32 %tmp6, 0
+    %tmp8 = or i1 %tmp4, %tmp7
+    br i1 %tmp8, label %then0, label %endif0
 then0:
-    %tmp8 = getelementptr inbounds [24 x i8], [24 x i8]* @.str.39, i64 0, i64 0
-    call void @process.throw(i8* %tmp8)
+    %tmp9 = getelementptr inbounds [24 x i8], [24 x i8]* @.str.39, i64 0, i64 0
+    call void @process.throw(i8* %tmp9)
     br label %endif0
 endif0:
-    call void @vector.push(%struct.vector.Vec* %v0, i8 10)
-    call void @vector.push(%struct.vector.Vec* %v0, i8 20)
-    call void @vector.push(%struct.vector.Vec* %v0, i8 30)
-    call void @vector.push(%struct.vector.Vec* %v0, i8 40)
-    %tmp9 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %v0, i32 0, i32 1
-    %tmp10 = load i32, i32* %tmp9
-    %tmp11 = icmp ne i32 %tmp10, 4
-    %tmp12 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %v0, i32 0, i32 2
-    %tmp13 = load i32, i32* %tmp12
-    %tmp14 = icmp ne i32 %tmp13, 4
-    %tmp15 = or i1 %tmp11, %tmp14
-    br i1 %tmp15, label %then1, label %endif1
+    call void @"vector.push<i8>"(%"struct.vector.Vec<i8>"* %v0, i8 10)
+    call void @"vector.push<i8>"(%"struct.vector.Vec<i8>"* %v0, i8 20)
+    call void @"vector.push<i8>"(%"struct.vector.Vec<i8>"* %v0, i8 30)
+    call void @"vector.push<i8>"(%"struct.vector.Vec<i8>"* %v0, i8 40)
+    %tmp10 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %v0, i32 0, i32 1
+    %tmp11 = load i32, i32* %tmp10
+    %tmp12 = icmp ne i32 %tmp11, 4
+    %tmp13 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %v0, i32 0, i32 2
+    %tmp14 = load i32, i32* %tmp13
+    %tmp15 = icmp ne i32 %tmp14, 4
+    %tmp16 = or i1 %tmp12, %tmp15
+    br i1 %tmp16, label %then1, label %endif1
 then1:
-    %tmp16 = getelementptr inbounds [33 x i8], [33 x i8]* @.str.40, i64 0, i64 0
-    call void @process.throw(i8* %tmp16)
+    %tmp17 = getelementptr inbounds [33 x i8], [33 x i8]* @.str.40, i64 0, i64 0
+    call void @process.throw(i8* %tmp17)
     br label %endif1
 endif1:
-    %tmp17 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %v0, i32 0, i32 0
-    %tmp18 = load i8*, i8** %tmp17
-    %tmp19 = getelementptr inbounds i8, i8* %tmp18, i64 0
-    %tmp20 = load i8, i8* %tmp19
-    %tmp21 = icmp ne i8 %tmp20, 10
-    %tmp22 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %v0, i32 0, i32 0
-    %tmp23 = load i8*, i8** %tmp22
-    %tmp24 = getelementptr inbounds i8, i8* %tmp23, i64 3
-    %tmp25 = load i8, i8* %tmp24
-    %tmp26 = icmp ne i8 %tmp25, 40
-    %tmp27 = or i1 %tmp21, %tmp26
-    br i1 %tmp27, label %then2, label %endif2
+    %tmp18 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %v0, i32 0, i32 0
+    %tmp19 = load i8*, i8** %tmp18
+    %tmp20 = getelementptr inbounds i8, i8* %tmp19, i64 0
+    %tmp21 = load i8, i8* %tmp20
+    %tmp22 = icmp ne i8 %tmp21, 10
+    %tmp23 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %v0, i32 0, i32 0
+    %tmp24 = load i8*, i8** %tmp23
+    %tmp25 = getelementptr inbounds i8, i8* %tmp24, i64 3
+    %tmp26 = load i8, i8* %tmp25
+    %tmp27 = icmp ne i8 %tmp26, 40
+    %tmp28 = or i1 %tmp22, %tmp27
+    br i1 %tmp28, label %then2, label %endif2
 then2:
-    %tmp28 = getelementptr inbounds [36 x i8], [36 x i8]* @.str.41, i64 0, i64 0
-    call void @process.throw(i8* %tmp28)
+    %tmp29 = getelementptr inbounds [36 x i8], [36 x i8]* @.str.41, i64 0, i64 0
+    call void @process.throw(i8* %tmp29)
     br label %endif2
 endif2:
-    call void @vector.push(%struct.vector.Vec* %v0, i8 50)
-    %tmp29 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %v0, i32 0, i32 1
-    %tmp30 = load i32, i32* %tmp29
-    %tmp31 = icmp ne i32 %tmp30, 5
-    %tmp32 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %v0, i32 0, i32 2
-    %tmp33 = load i32, i32* %tmp32
-    %tmp34 = icmp ne i32 %tmp33, 8
-    %tmp35 = or i1 %tmp31, %tmp34
-    br i1 %tmp35, label %then3, label %endif3
+    call void @"vector.push<i8>"(%"struct.vector.Vec<i8>"* %v0, i8 50)
+    %tmp30 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %v0, i32 0, i32 1
+    %tmp31 = load i32, i32* %tmp30
+    %tmp32 = icmp ne i32 %tmp31, 5
+    %tmp33 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %v0, i32 0, i32 2
+    %tmp34 = load i32, i32* %tmp33
+    %tmp35 = icmp ne i32 %tmp34, 8
+    %tmp36 = or i1 %tmp32, %tmp35
+    br i1 %tmp36, label %then3, label %endif3
 then3:
-    %tmp36 = getelementptr inbounds [28 x i8], [28 x i8]* @.str.42, i64 0, i64 0
-    call void @process.throw(i8* %tmp36)
+    %tmp37 = getelementptr inbounds [28 x i8], [28 x i8]* @.str.42, i64 0, i64 0
+    call void @process.throw(i8* %tmp37)
     br label %endif3
 endif3:
-    %tmp37 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %v0, i32 0, i32 0
-    %tmp38 = load i8*, i8** %tmp37
-    %tmp39 = getelementptr inbounds i8, i8* %tmp38, i64 4
-    %tmp40 = load i8, i8* %tmp39
-    %tmp41 = icmp ne i8 %tmp40, 50
-    %tmp42 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %v0, i32 0, i32 0
-    %tmp43 = load i8*, i8** %tmp42
-    %tmp44 = getelementptr inbounds i8, i8* %tmp43, i64 0
-    %tmp45 = load i8, i8* %tmp44
-    %tmp46 = icmp ne i8 %tmp45, 10
-    %tmp47 = or i1 %tmp41, %tmp46
-    br i1 %tmp47, label %then4, label %endif4
+    %tmp38 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %v0, i32 0, i32 0
+    %tmp39 = load i8*, i8** %tmp38
+    %tmp40 = getelementptr inbounds i8, i8* %tmp39, i64 4
+    %tmp41 = load i8, i8* %tmp40
+    %tmp42 = icmp ne i8 %tmp41, 50
+    %tmp43 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %v0, i32 0, i32 0
+    %tmp44 = load i8*, i8** %tmp43
+    %tmp45 = getelementptr inbounds i8, i8* %tmp44, i64 0
+    %tmp46 = load i8, i8* %tmp45
+    %tmp47 = icmp ne i8 %tmp46, 10
+    %tmp48 = or i1 %tmp42, %tmp47
+    br i1 %tmp48, label %then4, label %endif4
 then4:
-    %tmp48 = getelementptr inbounds [36 x i8], [36 x i8]* @.str.43, i64 0, i64 0
-    call void @process.throw(i8* %tmp48)
+    %tmp49 = getelementptr inbounds [36 x i8], [36 x i8]* @.str.43, i64 0, i64 0
+    call void @process.throw(i8* %tmp49)
     br label %endif4
 endif4:
-    %tmp49 = getelementptr inbounds [3 x i8], [3 x i8]* @.str.44, i64 0, i64 0
-    store i8* %tmp49, i8** %v1
-    %tmp50 = load i8*, i8** %v1
-    call void @vector.push_bulk(%struct.vector.Vec* %v0, i8* %tmp50, i32 2)
-    %tmp51 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %v0, i32 0, i32 1
-    %tmp52 = load i32, i32* %tmp51
-    %tmp53 = icmp ne i32 %tmp52, 7
-    br i1 %tmp53, label %then5, label %endif5
+    %tmp50 = getelementptr inbounds [3 x i8], [3 x i8]* @.str.44, i64 0, i64 0
+    store i8* %tmp50, i8** %v1
+    %tmp51 = load i8*, i8** %v1
+    call void @"vector.push_bulk<i8>"(%"struct.vector.Vec<i8>"* %v0, i8* %tmp51, i32 2)
+    %tmp52 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %v0, i32 0, i32 1
+    %tmp53 = load i32, i32* %tmp52
+    %tmp54 = icmp ne i32 %tmp53, 7
+    br i1 %tmp54, label %then5, label %endif5
 then5:
-    %tmp54 = getelementptr inbounds [37 x i8], [37 x i8]* @.str.45, i64 0, i64 0
-    call void @process.throw(i8* %tmp54)
+    %tmp55 = getelementptr inbounds [37 x i8], [37 x i8]* @.str.45, i64 0, i64 0
+    call void @process.throw(i8* %tmp55)
     br label %endif5
 endif5:
-    %tmp55 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %v0, i32 0, i32 0
-    %tmp56 = load i8*, i8** %tmp55
-    %tmp57 = getelementptr inbounds i8, i8* %tmp56, i64 5
-    %tmp58 = load i8, i8* %tmp57
-    %tmp59 = icmp ne i8 %tmp58, 65
-    %tmp60 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %v0, i32 0, i32 0
-    %tmp61 = load i8*, i8** %tmp60
-    %tmp62 = getelementptr inbounds i8, i8* %tmp61, i64 6
-    %tmp63 = load i8, i8* %tmp62
-    %tmp64 = icmp ne i8 %tmp63, 66
-    %tmp65 = or i1 %tmp59, %tmp64
-    br i1 %tmp65, label %then6, label %endif6
+    %tmp56 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %v0, i32 0, i32 0
+    %tmp57 = load i8*, i8** %tmp56
+    %tmp58 = getelementptr inbounds i8, i8* %tmp57, i64 5
+    %tmp59 = load i8, i8* %tmp58
+    %tmp60 = icmp ne i8 %tmp59, 65
+    %tmp61 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %v0, i32 0, i32 0
+    %tmp62 = load i8*, i8** %tmp61
+    %tmp63 = getelementptr inbounds i8, i8* %tmp62, i64 6
+    %tmp64 = load i8, i8* %tmp63
+    %tmp65 = icmp ne i8 %tmp64, 66
+    %tmp66 = or i1 %tmp60, %tmp65
+    br i1 %tmp66, label %then6, label %endif6
 then6:
-    %tmp66 = getelementptr inbounds [38 x i8], [38 x i8]* @.str.46, i64 0, i64 0
-    call void @process.throw(i8* %tmp66)
+    %tmp67 = getelementptr inbounds [38 x i8], [38 x i8]* @.str.46, i64 0, i64 0
+    call void @process.throw(i8* %tmp67)
     br label %endif6
 endif6:
-    call void @vector.free(%struct.vector.Vec* %v0)
-    %tmp67 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %v0, i32 0, i32 1
-    %tmp68 = load i32, i32* %tmp67
-    %tmp69 = icmp ne i32 %tmp68, 0
-    %tmp70 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %v0, i32 0, i32 2
-    %tmp71 = load i32, i32* %tmp70
-    %tmp72 = icmp ne i32 %tmp71, 0
-    %tmp73 = or i1 %tmp69, %tmp72
-    %tmp74 = getelementptr inbounds %struct.vector.Vec, %struct.vector.Vec* %v0, i32 0, i32 0
-    %tmp75 = load i8*, i8** %tmp74
-    %tmp76 = icmp ne ptr %tmp75, null
-    %tmp77 = or i1 %tmp73, %tmp76
-    br i1 %tmp77, label %then7, label %endif7
+    call void @"vector.free<i8>"(%"struct.vector.Vec<i8>"* %v0)
+    %tmp68 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %v0, i32 0, i32 1
+    %tmp69 = load i32, i32* %tmp68
+    %tmp70 = icmp ne i32 %tmp69, 0
+    %tmp71 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %v0, i32 0, i32 2
+    %tmp72 = load i32, i32* %tmp71
+    %tmp73 = icmp ne i32 %tmp72, 0
+    %tmp74 = or i1 %tmp70, %tmp73
+    %tmp75 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %v0, i32 0, i32 0
+    %tmp76 = load i8*, i8** %tmp75
+    %tmp77 = icmp ne ptr %tmp76, null
+    %tmp78 = or i1 %tmp74, %tmp77
+    br i1 %tmp78, label %then7, label %endif7
 then7:
-    %tmp78 = getelementptr inbounds [25 x i8], [25 x i8]* @.str.47, i64 0, i64 0
-    call void @process.throw(i8* %tmp78)
+    %tmp79 = getelementptr inbounds [25 x i8], [25 x i8]* @.str.47, i64 0, i64 0
+    call void @process.throw(i8* %tmp79)
     br label %endif7
 endif7:
-    %tmp79 = getelementptr inbounds [3 x i8], [3 x i8]* @.str.48, i64 0, i64 0
-    call void @console.writeln(i8* %tmp79, i32 2)
+    %tmp80 = getelementptr inbounds [3 x i8], [3 x i8]* @.str.48, i64 0, i64 0
+    call void @console.writeln(i8* %tmp80, i32 2)
     ret void
 }
 define void @"tests.list_test"(){
-    %v0 = alloca %struct.list.List; var: l
-    %v1 = alloca %struct.list.ListNode*; var: current
+    %v0 = alloca %"struct.list.List<i32>"; var: l
+    %v1 = alloca %"struct.list.ListNode<i32>"*; var: current
     %tmp0 = getelementptr inbounds [12 x i8], [12 x i8]* @.str.49, i64 0, i64 0
     call void @console.write(i8* %tmp0, i32 11)
-    call void @list.new(%struct.list.List* %v0)
-    %tmp1 = getelementptr inbounds %struct.list.List, %struct.list.List* %v0, i32 0, i32 2
-    %tmp2 = load i32, i32* %tmp1
-    %tmp3 = icmp ne i32 %tmp2, 0
-    %tmp4 = getelementptr inbounds %struct.list.List, %struct.list.List* %v0, i32 0, i32 0
-    %tmp5 = load %struct.list.ListNode*, %struct.list.ListNode** %tmp4
-    %tmp6 = icmp ne ptr %tmp5, null
-    %tmp7 = or i1 %tmp3, %tmp6
-    br i1 %tmp7, label %then0, label %endif0
+    %tmp1 = call %"struct.list.List<i32>" @"list.new<i32>"()
+    store %"struct.list.List<i32>" %tmp1, %"struct.list.List<i32>"* %v0
+    %tmp2 = getelementptr inbounds %"struct.list.List<i32>", %"struct.list.List<i32>"* %v0, i32 0, i32 2
+    %tmp3 = load i32, i32* %tmp2
+    %tmp4 = icmp ne i32 %tmp3, 0
+    %tmp5 = getelementptr inbounds %"struct.list.List<i32>", %"struct.list.List<i32>"* %v0, i32 0, i32 0
+    %tmp6 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %tmp5
+    %tmp7 = icmp ne ptr %tmp6, null
+    %tmp8 = or i1 %tmp4, %tmp7
+    br i1 %tmp8, label %then0, label %endif0
 then0:
-    %tmp8 = getelementptr inbounds [22 x i8], [22 x i8]* @.str.50, i64 0, i64 0
-    call void @process.throw(i8* %tmp8)
+    %tmp9 = getelementptr inbounds [22 x i8], [22 x i8]* @.str.50, i64 0, i64 0
+    call void @process.throw(i8* %tmp9)
     br label %endif0
 endif0:
-    call void @list.extend(%struct.list.List* %v0, i32 100)
-    call void @list.extend(%struct.list.List* %v0, i32 200)
-    call void @list.extend(%struct.list.List* %v0, i32 300)
-    %tmp9 = getelementptr inbounds %struct.list.List, %struct.list.List* %v0, i32 0, i32 2
-    %tmp10 = load i32, i32* %tmp9
-    %tmp11 = icmp ne i32 %tmp10, 3
-    br i1 %tmp11, label %then1, label %endif1
+    call void @"list.extend<i32>"(%"struct.list.List<i32>"* %v0, i32 100)
+    call void @"list.extend<i32>"(%"struct.list.List<i32>"* %v0, i32 200)
+    call void @"list.extend<i32>"(%"struct.list.List<i32>"* %v0, i32 300)
+    %tmp10 = getelementptr inbounds %"struct.list.List<i32>", %"struct.list.List<i32>"* %v0, i32 0, i32 2
+    %tmp11 = load i32, i32* %tmp10
+    %tmp12 = icmp ne i32 %tmp11, 3
+    br i1 %tmp12, label %then1, label %endif1
 then1:
-    %tmp12 = getelementptr inbounds [41 x i8], [41 x i8]* @.str.51, i64 0, i64 0
-    call void @process.throw(i8* %tmp12)
+    %tmp13 = getelementptr inbounds [41 x i8], [41 x i8]* @.str.51, i64 0, i64 0
+    call void @process.throw(i8* %tmp13)
     br label %endif1
 endif1:
-    %tmp13 = call i32 @list.walk(%struct.list.List* %v0)
-    %tmp14 = icmp ne i32 %tmp13, 3
-    br i1 %tmp14, label %then2, label %endif2
+    %tmp14 = call i32 @"list.walk<i32>"(%"struct.list.List<i32>"* %v0)
+    %tmp15 = icmp ne i32 %tmp14, 3
+    br i1 %tmp15, label %then2, label %endif2
 then2:
-    %tmp15 = getelementptr inbounds [33 x i8], [33 x i8]* @.str.52, i64 0, i64 0
-    call void @process.throw(i8* %tmp15)
+    %tmp16 = getelementptr inbounds [33 x i8], [33 x i8]* @.str.52, i64 0, i64 0
+    call void @process.throw(i8* %tmp16)
     br label %endif2
 endif2:
-    %tmp16 = getelementptr inbounds %struct.list.List, %struct.list.List* %v0, i32 0, i32 0
-    %tmp17 = load %struct.list.ListNode*, %struct.list.ListNode** %tmp16
-    store %struct.list.ListNode* %tmp17, %struct.list.ListNode** %v1
-    %tmp18 = load %struct.list.ListNode*, %struct.list.ListNode** %v1
-    %tmp19 = getelementptr inbounds %struct.list.ListNode, %struct.list.ListNode* %tmp18, i32 0, i32 0
-    %tmp20 = load i32, i32* %tmp19
-    %tmp21 = icmp ne i32 %tmp20, 100
-    br i1 %tmp21, label %then3, label %endif3
+    %tmp17 = getelementptr inbounds %"struct.list.List<i32>", %"struct.list.List<i32>"* %v0, i32 0, i32 0
+    %tmp18 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %tmp17
+    store %"struct.list.ListNode<i32>"* %tmp18, %"struct.list.ListNode<i32>"** %v1
+    %tmp19 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %v1
+    %tmp20 = getelementptr inbounds %"struct.list.ListNode<i32>", %"struct.list.ListNode<i32>"* %tmp19, i32 0, i32 0
+    %tmp21 = load i32, i32* %tmp20
+    %tmp22 = icmp ne i32 %tmp21, 100
+    br i1 %tmp22, label %then3, label %endif3
 then3:
-    %tmp22 = getelementptr inbounds [36 x i8], [36 x i8]* @.str.53, i64 0, i64 0
-    call void @process.throw(i8* %tmp22)
+    %tmp23 = getelementptr inbounds [36 x i8], [36 x i8]* @.str.53, i64 0, i64 0
+    call void @process.throw(i8* %tmp23)
     br label %endif3
 endif3:
-    %tmp23 = load %struct.list.ListNode*, %struct.list.ListNode** %v1
-    %tmp24 = getelementptr inbounds %struct.list.ListNode, %struct.list.ListNode* %tmp23, i32 0, i32 1
-    %tmp25 = load %struct.list.ListNode*, %struct.list.ListNode** %tmp24
-    store %struct.list.ListNode* %tmp25, %struct.list.ListNode** %v1
-    %tmp26 = load %struct.list.ListNode*, %struct.list.ListNode** %v1
-    %tmp27 = getelementptr inbounds %struct.list.ListNode, %struct.list.ListNode* %tmp26, i32 0, i32 0
-    %tmp28 = load i32, i32* %tmp27
-    %tmp29 = icmp ne i32 %tmp28, 200
-    br i1 %tmp29, label %then4, label %endif4
+    %tmp24 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %v1
+    %tmp25 = getelementptr inbounds %"struct.list.ListNode<i32>", %"struct.list.ListNode<i32>"* %tmp24, i32 0, i32 1
+    %tmp26 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %tmp25
+    store %"struct.list.ListNode<i32>"* %tmp26, %"struct.list.ListNode<i32>"** %v1
+    %tmp27 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %v1
+    %tmp28 = getelementptr inbounds %"struct.list.ListNode<i32>", %"struct.list.ListNode<i32>"* %tmp27, i32 0, i32 0
+    %tmp29 = load i32, i32* %tmp28
+    %tmp30 = icmp ne i32 %tmp29, 200
+    br i1 %tmp30, label %then4, label %endif4
 then4:
-    %tmp30 = getelementptr inbounds [36 x i8], [36 x i8]* @.str.54, i64 0, i64 0
-    call void @process.throw(i8* %tmp30)
+    %tmp31 = getelementptr inbounds [36 x i8], [36 x i8]* @.str.54, i64 0, i64 0
+    call void @process.throw(i8* %tmp31)
     br label %endif4
 endif4:
-    %tmp31 = load %struct.list.ListNode*, %struct.list.ListNode** %v1
-    %tmp32 = getelementptr inbounds %struct.list.ListNode, %struct.list.ListNode* %tmp31, i32 0, i32 1
-    %tmp33 = load %struct.list.ListNode*, %struct.list.ListNode** %tmp32
-    store %struct.list.ListNode* %tmp33, %struct.list.ListNode** %v1
-    %tmp34 = load %struct.list.ListNode*, %struct.list.ListNode** %v1
-    %tmp35 = getelementptr inbounds %struct.list.ListNode, %struct.list.ListNode* %tmp34, i32 0, i32 0
-    %tmp36 = load i32, i32* %tmp35
-    %tmp37 = icmp ne i32 %tmp36, 300
-    br i1 %tmp37, label %then5, label %endif5
+    %tmp32 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %v1
+    %tmp33 = getelementptr inbounds %"struct.list.ListNode<i32>", %"struct.list.ListNode<i32>"* %tmp32, i32 0, i32 1
+    %tmp34 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %tmp33
+    store %"struct.list.ListNode<i32>"* %tmp34, %"struct.list.ListNode<i32>"** %v1
+    %tmp35 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %v1
+    %tmp36 = getelementptr inbounds %"struct.list.ListNode<i32>", %"struct.list.ListNode<i32>"* %tmp35, i32 0, i32 0
+    %tmp37 = load i32, i32* %tmp36
+    %tmp38 = icmp ne i32 %tmp37, 300
+    br i1 %tmp38, label %then5, label %endif5
 then5:
-    %tmp38 = getelementptr inbounds [36 x i8], [36 x i8]* @.str.55, i64 0, i64 0
-    call void @process.throw(i8* %tmp38)
+    %tmp39 = getelementptr inbounds [36 x i8], [36 x i8]* @.str.55, i64 0, i64 0
+    call void @process.throw(i8* %tmp39)
     br label %endif5
 endif5:
-    %tmp39 = load %struct.list.ListNode*, %struct.list.ListNode** %v1
-    %tmp40 = getelementptr inbounds %struct.list.List, %struct.list.List* %v0, i32 0, i32 1
-    %tmp41 = load %struct.list.ListNode*, %struct.list.ListNode** %tmp40
-    %tmp42 = icmp ne ptr %tmp39, %tmp41
-    br i1 %tmp42, label %then6, label %endif6
+    %tmp40 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %v1
+    %tmp41 = getelementptr inbounds %"struct.list.List<i32>", %"struct.list.List<i32>"* %v0, i32 0, i32 1
+    %tmp42 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %tmp41
+    %tmp43 = icmp ne ptr %tmp40, %tmp42
+    br i1 %tmp43, label %then6, label %endif6
 then6:
-    %tmp43 = getelementptr inbounds [33 x i8], [33 x i8]* @.str.56, i64 0, i64 0
-    call void @process.throw(i8* %tmp43)
+    %tmp44 = getelementptr inbounds [33 x i8], [33 x i8]* @.str.56, i64 0, i64 0
+    call void @process.throw(i8* %tmp44)
     br label %endif6
 endif6:
-    call void @list.free(%struct.list.List* %v0)
-    %tmp44 = getelementptr inbounds %struct.list.List, %struct.list.List* %v0, i32 0, i32 2
-    %tmp45 = load i32, i32* %tmp44
-    %tmp46 = icmp ne i32 %tmp45, 0
-    %tmp47 = getelementptr inbounds %struct.list.List, %struct.list.List* %v0, i32 0, i32 0
-    %tmp48 = load %struct.list.ListNode*, %struct.list.ListNode** %tmp47
-    %tmp49 = icmp ne ptr %tmp48, null
-    %tmp50 = or i1 %tmp46, %tmp49
-    br i1 %tmp50, label %then7, label %endif7
+    call void @"list.free<i32>"(%"struct.list.List<i32>"* %v0)
+    %tmp45 = getelementptr inbounds %"struct.list.List<i32>", %"struct.list.List<i32>"* %v0, i32 0, i32 2
+    %tmp46 = load i32, i32* %tmp45
+    %tmp47 = icmp ne i32 %tmp46, 0
+    %tmp48 = getelementptr inbounds %"struct.list.List<i32>", %"struct.list.List<i32>"* %v0, i32 0, i32 0
+    %tmp49 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %tmp48
+    %tmp50 = icmp ne ptr %tmp49, null
+    %tmp51 = or i1 %tmp47, %tmp50
+    br i1 %tmp51, label %then7, label %endif7
 then7:
-    %tmp51 = getelementptr inbounds [23 x i8], [23 x i8]* @.str.57, i64 0, i64 0
-    call void @process.throw(i8* %tmp51)
+    %tmp52 = getelementptr inbounds [23 x i8], [23 x i8]* @.str.57, i64 0, i64 0
+    call void @process.throw(i8* %tmp52)
     br label %endif7
 endif7:
-    %tmp52 = getelementptr inbounds [3 x i8], [3 x i8]* @.str.58, i64 0, i64 0
-    call void @console.writeln(i8* %tmp52, i32 2)
+    %tmp53 = getelementptr inbounds [3 x i8], [3 x i8]* @.str.58, i64 0, i64 0
+    call void @console.writeln(i8* %tmp53, i32 2)
     ret void
 }
 define void @"tests.process_test"(){
@@ -1977,7 +1719,7 @@ define i1 @"tests.is_valid_number_token"(i8 %c){
 define void @"tests.funny"(){
     %v0 = alloca i8*; var: path
     %v1 = alloca %struct.string.String; var: file
-    %v2 = alloca %struct.vector.Vec; var: tokens
+    %v2 = alloca %"struct.vector.Vec<i8>"; var: tokens
     %v3 = alloca i32; var: iterator
     %v4 = alloca i8; var: char
     %v5 = alloca i8; var: next_char
@@ -1990,559 +1732,548 @@ define void @"tests.funny"(){
     %tmp1 = load i8*, i8** %v0
     %tmp2 = call %struct.string.String @fs.read_full_file_as_string(i8* %tmp1)
     store %struct.string.String %tmp2, %struct.string.String* %v1
-    call void @vector.new(%struct.vector.Vec* %v2)
+    %tmp3 = call %"struct.vector.Vec<i8>" @"vector.new<i8>"()
+    store %"struct.vector.Vec<i8>" %tmp3, %"struct.vector.Vec<i8>"* %v2
     store i32 0, i32* %v3
     store i32 0, i32* %v8
     store i32 0, i32* %v9
     br label %loop_body0
 loop_body0:
-    %tmp3 = load i32, i32* %v3
-    %tmp4 = getelementptr inbounds %struct.string.String, %struct.string.String* %v1, i32 0, i32 1
-    %tmp5 = load i32, i32* %tmp4
-    %tmp6 = icmp sge i32 %tmp3, %tmp5
-    br i1 %tmp6, label %then1, label %endif1
+    %tmp4 = load i32, i32* %v3
+    %tmp5 = getelementptr inbounds %struct.string.String, %struct.string.String* %v1, i32 0, i32 1
+    %tmp6 = load i32, i32* %tmp5
+    %tmp7 = icmp sge i32 %tmp4, %tmp6
+    br i1 %tmp7, label %then1, label %endif1
 then1:
     br label %loop_body0_exit
     br label %endif1
 endif1:
-    %tmp7 = getelementptr inbounds %struct.string.String, %struct.string.String* %v1, i32 0, i32 0
-    %tmp8 = load i8*, i8** %tmp7
-    %tmp9 = load i32, i32* %v3
-    %tmp10 = getelementptr inbounds i8, i8* %tmp8, i32 %tmp9
-    %tmp11 = load i8, i8* %tmp10
-    store i8 %tmp11, i8* %v4
-    %tmp12 = load i8, i8* %v4
-    %tmp13 = icmp eq i8 %tmp12, 10
-    br i1 %tmp13, label %then2, label %endif2
+    %tmp8 = getelementptr inbounds %struct.string.String, %struct.string.String* %v1, i32 0, i32 0
+    %tmp9 = load i8*, i8** %tmp8
+    %tmp10 = load i32, i32* %v3
+    %tmp11 = getelementptr inbounds i8, i8* %tmp9, i32 %tmp10
+    %tmp12 = load i8, i8* %tmp11
+    store i8 %tmp12, i8* %v4
+    %tmp13 = load i8, i8* %v4
+    %tmp14 = icmp eq i8 %tmp13, 10
+    br i1 %tmp14, label %then2, label %endif2
 then2:
-    %tmp14 = load i32, i32* %v8
-    %tmp15 = add i32 %tmp14, 1
-    store i32 %tmp15, i32* %v8
-    %tmp16 = load i32, i32* %v3
-    store i32 %tmp16, i32* %v9
+    %tmp15 = load i32, i32* %v8
+    %tmp16 = add i32 %tmp15, 1
+    store i32 %tmp16, i32* %v8
     %tmp17 = load i32, i32* %v3
-    %tmp18 = add i32 %tmp17, 1
-    store i32 %tmp18, i32* %v3
+    store i32 %tmp17, i32* %v9
+    %tmp18 = load i32, i32* %v3
+    %tmp19 = add i32 %tmp18, 1
+    store i32 %tmp19, i32* %v3
     br label %loop_body0
     br label %endif2
 endif2:
-    %tmp19 = load i8, i8* %v4
-    %tmp20 = icmp eq i8 %tmp19, 32
-    %tmp21 = load i8, i8* %v4
-    %tmp22 = icmp eq i8 %tmp21, 9
-    %tmp23 = or i1 %tmp20, %tmp22
-    %tmp24 = load i8, i8* %v4
-    %tmp25 = icmp eq i8 %tmp24, 13
-    %tmp26 = or i1 %tmp23, %tmp25
-    %tmp27 = and i1 %tmp26, 1
-    br i1 %tmp27, label %then3, label %endif3
+    %tmp20 = load i8, i8* %v4
+    %tmp21 = icmp eq i8 %tmp20, 32
+    %tmp22 = load i8, i8* %v4
+    %tmp23 = icmp eq i8 %tmp22, 9
+    %tmp24 = or i1 %tmp21, %tmp23
+    %tmp25 = load i8, i8* %v4
+    %tmp26 = icmp eq i8 %tmp25, 13
+    %tmp27 = or i1 %tmp24, %tmp26
+    %tmp28 = and i1 %tmp27, 1
+    br i1 %tmp28, label %then3, label %endif3
 then3:
-    %tmp28 = load i32, i32* %v3
-    %tmp29 = add i32 %tmp28, 1
-    store i32 %tmp29, i32* %v3
+    %tmp29 = load i32, i32* %v3
+    %tmp30 = add i32 %tmp29, 1
+    store i32 %tmp30, i32* %v3
     br label %loop_body0
     br label %endif3
 endif3:
-    %tmp30 = load i32, i32* %v3
-    %tmp31 = add i32 %tmp30, 1
-    %tmp32 = getelementptr inbounds %struct.string.String, %struct.string.String* %v1, i32 0, i32 1
-    %tmp33 = load i32, i32* %tmp32
-    %tmp34 = icmp slt i32 %tmp31, %tmp33
-    br i1 %tmp34, label %then4, label %else4
+    %tmp31 = load i32, i32* %v3
+    %tmp32 = add i32 %tmp31, 1
+    %tmp33 = getelementptr inbounds %struct.string.String, %struct.string.String* %v1, i32 0, i32 1
+    %tmp34 = load i32, i32* %tmp33
+    %tmp35 = icmp slt i32 %tmp32, %tmp34
+    br i1 %tmp35, label %then4, label %else4
 then4:
-    %tmp35 = getelementptr inbounds %struct.string.String, %struct.string.String* %v1, i32 0, i32 0
-    %tmp36 = load i8*, i8** %tmp35
-    %tmp37 = load i32, i32* %v3
-    %tmp38 = add i32 %tmp37, 1
-    %tmp39 = getelementptr inbounds i8, i8* %tmp36, i32 %tmp38
-    %tmp40 = load i8, i8* %tmp39
-    store i8 %tmp40, i8* %v5
+    %tmp36 = getelementptr inbounds %struct.string.String, %struct.string.String* %v1, i32 0, i32 0
+    %tmp37 = load i8*, i8** %tmp36
+    %tmp38 = load i32, i32* %v3
+    %tmp39 = add i32 %tmp38, 1
+    %tmp40 = getelementptr inbounds i8, i8* %tmp37, i32 %tmp39
+    %tmp41 = load i8, i8* %tmp40
+    store i8 %tmp41, i8* %v5
     br label %endif4
 else4:
     store i8 0, i8* %v5
     br label %endif4
 endif4:
-    %tmp41 = load i8, i8* %v4
-    %tmp42 = icmp eq i8 %tmp41, 47
-    %tmp43 = load i8, i8* %v5
-    %tmp44 = icmp eq i8 %tmp43, 47
-    %tmp45 = and i1 %tmp42, %tmp44
-    br i1 %tmp45, label %then5, label %endif5
+    %tmp42 = load i8, i8* %v4
+    %tmp43 = icmp eq i8 %tmp42, 47
+    %tmp44 = load i8, i8* %v5
+    %tmp45 = icmp eq i8 %tmp44, 47
+    %tmp46 = and i1 %tmp43, %tmp45
+    br i1 %tmp46, label %then5, label %endif5
 then5:
-    %tmp46 = load i32, i32* %v3
-    store i32 %tmp46, i32* %v6
+    %tmp47 = load i32, i32* %v3
+    store i32 %tmp47, i32* %v6
     call void @tests.consume_while(%struct.string.String* %v1, i32* %v3, i1 (i8)** @tests.not_new_line)
     br label %loop_body0
     br label %endif5
 endif5:
-    %tmp47 = load i8, i8* %v4
-    %tmp48 = call i1 @string_utils.is_ascii_num(i8 %tmp47)
-    br i1 %tmp48, label %then6, label %endif6
+    %tmp48 = load i8, i8* %v4
+    %tmp49 = call i1 @string_utils.is_ascii_num(i8 %tmp48)
+    br i1 %tmp49, label %then6, label %endif6
 then6:
-    %tmp49 = load i32, i32* %v3
-    store i32 %tmp49, i32* %v6
-    %tmp50 = load i8, i8* %v5
-    %tmp51 = icmp eq i8 %tmp50, 120
-    %tmp52 = load i8, i8* %v5
-    %tmp53 = icmp eq i8 %tmp52, 98
-    %tmp54 = or i1 %tmp51, %tmp53
-    br i1 %tmp54, label %then7, label %endif7
+    %tmp50 = load i32, i32* %v3
+    store i32 %tmp50, i32* %v6
+    %tmp51 = load i8, i8* %v5
+    %tmp52 = icmp eq i8 %tmp51, 120
+    %tmp53 = load i8, i8* %v5
+    %tmp54 = icmp eq i8 %tmp53, 98
+    %tmp55 = or i1 %tmp52, %tmp54
+    br i1 %tmp55, label %then7, label %endif7
 then7:
-    %tmp55 = load i32, i32* %v3
-    %tmp56 = add i32 %tmp55, 2
-    store i32 %tmp56, i32* %v3
+    %tmp56 = load i32, i32* %v3
+    %tmp57 = add i32 %tmp56, 2
+    store i32 %tmp57, i32* %v3
     br label %endif7
 endif7:
     call void @tests.consume_while(%struct.string.String* %v1, i32* %v3, i1 (i8)** @tests.is_valid_number_token)
-    %tmp57 = load i32, i32* %v3
-    %tmp58 = load i32, i32* %v6
-    %tmp59 = sub i32 %tmp57, %tmp58
-    %tmp60 = call %struct.string.String @string.with_size(i32 %tmp59)
-    store %struct.string.String %tmp60, %struct.string.String* %v7
-    %tmp61 = getelementptr inbounds %struct.string.String, %struct.string.String* %v1, i32 0, i32 0
-    %tmp62 = load i8*, i8** %tmp61
-    %tmp63 = load i32, i32* %v6
-    %tmp64 = getelementptr i8, i8* %tmp62, i32 %tmp63
-    %tmp65 = getelementptr inbounds %struct.string.String, %struct.string.String* %v7, i32 0, i32 0
-    %tmp66 = load i8*, i8** %tmp65
-    %tmp67 = getelementptr inbounds %struct.string.String, %struct.string.String* %v7, i32 0, i32 1
-    %tmp68 = load i32, i32* %tmp67
-    %tmp69 = sext i32 %tmp68 to i64
-    call void @mem.copy(i8* %tmp64, i8* %tmp66, i64 %tmp69)
+    %tmp58 = load i32, i32* %v3
+    %tmp59 = load i32, i32* %v6
+    %tmp60 = sub i32 %tmp58, %tmp59
+    %tmp61 = call %struct.string.String @string.with_size(i32 %tmp60)
+    store %struct.string.String %tmp61, %struct.string.String* %v7
+    %tmp62 = getelementptr inbounds %struct.string.String, %struct.string.String* %v1, i32 0, i32 0
+    %tmp63 = load i8*, i8** %tmp62
+    %tmp64 = load i32, i32* %v6
+    %tmp65 = getelementptr i8, i8* %tmp63, i32 %tmp64
+    %tmp66 = getelementptr inbounds %struct.string.String, %struct.string.String* %v7, i32 0, i32 0
+    %tmp67 = load i8*, i8** %tmp66
+    %tmp68 = getelementptr inbounds %struct.string.String, %struct.string.String* %v7, i32 0, i32 1
+    %tmp69 = load i32, i32* %tmp68
+    %tmp70 = sext i32 %tmp69 to i64
+    call void @mem.copy(i8* %tmp65, i8* %tmp67, i64 %tmp70)
     call void @string.free(%struct.string.String* %v7)
     br label %loop_body0
     br label %endif6
 endif6:
-    %tmp70 = load i8, i8* %v4
-    %tmp71 = call i1 @string_utils.is_ascii_char(i8 %tmp70)
-    %tmp72 = load i8, i8* %v4
-    %tmp73 = icmp eq i8 %tmp72, 95
-    %tmp74 = or i1 %tmp71, %tmp73
-    br i1 %tmp74, label %then8, label %endif8
+    %tmp71 = load i8, i8* %v4
+    %tmp72 = call i1 @string_utils.is_ascii_char(i8 %tmp71)
+    %tmp73 = load i8, i8* %v4
+    %tmp74 = icmp eq i8 %tmp73, 95
+    %tmp75 = or i1 %tmp72, %tmp74
+    br i1 %tmp75, label %then8, label %endif8
 then8:
-    %tmp75 = load i32, i32* %v3
-    store i32 %tmp75, i32* %v6
-    call void @tests.consume_while(%struct.string.String* %v1, i32* %v3, i1 (i8)** @tests.valid_name_token)
     %tmp76 = load i32, i32* %v3
-    %tmp77 = load i32, i32* %v6
-    %tmp78 = sub i32 %tmp76, %tmp77
-    %tmp79 = call %struct.string.String @string.with_size(i32 %tmp78)
-    store %struct.string.String %tmp79, %struct.string.String* %v7
-    %tmp80 = getelementptr inbounds %struct.string.String, %struct.string.String* %v1, i32 0, i32 0
-    %tmp81 = load i8*, i8** %tmp80
-    %tmp82 = load i32, i32* %v6
-    %tmp83 = getelementptr i8, i8* %tmp81, i32 %tmp82
-    %tmp84 = getelementptr inbounds %struct.string.String, %struct.string.String* %v7, i32 0, i32 0
-    %tmp85 = load i8*, i8** %tmp84
-    %tmp86 = getelementptr inbounds %struct.string.String, %struct.string.String* %v7, i32 0, i32 1
-    %tmp87 = load i32, i32* %tmp86
-    %tmp88 = sext i32 %tmp87 to i64
-    call void @mem.copy(i8* %tmp83, i8* %tmp85, i64 %tmp88)
+    store i32 %tmp76, i32* %v6
+    call void @tests.consume_while(%struct.string.String* %v1, i32* %v3, i1 (i8)** @tests.valid_name_token)
+    %tmp77 = load i32, i32* %v3
+    %tmp78 = load i32, i32* %v6
+    %tmp79 = sub i32 %tmp77, %tmp78
+    %tmp80 = call %struct.string.String @string.with_size(i32 %tmp79)
+    store %struct.string.String %tmp80, %struct.string.String* %v7
+    %tmp81 = getelementptr inbounds %struct.string.String, %struct.string.String* %v1, i32 0, i32 0
+    %tmp82 = load i8*, i8** %tmp81
+    %tmp83 = load i32, i32* %v6
+    %tmp84 = getelementptr i8, i8* %tmp82, i32 %tmp83
+    %tmp85 = getelementptr inbounds %struct.string.String, %struct.string.String* %v7, i32 0, i32 0
+    %tmp86 = load i8*, i8** %tmp85
+    %tmp87 = getelementptr inbounds %struct.string.String, %struct.string.String* %v7, i32 0, i32 1
+    %tmp88 = load i32, i32* %tmp87
+    %tmp89 = sext i32 %tmp88 to i64
+    call void @mem.copy(i8* %tmp84, i8* %tmp86, i64 %tmp89)
     call void @string.free(%struct.string.String* %v7)
     br label %loop_body0
     br label %endif8
 endif8:
-    %tmp89 = load i8, i8* %v4
-    %tmp90 = icmp eq i8 %tmp89, 34
-    br i1 %tmp90, label %then9, label %endif9
+    %tmp90 = load i8, i8* %v4
+    %tmp91 = icmp eq i8 %tmp90, 34
+    br i1 %tmp91, label %then9, label %endif9
 then9:
-    %tmp91 = load i32, i32* %v3
-    store i32 %tmp91, i32* %v6
+    %tmp92 = load i32, i32* %v3
+    store i32 %tmp92, i32* %v6
     br label %loop_body10
 loop_body10:
-    %tmp92 = load i32, i32* %v3
-    %tmp93 = add i32 %tmp92, 1
-    store i32 %tmp93, i32* %v3
-    %tmp94 = load i32, i32* %v3
-    %tmp95 = getelementptr inbounds %struct.string.String, %struct.string.String* %v1, i32 0, i32 1
-    %tmp96 = load i32, i32* %tmp95
-    %tmp97 = icmp sge i32 %tmp94, %tmp96
-    br i1 %tmp97, label %then11, label %endif11
+    %tmp93 = load i32, i32* %v3
+    %tmp94 = add i32 %tmp93, 1
+    store i32 %tmp94, i32* %v3
+    %tmp95 = load i32, i32* %v3
+    %tmp96 = getelementptr inbounds %struct.string.String, %struct.string.String* %v1, i32 0, i32 1
+    %tmp97 = load i32, i32* %tmp96
+    %tmp98 = icmp sge i32 %tmp95, %tmp97
+    br i1 %tmp98, label %then11, label %endif11
 then11:
     br label %loop_body10_exit
     br label %endif11
 endif11:
-    %tmp98 = getelementptr inbounds %struct.string.String, %struct.string.String* %v1, i32 0, i32 0
-    %tmp99 = load i8*, i8** %tmp98
-    %tmp100 = load i32, i32* %v3
-    %tmp101 = getelementptr inbounds i8, i8* %tmp99, i32 %tmp100
-    %tmp102 = load i8, i8* %tmp101
-    store i8 %tmp102, i8* %v4
-    %tmp103 = load i8, i8* %v4
-    %tmp104 = icmp ne i8 %tmp103, 34
-    br i1 %tmp104, label %then12, label %endif12
+    %tmp99 = getelementptr inbounds %struct.string.String, %struct.string.String* %v1, i32 0, i32 0
+    %tmp100 = load i8*, i8** %tmp99
+    %tmp101 = load i32, i32* %v3
+    %tmp102 = getelementptr inbounds i8, i8* %tmp100, i32 %tmp101
+    %tmp103 = load i8, i8* %tmp102
+    store i8 %tmp103, i8* %v4
+    %tmp104 = load i8, i8* %v4
+    %tmp105 = icmp ne i8 %tmp104, 34
+    br i1 %tmp105, label %then12, label %endif12
 then12:
     br label %loop_body10
     br label %endif12
 endif12:
-    %tmp105 = load i32, i32* %v3
-    %tmp106 = add i32 %tmp105, 1
-    store i32 %tmp106, i32* %v3
+    %tmp106 = load i32, i32* %v3
+    %tmp107 = add i32 %tmp106, 1
+    store i32 %tmp107, i32* %v3
     br label %loop_body10_exit
     br label %loop_body10
 loop_body10_exit:
-    %tmp107 = load i32, i32* %v3
-    %tmp108 = load i32, i32* %v6
-    %tmp109 = sub i32 %tmp107, %tmp108
-    %tmp110 = call %struct.string.String @string.with_size(i32 %tmp109)
-    store %struct.string.String %tmp110, %struct.string.String* %v7
-    %tmp111 = getelementptr inbounds %struct.string.String, %struct.string.String* %v1, i32 0, i32 0
-    %tmp112 = load i8*, i8** %tmp111
-    %tmp113 = load i32, i32* %v6
-    %tmp114 = getelementptr i8, i8* %tmp112, i32 %tmp113
-    %tmp115 = getelementptr inbounds %struct.string.String, %struct.string.String* %v7, i32 0, i32 0
-    %tmp116 = load i8*, i8** %tmp115
-    %tmp117 = getelementptr inbounds %struct.string.String, %struct.string.String* %v7, i32 0, i32 1
-    %tmp118 = load i32, i32* %tmp117
-    %tmp119 = sext i32 %tmp118 to i64
-    call void @mem.copy(i8* %tmp114, i8* %tmp116, i64 %tmp119)
+    %tmp108 = load i32, i32* %v3
+    %tmp109 = load i32, i32* %v6
+    %tmp110 = sub i32 %tmp108, %tmp109
+    %tmp111 = call %struct.string.String @string.with_size(i32 %tmp110)
+    store %struct.string.String %tmp111, %struct.string.String* %v7
+    %tmp112 = getelementptr inbounds %struct.string.String, %struct.string.String* %v1, i32 0, i32 0
+    %tmp113 = load i8*, i8** %tmp112
+    %tmp114 = load i32, i32* %v6
+    %tmp115 = getelementptr i8, i8* %tmp113, i32 %tmp114
+    %tmp116 = getelementptr inbounds %struct.string.String, %struct.string.String* %v7, i32 0, i32 0
+    %tmp117 = load i8*, i8** %tmp116
+    %tmp118 = getelementptr inbounds %struct.string.String, %struct.string.String* %v7, i32 0, i32 1
+    %tmp119 = load i32, i32* %tmp118
+    %tmp120 = sext i32 %tmp119 to i64
+    call void @mem.copy(i8* %tmp115, i8* %tmp117, i64 %tmp120)
     call void @string.free(%struct.string.String* %v7)
     br label %loop_body0
     br label %endif9
 endif9:
-    %tmp120 = load i8, i8* %v4
-    %tmp121 = icmp eq i8 %tmp120, 39
-    br i1 %tmp121, label %then13, label %endif13
+    %tmp121 = load i8, i8* %v4
+    %tmp122 = icmp eq i8 %tmp121, 39
+    br i1 %tmp122, label %then13, label %endif13
 then13:
-    %tmp122 = load i32, i32* %v3
-    %tmp123 = add i32 %tmp122, 1
-    store i32 %tmp123, i32* %v3
+    %tmp123 = load i32, i32* %v3
+    %tmp124 = add i32 %tmp123, 1
+    store i32 %tmp124, i32* %v3
     br label %loop_body0
     br label %endif13
 endif13:
-    %tmp124 = load i8, i8* %v4
-    %tmp125 = icmp eq i8 %tmp124, 40
-    br i1 %tmp125, label %then14, label %endif14
+    %tmp125 = load i8, i8* %v4
+    %tmp126 = icmp eq i8 %tmp125, 40
+    br i1 %tmp126, label %then14, label %endif14
 then14:
-    %tmp126 = load i32, i32* %v3
-    %tmp127 = add i32 %tmp126, 1
-    store i32 %tmp127, i32* %v3
+    %tmp127 = load i32, i32* %v3
+    %tmp128 = add i32 %tmp127, 1
+    store i32 %tmp128, i32* %v3
     br label %loop_body0
     br label %endif14
 endif14:
-    %tmp128 = load i8, i8* %v4
-    %tmp129 = icmp eq i8 %tmp128, 41
-    br i1 %tmp129, label %then15, label %endif15
+    %tmp129 = load i8, i8* %v4
+    %tmp130 = icmp eq i8 %tmp129, 41
+    br i1 %tmp130, label %then15, label %endif15
 then15:
-    %tmp130 = load i32, i32* %v3
-    %tmp131 = add i32 %tmp130, 1
-    store i32 %tmp131, i32* %v3
+    %tmp131 = load i32, i32* %v3
+    %tmp132 = add i32 %tmp131, 1
+    store i32 %tmp132, i32* %v3
     br label %loop_body0
     br label %endif15
 endif15:
-    %tmp132 = load i8, i8* %v4
-    %tmp133 = icmp eq i8 %tmp132, 123
-    br i1 %tmp133, label %then16, label %endif16
+    %tmp133 = load i8, i8* %v4
+    %tmp134 = icmp eq i8 %tmp133, 123
+    br i1 %tmp134, label %then16, label %endif16
 then16:
-    %tmp134 = load i32, i32* %v3
-    %tmp135 = add i32 %tmp134, 1
-    store i32 %tmp135, i32* %v3
+    %tmp135 = load i32, i32* %v3
+    %tmp136 = add i32 %tmp135, 1
+    store i32 %tmp136, i32* %v3
     br label %loop_body0
     br label %endif16
 endif16:
-    %tmp136 = load i8, i8* %v4
-    %tmp137 = icmp eq i8 %tmp136, 125
-    br i1 %tmp137, label %then17, label %endif17
+    %tmp137 = load i8, i8* %v4
+    %tmp138 = icmp eq i8 %tmp137, 125
+    br i1 %tmp138, label %then17, label %endif17
 then17:
-    %tmp138 = load i32, i32* %v3
-    %tmp139 = add i32 %tmp138, 1
-    store i32 %tmp139, i32* %v3
+    %tmp139 = load i32, i32* %v3
+    %tmp140 = add i32 %tmp139, 1
+    store i32 %tmp140, i32* %v3
     br label %loop_body0
     br label %endif17
 endif17:
-    %tmp140 = load i8, i8* %v4
-    %tmp141 = icmp eq i8 %tmp140, 91
-    br i1 %tmp141, label %then18, label %endif18
+    %tmp141 = load i8, i8* %v4
+    %tmp142 = icmp eq i8 %tmp141, 91
+    br i1 %tmp142, label %then18, label %endif18
 then18:
-    %tmp142 = load i32, i32* %v3
-    %tmp143 = add i32 %tmp142, 1
-    store i32 %tmp143, i32* %v3
+    %tmp143 = load i32, i32* %v3
+    %tmp144 = add i32 %tmp143, 1
+    store i32 %tmp144, i32* %v3
     br label %loop_body0
     br label %endif18
 endif18:
-    %tmp144 = load i8, i8* %v4
-    %tmp145 = icmp eq i8 %tmp144, 93
-    br i1 %tmp145, label %then19, label %endif19
+    %tmp145 = load i8, i8* %v4
+    %tmp146 = icmp eq i8 %tmp145, 93
+    br i1 %tmp146, label %then19, label %endif19
 then19:
-    %tmp146 = load i32, i32* %v3
-    %tmp147 = add i32 %tmp146, 1
-    store i32 %tmp147, i32* %v3
+    %tmp147 = load i32, i32* %v3
+    %tmp148 = add i32 %tmp147, 1
+    store i32 %tmp148, i32* %v3
     br label %loop_body0
     br label %endif19
 endif19:
-    %tmp148 = load i8, i8* %v4
-    %tmp149 = icmp eq i8 %tmp148, 61
-    br i1 %tmp149, label %then20, label %endif20
+    %tmp149 = load i8, i8* %v4
+    %tmp150 = icmp eq i8 %tmp149, 61
+    br i1 %tmp150, label %then20, label %endif20
 then20:
-    %tmp150 = load i8, i8* %v5
-    %tmp151 = icmp eq i8 %tmp150, 61
-    br i1 %tmp151, label %then21, label %endif21
+    %tmp151 = load i8, i8* %v5
+    %tmp152 = icmp eq i8 %tmp151, 61
+    br i1 %tmp152, label %then21, label %endif21
 then21:
-    %tmp152 = load i32, i32* %v3
-    %tmp153 = add i32 %tmp152, 2
-    store i32 %tmp153, i32* %v3
+    %tmp153 = load i32, i32* %v3
+    %tmp154 = add i32 %tmp153, 2
+    store i32 %tmp154, i32* %v3
     br label %loop_body0
     br label %endif21
 endif21:
-    %tmp154 = load i32, i32* %v3
-    %tmp155 = add i32 %tmp154, 1
-    store i32 %tmp155, i32* %v3
+    %tmp155 = load i32, i32* %v3
+    %tmp156 = add i32 %tmp155, 1
+    store i32 %tmp156, i32* %v3
     br label %loop_body0
     br label %endif20
 endif20:
-    %tmp156 = load i8, i8* %v4
-    %tmp157 = icmp eq i8 %tmp156, 58
-    br i1 %tmp157, label %then22, label %endif22
+    %tmp157 = load i8, i8* %v4
+    %tmp158 = icmp eq i8 %tmp157, 58
+    br i1 %tmp158, label %then22, label %endif22
 then22:
-    %tmp158 = load i8, i8* %v5
-    %tmp159 = icmp eq i8 %tmp158, 58
-    br i1 %tmp159, label %then23, label %endif23
+    %tmp159 = load i8, i8* %v5
+    %tmp160 = icmp eq i8 %tmp159, 58
+    br i1 %tmp160, label %then23, label %endif23
 then23:
-    %tmp160 = load i32, i32* %v3
-    %tmp161 = add i32 %tmp160, 2
-    store i32 %tmp161, i32* %v3
+    %tmp161 = load i32, i32* %v3
+    %tmp162 = add i32 %tmp161, 2
+    store i32 %tmp162, i32* %v3
     br label %loop_body0
     br label %endif23
 endif23:
-    %tmp162 = load i32, i32* %v3
-    %tmp163 = add i32 %tmp162, 1
-    store i32 %tmp163, i32* %v3
+    %tmp163 = load i32, i32* %v3
+    %tmp164 = add i32 %tmp163, 1
+    store i32 %tmp164, i32* %v3
     br label %loop_body0
     br label %endif22
 endif22:
-    %tmp164 = load i8, i8* %v4
-    %tmp165 = icmp eq i8 %tmp164, 124
-    br i1 %tmp165, label %then24, label %endif24
+    %tmp165 = load i8, i8* %v4
+    %tmp166 = icmp eq i8 %tmp165, 124
+    br i1 %tmp166, label %then24, label %endif24
 then24:
-    %tmp166 = load i8, i8* %v5
-    %tmp167 = icmp eq i8 %tmp166, 124
-    br i1 %tmp167, label %then25, label %endif25
+    %tmp167 = load i8, i8* %v5
+    %tmp168 = icmp eq i8 %tmp167, 124
+    br i1 %tmp168, label %then25, label %endif25
 then25:
-    %tmp168 = load i32, i32* %v3
-    %tmp169 = add i32 %tmp168, 2
-    store i32 %tmp169, i32* %v3
+    %tmp169 = load i32, i32* %v3
+    %tmp170 = add i32 %tmp169, 2
+    store i32 %tmp170, i32* %v3
     br label %loop_body0
     br label %endif25
 endif25:
-    %tmp170 = load i32, i32* %v3
-    %tmp171 = add i32 %tmp170, 1
-    store i32 %tmp171, i32* %v3
+    %tmp171 = load i32, i32* %v3
+    %tmp172 = add i32 %tmp171, 1
+    store i32 %tmp172, i32* %v3
     br label %loop_body0
     br label %endif24
 endif24:
-    %tmp172 = load i8, i8* %v4
-    %tmp173 = icmp eq i8 %tmp172, 38
-    br i1 %tmp173, label %then26, label %endif26
+    %tmp173 = load i8, i8* %v4
+    %tmp174 = icmp eq i8 %tmp173, 38
+    br i1 %tmp174, label %then26, label %endif26
 then26:
-    %tmp174 = load i8, i8* %v5
-    %tmp175 = icmp eq i8 %tmp174, 38
-    br i1 %tmp175, label %then27, label %endif27
+    %tmp175 = load i8, i8* %v5
+    %tmp176 = icmp eq i8 %tmp175, 38
+    br i1 %tmp176, label %then27, label %endif27
 then27:
-    %tmp176 = load i32, i32* %v3
-    %tmp177 = add i32 %tmp176, 2
-    store i32 %tmp177, i32* %v3
+    %tmp177 = load i32, i32* %v3
+    %tmp178 = add i32 %tmp177, 2
+    store i32 %tmp178, i32* %v3
     br label %loop_body0
     br label %endif27
 endif27:
-    %tmp178 = load i32, i32* %v3
-    %tmp179 = add i32 %tmp178, 1
-    store i32 %tmp179, i32* %v3
+    %tmp179 = load i32, i32* %v3
+    %tmp180 = add i32 %tmp179, 1
+    store i32 %tmp180, i32* %v3
     br label %loop_body0
     br label %endif26
 endif26:
-    %tmp180 = load i8, i8* %v4
-    %tmp181 = icmp eq i8 %tmp180, 62
-    br i1 %tmp181, label %then28, label %endif28
+    %tmp181 = load i8, i8* %v4
+    %tmp182 = icmp eq i8 %tmp181, 62
+    br i1 %tmp182, label %then28, label %endif28
 then28:
-    %tmp182 = load i8, i8* %v5
-    %tmp183 = icmp eq i8 %tmp182, 61
-    br i1 %tmp183, label %then29, label %endif29
+    %tmp183 = load i8, i8* %v5
+    %tmp184 = icmp eq i8 %tmp183, 61
+    br i1 %tmp184, label %then29, label %endif29
 then29:
-    %tmp184 = load i32, i32* %v3
-    %tmp185 = add i32 %tmp184, 2
-    store i32 %tmp185, i32* %v3
+    %tmp185 = load i32, i32* %v3
+    %tmp186 = add i32 %tmp185, 2
+    store i32 %tmp186, i32* %v3
     br label %loop_body0
     br label %endif29
 endif29:
-    %tmp186 = load i32, i32* %v3
-    %tmp187 = add i32 %tmp186, 1
-    store i32 %tmp187, i32* %v3
+    %tmp187 = load i32, i32* %v3
+    %tmp188 = add i32 %tmp187, 1
+    store i32 %tmp188, i32* %v3
     br label %loop_body0
     br label %endif28
 endif28:
-    %tmp188 = load i8, i8* %v4
-    %tmp189 = icmp eq i8 %tmp188, 60
-    br i1 %tmp189, label %then30, label %endif30
+    %tmp189 = load i8, i8* %v4
+    %tmp190 = icmp eq i8 %tmp189, 60
+    br i1 %tmp190, label %then30, label %endif30
 then30:
-    %tmp190 = load i8, i8* %v5
-    %tmp191 = icmp eq i8 %tmp190, 61
-    br i1 %tmp191, label %then31, label %endif31
+    %tmp191 = load i8, i8* %v5
+    %tmp192 = icmp eq i8 %tmp191, 61
+    br i1 %tmp192, label %then31, label %endif31
 then31:
-    %tmp192 = load i32, i32* %v3
-    %tmp193 = add i32 %tmp192, 2
-    store i32 %tmp193, i32* %v3
+    %tmp193 = load i32, i32* %v3
+    %tmp194 = add i32 %tmp193, 2
+    store i32 %tmp194, i32* %v3
     br label %loop_body0
     br label %endif31
 endif31:
-    %tmp194 = load i32, i32* %v3
-    %tmp195 = add i32 %tmp194, 1
-    store i32 %tmp195, i32* %v3
+    %tmp195 = load i32, i32* %v3
+    %tmp196 = add i32 %tmp195, 1
+    store i32 %tmp196, i32* %v3
     br label %loop_body0
     br label %endif30
 endif30:
-    %tmp196 = load i8, i8* %v4
-    %tmp197 = icmp eq i8 %tmp196, 35
-    br i1 %tmp197, label %then32, label %endif32
+    %tmp197 = load i8, i8* %v4
+    %tmp198 = icmp eq i8 %tmp197, 35
+    br i1 %tmp198, label %then32, label %endif32
 then32:
-    %tmp198 = load i32, i32* %v3
-    %tmp199 = add i32 %tmp198, 1
-    store i32 %tmp199, i32* %v3
+    %tmp199 = load i32, i32* %v3
+    %tmp200 = add i32 %tmp199, 1
+    store i32 %tmp200, i32* %v3
     br label %loop_body0
     br label %endif32
 endif32:
-    %tmp200 = load i8, i8* %v4
-    %tmp201 = icmp eq i8 %tmp200, 59
-    br i1 %tmp201, label %then33, label %endif33
+    %tmp201 = load i8, i8* %v4
+    %tmp202 = icmp eq i8 %tmp201, 59
+    br i1 %tmp202, label %then33, label %endif33
 then33:
-    %tmp202 = load i32, i32* %v3
-    %tmp203 = add i32 %tmp202, 1
-    store i32 %tmp203, i32* %v3
+    %tmp203 = load i32, i32* %v3
+    %tmp204 = add i32 %tmp203, 1
+    store i32 %tmp204, i32* %v3
     br label %loop_body0
     br label %endif33
 endif33:
-    %tmp204 = load i8, i8* %v4
-    %tmp205 = icmp eq i8 %tmp204, 46
-    br i1 %tmp205, label %then34, label %endif34
+    %tmp205 = load i8, i8* %v4
+    %tmp206 = icmp eq i8 %tmp205, 46
+    br i1 %tmp206, label %then34, label %endif34
 then34:
-    %tmp206 = load i32, i32* %v3
-    %tmp207 = add i32 %tmp206, 1
-    store i32 %tmp207, i32* %v3
+    %tmp207 = load i32, i32* %v3
+    %tmp208 = add i32 %tmp207, 1
+    store i32 %tmp208, i32* %v3
     br label %loop_body0
     br label %endif34
 endif34:
-    %tmp208 = load i8, i8* %v4
-    %tmp209 = icmp eq i8 %tmp208, 44
-    br i1 %tmp209, label %then35, label %endif35
+    %tmp209 = load i8, i8* %v4
+    %tmp210 = icmp eq i8 %tmp209, 44
+    br i1 %tmp210, label %then35, label %endif35
 then35:
-    %tmp210 = load i32, i32* %v3
-    %tmp211 = add i32 %tmp210, 1
-    store i32 %tmp211, i32* %v3
+    %tmp211 = load i32, i32* %v3
+    %tmp212 = add i32 %tmp211, 1
+    store i32 %tmp212, i32* %v3
     br label %loop_body0
     br label %endif35
 endif35:
-    %tmp212 = load i8, i8* %v4
-    %tmp213 = icmp eq i8 %tmp212, 43
-    br i1 %tmp213, label %then36, label %endif36
+    %tmp213 = load i8, i8* %v4
+    %tmp214 = icmp eq i8 %tmp213, 43
+    br i1 %tmp214, label %then36, label %endif36
 then36:
-    %tmp214 = load i32, i32* %v3
-    %tmp215 = add i32 %tmp214, 1
-    store i32 %tmp215, i32* %v3
+    %tmp215 = load i32, i32* %v3
+    %tmp216 = add i32 %tmp215, 1
+    store i32 %tmp216, i32* %v3
     br label %loop_body0
     br label %endif36
 endif36:
-    %tmp216 = load i8, i8* %v4
-    %tmp217 = icmp eq i8 %tmp216, 45
-    br i1 %tmp217, label %then37, label %endif37
+    %tmp217 = load i8, i8* %v4
+    %tmp218 = icmp eq i8 %tmp217, 45
+    br i1 %tmp218, label %then37, label %endif37
 then37:
-    %tmp218 = load i32, i32* %v3
-    %tmp219 = add i32 %tmp218, 1
-    store i32 %tmp219, i32* %v3
+    %tmp219 = load i32, i32* %v3
+    %tmp220 = add i32 %tmp219, 1
+    store i32 %tmp220, i32* %v3
     br label %loop_body0
     br label %endif37
 endif37:
-    %tmp220 = load i8, i8* %v4
-    %tmp221 = icmp eq i8 %tmp220, 42
-    br i1 %tmp221, label %then38, label %endif38
+    %tmp221 = load i8, i8* %v4
+    %tmp222 = icmp eq i8 %tmp221, 42
+    br i1 %tmp222, label %then38, label %endif38
 then38:
-    %tmp222 = load i32, i32* %v3
-    %tmp223 = add i32 %tmp222, 1
-    store i32 %tmp223, i32* %v3
+    %tmp223 = load i32, i32* %v3
+    %tmp224 = add i32 %tmp223, 1
+    store i32 %tmp224, i32* %v3
     br label %loop_body0
     br label %endif38
 endif38:
-    %tmp224 = load i8, i8* %v4
-    %tmp225 = icmp eq i8 %tmp224, 47
-    br i1 %tmp225, label %then39, label %endif39
+    %tmp225 = load i8, i8* %v4
+    %tmp226 = icmp eq i8 %tmp225, 47
+    br i1 %tmp226, label %then39, label %endif39
 then39:
-    %tmp226 = load i32, i32* %v3
-    %tmp227 = add i32 %tmp226, 1
-    store i32 %tmp227, i32* %v3
+    %tmp227 = load i32, i32* %v3
+    %tmp228 = add i32 %tmp227, 1
+    store i32 %tmp228, i32* %v3
     br label %loop_body0
     br label %endif39
 endif39:
-    %tmp228 = load i8, i8* %v4
-    %tmp229 = icmp eq i8 %tmp228, 37
-    br i1 %tmp229, label %then40, label %endif40
+    %tmp229 = load i8, i8* %v4
+    %tmp230 = icmp eq i8 %tmp229, 37
+    br i1 %tmp230, label %then40, label %endif40
 then40:
-    %tmp230 = load i32, i32* %v3
-    %tmp231 = add i32 %tmp230, 1
-    store i32 %tmp231, i32* %v3
+    %tmp231 = load i32, i32* %v3
+    %tmp232 = add i32 %tmp231, 1
+    store i32 %tmp232, i32* %v3
     br label %loop_body0
     br label %endif40
 endif40:
-    %tmp232 = load i8, i8* %v4
-    %tmp233 = icmp eq i8 %tmp232, 33
-    br i1 %tmp233, label %then41, label %endif41
+    %tmp233 = load i8, i8* %v4
+    %tmp234 = icmp eq i8 %tmp233, 33
+    br i1 %tmp234, label %then41, label %endif41
 then41:
-    %tmp234 = load i32, i32* %v3
-    %tmp235 = add i32 %tmp234, 1
-    store i32 %tmp235, i32* %v3
+    %tmp235 = load i32, i32* %v3
+    %tmp236 = add i32 %tmp235, 1
+    store i32 %tmp236, i32* %v3
     br label %loop_body0
     br label %endif41
 endif41:
-    %tmp236 = load i8, i8* %v4
-    %tmp237 = icmp eq i8 %tmp236, 126
-    br i1 %tmp237, label %then42, label %endif42
+    %tmp237 = load i8, i8* %v4
+    %tmp238 = icmp eq i8 %tmp237, 126
+    br i1 %tmp238, label %then42, label %endif42
 then42:
-    %tmp238 = load i32, i32* %v3
-    %tmp239 = add i32 %tmp238, 1
-    store i32 %tmp239, i32* %v3
+    %tmp239 = load i32, i32* %v3
+    %tmp240 = add i32 %tmp239, 1
+    store i32 %tmp240, i32* %v3
     br label %loop_body0
     br label %endif42
 endif42:
-    %tmp240 = load i8, i8* %v4
-    %tmp241 = icmp eq i8 %tmp240, 92
-    br i1 %tmp241, label %then43, label %endif43
+    %tmp241 = load i8, i8* %v4
+    %tmp242 = icmp eq i8 %tmp241, 92
+    br i1 %tmp242, label %then43, label %endif43
 then43:
-    %tmp242 = load i32, i32* %v3
-    %tmp243 = add i32 %tmp242, 1
-    store i32 %tmp243, i32* %v3
+    %tmp243 = load i32, i32* %v3
+    %tmp244 = add i32 %tmp243, 1
+    store i32 %tmp244, i32* %v3
     br label %loop_body0
     br label %endif43
 endif43:
-    %tmp244 = load i8, i8* %v4
-    call void @console.print_char(i8 %tmp244)
+    %tmp245 = load i8, i8* %v4
+    call void @console.print_char(i8 %tmp245)
     call void @console.print_char(i8 10)
-    %tmp245 = load i32, i32* %v8
-    %tmp246 = sext i32 %tmp245 to i64
-    call void @console.println_u64(i64 %tmp246)
-    %tmp247 = load i32, i32* %v3
-    %tmp248 = load i32, i32* %v9
-    %tmp249 = sub i32 %tmp247, %tmp248
-    %tmp250 = sext i32 %tmp249 to i64
-    call void @console.println_u64(i64 %tmp250)
-    %tmp251 = load i32, i32* %v3
-    %tmp252 = add i32 %tmp251, 1
-    store i32 %tmp252, i32* %v3
+    %tmp246 = load i32, i32* %v8
+    %tmp247 = sext i32 %tmp246 to i64
+    call void @console.println_u64(i64 %tmp247)
+    %tmp248 = load i32, i32* %v3
+    %tmp249 = load i32, i32* %v9
+    %tmp250 = sub i32 %tmp248, %tmp249
+    %tmp251 = sext i32 %tmp250 to i64
+    call void @console.println_u64(i64 %tmp251)
+    %tmp252 = load i32, i32* %v3
+    %tmp253 = add i32 %tmp252, 1
+    store i32 %tmp253, i32* %v3
     br label %loop_body0
 loop_body0_exit:
-    call void @vector.free(%struct.vector.Vec* %v2)
+    call void @"vector.free<i8>"(%"struct.vector.Vec<i8>"* %v2)
     call void @string.free(%struct.string.String* %v1)
     ret void
 }
 define i32 @"main"(){
-    %v0 = alloca i32*; var: x
-    call %"struct.Pair<i64, struct.Pair<i8, %struct.string.String>>" @"x<i64>"()
-    %tmp0 = mul i64 4, 512
-    %tmp1 = alloca i8, i64 %tmp0
-    %tmp2 = bitcast i8* %tmp1 to i32*
-    store i32* %tmp2, i32** %v0
-    %tmp3 = load i32*, i32** %v0
-    call void @"mem.default_fill<i32>"(i32 32, i32* %tmp3, i64 512)
-    %tmp4 = load i32*, i32** %v0
-    %tmp5 = getelementptr inbounds i32, i32* %tmp4, i64 511
-    %tmp6 = load i32, i32* %tmp5
-    ret i32 %tmp6
     call i32 @AllocConsole()
     call void @tests.run()
     call void @window.start()
@@ -2695,32 +2426,259 @@ endif6:
 loop_body5_exit:
     ret void
 }
-define void @"mem.default_fill<i32>"(i32 %val, i32* %dest, i64 %len){
-    %v0 = alloca i64; var: i
-    store i64 0, i64* %v0
+define %"struct.list.List<i32>" @"list.new<i32>"(){
+    %v0 = alloca %"struct.list.List<i32>"; var: list
+    %tmp0 = getelementptr inbounds %"struct.list.List<i32>", %"struct.list.List<i32>"* %v0, i32 0, i32 0
+    store %"struct.list.ListNode<i32>"* null, %"struct.list.ListNode<i32>"** %tmp0
+    %tmp1 = getelementptr inbounds %"struct.list.List<i32>", %"struct.list.List<i32>"* %v0, i32 0, i32 1
+    store %"struct.list.ListNode<i32>"* null, %"struct.list.ListNode<i32>"** %tmp1
+    %tmp2 = getelementptr inbounds %"struct.list.List<i32>", %"struct.list.List<i32>"* %v0, i32 0, i32 2
+    store i32 0, i32* %tmp2
+    %tmp3 = load %"struct.list.List<i32>", %"struct.list.List<i32>"* %v0
+    ret %"struct.list.List<i32>" %tmp3
+}
+define void @"list.extend<i32>"(%"struct.list.List<i32>"* %list, i32 %data){
+    %v0 = alloca %"struct.list.ListNode<i32>"*; var: node_to_add
+    %tmp0 = call i8* @mem.malloc(i64 12)
+    %tmp1 = bitcast i8* %tmp0 to %"struct.list.ListNode<i32>"*
+    store %"struct.list.ListNode<i32>"* %tmp1, %"struct.list.ListNode<i32>"** %v0
+    %tmp2 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %v0
+    %tmp3 = getelementptr inbounds %"struct.list.ListNode<i32>", %"struct.list.ListNode<i32>"* %tmp2, i32 0, i32 1
+    store %"struct.list.ListNode<i32>"* null, %"struct.list.ListNode<i32>"** %tmp3
+    %tmp4 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %v0
+    %tmp5 = getelementptr inbounds %"struct.list.ListNode<i32>", %"struct.list.ListNode<i32>"* %tmp4, i32 0, i32 0
+    store i32 %data, i32* %tmp5
+    %tmp6 = getelementptr inbounds %"struct.list.List<i32>", %"struct.list.List<i32>"* %list, i32 0, i32 0
+    %tmp7 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %tmp6
+    %tmp8 = icmp eq ptr %tmp7, null
+    br i1 %tmp8, label %then0, label %else0
+then0:
+    %tmp9 = getelementptr inbounds %"struct.list.List<i32>", %"struct.list.List<i32>"* %list, i32 0, i32 0
+    %tmp10 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %v0
+    store %"struct.list.ListNode<i32>"* %tmp10, %"struct.list.ListNode<i32>"** %tmp9
+    %tmp11 = getelementptr inbounds %"struct.list.List<i32>", %"struct.list.List<i32>"* %list, i32 0, i32 1
+    %tmp12 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %v0
+    store %"struct.list.ListNode<i32>"* %tmp12, %"struct.list.ListNode<i32>"** %tmp11
+    br label %endif0
+else0:
+    %tmp13 = getelementptr inbounds %"struct.list.List<i32>", %"struct.list.List<i32>"* %list, i32 0, i32 1
+    %tmp14 = getelementptr inbounds %"struct.list.List<i32>", %"struct.list.List<i32>"* %list, i32 0, i32 1
+    %tmp15 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %tmp14
+    %tmp16 = getelementptr inbounds %"struct.list.ListNode<i32>", %"struct.list.ListNode<i32>"* %tmp15, i32 0, i32 1
+    %tmp17 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %v0
+    store %"struct.list.ListNode<i32>"* %tmp17, %"struct.list.ListNode<i32>"** %tmp16
+    %tmp18 = getelementptr inbounds %"struct.list.List<i32>", %"struct.list.List<i32>"* %list, i32 0, i32 1
+    %tmp19 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %v0
+    store %"struct.list.ListNode<i32>"* %tmp19, %"struct.list.ListNode<i32>"** %tmp18
+    br label %endif0
+endif0:
+    %tmp20 = getelementptr inbounds %"struct.list.List<i32>", %"struct.list.List<i32>"* %list, i32 0, i32 2
+    %tmp21 = getelementptr inbounds %"struct.list.List<i32>", %"struct.list.List<i32>"* %list, i32 0, i32 2
+    %tmp22 = load i32, i32* %tmp21
+    %tmp23 = add i32 %tmp22, 1
+    store i32 %tmp23, i32* %tmp20
+    ret void
+}
+define i32 @"list.walk<i32>"(%"struct.list.List<i32>"* %list){
+    %v0 = alloca i32; var: l
+    %v1 = alloca %"struct.list.ListNode<i32>"*; var: ptr
+    store i32 0, i32* %v0
+    %tmp0 = getelementptr inbounds %"struct.list.List<i32>", %"struct.list.List<i32>"* %list, i32 0, i32 0
+    %tmp1 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %tmp0
+    store %"struct.list.ListNode<i32>"* %tmp1, %"struct.list.ListNode<i32>"** %v1
     br label %loop_body0
 loop_body0:
-    %tmp0 = load i64, i64* %v0
-    %tmp1 = icmp sge i64 %tmp0, %len
+    %tmp2 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %v1
+    %tmp3 = icmp eq ptr %tmp2, null
+    br i1 %tmp3, label %then1, label %endif1
+then1:
+    br label %loop_body0_exit
+    br label %endif1
+endif1:
+    %tmp4 = load i32, i32* %v0
+    %tmp5 = add i32 %tmp4, 1
+    store i32 %tmp5, i32* %v0
+    %tmp6 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %v1
+    %tmp7 = getelementptr inbounds %"struct.list.ListNode<i32>", %"struct.list.ListNode<i32>"* %tmp6, i32 0, i32 1
+    %tmp8 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %tmp7
+    store %"struct.list.ListNode<i32>"* %tmp8, %"struct.list.ListNode<i32>"** %v1
+    br label %loop_body0
+loop_body0_exit:
+    %tmp9 = load i32, i32* %v0
+    ret i32 %tmp9
+}
+define void @"list.free<i32>"(%"struct.list.List<i32>"* %list){
+    %v0 = alloca %"struct.list.ListNode<i32>"*; var: current
+    %v1 = alloca %"struct.list.ListNode<i32>"*; var: next
+    %tmp0 = getelementptr inbounds %"struct.list.List<i32>", %"struct.list.List<i32>"* %list, i32 0, i32 0
+    %tmp1 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %tmp0
+    store %"struct.list.ListNode<i32>"* %tmp1, %"struct.list.ListNode<i32>"** %v0
+    br label %loop_body0
+loop_body0:
+    %tmp2 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %v0
+    %tmp3 = icmp eq ptr %tmp2, null
+    br i1 %tmp3, label %then1, label %endif1
+then1:
+    br label %loop_body0_exit
+    br label %endif1
+endif1:
+    %tmp4 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %v0
+    %tmp5 = getelementptr inbounds %"struct.list.ListNode<i32>", %"struct.list.ListNode<i32>"* %tmp4, i32 0, i32 1
+    %tmp6 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %tmp5
+    store %"struct.list.ListNode<i32>"* %tmp6, %"struct.list.ListNode<i32>"** %v1
+    %tmp7 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %v0
+    %tmp8 = bitcast %"struct.list.ListNode<i32>"* %tmp7 to i8*
+    call void @mem.free(i8* %tmp8)
+    %tmp9 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %v1
+    store %"struct.list.ListNode<i32>"* %tmp9, %"struct.list.ListNode<i32>"** %v0
+    br label %loop_body0
+loop_body0_exit:
+    %tmp10 = getelementptr inbounds %"struct.list.List<i32>", %"struct.list.List<i32>"* %list, i32 0, i32 0
+    store %"struct.list.ListNode<i32>"* null, %"struct.list.ListNode<i32>"** %tmp10
+    %tmp11 = getelementptr inbounds %"struct.list.List<i32>", %"struct.list.List<i32>"* %list, i32 0, i32 1
+    store %"struct.list.ListNode<i32>"* null, %"struct.list.ListNode<i32>"** %tmp11
+    %tmp12 = getelementptr inbounds %"struct.list.List<i32>", %"struct.list.List<i32>"* %list, i32 0, i32 2
+    store i32 0, i32* %tmp12
+    ret void
+}
+define %"struct.vector.Vec<i8>" @"vector.new<i8>"(){
+    %v0 = alloca %"struct.vector.Vec<i8>"; var: vec
+    %tmp0 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %v0, i32 0, i32 0
+    store i8* null, i8** %tmp0
+    %tmp1 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %v0, i32 0, i32 1
+    store i32 0, i32* %tmp1
+    %tmp2 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %v0, i32 0, i32 2
+    store i32 0, i32* %tmp2
+    %tmp3 = load %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %v0
+    ret %"struct.vector.Vec<i8>" %tmp3
+}
+define void @"vector.push<i8>"(%"struct.vector.Vec<i8>"* %vec, i8 %data){
+    %v0 = alloca i32; var: new_capacity
+    %v1 = alloca i8*; var: new_array
+    %v2 = alloca i32; var: i
+    %tmp0 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %vec, i32 0, i32 1
+    %tmp1 = load i32, i32* %tmp0
+    %tmp2 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %vec, i32 0, i32 2
+    %tmp3 = load i32, i32* %tmp2
+    %tmp4 = icmp uge i32 %tmp1, %tmp3
+    br i1 %tmp4, label %then0, label %endif0
+then0:
+    store i32 4, i32* %v0
+    %tmp5 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %vec, i32 0, i32 2
+    %tmp6 = load i32, i32* %tmp5
+    %tmp7 = icmp ne i32 %tmp6, 0
+    br i1 %tmp7, label %then1, label %endif1
+then1:
+    %tmp8 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %vec, i32 0, i32 2
+    %tmp9 = load i32, i32* %tmp8
+    %tmp10 = mul i32 %tmp9, 2
+    store i32 %tmp10, i32* %v0
+    br label %endif1
+endif1:
+    %tmp11 = load i32, i32* %v0
+    %tmp12 = zext i32 %tmp11 to i64
+    %tmp13 = mul i64 %tmp12, 4294967295
+    %tmp14 = call i8* @mem.malloc(i64 %tmp13)
+    %tmp15 = bitcast i8* %tmp14 to i8*
+    store i8* %tmp15, i8** %v1
+    %tmp16 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %vec, i32 0, i32 0
+    %tmp17 = load i8*, i8** %tmp16
+    %tmp18 = icmp ne ptr %tmp17, null
+    br i1 %tmp18, label %then2, label %endif2
+then2:
+    store i32 0, i32* %v2
+    br label %loop_body3
+loop_body3:
+    %tmp19 = load i32, i32* %v2
+    %tmp20 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %vec, i32 0, i32 1
+    %tmp21 = load i32, i32* %tmp20
+    %tmp22 = icmp uge i32 %tmp19, %tmp21
+    br i1 %tmp22, label %then4, label %endif4
+then4:
+    br label %loop_body3_exit
+    br label %endif4
+endif4:
+    %tmp23 = load i8*, i8** %v1
+    %tmp24 = load i32, i32* %v2
+    %tmp25 = getelementptr inbounds i8, i8* %tmp23, i32 %tmp24
+    %tmp26 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %vec, i32 0, i32 0
+    %tmp27 = load i8*, i8** %tmp26
+    %tmp28 = load i32, i32* %v2
+    %tmp29 = getelementptr inbounds i8, i8* %tmp27, i32 %tmp28
+    %tmp30 = load i8, i8* %tmp29
+    store i8 %tmp30, i8* %tmp25
+    %tmp31 = load i32, i32* %v2
+    %tmp32 = add i32 %tmp31, 1
+    store i32 %tmp32, i32* %v2
+    br label %loop_body3
+loop_body3_exit:
+    %tmp33 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %vec, i32 0, i32 0
+    %tmp34 = load i8*, i8** %tmp33
+    %tmp35 = bitcast i8* %tmp34 to i8*
+    call void @mem.free(i8* %tmp35)
+    br label %endif2
+endif2:
+    %tmp36 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %vec, i32 0, i32 0
+    %tmp37 = load i8*, i8** %v1
+    store i8* %tmp37, i8** %tmp36
+    %tmp38 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %vec, i32 0, i32 2
+    %tmp39 = load i32, i32* %v0
+    store i32 %tmp39, i32* %tmp38
+    br label %endif0
+endif0:
+    %tmp40 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %vec, i32 0, i32 0
+    %tmp41 = load i8*, i8** %tmp40
+    %tmp42 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %vec, i32 0, i32 1
+    %tmp43 = load i32, i32* %tmp42
+    %tmp44 = getelementptr inbounds i8, i8* %tmp41, i32 %tmp43
+    store i8 %data, i8* %tmp44
+    %tmp45 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %vec, i32 0, i32 1
+    %tmp46 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %vec, i32 0, i32 1
+    %tmp47 = load i32, i32* %tmp46
+    %tmp48 = add i32 %tmp47, 1
+    store i32 %tmp48, i32* %tmp45
+    ret void
+}
+define void @"vector.push_bulk<i8>"(%"struct.vector.Vec<i8>"* %vec, i8* %data, i32 %data_len){
+    %v0 = alloca i32; var: index
+    store i32 0, i32* %v0
+    br label %loop_body0
+loop_body0:
+    %tmp0 = load i32, i32* %v0
+    %tmp1 = icmp sge i32 %tmp0, %data_len
     br i1 %tmp1, label %then1, label %endif1
 then1:
     br label %loop_body0_exit
     br label %endif1
 endif1:
-    %tmp2 = load i64, i64* %v0
-    %tmp3 = getelementptr inbounds i32, i32* %dest, i64 %tmp2
-    store i32 %val, i32* %tmp3
-    %tmp4 = load i64, i64* %v0
-    %tmp5 = add i64 %tmp4, 1
-    store i64 %tmp5, i64* %v0
+    %tmp2 = load i32, i32* %v0
+    %tmp3 = getelementptr inbounds i8, i8* %data, i32 %tmp2
+    %tmp4 = load i8, i8* %tmp3
+    call void @"vector.push<i8>"(%"struct.vector.Vec<i8>"* %vec, i8 %tmp4)
+    %tmp5 = load i32, i32* %v0
+    %tmp6 = add i32 %tmp5, 1
+    store i32 %tmp6, i32* %v0
     br label %loop_body0
 loop_body0_exit:
     ret void
 }
-define %"struct.Pair<i64, struct.Pair<i8, %struct.string.String>>" @"x<i64>"(){
-    %v0 = alloca %"struct.Pair<i64, struct.Pair<i8, %struct.string.String>>"; var: p
-    %tmp0 = getelementptr inbounds %"struct.Pair<i64, struct.Pair<i8, %struct.string.String>>", %"struct.Pair<i64, struct.Pair<i8, %struct.string.String>>"* %v0, i32 0, i32 0
-    store i64 43, i64* %tmp0
-    %tmp1 = load %"struct.Pair<i64, struct.Pair<i8, %struct.string.String>>", %"struct.Pair<i64, struct.Pair<i8, %struct.string.String>>"* %v0
-    ret %"struct.Pair<i64, struct.Pair<i8, %struct.string.String>>" %tmp1
+define void @"vector.free<i8>"(%"struct.vector.Vec<i8>"* %vec){
+    %tmp0 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %vec, i32 0, i32 0
+    %tmp1 = load i8*, i8** %tmp0
+    %tmp2 = icmp ne ptr %tmp1, null
+    br i1 %tmp2, label %then0, label %endif0
+then0:
+    %tmp3 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %vec, i32 0, i32 0
+    %tmp4 = load i8*, i8** %tmp3
+    %tmp5 = bitcast i8* %tmp4 to i8*
+    call void @mem.free(i8* %tmp5)
+    br label %endif0
+endif0:
+    %tmp6 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %vec, i32 0, i32 0
+    store i8* null, i8** %tmp6
+    %tmp7 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %vec, i32 0, i32 1
+    store i32 0, i32* %tmp7
+    %tmp8 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %vec, i32 0, i32 2
+    store i32 0, i32* %tmp8
+    ret void
 }

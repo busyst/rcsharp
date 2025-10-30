@@ -120,6 +120,13 @@ impl Struct {
         }
         return Ok(sum);
     }
+    
+    pub(crate) fn full_path(&self) -> Box<str> {
+        if self.path.is_empty() {
+            return self.name.to_string().into_boxed_str();
+        }
+        format!("{}.{}", self.path, self.name).into()
+    }
 }
 
 // ------------------------------------------------------------------------------------

@@ -220,6 +220,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             if func.generic_params.len() != given_generic.len() {
                 return Err(CompileError::Generic(format!("Amount of generic params provided '{}' does not equal to amount requested by function '{}'", required_arguments.len(), given_args.len())));
             }
+            let given_generic = given_generic.iter().map(|x| substitute_generic_type(x, &self.ctx.symbols.alias_types)).collect::<Vec<_>>();
             let symbols = self.ctx.symbols;
             let current_namespace = &self.ctx.current_function_path;
 
@@ -231,14 +232,17 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
                 type_map.insert(prm.clone(), given_generic[ind].clone());
                 ind +=  1;
             }
-            let rt = substitute_generic_type(return_type, &type_map);
+            let rt = substitute_generic_type(&substitute_generic_type(&return_type, &self.ctx.symbols.alias_types), &type_map);
             let return_type_repr = get_llvm_type_str(&rt, symbols, current_namespace)?;
             let mut compiled_arguments = vec![];
             let required_arguments = required_arguments.iter().map(|x| substitute_generic_type(&x, &type_map)).collect::<Vec<_>>();
             for i in 0..required_arguments.len() {
-                let x = self.compile_rvalue(&given_args[i], Expected::Type(&required_arguments[i]))?;
-                if x.get_type() != &required_arguments[i] {
+                let sub = substitute_generic_type(&required_arguments[i], &self.ctx.symbols.alias_types);
+                println!("----{:?}\n----{:?}", required_arguments[i], sub);
+                let x = self.compile_rvalue(&given_args[i], Expected::Type(&sub))?;
+                if *x.get_type() != sub {
                     println!("{:?}", required_arguments[i]);
+                    println!("{:?}", callee);
                     return CompileResult::Err(CompileError::InvalidExpression(format!("{:?} vs {:?} type missmatch with {}th argument", x.get_type(), &required_arguments[i], i + 1)));
                 }
                 compiled_arguments.push(x.get_llvm_repr_with_type(self.ctx)?);
@@ -454,6 +458,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
         Err(CompileError::SymbolNotFound(format!("Symbol '{}' not found in '{}'", name, self.ctx.current_function_path)))
     }
     fn compile_integer_literal(&mut self, num_str: &str, expected: Expected) -> CompileResult<CompiledValue> {
+        println!("{:?}", expected);
         if let Expected::Type(ptype) = expected {
             if ptype.is_integer() {
                 return Ok(CompiledValue::Value { llvm_repr: num_str.to_string(), ptype: ptype.clone() });
@@ -490,7 +495,9 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
     fn compile_member_access_rvalue(&mut self, expr: &Expr) -> CompileResult<CompiledValue> {
         let member_ptr = self.compile_lvalue(expr)?;
         let temp_id = self.ctx.aquire_unique_temp_value_counter();
-        let ptype = member_ptr.get_type().clone();
+        let ptype = substitute_generic_type(member_ptr.get_type(), &self.ctx.symbols.alias_types);
+        println!("{:?}", expr);
+        println!("{:?}", ptype);
         let type_str = get_llvm_type_str(&ptype, self.ctx.symbols, &self.ctx.current_function_path)?;
         self.output.push_str(&format!("    %tmp{} = load {}, {}* {}\n", temp_id, type_str, type_str, member_ptr.get_llvm_repr()));
         Ok(CompiledValue::Value { llvm_repr: format!("%tmp{}", temp_id), ptype })
@@ -687,11 +694,23 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             let struct_type = obj_lvalue.get_type().clone();
             (obj_lvalue.get_llvm_repr(), struct_type)
         };
+        
         let (struct_fqn, fields) = self.ctx.symbols.get_struct_representation(&struct_type_to_index, &self.ctx.current_function_path)?;
         let field_index = fields.iter().position(|(name, _)| name == member)
             .ok_or_else(|| CompileError::Generic(format!("Member '{}' not found in struct '{}'", member, struct_fqn)))?;
-
-        let field_ptype = &substitute_generic_type(&fields[field_index].1, &self.ctx.symbols.alias_types);
+        
+        let mut field_ptype = substitute_generic_type(&fields[field_index].1, &self.ctx.symbols.alias_types);
+        if let ParserType::Generic(_, p) = obj_lvalue.get_type().dereference_full().delink() {
+            let mut type_map = HashMap::new();
+            let mut ind = 0;
+            let q = self.ctx.symbols.get_type(&struct_fqn).unwrap();
+            for prm in &q.generic_params {
+                type_map.insert(prm.clone(), p[ind].clone());
+                ind +=  1;
+            }
+            println!("\n\n{:?}={:?}", field_ptype, substitute_generic_type(&field_ptype, &type_map));
+            field_ptype = substitute_generic_type(&field_ptype, &type_map);
+        }
         let llvm_struct_type = get_llvm_type_str(&struct_type_to_index, self.ctx.symbols, &self.ctx.current_function_path)?;
         
         let gep_id = self.ctx.aquire_unique_temp_value_counter();
@@ -707,7 +726,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             base_ptr_repr,
             field_index
         ));
-        Ok(CompiledValue::Pointer { llvm_repr: gep_result_reg, ptype: field_ptype.clone() })
+        Ok(CompiledValue::Pointer { llvm_repr: gep_result_reg, ptype: field_ptype })
     }
     fn compile_deref_lvalue(&mut self, operand: &Expr) -> CompileResult<CompiledValue> {
         let pointer_rval = self.compile_rvalue(operand, Expected::Anything)?;
