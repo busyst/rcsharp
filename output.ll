@@ -124,7 +124,7 @@ declare dllimport i8* @GetModuleHandleA(i8*)
 @.str.83 = private unnamed_addr constant [46 x i8] c"Window error: StartError::RegisterClassFailed\00"
 @.str.84 = private unnamed_addr constant [14 x i8] c"Hello, World!\00"
 @.str.85 = private unnamed_addr constant [45 x i8] c"Window error: StartError::CreateWindowFailed\00"
-%"struct.Pair<i64, %"struct.Pair<i8, %struct.string.String>">" = type { i64, %"struct.Pair<i8, %struct.string.String>" }
+%"struct.Pair<i64, struct.Pair<i8, %struct.string.String>>" = type { i64, %"struct.Pair<i8, %struct.string.String>" }
 %"struct.Pair<i8, %struct.string.String>" = type { i8, %struct.string.String }
 
 define void @"__chkstk"(){
@@ -2532,7 +2532,7 @@ loop_body0_exit:
 }
 define i32 @"main"(){
     %v0 = alloca i32*; var: x
-    call %"struct.Pair<i64, %"struct.Pair<i8, %struct.string.String>">" @"x<i64>"()
+    call %"struct.Pair<i64, struct.Pair<i8, %struct.string.String>>" @"x<i64>"()
     %tmp0 = mul i64 4, 512
     %tmp1 = alloca i8, i64 %tmp0
     %tmp2 = bitcast i8* %tmp1 to i32*
@@ -2717,10 +2717,10 @@ endif1:
 loop_body0_exit:
     ret void
 }
-define %"struct.Pair<i64, %"struct.Pair<i8, %struct.string.String>">" @"x<i64>"(){
-    %v0 = alloca %"struct.Pair<i64, %"struct.Pair<i8, %struct.string.String>">"; var: p
-    %tmp0 = getelementptr inbounds %"struct.Pair<i64, %"struct.Pair<i8, %struct.string.String>">", %"struct.Pair<i64, %"struct.Pair<i8, %struct.string.String>">"* %v0, i32 0, i32 0
+define %"struct.Pair<i64, struct.Pair<i8, %struct.string.String>>" @"x<i64>"(){
+    %v0 = alloca %"struct.Pair<i64, struct.Pair<i8, %struct.string.String>>"; var: p
+    %tmp0 = getelementptr inbounds %"struct.Pair<i64, struct.Pair<i8, %struct.string.String>>", %"struct.Pair<i64, struct.Pair<i8, %struct.string.String>>"* %v0, i32 0, i32 0
     store i64 43, i64* %tmp0
-    %tmp1 = load %"struct.Pair<i64, %"struct.Pair<i8, %struct.string.String>">", %"struct.Pair<i64, %"struct.Pair<i8, %struct.string.String>">"* %v0
-    ret %"struct.Pair<i64, %"struct.Pair<i8, %struct.string.String>">" %tmp1
+    %tmp1 = load %"struct.Pair<i64, struct.Pair<i8, %struct.string.String>>", %"struct.Pair<i64, struct.Pair<i8, %struct.string.String>>"* %v0
+    ret %"struct.Pair<i64, struct.Pair<i8, %struct.string.String>>" %tmp1
 }
