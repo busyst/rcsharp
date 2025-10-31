@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{compiler::{get_llvm_type_str, substitute_generic_type, CodeGenContext, CompileError, CompileResult, LLVMOutputHandler, SymbolTable, POINTER_SIZE_IN_BYTES}, compiler_essentials::Variable, expression_parser::{BinaryOp, Expr, UnaryOp}, parser::{ParserType, Stmt, PRIMITIVE_TYPES, PRIMITIVE_TYPES_SIZE}};
+use crate::{compiler::{CodeGenContext, CompileError, CompileResult, LLVMOutputHandler, POINTER_SIZE_IN_BYTES, SymbolTable, get_llvm_type_str, substitute_generic_type}, compiler_essentials::Variable, expression_parser::{BinaryOp, Expr, UnaryOp}, parser::{PRIMITIVE_TYPES, PRIMITIVE_TYPES_ALIGNMENT, PRIMITIVE_TYPES_SIZE, ParserType, Stmt}};
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expected<'a> {
     Type(&'a ParserType),
@@ -626,7 +626,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
                     debug_assert!(*expected != Expected::NoReturn);
                     if given_args.len() != 1 { return Some(Err(CompileError::Generic(format!("sizeof expects exactly 1 type argument. Example: sizeof(i32);"))));}
                     if let Expr::Type(sizeof_type) = &given_args[0]{
-                        let t = size_of_from_parser_type(sizeof_type, self.ctx);
+                        let t = size_of_from_parser_type(&substitute_generic_type(sizeof_type, &self.ctx.symbols.alias_types), self.ctx);
                         if let Expected::Type(pt) = expected {
                             if pt.is_integer() {
                                 return Some(Ok(CompiledValue::Value { llvm_repr: t.to_string(), ptype: (*pt).clone() }));
@@ -776,41 +776,60 @@ fn get_path_from_expr(expr: &Expr) -> String {
         _ => panic!("Cannot extract path from {:?}", expr),
     }
 }
-fn size_of_from_parser_type(ptype: &ParserType, ctx: &mut CodeGenContext) -> u32{
+pub fn size_of_from_parser_type(ptype: &ParserType, ctx: &mut CodeGenContext) -> u32 {
+    size_and_alignment_of_type(ptype, ctx).0
+}
+fn size_and_alignment_of_type(ptype: &ParserType, ctx: &mut CodeGenContext) -> (u32, u32){
     if ptype.is_pointer() {
-        return POINTER_SIZE_IN_BYTES;
+        return (POINTER_SIZE_IN_BYTES, POINTER_SIZE_IN_BYTES);
     }
     if let Some(pt) = ptype.as_primitive_type() {
         if let Some(idx) = PRIMITIVE_TYPES.iter().position(|&x| x == pt) {
             let size = PRIMITIVE_TYPES_SIZE[idx];
-            if size == 0 {
+            let align = PRIMITIVE_TYPES_ALIGNMENT[idx];
+            if size == 0 && pt != "void" {
                 panic!("{}", CompileError::Generic(format!("Trying to get size of zero-sized type '{}'", pt)));
             }
-            return size;
+            return (size, align);
         }
     }
     if let Some(struc) = ctx.symbols.get_type(&format!("{}.{}", ctx.current_function_path, ptype.to_string())).or(ctx.symbols.get_type(&ptype.to_string())) {
-        if struc.is_generic() {
-            println!("{:?}", struc);
-            if let ParserType::Generic(_, y) = ptype {
+        let field_types: Vec<ParserType> = if struc.is_generic() {
+            if let ParserType::Generic(_, concrete_types) = ptype {
+                if struc.generic_params.len() != concrete_types.len() {
+                    panic!("Mismatched number of generic arguments");
+                }
                 let mut type_map = HashMap::new();
                 let mut ind = 0;
                 for prm in &struc.generic_params {
-                    type_map.insert(prm.clone(), y[ind].clone());
+                    type_map.insert(prm.clone(), concrete_types[ind].clone());
                     ind +=  1;
                 }
-                let f = struc.fields.iter().map(|x| substitute_generic_type(&x.1, &ctx.symbols.alias_types)).collect::<Vec<_>>();
-                let mut sum = 0;
-                for x in &f {
-                    sum += size_of_from_parser_type(x, ctx);
-                }
-                return sum;
+                struc.fields.iter().map(|x| substitute_generic_type(&x.1, &ctx.symbols.alias_types)).collect::<Vec<_>>()
             }
-            panic!()
+            else {
+                panic!("Generic struct used without concrete types");
+            }
+        }else {
+            struc.fields.iter().map(|(_, field_type)| field_type.clone()).collect()
+        };
+        let mut current_offset = 0;
+        let mut max_alignment = 1;
+        for field_type in &field_types {
+            let (field_size, field_alignment) = size_and_alignment_of_type(field_type, ctx);
+
+            if field_alignment == 0 { continue; }
+            max_alignment = u32::max(max_alignment, field_alignment);
+            let padding = (field_alignment - (current_offset % field_alignment)) % field_alignment;
+            
+            current_offset += padding;
+            current_offset += field_size;
         }
-        return struc.get_size_of(ctx.symbols).unwrap();
+        let final_padding = (max_alignment - (current_offset % max_alignment)) % max_alignment;
+        let total_size = current_offset + final_padding;
+        return (total_size, max_alignment);
     }
-    u32::MAX
+    panic!()
 }
 pub fn constant_integer_expression_compiler(expression: &Expr, symbols: &SymbolTable) -> Result<i128, String> {
     match expression {

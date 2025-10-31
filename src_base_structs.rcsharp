@@ -244,7 +244,7 @@ namespace vector{
     }
     #[ExtentionOf(Vec)]
     fn free<T>(vec: &Vec<T>) {
-        if vec.array != 0 as &i8 {
+        if vec.array != 0 as &T {
             mem::free(vec.array as &void);
         }
         vec.array = 0 as &T;
@@ -317,44 +317,27 @@ namespace console{
         }
     }
     fn println_u64(n: u64) {
-        let buffer: vector::Vec<i8> = vector::new::<i8>();
-        if (n == 0) {
-            vector::push::<i8>(&buffer, 48 as i8);
-            vector::push::<i8>(&buffer, 10);
-            write(buffer.array, buffer.length as i32);
-            vector::free::<i8>(&buffer);
+        let buffer : &i8 = stalloc(sizeof(i8) * 22);
+        let i: i32 = 20; 
+        if n == 0 {
+            write("0\n", 2);
             return;
         }
 
         let mut_n: u64 = n;
-
         loop {
-            if (mut_n == 0) {
-                break;
-            }
-            let digit_char: i8 = (mut_n % 10) as i8 + (48 as i8);
-            vector::push::<i8>(&buffer, digit_char);
+            buffer[i] = (mut_n % 10) as i8 + '0';
             mut_n = mut_n / 10;
-        }
-
-        let i: u32 = 0;
-        let j: u32 = buffer.length - 1;
-        loop {
-            if (i >= j) {
+            i = i - 1;
+            if mut_n == 0 {
                 break;
             }
-            let temp: i8 = buffer.array[i];
-            buffer.array[i] = buffer.array[j];
-            buffer.array[j] = temp;
-
-            i = i + 1;
-            j = j - 1;
         }
 
-        vector::push::<i8>(&buffer, 10); 
-
-        write(buffer.array, buffer.length as i32);
-        vector::free::<i8>(&buffer);
+        buffer[21] = '\n';
+        let start_ptr : &i8 = &buffer[i + 1];
+        let len: i32 = 21 as i32 - (i + 1) + 1;
+        write(start_ptr, len);
     }
 }
 namespace string{
@@ -463,11 +446,11 @@ namespace fs{
         dwCreationDisposition: u32,
         dwFlagsAndAttributes: u32,
         hTemplateFile: &i8
-    ) : &i8; // Returns a HANDLE
+    ) : &void; // Returns a HANDLE
 
     #[DllImport("kernel32.dll")]
     fn WriteFile(
-        hFile: &i8,
+        hFile: &void,
         lpBuffer: &i8,
         nNumberOfBytesToWrite: u32,
         lpNumberOfBytesWritten: &u32,
@@ -476,7 +459,7 @@ namespace fs{
 
     #[DllImport("kernel32.dll")]
     fn ReadFile(
-        hFile: &i8,
+        hFile: &void,
         lpBuffer: &i8,
         nNumberOfBytesToRead: u32,
         lpNumberOfBytesRead: &u32,
@@ -484,10 +467,10 @@ namespace fs{
     ) : i32; // Returns a BOOL
     
     #[DllImport("kernel32.dll")]
-    fn GetFileSizeEx(hFile: &i8, lpFileSize: &i64): i32; // Returns BOOL
+    fn GetFileSizeEx(hFile: &void, lpFileSize: &i64): i32; // Returns BOOL
 
     #[DllImport("kernel32.dll")]
-    fn CloseHandle(hObject: &i8) : i32; // Returns a BOOL
+    fn CloseHandle(hObject: &void) : i32; // Returns a BOOL
 
     #[DllImport("kernel32.dll")]
     fn DeleteFileA(lpFileName: &i8) : i32; // Returns a BOOL
@@ -496,8 +479,8 @@ namespace fs{
         let CREATE_ALWAYS: u32 = 2;
         let GENERIC_WRITE: u32 = 0x40000000;
         let FILE_ATTRIBUTE_NORMAL: u32 = 0x80;
-        let hFile: &i8 = CreateFileA(path, GENERIC_WRITE, 0, 0 as &i8, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0 as &i8);
-        let INVALID_HANDLE_VALUE: &i8 = -1 as &i8;
+        let hFile: &void = CreateFileA(path, GENERIC_WRITE, 0, 0 as &i8, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0 as &i8);
+        let INVALID_HANDLE_VALUE: &void = -1 as &void;
         if hFile == INVALID_HANDLE_VALUE {
             return 0;
         }
@@ -520,8 +503,8 @@ namespace fs{
         let GENERIC_READ: u32 = 0x80000000;
         let FILE_ATTRIBUTE_NORMAL: u32 = 0x80;
         let OPEN_EXISTING: u32 = 3; 
-        let hFile: &i8 = CreateFileA(path, GENERIC_READ, 0, 0 as &i8, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0 as &i8);
-        let INVALID_HANDLE_VALUE: &i8 = -1 as &i8;
+        let hFile: &void = CreateFileA(path, GENERIC_READ, 0, 0 as &i8, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0 as &i8);
+        let INVALID_HANDLE_VALUE: &void = -1 as &void;
 
         if hFile == INVALID_HANDLE_VALUE {
             process::throw(string_utils::insert("File  was not found", path, 5));
@@ -555,7 +538,7 @@ namespace fs{
         let GENERIC_WRITE: u32 = 0x40000000;
         let FILE_ATTRIBUTE_NORMAL: u32 = 0x80;
         
-        let hFile: &i8 = CreateFileA(
+        let hFile: &void = CreateFileA(
             path,
             GENERIC_WRITE,
             0, // dwShareMode: No sharing
@@ -565,7 +548,7 @@ namespace fs{
             0 as &i8 // hTemplateFile: No template
         );
 
-        let INVALID_HANDLE_VALUE: &i8 = -1 as &i8;
+        let INVALID_HANDLE_VALUE: &void = -1 as &void;
         if hFile == INVALID_HANDLE_VALUE {
             return 0;
         }
@@ -612,7 +595,7 @@ namespace tests{
             i = i + 1;
         }
         // Test zero_fill
-        mem::zero_fill(buffer1, size); // First argument is ignored
+        mem::zero_fill(buffer1, size);
         let i: i64 = 0;
         loop {
             if i >= size { break; }
@@ -827,27 +810,23 @@ namespace tests{
     // No.
     fn funny(){
         let path: &i8 = "D:\\Projects\\rcsharp\\src_base_structs.rcsharp";
+        if fs::create_file(path) == 1 {
+            fs::delete_file(path);
+            return;
+        }
         let file: string::String = fs::read_full_file_as_string(path);
-        let tokens: vector::Vec<i8> = vector::new::<i8>();;
         let iterator: i32 = 0;
         let char: i8;
         let next_char: i8;
         let index: i32;
-        let temp_string: string::String;
-        let line: i32 = 0;
-        let line_index: i32 = 0;
+        
+        let data: vector::Vec<string::String> = vector::new::<string::String>();
         loop{
             if iterator >= file.len {
                 break;
             }
             char = file.data[iterator];
-            if char == '\n'{
-                line = line + 1;
-                line_index = iterator;
-                iterator = iterator + 1;
-                continue;
-            }
-            if (char == ' ' || char == '\t' || char == '\r') && 1 as bool{
+            if (char == ' ' || char == '\t' || char == '\r' || char == '\n'){
                 iterator = iterator + 1;
                 continue;
             }
@@ -859,7 +838,6 @@ namespace tests{
             }
             
             if char == '/' && next_char == '/'{
-                index = iterator;
                 consume_while(&file, &iterator, &not_new_line);
                 continue;
             }
@@ -869,24 +847,18 @@ namespace tests{
                     iterator = iterator + 2;
                 }
                 consume_while(&file, &iterator, &is_valid_number_token);
-                // Num string
-                temp_string = string::with_size(iterator - index);
+                let temp_string: string::String = string::with_size(iterator - index);
                 mem::copy(file.data + index, temp_string.data, temp_string.len as i64);
-                //console::write_string(&temp_string);
-                //console::print_char('\n');
-                string::free(&temp_string);
+                vector::push::<string::String>(&data, temp_string);
                 continue;
             }
 
             if string_utils::is_ascii_char(char) || char == '_'{
                 index = iterator;
                 consume_while(&file, &iterator, &valid_name_token);
-                // name token string
-                temp_string = string::with_size(iterator - index);
+                let temp_string: string::String = string::with_size(iterator - index);
                 mem::copy(file.data + index, temp_string.data, temp_string.len as i64);
-                //console::write_string(&temp_string);
-                //console::print_char('\n');
-                string::free(&temp_string);
+                vector::push::<string::String>(&data, temp_string);
                 continue;
             }
 
@@ -894,20 +866,15 @@ namespace tests{
                 index = iterator;
                 loop{
                     iterator = iterator + 1;
-                    if iterator >= file.len {
+                    if iterator >= file.len { break; }
+                    if file.data[iterator] == '"'{
+                        iterator = iterator + 1;
                         break;
                     }
-                    char = file.data[iterator];
-                    if char != '"'{
-                        continue;
-                    }
-                    iterator = iterator + 1;
-                    break;
                 }
-                // string token
-                temp_string = string::with_size(iterator - index);
+                let temp_string: string::String = string::with_size(iterator - index);
                 mem::copy(file.data + index, temp_string.data, temp_string.len as i64);
-                string::free(&temp_string);
+                vector::push::<string::String>(&data, temp_string);
                 continue;
             }
             if char == '\''{
@@ -1036,11 +1003,20 @@ namespace tests{
             }
             console::print_char(char);
             console::print_char('\n');
-            console::println_u64(line as u64);
-            console::println_u64((iterator - line_index) as u64);
             iterator = iterator + 1;
         }
-        vector::free::<i8>(&tokens);
+        
+        let i : u32 = 0;
+        loop {
+            if i >= data.length {
+                break;
+            }
+            console::write_string(&data.array[i]);
+            console::write("\n", 1);
+            string::free(&data.array[i]);
+            i = i + 1;
+        }
+        vector::free::<string::String>(&data);
         string::free(&file);
     }
 }

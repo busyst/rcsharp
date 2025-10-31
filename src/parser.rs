@@ -12,6 +12,12 @@ pub const PRIMITIVE_TYPES_SIZE: &[u32] = &[
     1, 2, 4, 8, 1, 2, 4, 8,
     4, 8
 ];
+pub const PRIMITIVE_TYPES_ALIGNMENT: &[u32] = &[
+    1, 1,          // void (alignment 1 is a safe default), bool
+    1, 2, 4, 8,    // i8, i16, i32, i64
+    1, 2, 4, 8,    // u8, u16, u32, u64
+    4, 8           // f32, f64
+];
 pub const LLVM_PRIMITIVE_TYPES: &[&str] = &[
     "void", "i1",
     "i8", "i16", "i32", "i64", 
