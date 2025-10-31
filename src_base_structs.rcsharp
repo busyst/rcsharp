@@ -134,7 +134,7 @@ namespace list{
     }
     // Linked list node
     struct ListNode<T>{
-        data: i32,
+        data: T,
         next_node: &ListNode<T>,
     }
     fn new<T>() : List<T>{
@@ -148,7 +148,7 @@ namespace list{
         list.next_node = 0 as &ListNode<T>;
         list.data = 0 as i32;
     }
-    fn extend<T>(list: &List<T>, data: i32){
+    fn extend<T>(list: &List<T>, data: T){
         let node_to_add: &ListNode<T> = mem::malloc(sizeof(ListNode<T>)) as &ListNode<T>;
         node_to_add.next_node = 0 as &ListNode<T>;
         node_to_add.data = data;

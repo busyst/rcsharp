@@ -223,8 +223,12 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             let given_generic = given_generic.iter().map(|x| substitute_generic_type(x, &self.ctx.symbols.alias_types)).collect::<Vec<_>>();
             let symbols = self.ctx.symbols;
             let current_namespace = &self.ctx.current_function_path;
-
-            func.generic_implementations.borrow_mut().push(given_generic.to_vec().into());
+            {
+                let mut b = func.generic_implementations.borrow_mut();
+                if !b.iter().any(|x| x.as_ref().eq(&given_generic)) {
+                    b.push(given_generic.clone().into());
+                }
+            }
             let llvm_struct_name = format!("{}<{}>", func.get_llvm_repr(), given_generic.iter().map(|x| get_llvm_type_str(x, symbols, &current_namespace)).collect::<CompileResult<Vec<_>>>()?.join(", "));
             let mut type_map = HashMap::new();
             let mut ind = 0;
@@ -787,6 +791,7 @@ fn size_of_from_parser_type(ptype: &ParserType, ctx: &mut CodeGenContext) -> u32
     }
     if let Some(struc) = ctx.symbols.get_type(&format!("{}.{}", ctx.current_function_path, ptype.to_string())).or(ctx.symbols.get_type(&ptype.to_string())) {
         if struc.is_generic() {
+            println!("{:?}", struc);
             if let ParserType::Generic(_, y) = ptype {
                 let mut type_map = HashMap::new();
                 let mut ind = 0;
@@ -794,8 +799,12 @@ fn size_of_from_parser_type(ptype: &ParserType, ctx: &mut CodeGenContext) -> u32
                     type_map.insert(prm.clone(), y[ind].clone());
                     ind +=  1;
                 }
-                let q: u32 = struc.fields.iter().map(|x| size_of_from_parser_type(&substitute_generic_type(&x.1, &type_map), ctx)).sum();
-                return q;
+                let f = struc.fields.iter().map(|x| substitute_generic_type(&x.1, &ctx.symbols.alias_types)).collect::<Vec<_>>();
+                let mut sum = 0;
+                for x in &f {
+                    sum += size_of_from_parser_type(x, ctx);
+                }
+                return sum;
             }
             panic!()
         }

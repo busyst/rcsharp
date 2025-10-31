@@ -680,11 +680,17 @@ pub fn get_llvm_type_str(
             let rel = ptype.to_string();
             let imp = imp.iter().map(|x| substitute_generic_type(x, &symbols.alias_types)).collect::<Box<_>>();
             if let Some(x) = symbols.types.get(&abs) {
-                x.generic_implementations.borrow_mut().push(imp.clone());
+                let mut b = x.generic_implementations.borrow_mut();
+                if !b.iter().any(|x| x.as_ref().eq(imp.as_ref())) {
+                    b.push(imp.clone().into());
+                }
                 return Ok(format!("%\"struct.{}<{}>\"", abs, imp.iter().map(|x| get_llvm_type_str_int(x, symbols, current_namespace)).collect::<CompileResult<Vec<_>>>()?.join(", ")));
             }
             if let Some(x) = symbols.types.get(&rel) {
-                x.generic_implementations.borrow_mut().push(imp.clone());
+                let mut b = x.generic_implementations.borrow_mut();
+                if !b.iter().any(|x| x.as_ref().eq(imp.as_ref())) {
+                    b.push(imp.clone().into());
+                }
                 return Ok(format!("%\"struct.{}<{}>\"", rel, imp.iter().map(|x| get_llvm_type_str_int(x, symbols, current_namespace)).collect::<CompileResult<Vec<_>>>()?.join(", ")));
             }
             println!("{:?}", symbols.types.iter().map(|x| x.0.clone()).collect::<Vec<_>>().join("\n"));
@@ -705,11 +711,17 @@ pub fn get_llvm_type_str_int(
             let rel = ptype.to_string();
             let imp = imp.iter().map(|x| substitute_generic_type(x, &symbols.alias_types)).collect::<Box<_>>();
             if let Some(x) = symbols.types.get(&abs) {
-                x.generic_implementations.borrow_mut().push(imp.clone());
+                let mut b = x.generic_implementations.borrow_mut();
+                if !b.iter().any(|x| x.as_ref().eq(imp.as_ref())) {
+                    b.push(imp.clone().into());
+                }
                 return Ok(format!("struct.{}<{}>", abs, imp.iter().map(|x| get_llvm_type_str_int(x, symbols, current_namespace)).collect::<CompileResult<Vec<_>>>()?.join(", ")));
             }
             if let Some(x) = symbols.types.get(&rel) {
-                x.generic_implementations.borrow_mut().push(imp.clone());
+                let mut b = x.generic_implementations.borrow_mut();
+                if !b.iter().any(|x| x.as_ref().eq(imp.as_ref())) {
+                    b.push(imp.clone().into());
+                }
                 return Ok(format!("struct.{}<{}>", rel, imp.iter().map(|x| get_llvm_type_str_int(x, symbols, current_namespace)).collect::<CompileResult<Vec<_>>>()?.join(", ")));
             }
             println!("{:?}", symbols.types.iter().map(|x| x.0.clone()).collect::<Vec<_>>().join("\n"));
