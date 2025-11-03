@@ -57,7 +57,7 @@ fn main() -> Result<(), String> {
 	println!("pars\t{:?} statements", y.iter().map(|x| x.recursive_statement_count()).sum::<u64>());
 	println!("pars\t{:?} top level statements", y.len());
 	println!("compil\t{:?}", compiled_and_wrote - tokens_parsed);
-	return Ok(());
+	Ok(())
 }
 
 

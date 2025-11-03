@@ -118,7 +118,7 @@ impl Struct {
             }
 
         }
-        return Ok(sum);
+        Ok(sum)
     }
     
     pub(crate) fn full_path(&self) -> Box<str> {
@@ -157,15 +157,15 @@ impl Function {
     }
     
     pub fn effective_name(&self) -> Box<str> {
-        let output = if self.path.is_empty() {
+        
+        if self.path.is_empty() {
             self.name.clone()
         }else{
             let mut o = self.path.to_string();
             o.push('.');
             o.push_str(&self.name);
             o.into_boxed_str()
-        };
-        return output;
+        }
     }
     
     pub fn is_generic(&self) -> bool { self.flags.get() & FunctionFlags::Generic as u8 != 0 }
@@ -229,7 +229,7 @@ impl Variable {
         if modify_content {
             self.flags.replace(self.flags.get() | VariableFlags::ModifiedContent as u8);
         }
-        return &self.compiler_type;
+        &self.compiler_type
     }
     
     pub fn is_argument(&self) -> bool {
@@ -252,18 +252,18 @@ impl Variable {
     pub fn unusual_flags_to_string(&self) -> String{
         let mut output = String::new();
         if !self.has_read() {
-            output.push_str(&format!("Unread\t"));
+            output.push_str("Unread\t");
         }
-        if !(self.is_argument() && !self.has_wrote()) {
+        if !self.is_argument() || self.has_wrote() {
             if !self.has_wrote() && !self.modified() {
-                output.push_str(&format!("Unwritten\\Unmodified\t"));
+                output.push_str("Unwritten\\Unmodified\t");
             }
             if self.is_argument() {
-                output.push_str(&format!("Argument\t"));
+                output.push_str("Argument\t");
             }
         }
 
-        return output;
+        output
     }
 }
 
@@ -304,7 +304,6 @@ impl Scope {
     }
     pub fn leave_scope(&self, variable: (&String, &(Variable, u32))){
         if variable.1.0.unusual_flags_to_string().is_empty() {
-            return;
         }
         //println!("Variable {}, has left scope.\nFlags:\t{}", variable.0, variable.1.0.unusual_flags_to_string());
     }
@@ -337,7 +336,7 @@ impl Scope {
         }
         self.upper_scope_variables = new_scope;
         self.current_scope_variables.clear();
-        return sc;
+        sc
     }
     
     pub fn loop_index(&self) -> Option<u32> {

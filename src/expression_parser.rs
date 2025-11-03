@@ -120,7 +120,7 @@ impl<'a> ExpressionParser<'a> {
             Token::Multiply => self.parse_unary(UnaryOp::Deref),
             Token::BinaryAnd => self.parse_unary(UnaryOp::Pointer),
             Token::LogicAnd => {
-                return Ok(Expr::UnaryOp(UnaryOp::Pointer, Box::new(Expr::UnaryOp(UnaryOp::Pointer, Box::new(self.parse_prefix()?)))));
+                Ok(Expr::UnaryOp(UnaryOp::Pointer, Box::new(Expr::UnaryOp(UnaryOp::Pointer, Box::new(self.parse_prefix()?)))))
             },
             _ => Err(format!(
                 "Unexpected token {:?} in expression at row {}, col {}",
@@ -196,7 +196,7 @@ impl<'a> ExpressionParser<'a> {
 
     fn parse_call(&mut self, callee: Expr) -> Result<Expr, String> {
         self.consume(&Token::LParen)?; 
-        if callee == Expr::Name(format!("sizeof")) {
+        if callee == Expr::Name("sizeof".to_string()) {
             let t = self.parse_type()?;
             self.consume(&Token::RParen)?; 
             return Ok(Expr::Call(Box::new(callee), Box::new([Expr::Type(t)])));
@@ -274,20 +274,17 @@ impl<'a> ExpressionParser<'a> {
             self.advance();
             Ok(ParserType::Pointer(Box::new(ParserType::Pointer(Box::new(self.parse_type()?)))))
         }
-        else if self.peek().token == Token::BinaryAnd {
+        else if self.peek().token == Token::BinaryAnd ||
+            self.peek().token == Token::Multiply && crate::USE_MULTIPLY_AS_POINTER_IN_TYPES {
             self.advance();
             Ok(ParserType::Pointer(Box::new(self.parse_type()?)))
         }
-        else if self.peek().token == Token::Multiply && crate::USE_MULTIPLY_AS_POINTER_IN_TYPES {
-            self.advance();
-            Ok(ParserType::Pointer(Box::new(self.parse_type()?)))
-        } 
         else if self.peek().token == Token::KeywordFunction {
             self.advance();
             self.consume(&Token::LParen)?;
 
             let mut arguments = vec![];
-            let return_type;
+            
             
             if self.peek().token != Token::RParen {
                 loop {
@@ -300,7 +297,7 @@ impl<'a> ExpressionParser<'a> {
             }
             self.consume(&Token::RParen)?;
             self.consume(&Token::Colon)?;
-            return_type = Box::new(self.parse_type()?);
+            let return_type = Box::new(self.parse_type()?);
             Ok(ParserType::Function(return_type, arguments.into_boxed_slice()))
         }
         else {

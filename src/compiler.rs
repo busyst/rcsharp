@@ -56,10 +56,7 @@ pub fn rcsharp_compile_to_file(stmts: &[Stmt], full_path: &str) -> Result<(), St
 }
 
 fn is_global_hint(name: &str) -> bool {
-    match name {
-        "include" | "-pop" => true,
-        _ => false
-    }
+    matches!(name, "include" | "-pop")
 }
 pub fn rcsharp_compile(stmts: &[Stmt], absolute_file_path: &str) -> CompileResult<LLVMOutputHandler>  {
     let mut symbols = SymbolTable::new();
@@ -139,14 +136,12 @@ fn handle_generics(symbols: &mut SymbolTable, output: &mut LLVMOutputHandler) ->
                 new = true;
                 let current_namespace = function.path();
                 let mut type_map = HashMap::new();
-                let mut ind = 0;
-                for prm in &function.generic_params {
+                for (ind, prm) in function.generic_params.iter().enumerate() {
                     type_map.insert(prm.clone(), x[ind].clone());
                     symbols.alias_types.insert(prm.clone(), x[ind].clone());
-                    ind +=  1;
                 }
                 println!("{}", full_path);
-                let llvm_struct_name = format!("{}<{}>", full_path, x.iter().map(|x| get_llvm_type_str(x, symbols, &current_namespace)).collect::<CompileResult<Vec<_>>>()?.join(", "));
+                let llvm_struct_name = format!("{}<{}>", full_path, x.iter().map(|x| get_llvm_type_str(x, symbols, current_namespace)).collect::<CompileResult<Vec<_>>>()?.join(", "));
                 let mut q= function.clone();
                 for x in q.args.iter_mut() {
                     x.1 = substitute_generic_type(&x.1, &type_map);
@@ -171,10 +166,9 @@ fn handle_generics(symbols: &mut SymbolTable, output: &mut LLVMOutputHandler) ->
                 }
                 new = true;
                 let mut type_map = HashMap::new();
-                let mut ind = 0;
-                for prm in &r#struct.generic_params {
+                for (ind, prm) in r#struct.generic_params.iter().enumerate() {
                     type_map.insert(prm.clone(), x[ind].clone());
-                    ind +=  1;
+                    symbols.alias_types.insert(prm.clone(), x[ind].clone());
                 }
                 let current_path = r#struct.path.to_string();
                 let struct_name = r#struct.name.to_string();
@@ -210,7 +204,7 @@ fn collect(stmts: &[Stmt],
             if let Stmt::Hint(h, ex) = x {
                 if is_global_hint(&h) {
                     if h == "include" {
-                        if let Some(Expr::StringConst(include_path)) = ex.get(0) {
+                        if let Some(Expr::StringConst(include_path)) = ex.first() {
                             if included_files.contains(include_path) {
                                 continue;
                             }
@@ -235,7 +229,7 @@ fn collect(stmts: &[Stmt],
             }
             if let Stmt::Namespace(namespace, body) = x {
                 if !stack_hints.is_empty() {
-                    return Err(CompileError::Generic(format!("Hints are not applicable to namespaces")));
+                    return Err(CompileError::Generic("Hints are not applicable to namespaces".to_string()));
                 }
                 current_path.push(namespace);
                 statements.push_front(Stmt::Hint("-pop".to_string(), Box::new([])));
@@ -259,7 +253,7 @@ fn collect(stmts: &[Stmt],
                 continue;
             }
             if let Stmt::Enum(enum_name, enum_type, fields) = x {
-                enums.push((current_path.join("."), stack_hints.clone().into_boxed_slice(), (enum_name, enum_type.unwrap_or(ParserType::Named(format!("i32"))), fields)));
+                enums.push((current_path.join("."), stack_hints.clone().into_boxed_slice(), (enum_name, enum_type.unwrap_or(ParserType::Named("i32".to_string())), fields)));
                 stack_hints.clear();
                 continue;
             }
@@ -293,10 +287,10 @@ fn handle_types(structs : Vec<(String, Box<[Attribute]>, (String, Box<[(String, 
             if !dereferenced_type.is_primitive_type() {
                 if let ParserType::Named(named) = dereferenced_type {
                     let is_found = registered_types.iter().any(|(p, n)| {
-                        (p == &current_path && n == named) || (p.is_empty() && n == named)
+                        (p == &current_path || p.is_empty()) && n == named
                     });
 
-                    if !is_found && generics.len() == 0 {
+                    if !is_found && generics.is_empty() {
                         return Err(CompileError::SymbolNotFound(format!(
                             "Type '{}' for field '{}' in struct '{}' was not found.",
                             named, name, struct_name
@@ -345,7 +339,7 @@ fn handle_enums(enums : Vec<(String, Box<[Attribute]>, (String, ParserType, Box<
                 compiler_enum_fields.push((field_name, int.parse::<i128>().unwrap()));
                 continue;
             }
-            if let Ok(int) = constant_integer_expression_compiler(&field_expr, &symbols) {
+            if let Ok(int) = constant_integer_expression_compiler(&field_expr, symbols) {
                 compiler_enum_fields.push((field_name, int));
                 continue;
             }
@@ -378,10 +372,10 @@ fn handle_functions(functions : Vec<ParsedFunction>, symbols: &mut SymbolTable, 
         if function_attrs.iter().any(|x| x.name_equals("DllImport")) {
             act_flags |= FunctionFlags::Imported as u8;
         }
-        if function_generics.len() != 0 {
+        if !function_generics.is_empty() {
             act_flags |= FunctionFlags::Generic as u8;
         }
-        let function = Function::new(current_path.into(), function_name.into(), args, return_type, function_body, act_flags.into(), function_attrs, function_generics);
+        let function = Function::new(current_path, function_name, args, return_type, function_body, act_flags.into(), function_attrs, function_generics);
         symbols.functions.insert(full_path, function);
     }
     Ok(())
@@ -393,18 +387,18 @@ fn qualify_type(ty: &ParserType, current_path: &str, symbols: &SymbolTable) -> P
 
     match ty {
         ParserType::Named(name)=> {
-            if symbols.get_type(name).is_some() || symbols.alias_types.get(name).is_some() {
-                return ty.clone();
+            if symbols.get_type(name).is_some() || symbols.alias_types.contains_key(name) {
+                ty.clone()
             }
             else {
-                nest_type_in_namespace_path(&current_path, ty.clone())
+                nest_type_in_namespace_path(current_path, ty.clone())
             }
         }
         ParserType::Generic(_, _) =>{
             if symbols.get_type(&ty.to_string()).is_some()  {
                 return ty.clone();
             }
-            let ty = nest_type_in_namespace_path(&current_path, ty.clone());
+            let ty = nest_type_in_namespace_path(current_path, ty.clone());
             if symbols.get_type(&ty.to_string()).is_some()  {
                 return ty.clone();
             }
@@ -453,12 +447,12 @@ fn collect_local_variables<'a>(stmts: &'a [Stmt], vars: &mut Vec<(&'a String, &'
 }
 fn compile_function_body(function: &Function, full_function_name: &str, symbols: &SymbolTable, output: &mut LLVMOutputHandler) -> CompileResult<()>{
     let current_namespace = &function.path;
-    let rt = get_llvm_type_str(&function.return_type, &symbols, current_namespace)?;
+    let rt = get_llvm_type_str(&function.return_type, symbols, current_namespace)?;
     let mut ctx = CodeGenContext::new(symbols, function);
 
     let args_str = function.args.iter()
     .map(|(name, ptype)| {
-        get_llvm_type_str(&ptype, ctx.symbols, &function.path)
+        get_llvm_type_str(ptype, ctx.symbols, &function.path)
             .map(|type_str| format!("{} %{}", type_str, name))
     })
     .collect::<CompileResult<Vec<_>>>()?
@@ -471,7 +465,7 @@ fn compile_function_body(function: &Function, full_function_name: &str, symbols:
         ctx.scope.add_variable(arg_name.clone(), Variable::new_argument(arg_type.clone()), 0);
     }
     for x in statically_declared_vars.iter().enumerate() {
-        let llvm_type = get_llvm_type_str(x.1.1, &symbols, &function.path())?;
+        let llvm_type = get_llvm_type_str(x.1.1, symbols, function.path())?;
         output.push_str(&format!("    %v{} = alloca {}; var: {}\n", x.0, llvm_type, x.1.0));
     }
 
@@ -494,12 +488,12 @@ fn compile(symbols: &mut SymbolTable, output: &mut LLVMOutputHandler) -> Compile
     for (_, function) in symbols.functions.iter().filter(|x| x.1.is_imported()) {
         // declare dllimport i32 @GetModuleFileNameA(i8*,i8*,i32)
         let current_namespace = &function.path;
-        let rt = get_llvm_type_str(&function.return_type, &symbols, current_namespace)?;
+        let rt = get_llvm_type_str(&function.return_type, symbols, current_namespace)?;
         let args = function.args.iter().map(|x| get_llvm_type_str(&x.1, symbols, current_namespace)).collect::<CompileResult<Vec<_>>>()?.join(",");
         output.push_str_header(&format!("declare dllimport {} @{}({})\n", rt, function.name() , args));
     }
     for (full_path, function) in symbols.functions.iter().filter(|x| !x.1.is_imported() && !x.1.is_inline() && !x.1.is_generic()) {
-        compile_function_body(function, &full_path, symbols, output)?;
+        compile_function_body(function, full_path, symbols, output)?;
     }
     
     Ok(())
@@ -547,14 +541,14 @@ pub fn compile_statement(stmt: &Stmt, ctx: &mut CodeGenContext, output: &mut LLV
                 output.push_str(&format!("    br label %loop_body{}\n", li));
                 return Ok(());
             }
-            return Err(CompileError::InvalidStatementInContext(format!("Tried to continue without loop")));
+            return Err(CompileError::InvalidStatementInContext("Tried to continue without loop".to_string()));
         }
         Stmt::Break => {
             if let Some(li) = ctx.scope.loop_index() {
                 output.push_str(&format!("    br label %loop_body{}_exit\n", li));
                 return Ok(());
             }
-            return Err(CompileError::InvalidStatementInContext(format!("Tried to break without loop")));
+            return Err(CompileError::InvalidStatementInContext("Tried to break without loop".to_string()));
         }
         Stmt::If(condition, then_body, else_body) => {
             let bool_type = ParserType::Named("bool".to_string());
@@ -661,12 +655,14 @@ pub fn get_llvm_type_str(
             if let Some(enm) = symbols.enums.get(&rel) {
                 return get_llvm_type_str(&enm.base_type, symbols, current_namespace);
             }
+            println!("{}", rel);
+            println!("{}", abs);
         }
         ParserType::NamespaceLink(_, c) => {
             let fqn = ptype.get_absolute_path_or(current_namespace);
             if let Some(x) = symbols.get_type(&fqn) {
                 if x.is_generic() {
-                    return get_llvm_type_str(&c.delink(), symbols, &x.path);
+                    return get_llvm_type_str(c.delink(), symbols, &x.path);
                 }
                 return Ok(x.llvm_representation());
             }
@@ -682,14 +678,14 @@ pub fn get_llvm_type_str(
             if let Some(x) = symbols.types.get(&abs) {
                 let mut b = x.generic_implementations.borrow_mut();
                 if !b.iter().any(|x| x.as_ref().eq(imp.as_ref())) {
-                    b.push(imp.clone().into());
+                    b.push(imp.clone());
                 }
                 return Ok(format!("%\"struct.{}<{}>\"", abs, imp.iter().map(|x| get_llvm_type_str_int(x, symbols, current_namespace)).collect::<CompileResult<Vec<_>>>()?.join(", ")));
             }
             if let Some(x) = symbols.types.get(&rel) {
                 let mut b = x.generic_implementations.borrow_mut();
                 if !b.iter().any(|x| x.as_ref().eq(imp.as_ref())) {
-                    b.push(imp.clone().into());
+                    b.push(imp.clone());
                 }
                 return Ok(format!("%\"struct.{}<{}>\"", rel, imp.iter().map(|x| get_llvm_type_str_int(x, symbols, current_namespace)).collect::<CompileResult<Vec<_>>>()?.join(", ")));
             }
@@ -698,7 +694,7 @@ pub fn get_llvm_type_str(
         }
     }
     println!("{:?}", symbols.alias_types);
-    return Err(CompileError::Generic(format!("GENERIC LLVM ERROR {:?}", ptype)));
+    Err(CompileError::Generic(format!("GENERIC LLVM ERROR {:?}", ptype)))
 }
 pub fn get_llvm_type_str_int(
     ptype: &ParserType,
@@ -713,19 +709,19 @@ pub fn get_llvm_type_str_int(
             if let Some(x) = symbols.types.get(&abs) {
                 let mut b = x.generic_implementations.borrow_mut();
                 if !b.iter().any(|x| x.as_ref().eq(imp.as_ref())) {
-                    b.push(imp.clone().into());
+                    b.push(imp.clone());
                 }
                 return Ok(format!("struct.{}<{}>", abs, imp.iter().map(|x| get_llvm_type_str_int(x, symbols, current_namespace)).collect::<CompileResult<Vec<_>>>()?.join(", ")));
             }
             if let Some(x) = symbols.types.get(&rel) {
                 let mut b = x.generic_implementations.borrow_mut();
                 if !b.iter().any(|x| x.as_ref().eq(imp.as_ref())) {
-                    b.push(imp.clone().into());
+                    b.push(imp.clone());
                 }
                 return Ok(format!("struct.{}<{}>", rel, imp.iter().map(|x| get_llvm_type_str_int(x, symbols, current_namespace)).collect::<CompileResult<Vec<_>>>()?.join(", ")));
             }
             println!("{:?}", symbols.types.iter().map(|x| x.0.clone()).collect::<Vec<_>>().join("\n"));
-            return Err(CompileError::Generic(format!("LLVM {{GENERIC}} error {:?}", ptype)));
+            Err(CompileError::Generic(format!("LLVM {{GENERIC}} error {:?}", ptype)))
         }
         _ => get_llvm_type_str(ptype, symbols, current_namespace),
     }
@@ -805,7 +801,7 @@ impl SymbolTable {
         debug_assert!(!struct_type.is_primitive_type());
         debug_assert!(!struct_type.is_pointer());
         let x = self.types.get(&SymbolTable::get_abs_path(struct_type, current_namespace)).ok_or(CompileError::SymbolNotFound(format!("Type:{:?}, Namespace {}",struct_type, current_namespace)))?;
-        return Ok((x.full_path(), &x.fields));
+        Ok((x.full_path(), &x.fields))
     }
 }
 

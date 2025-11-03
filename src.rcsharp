@@ -353,7 +353,6 @@ namespace window{
     struct WNDCLASSEXA {
         cbSize: u32,                            // UINT
         style: u32,                             // UINT
-        //lpfnWndProc: &fn(hWnd: &i8, uMsg: u32, wParam: u64, lParam: u64): i64, // WNDPROC (function pointer)
         lpfnWndProc: &fn(&i8, u32, u64, u64): i64, // WNDPROC (function pointer)
         cbClsExtra: i32,                        // INT
         cbWndExtra: i32,                        // INT

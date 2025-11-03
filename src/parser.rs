@@ -29,8 +29,8 @@ pub const SIGNED_TYPES: Range<usize> = 2..6;
 pub const UNSIGNED_TYPES: Range<usize> = 6..10;
 pub const FLOAT_TYPES: Range<usize> = 10..12;
 
-pub const VOID_TYPE: &&'static str = &PRIMITIVE_TYPES[0];
-pub const BOOL_TYPE: &&'static str = &PRIMITIVE_TYPES[1];
+pub const VOID_TYPE: &&str = &PRIMITIVE_TYPES[0];
+pub const BOOL_TYPE: &&str = &PRIMITIVE_TYPES[1];
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParsedFunction {
     pub path: Box<str>,
@@ -166,7 +166,7 @@ impl ParserType {
         false
     }
     pub fn is_pointer(&self) -> bool{
-        return matches!(self, ParserType::Pointer(_));
+        matches!(self, ParserType::Pointer(_))
     }
 
     pub fn is_both_integers(&self, other: &ParserType) -> Option<(u32, u32)> {
@@ -182,20 +182,20 @@ impl ParserType {
     }
     pub fn dereference_once(&self) -> &ParserType{
         match self {
-            ParserType::Pointer(x) => &x,
-            _ => return self,
+            ParserType::Pointer(x) => x,
+            _ => self,
         }
     }
     pub fn dereference_full(&self) -> &ParserType{
         match self {
-            ParserType::Pointer(x) => &x.dereference_full(),
-            _ => return self,
+            ParserType::Pointer(x) => x.dereference_full(),
+            _ => self,
         }
     }
     pub fn delink(&self) -> &ParserType {
         match self {
             ParserType::NamespaceLink(_, c) => c.delink(),
-            _ => return self,
+            _ => self,
         }
     }
     pub fn to_string(&self) -> String{
@@ -205,27 +205,27 @@ impl ParserType {
             ParserType::Pointer(x) => {output.push_str(&x.to_string()); output.push('*');},
             ParserType::Function(return_type, _) => {output.push_str(&return_type.to_string());},
             ParserType::NamespaceLink(x, y) => {output.push_str(&format!("{}.{}", x, y.to_string()));}
-            ParserType::Generic(x, _) => {output.push_str(&format!("{}", x));}
+            ParserType::Generic(x, _) => {output.push_str(&x.to_string());}
         }
-        return output;
+        output
     }
     pub fn get_absolute_path_or(&self, current_fallback: &str) -> String{
         match self {
             ParserType::NamespaceLink(x, y) =>{
-                return format!("{}.{}", x, y.to_string());
+                format!("{}.{}", x, y.to_string())
             }
             ParserType::Named(x) =>{
                 if current_fallback.is_empty() || self.is_primitive_type() {
-                    return format!("{}", x.clone());
+                    x.clone().to_string()
                 }else {
-                    return format!("{}.{}",current_fallback, x.clone());
+                    format!("{}.{}",current_fallback, x.clone())
                 }
             }
             ParserType::Generic(x, _) =>{
                 if current_fallback.is_empty() || self.is_primitive_type() {
-                    return format!("{}", x.clone());
+                    x.clone().to_string()
                 }else {
-                    return format!("{}.{}",current_fallback, x.clone());
+                    format!("{}.{}",current_fallback, x.clone())
                 }
             }
             _ => self.to_string(),
@@ -297,7 +297,7 @@ impl<'a> GeneralParser<'a> {
                     func.flags |= FunctionFlags::Inline as u8;
                     return Ok(x);
                 }
-                Err(format!("Keyword Inline only applicable to functions"))
+                Err("Keyword Inline only applicable to functions".to_string())
             }
             Token::KeywordConstExpr =>{
                 self.advance();
@@ -306,7 +306,7 @@ impl<'a> GeneralParser<'a> {
                     func.flags |= FunctionFlags::ConstExpression as u8;
                     return Ok(x);
                 }
-                Err(format!("Keyword Inline only applicable to functions"))
+                Err("Keyword Inline only applicable to functions".to_string())
             }
             Token::KeywordPub =>{
                 self.advance();
@@ -315,7 +315,7 @@ impl<'a> GeneralParser<'a> {
                     func.flags |= FunctionFlags::ConstExpression as u8;
                     return Ok(x);
                 }
-                Err(format!("Keyword Inline only applicable to functions"))
+                Err("Keyword Inline only applicable to functions".to_string())
             }
             _ => Err(format!(
                     "Unexpected token {:?} at {}:{} in top-level scope. Only functions, structs, and hints are allowed.",
@@ -391,10 +391,10 @@ impl<'a> GeneralParser<'a> {
         } 
         let body = self.parse_block_body()?;
         
-        if generic_types.len() != 0 {
+        if !generic_types.is_empty() {
             return Ok(Stmt::Function(ParsedFunction::new_parse_generic(name.into(), args.into_boxed_slice(), return_type, body, generic_types.into())));
         }
-        return Ok(Stmt::Function(ParsedFunction::new_parse(name.into(), args.into_boxed_slice(), return_type, body)));
+        Ok(Stmt::Function(ParsedFunction::new_parse(name.into(), args.into_boxed_slice(), return_type, body)))
     }  
     fn parse_struct(&mut self) -> Result<Stmt, String> {
         self.consume(&Token::KeywordStruct)?;
@@ -448,18 +448,17 @@ impl<'a> GeneralParser<'a> {
             body.push(self.parse_toplevel_item()?);
         }
         self.consume(&Token::RBrace)?;
-        return Ok(Stmt::Namespace(x, body.into_boxed_slice()));
+        Ok(Stmt::Namespace(x, body.into_boxed_slice()))
     }
     fn parse_enum(&mut self) -> Result<Stmt, String> {
         self.consume(&Token::KeywordEnum)?;
         let name = self.advance().expect_name_token()?;
-        let enum_base_type ;
-        if self.peek().token == Token::Colon {
+        let enum_base_type = if self.peek().token == Token::Colon {
             self.advance();
-            enum_base_type = Some(self.parse_type()?);
+            Some(self.parse_type()?)
         }else {
-            enum_base_type = None;
-        }
+           None
+        };
         self.consume(&Token::LBrace)?;
         let mut values = vec![];
         let mut counter = 0;
@@ -542,8 +541,8 @@ impl<'a> GeneralParser<'a> {
                 let else_if_stmt = self.parse_if_statement()?;
                 Box::new([else_if_stmt])
             } else {
-                let else_body = self.parse_block_body()?;
-                else_body
+                
+                self.parse_block_body()?
             }
         }else{
             Box::new([])
@@ -570,7 +569,7 @@ impl<'a> GeneralParser<'a> {
         let mut ep = ExpressionParser::new(&self.tokens[self.cursor..]);
         let pt = ep.parse_type();
         self.cursor += ep.cursor();
-        return pt;
+        pt
     }
     fn parse_expression(&mut self) -> Result<Expr, String> {
         let mut expr_parser = ExpressionParser::new(&self.tokens[self.cursor..]);

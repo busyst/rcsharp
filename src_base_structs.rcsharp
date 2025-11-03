@@ -807,6 +807,9 @@ namespace tests{
     fn not_new_line(c:i8) : bool { return c != '\n'; }
     fn valid_name_token(c:i8) : bool { return string_utils::is_ascii_char(c) || string_utils::is_ascii_num(c) || c == '_'; }
     fn is_valid_number_token(c:i8) : bool { return string_utils::is_ascii_num(c) || string_utils::is_ascii_hex(c) || c == '_'; }
+    enum LexerTokens{
+        String
+    }
     // No.
     fn funny(){
         let path: &i8 = "D:\\Projects\\rcsharp\\src_base_structs.rcsharp";
@@ -821,6 +824,7 @@ namespace tests{
         let index: i32;
         
         let data: vector::Vec<string::String> = vector::new::<string::String>();
+        let tokens: vector::Vec<LexerTokens> = vector::new::<LexerTokens>();
         loop{
             if iterator >= file.len {
                 break;
