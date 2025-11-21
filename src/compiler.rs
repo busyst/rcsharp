@@ -140,7 +140,6 @@ fn handle_generics(symbols: &mut SymbolTable, output: &mut LLVMOutputHandler) ->
                     type_map.insert(prm.clone(), x[ind].clone());
                     symbols.alias_types.insert(prm.clone(), x[ind].clone());
                 }
-                println!("{}", full_path);
                 let llvm_struct_name = format!("{}<{}>", full_path, x.iter().map(|x| get_llvm_type_str(x, symbols, current_namespace)).collect::<CompileResult<Vec<_>>>()?.join(", "));
                 let mut q= function.clone();
                 for x in q.args.iter_mut() {
@@ -247,7 +246,6 @@ fn collect(stmts: &[Stmt],
                 
                 x.path = current_path.join(".").into();
                 x.attributes = stack_hints.clone().into_boxed_slice();
-                println!("{} {}", x.path, x.name);
                 functions.push(x);
                 stack_hints.clear();
                 continue;
@@ -308,7 +306,6 @@ fn handle_types(structs : Vec<(String, Box<[Attribute]>, (String, Box<[(String, 
         .filter(|s: &&Struct| !s.is_primitive() && !s.is_generic())
         .collect();
     for s in user_defined_structs {
-        println!("{} : {}", s.name, s.flags.get());
         let field_types: Vec<String> = s.fields
             .iter()
             .map(|(_field_name, field_type)| get_llvm_type_str(field_type, symbols, &s.path))
@@ -395,11 +392,11 @@ fn qualify_type(ty: &ParserType, current_path: &str, symbols: &SymbolTable) -> P
             }
         }
         ParserType::Generic(_, _) =>{
-            if symbols.get_type(&ty.to_string()).is_some()  {
+            if symbols.get_type(&ty.type_name()).is_some()  {
                 return ty.clone();
             }
             let ty = nest_type_in_namespace_path(current_path, ty.clone());
-            if symbols.get_type(&ty.to_string()).is_some()  {
+            if symbols.get_type(&ty.type_name()).is_some()  {
                 return ty.clone();
             }
             panic!()
@@ -630,10 +627,8 @@ pub fn get_llvm_type_str(
         ParserType::Named(name) => {
             if let Some(x) = symbols.alias_types.get(name) {
                 if ParserType::Named(name.clone()) == *x {
-                    println!("{:?}", symbols.alias_types);
                     panic!()
                 }
-                println!("{:?} {:?}", x, name);
                 return get_llvm_type_str(x, symbols, current_namespace);
             }
 
@@ -641,7 +636,7 @@ pub fn get_llvm_type_str(
                 return Ok(LLVM_PRIMITIVE_TYPES[index].to_string());
             }
             let abs = ptype.get_absolute_path_or(current_namespace);
-            let rel = ptype.to_string();
+            let rel = ptype.type_name();
             if let Some(x) = symbols.types.get(&abs) {
                 return Ok(x.llvm_representation());
             }
@@ -655,14 +650,12 @@ pub fn get_llvm_type_str(
             if let Some(enm) = symbols.enums.get(&rel) {
                 return get_llvm_type_str(&enm.base_type, symbols, current_namespace);
             }
-            println!("{}", rel);
-            println!("{}", abs);
         }
         ParserType::NamespaceLink(_, c) => {
             let fqn = ptype.get_absolute_path_or(current_namespace);
             if let Some(x) = symbols.get_type(&fqn) {
                 if x.is_generic() {
-                    return get_llvm_type_str(c.delink(), symbols, &x.path);
+                    return get_llvm_type_str(c.full_delink(), symbols, &x.path);
                 }
                 return Ok(x.llvm_representation());
             }
@@ -671,29 +664,41 @@ pub fn get_llvm_type_str(
             }
             return Err(CompileError::Generic(format!("LLVM {{NAMESPACELINK}} error {:?}", ptype)));
         }
-        ParserType::Generic(_, imp) => {
-            let abs = ptype.get_absolute_path_or(current_namespace);
-            let rel = ptype.to_string();
-            let imp = imp.iter().map(|x| substitute_generic_type(x, &symbols.alias_types)).collect::<Box<_>>();
-            if let Some(x) = symbols.types.get(&abs) {
-                let mut b = x.generic_implementations.borrow_mut();
-                if !b.iter().any(|x| x.as_ref().eq(imp.as_ref())) {
-                    b.push(imp.clone());
+        ParserType::Generic(_, generic_args) => {
+            let concrete_types = generic_args
+                .iter()
+                .map(|arg| substitute_generic_type(arg, &symbols.alias_types))
+                .collect::<Box<[ParserType]>>();
+            let absolute_path = ptype.get_absolute_path_or(current_namespace);
+            let relative_name = ptype.type_name();
+            let lookups = [
+                (absolute_path.as_str(), absolute_path.as_str()),
+                (&relative_name, &relative_name),
+            ];
+            for (lookup_key, type_name_for_string) in lookups {
+                if let Some(type_info) = symbols.types.get(lookup_key) {
+                    {
+                        let mut implementations = type_info.generic_implementations.borrow_mut();
+                        if !implementations.iter().any(|existing| existing.as_ref() == concrete_types.as_ref()) {
+                            implementations.push(concrete_types.clone());
+                        }
+                    }
+                    let arg_type_strings = concrete_types
+                        .iter()
+                        .map(|arg| get_llvm_type_str_int(arg, symbols, current_namespace))
+                        .collect::<CompileResult<Vec<_>>>()?
+                        .join(", ");
+
+                    // Format the final LLVM type string and return.
+                    return Ok(format!("%\"struct.{}<{}>\"", type_name_for_string, arg_type_strings));
                 }
-                return Ok(format!("%\"struct.{}<{}>\"", abs, imp.iter().map(|x| get_llvm_type_str_int(x, symbols, current_namespace)).collect::<CompileResult<Vec<_>>>()?.join(", ")));
             }
-            if let Some(x) = symbols.types.get(&rel) {
-                let mut b = x.generic_implementations.borrow_mut();
-                if !b.iter().any(|x| x.as_ref().eq(imp.as_ref())) {
-                    b.push(imp.clone());
-                }
-                return Ok(format!("%\"struct.{}<{}>\"", rel, imp.iter().map(|x| get_llvm_type_str_int(x, symbols, current_namespace)).collect::<CompileResult<Vec<_>>>()?.join(", ")));
-            }
-            println!("{:?}", symbols.types.iter().map(|x| x.0.clone()).collect::<Vec<_>>().join("\n"));
-            return Err(CompileError::Generic(format!("LLVM {{GENERIC}} error {:?}", ptype)));
+            return Err(CompileError::Generic(format!(
+                "Could not find definition for generic type '{:?}'",
+                ptype
+            )));
         }
     }
-    println!("{:?}", symbols.alias_types);
     Err(CompileError::Generic(format!("GENERIC LLVM ERROR {:?}", ptype)))
 }
 pub fn get_llvm_type_str_int(
@@ -702,26 +707,41 @@ pub fn get_llvm_type_str_int(
     current_namespace: &str,
 ) -> CompileResult<String> {
     match ptype {
-        ParserType::Generic(_, imp) => {
-            let abs = ptype.get_absolute_path_or(current_namespace);
-            let rel = ptype.to_string();
-            let imp = imp.iter().map(|x| substitute_generic_type(x, &symbols.alias_types)).collect::<Box<_>>();
-            if let Some(x) = symbols.types.get(&abs) {
-                let mut b = x.generic_implementations.borrow_mut();
-                if !b.iter().any(|x| x.as_ref().eq(imp.as_ref())) {
-                    b.push(imp.clone());
+        ParserType::Generic(_, generic_args) => {
+            let concrete_types = generic_args
+                .iter()
+                .map(|arg| substitute_generic_type(arg, &symbols.alias_types))
+                .collect::<Box<[ParserType]>>();
+            let absolute_path = ptype.get_absolute_path_or(current_namespace);
+            let relative_name = ptype.type_name();
+            let lookups = [
+                (absolute_path.as_str(), absolute_path.as_str()),
+                (&relative_name, &relative_name),
+            ];
+            for (lookup_key, type_name_for_string) in lookups {
+                if let Some(type_info) = symbols.types.get(lookup_key) {
+                    {
+                        let mut implementations = type_info.generic_implementations.borrow_mut();
+                        if !implementations.iter().any(|existing| existing.as_ref() == concrete_types.as_ref()) {
+                            implementations.push(concrete_types.clone());
+                        }
+                    }
+                    let arg_type_strings = concrete_types
+                        .iter()
+                        .map(|arg| get_llvm_type_str_int(arg, symbols, current_namespace))
+                        .collect::<CompileResult<Vec<_>>>()?
+                        .join(", ");
+
+                    // Format the final LLVM type string and return.
+                    return Ok(format!("struct.{}<{}>", type_name_for_string, arg_type_strings));
                 }
-                return Ok(format!("struct.{}<{}>", abs, imp.iter().map(|x| get_llvm_type_str_int(x, symbols, current_namespace)).collect::<CompileResult<Vec<_>>>()?.join(", ")));
             }
-            if let Some(x) = symbols.types.get(&rel) {
-                let mut b = x.generic_implementations.borrow_mut();
-                if !b.iter().any(|x| x.as_ref().eq(imp.as_ref())) {
-                    b.push(imp.clone());
-                }
-                return Ok(format!("struct.{}<{}>", rel, imp.iter().map(|x| get_llvm_type_str_int(x, symbols, current_namespace)).collect::<CompileResult<Vec<_>>>()?.join(", ")));
-            }
-            println!("{:?}", symbols.types.iter().map(|x| x.0.clone()).collect::<Vec<_>>().join("\n"));
-            Err(CompileError::Generic(format!("LLVM {{GENERIC}} error {:?}", ptype)))
+
+
+            Err(CompileError::Generic(format!(
+                "Could not find definition for generic type '{:?}'",
+                ptype
+            )))
         }
         _ => get_llvm_type_str(ptype, symbols, current_namespace),
     }
@@ -779,7 +799,7 @@ impl SymbolTable {
         debug_assert!(!struct_type.is_primitive_type());
         debug_assert!(!struct_type.is_pointer());
         if let ParserType::NamespaceLink(s, y) = struct_type {
-            return format!("{}.{}", s, y.to_string());
+            return format!("{}.{}", s, y.type_name());
         }
         if let ParserType::Named(n) = struct_type{
             if current_namespace.is_empty() {

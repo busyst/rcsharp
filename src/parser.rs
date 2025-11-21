@@ -5,32 +5,33 @@ pub const PRIMITIVE_TYPES: &[&str] = &[
     "void", "bool",
     "i8", "i16", "i32", "i64",
     "u8", "u16", "u32", "u64",
-    "f32", "f64"
+    "f16", "f32", "f64"
 ];
 pub const PRIMITIVE_TYPES_SIZE: &[u32] = &[
     0, 1,
     1, 2, 4, 8, 1, 2, 4, 8,
-    4, 8
+    2, 4, 8
 ];
 pub const PRIMITIVE_TYPES_ALIGNMENT: &[u32] = &[
     1, 1,          // void (alignment 1 is a safe default), bool
     1, 2, 4, 8,    // i8, i16, i32, i64
     1, 2, 4, 8,    // u8, u16, u32, u64
-    4, 8           // f32, f64
+    2, 4, 8           // f16, f32, f64
 ];
 pub const LLVM_PRIMITIVE_TYPES: &[&str] = &[
     "void", "i1",
     "i8", "i16", "i32", "i64", 
     "i8", "i16", "i32", "i64",
-    "float", "double"
+    "half", "float", "double"
 ];
 pub const INTEGERS_TYPES: Range<usize> = 2..10;
 pub const SIGNED_TYPES: Range<usize> = 2..6;
 pub const UNSIGNED_TYPES: Range<usize> = 6..10;
-pub const FLOAT_TYPES: Range<usize> = 10..12;
+pub const DECIMAL_TYPES: Range<usize> = 10..13;
 
-pub const VOID_TYPE: &&str = &PRIMITIVE_TYPES[0];
-pub const BOOL_TYPE: &&str = &PRIMITIVE_TYPES[1];
+pub const VOID_TYPE: usize = 0;
+pub const BOOL_TYPE: usize = 1;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParsedFunction {
     pub path: Box<str>,
@@ -147,21 +148,21 @@ impl ParserType {
         }
         false
     }
-    pub fn is_float(&self) -> bool {
+    pub fn is_decimal(&self) -> bool {
         if let ParserType::Named(name) = self {
-            return PRIMITIVE_TYPES[FLOAT_TYPES].contains(&name.as_str());
+            return PRIMITIVE_TYPES[DECIMAL_TYPES].contains(&name.as_str());
         }
         false
     }
     pub fn is_bool(&self) -> bool{
         if let ParserType::Named(name) = self {
-            return name == BOOL_TYPE;
+            return name == PRIMITIVE_TYPES[BOOL_TYPE];
         }
         false
     }
     pub fn is_void(&self) -> bool {
         if let ParserType::Named(name) = self {
-            return name == VOID_TYPE;
+            return name == PRIMITIVE_TYPES[VOID_TYPE];
         }
         false
     }
@@ -171,16 +172,24 @@ impl ParserType {
 
     pub fn is_both_integers(&self, other: &ParserType) -> Option<(u32, u32)> {
         if self.is_integer() && other.is_integer() {
-            let ln = self.to_string()[1..].parse::<u32>().unwrap();
-            let rn = other.to_string()[1..].parse::<u32>().unwrap();
+            let ln = self.type_name()[1..].parse::<u32>().unwrap();
+            let rn = other.type_name()[1..].parse::<u32>().unwrap();
             return Some((ln, rn));
         }
         None
     }
-    pub fn reference_once(self) -> ParserType{
+    pub fn is_both_decimals(&self, other: &ParserType) -> Option<(u32, u32)> {
+        if self.is_decimal() && other.is_decimal() {
+            let ln = self.type_name()[1..].parse::<u32>().unwrap();
+            let rn = other.type_name()[1..].parse::<u32>().unwrap();
+            return Some((ln, rn));
+        }
+        None
+    }
+    pub fn self_reference_once(self) -> ParserType{
         ParserType::Pointer(Box::new(self))
     }
-    pub fn dereference_once(&self) -> &ParserType{
+    pub fn try_dereference_once(&self) -> &ParserType{
         match self {
             ParserType::Pointer(x) => x,
             _ => self,
@@ -192,27 +201,32 @@ impl ParserType {
             _ => self,
         }
     }
-    pub fn delink(&self) -> &ParserType {
+    pub fn full_delink(&self) -> &ParserType {
         match self {
-            ParserType::NamespaceLink(_, c) => c.delink(),
+            ParserType::NamespaceLink(_, c) => c.full_delink(),
             _ => self,
         }
     }
-    pub fn to_string(&self) -> String{
-        let mut output = String::new();
+    pub fn type_name(&self) -> String{
         match self {
-            ParserType::Named(x) => output.push_str(x),
-            ParserType::Pointer(x) => {output.push_str(&x.to_string()); output.push('*');},
-            ParserType::Function(return_type, _) => {output.push_str(&return_type.to_string());},
-            ParserType::NamespaceLink(x, y) => {output.push_str(&format!("{}.{}", x, y.to_string()));}
-            ParserType::Generic(x, _) => {output.push_str(&x.to_string());}
+            ParserType::Named(name) => format!("{}", name.to_string()),
+            ParserType::Generic(name, _) => format!("{}", name.to_string()),
+            ParserType::NamespaceLink(link, core) => format!("{}.{}", link, core.type_name()),
+            _ => panic!("{:?}", self)
         }
-        output
+    }
+    pub fn debug_type_name(&self) -> String{
+        match self {
+            ParserType::Named(name) => format!("{}", name.to_string()),
+            ParserType::Generic(name, _) => format!("{}", name.to_string()),
+            ParserType::NamespaceLink(link, core) => format!("{}.{}", link, core.type_name()),
+            _ => format!("{:?}", self)
+        }
     }
     pub fn get_absolute_path_or(&self, current_fallback: &str) -> String{
         match self {
             ParserType::NamespaceLink(x, y) =>{
-                format!("{}.{}", x, y.to_string())
+                format!("{}.{}", x, y.type_name())
             }
             ParserType::Named(x) =>{
                 if current_fallback.is_empty() || self.is_primitive_type() {
@@ -228,7 +242,7 @@ impl ParserType {
                     format!("{}.{}",current_fallback, x.clone())
                 }
             }
-            _ => self.to_string(),
+            _ => panic!("Cannot get abs type of {:?}", self),
         }
     }
     

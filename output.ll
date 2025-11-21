@@ -2256,6 +2256,14 @@ loop_body44_exit:
     ret void
 }
 define i32 @"main"(){
+    %v0 = alloca half; var: f
+    %v1 = alloca float; var: f
+    %v2 = alloca double; var: f
+    %tmp0 = fadd double 1.6456, 2.1235
+    %tmp1 = fptrunc double %tmp0 to half
+    store half %tmp1, half* %v0
+    store float 2.0, float* %v1
+    store double 3.0, double* %v2
     call i32 @AllocConsole()
     call void @tests.run()
     call void @window.start()

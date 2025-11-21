@@ -824,7 +824,7 @@ namespace tests{
         let index: i32;
         
         let data: vector::Vec<string::String> = vector::new::<string::String>();
-        let tokens: vector::Vec<LexerTokens> = vector::new::<LexerTokens>();
+        //let tokens: vector::Vec<LexerTokens> = vector::new::<LexerTokens>();
         loop{
             if iterator >= file.len {
                 break;

@@ -112,7 +112,7 @@ impl Struct {
                 }
             }
             else {
-                let r#struct = symbols.get_type(&field_type.to_string())
+                let r#struct = symbols.get_type(&field_type.type_name())
                     .ok_or(CompileError::SymbolNotFound(format!("In struct '{}', cannot resolve type for field '{}'", self.name, field_name)))?;
                 sum += r#struct.get_size_of(symbols)?;
             }

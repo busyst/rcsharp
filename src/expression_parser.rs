@@ -2,6 +2,7 @@ use crate::{parser::ParserType, token::{Token, TokenData}};
 
 #[derive(Debug, Clone, PartialEq)] 
 pub enum Expr {
+    Decimal(String),
     Integer(String),
     Name(String),
 
@@ -105,6 +106,7 @@ impl<'a> ExpressionParser<'a> {
         let token_data = self.advance();
         match &token_data.token {
             Token::Integer(val) => Ok(Expr::Integer(val.to_string())),
+            Token::Decimal(val) => Ok(Expr::Decimal(val.to_string())),
             Token::Char(val) => {  Ok(Expr::Integer(val.to_string()))},
             Token::String(val) => Ok(Expr::StringConst(val.to_string())),
             Token::Name(name) => Ok(Expr::Name(name.to_string())),

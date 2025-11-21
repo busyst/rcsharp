@@ -10,12 +10,15 @@ inline fn basic_functions(){
 }
 
 struct Pair<T, U> { first: T, second: U }
-fn x<T>() : Pair<T, Pair<i8, string::String> >{
+fn ax<T>() : Pair<T, Pair<i8, string::String> >{
     let p: Pair<T, Pair<i8, string::String> >;
     p.first = 43 as T;
     return p;
 }
 fn main(): i32 {
+    let f : f16 = (1.6456 + 2.1235) as f16;
+    let f : f32 = 2.0;
+    let f : f64 = 3.0;
     basic_functions();
     return 0;
 }
