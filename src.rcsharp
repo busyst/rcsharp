@@ -15,12 +15,16 @@ fn ax<T>() : Pair<T, Pair<i8, string::String> >{
     p.first = 43 as T;
     return p;
 }
+fn of_fn() : &fn() : &fn() : void{
+    return of_fn();
+}
 fn main(): i32 {
-    let f : f16 = (1.6456 + 2.1235) as f16;
-    let f : f32 = 2.0;
-    let f : f64 = 3.0;
-    basic_functions();
-    return 0;
+    let f : f32 = 31415.45675678567895636231454568;
+    //let tp : &fn() : Pair<i32, Pair<i8, string::String> > = &ax::<i32>; WIP
+    let tp : &fn() : i32 = &main;
+
+    console::println_f64(f as f64);
+    return &of_fn as i32;
 }
 
 namespace window{

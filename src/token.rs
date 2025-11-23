@@ -113,7 +113,7 @@ pub enum Token {
     Name(Box<str>),
     #[regex(r"0x[0-9a-fA-F]+|0b[01]+|\d+", unhex_num)]
     Integer(Box<str>),
-    #[regex(r"[0-9]+\.[0-9]+", |lex| lex.slice().to_string().into_boxed_str())]
+    #[regex(r"[0-9]+\.[0-9]+", undecimal_num)]
     Decimal(Box<str>),
     #[regex(r#""([^"\\]|\\.)*""#, unescape_string)]
     String(Box<str>),
@@ -219,6 +219,13 @@ fn unhex_num(lex: &mut logos::Lexer<Token>) -> Box<str> {
     }
     
     slice.to_string().into_boxed_str()
+}
+fn undecimal_num(lex: &mut logos::Lexer<Token>) -> Box<str> {
+    let slice = lex.slice();
+    if let Ok(x) = slice.parse::<f64>() {
+        return format!("{:.32}", x).to_string().into_boxed_str();
+    }
+    panic!("Unparsable decimal! {}", slice);
 }
 
 fn unescape_content(content: &str, is_string: bool) -> String {

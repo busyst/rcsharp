@@ -339,6 +339,58 @@ namespace console{
         let len: i32 = 21 as i32 - (i + 1) + 1;
         write(start_ptr, len);
     }
+    fn println_f64(n: f64) {
+        let PRECISION: i32 = 6;
+        let mut_n : f64 = n;
+        if n < 0.0 {
+            print_char('-');
+            mut_n = -mut_n;
+        }
+
+        let rounder: f64 = 0.5;
+        let i: i32 = 0;
+        loop {
+            if i >= PRECISION {
+                break;
+            }
+            rounder = rounder / 10.0;
+            i = i + 1;
+        }
+        mut_n = mut_n + rounder;
+        let integer_part : u64 = mut_n as u64;
+        let fractional_part : f64 = mut_n - (integer_part as f64);
+        if integer_part == 0 {
+            print_char('0');
+        }else{
+            let buffer : &i8 = stalloc(sizeof(i8) * 21); 
+            let i: i32 = 20;
+            let temp_int : u64 = integer_part;
+            loop {
+                buffer[i] = (temp_int % 10) as i8 + '0';
+                temp_int = temp_int / 10;
+                i = i - 1;
+                if temp_int == 0 {
+                    break;
+                }
+            }
+            let start_ptr: &i8 = &buffer[i + 1];
+            let len: i32 = 20 as i32 - i;
+            write(start_ptr, len);
+        }
+        print_char('.');
+        let i : i32 = 0;
+        loop {
+            if i >= PRECISION{
+                break;
+            }
+            fractional_part = fractional_part * 10.0;
+            let digit: u64 = fractional_part as u64;
+            print_char(digit as i8 + '0');
+            fractional_part = fractional_part - (digit as f64);
+            i = i + 1;
+        }
+        print_char('\n');
+    }
 }
 namespace string{
     // Always malloc'd, always must be freed

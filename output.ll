@@ -479,6 +479,150 @@ loop_body1_exit:
     call void @console.write(i8* %tmp28, i32 %tmp29)
     ret void
 }
+define void @"console.println_f64"(double %n){
+    %v0 = alloca i32; var: PRECISION
+    %v1 = alloca double; var: mut_n
+    %v2 = alloca double; var: rounder
+    %v3 = alloca i32; var: i
+    %v4 = alloca i64; var: integer_part
+    %v5 = alloca double; var: fractional_part
+    %v6 = alloca i8*; var: buffer
+    %v7 = alloca i32; var: i
+    %v8 = alloca i64; var: temp_int
+    %v9 = alloca i8*; var: start_ptr
+    %v10 = alloca i32; var: len
+    %v11 = alloca i32; var: i
+    %v12 = alloca i64; var: digit
+    store i32 6, i32* %v0
+    store double %n, double* %v1
+    %tmp0 = fcmp olt double %n, 0x0
+    br i1 %tmp0, label %then0, label %endif0
+then0:
+    call void @console.print_char(i8 45)
+    %tmp1 = load double, double* %v1
+    %tmp2 = fsub double 0.0, %tmp1
+    store double %tmp2, double* %v1
+    br label %endif0
+endif0:
+    store double 0x3FE0000000000000, double* %v2
+    store i32 0, i32* %v3
+    br label %loop_body1
+loop_body1:
+    %tmp3 = load i32, i32* %v3
+    %tmp4 = load i32, i32* %v0
+    %tmp5 = icmp sge i32 %tmp3, %tmp4
+    br i1 %tmp5, label %then2, label %endif2
+then2:
+    br label %loop_body1_exit
+    br label %endif2
+endif2:
+    %tmp6 = load double, double* %v2
+    %tmp7 = fdiv double %tmp6, 0x4024000000000000
+    store double %tmp7, double* %v2
+    %tmp8 = load i32, i32* %v3
+    %tmp9 = add i32 %tmp8, 1
+    store i32 %tmp9, i32* %v3
+    br label %loop_body1
+loop_body1_exit:
+    %tmp10 = load double, double* %v1
+    %tmp11 = load double, double* %v2
+    %tmp12 = fadd double %tmp10, %tmp11
+    store double %tmp12, double* %v1
+    %tmp13 = load double, double* %v1
+    %tmp14 = fptoui double %tmp13 to i64
+    store i64 %tmp14, i64* %v4
+    %tmp15 = load double, double* %v1
+    %tmp16 = load i64, i64* %v4
+    %tmp17 = uitofp i64 %tmp16 to double
+    %tmp18 = fsub double %tmp15, %tmp17
+    store double %tmp18, double* %v5
+    %tmp19 = load i64, i64* %v4
+    %tmp20 = icmp eq i64 %tmp19, 0
+    br i1 %tmp20, label %then3, label %else3
+then3:
+    call void @console.print_char(i8 48)
+    br label %endif3
+else3:
+    %tmp21 = mul i64 1, 21
+    %tmp22 = alloca i8, i64 %tmp21
+    store i8* %tmp22, i8** %v6
+    store i32 20, i32* %v7
+    %tmp23 = load i64, i64* %v4
+    store i64 %tmp23, i64* %v8
+    br label %loop_body4
+loop_body4:
+    %tmp24 = load i8*, i8** %v6
+    %tmp25 = load i32, i32* %v7
+    %tmp26 = getelementptr inbounds i8, i8* %tmp24, i32 %tmp25
+    %tmp27 = load i64, i64* %v8
+    %tmp28 = urem i64 %tmp27, 10
+    %tmp29 = trunc i64 %tmp28 to i8
+    %tmp30 = add i8 %tmp29, 48
+    store i8 %tmp30, i8* %tmp26
+    %tmp31 = load i64, i64* %v8
+    %tmp32 = udiv i64 %tmp31, 10
+    store i64 %tmp32, i64* %v8
+    %tmp33 = load i32, i32* %v7
+    %tmp34 = sub i32 %tmp33, 1
+    store i32 %tmp34, i32* %v7
+    %tmp35 = load i64, i64* %v8
+    %tmp36 = icmp eq i64 %tmp35, 0
+    br i1 %tmp36, label %then5, label %endif5
+then5:
+    br label %loop_body4_exit
+    br label %endif5
+endif5:
+    br label %loop_body4
+loop_body4_exit:
+    %tmp37 = load i8*, i8** %v6
+    %tmp38 = load i32, i32* %v7
+    %tmp39 = add i32 %tmp38, 1
+    %tmp40 = getelementptr inbounds i8, i8* %tmp37, i32 %tmp39
+    store i8* %tmp40, i8** %v9
+    %tmp41 = trunc i64 20 to i32
+    %tmp42 = load i32, i32* %v7
+    %tmp43 = sub i32 %tmp41, %tmp42
+    store i32 %tmp43, i32* %v10
+    %tmp44 = load i8*, i8** %v9
+    %tmp45 = load i32, i32* %v10
+    call void @console.write(i8* %tmp44, i32 %tmp45)
+    br label %endif3
+endif3:
+    call void @console.print_char(i8 46)
+    store i32 0, i32* %v11
+    br label %loop_body6
+loop_body6:
+    %tmp46 = load i32, i32* %v11
+    %tmp47 = load i32, i32* %v0
+    %tmp48 = icmp sge i32 %tmp46, %tmp47
+    br i1 %tmp48, label %then7, label %endif7
+then7:
+    br label %loop_body6_exit
+    br label %endif7
+endif7:
+    %tmp49 = load double, double* %v5
+    %tmp50 = fmul double %tmp49, 0x4024000000000000
+    store double %tmp50, double* %v5
+    %tmp51 = load double, double* %v5
+    %tmp52 = fptoui double %tmp51 to i64
+    store i64 %tmp52, i64* %v12
+    %tmp53 = load i64, i64* %v12
+    %tmp54 = trunc i64 %tmp53 to i8
+    %tmp55 = add i8 %tmp54, 48
+    call void @console.print_char(i8 %tmp55)
+    %tmp56 = load double, double* %v5
+    %tmp57 = load i64, i64* %v12
+    %tmp58 = uitofp i64 %tmp57 to double
+    %tmp59 = fsub double %tmp56, %tmp58
+    store double %tmp59, double* %v5
+    %tmp60 = load i32, i32* %v11
+    %tmp61 = add i32 %tmp60, 1
+    store i32 %tmp61, i32* %v11
+    br label %loop_body6
+loop_body6_exit:
+    call void @console.print_char(i8 10)
+    ret void
+}
 define %struct.string.String @"string.from_c_string"(i8* %c_string){
     %v0 = alloca %struct.string.String; var: x
     %tmp0 = getelementptr inbounds %struct.string.String, %struct.string.String* %v0, i32 0, i32 1
@@ -2255,22 +2399,21 @@ loop_body44_exit:
     call void @string.free(%struct.string.String* %v1)
     ret void
 }
+define void ()** ()** @"of_fn"(){
+    %tmp0 = call void ()** ()** @of_fn()
+    ret void ()** ()** %tmp0
+}
 define i32 @"main"(){
-    %v0 = alloca half; var: f
-    %v1 = alloca float; var: f
-    %v2 = alloca double; var: f
-    %tmp0 = fadd double 1.6456, 2.1235
-    %tmp1 = fptrunc double %tmp0 to half
-    store half %tmp1, half* %v0
-    store float 2.0, float* %v1
-    store double 3.0, double* %v2
-    call i32 @AllocConsole()
-    call void @tests.run()
-    call void @window.start()
-    call i32 @FreeConsole()
-    br label %inline_exit0
-inline_exit0:
-    ret i32 0
+    %v0 = alloca float; var: f
+    %v1 = alloca i32 ()**; var: tp
+    %tmp0 = fptrunc double 0x40DEADDD3B80D02E to float
+    store float %tmp0, float* %v0
+    store i32 ()** @main, i32 ()*** %v1
+    %tmp1 = load float, float* %v0
+    %tmp2 = fpext float %tmp1 to double
+    call void @console.println_f64(double %tmp2)
+    %tmp3 = ptrtoint void ()** ()** ()** @of_fn to i32
+    ret i32 %tmp3
 }
 define i64 @"window.WindowProc"(i8* %hWnd, i32 %uMsg, i64 %wParam, i64 %lParam){
     %tmp0 = icmp eq i32 %uMsg, 16

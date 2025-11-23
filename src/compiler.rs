@@ -30,7 +30,7 @@ impl std::fmt::Display for CompileError {
             CompileError::Io(e) => write!(f, "IO Error: {}", e),
             CompileError::DuplicateSymbol(name) => write!(f, "Symbol '{}' is already defined", name),
             CompileError::SymbolNotFound(name) => write!(f, "Symbol '{}' not found in the current scope", name),
-            CompileError::TypeMismatch { expected, found } => write!(f, "Type mismatch: expected {:?}, found {:?}", expected, found),
+            CompileError::TypeMismatch { expected, found } => write!(f, "Type mismatch: expected {:?}, found {:?}", expected.debug_type_name(), found.debug_type_name()),
             CompileError::InvalidStatementInContext(stmt) => write!(f, "Statement '{}' is not valid in the current context", stmt),
             CompileError::InvalidExpression(expr) => write!(f, "Invalid expression: {}", expr),
             CompileError::InvalidEnumBaseType(name) => write!(f, "Enum '{}' has an invalid (non-integer) base type", name),

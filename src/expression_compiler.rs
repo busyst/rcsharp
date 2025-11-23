@@ -184,6 +184,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
                 BinaryOp::Equals => "icmp eq",
                 BinaryOp::NotEqual => "icmp ne",
                 BinaryOp::Less => if is_signed { "icmp slt" } else { "icmp ult" },
+
                 BinaryOp::LessEqual => if is_signed { "icmp sle" } else { "icmp ule" },
                 BinaryOp::Greater => if is_signed { "icmp sgt" } else { "icmp ugt" },
                 BinaryOp::GreaterEqual => if is_signed { "icmp sge" } else { "icmp uge" },
@@ -216,12 +217,22 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
                 BinaryOp::Add => "fadd",
                 BinaryOp::Subtract => "fsub",
                 BinaryOp::Multiply => "fmul",
-                _ => todo!()
+                BinaryOp::Divide => "fdiv",
+                BinaryOp::Modulo => "frem",
+
+                BinaryOp::Equals => "fcmp oeq",
+                BinaryOp::NotEqual => "fcmp one",
+                BinaryOp::Less => "fcmp olt",
+                BinaryOp::LessEqual => "fcmp ole",
+                BinaryOp::Greater => "fcmp ogt",
+                BinaryOp::GreaterEqual => "fcmp oge",
+
+                _ => todo!("unsupported binary operator for float"),
             };
             let both_types_llvm_repr = get_llvm_type_str(ltype, self.ctx.symbols, &self.ctx.current_function_name)?;
             let utvc = self.ctx.aquire_unique_temp_value_counter();
             self.output.push_str(&format!("    %tmp{} = {} {} {}, {}\n",utvc, llvm_op, both_types_llvm_repr, left.get_llvm_repr(), right.get_llvm_repr()));
-            let result_type = if llvm_op.starts_with("icmp") {
+            let result_type = if llvm_op.starts_with("fcmp") {
                 ParserType::Named("bool".to_string())
             } else {
                 left.get_type().clone()
@@ -502,12 +513,20 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
         Ok(CompiledValue::Value { llvm_repr: num_str.to_string(), ptype: ParserType::Named("i64".to_string()) })
     }
     fn compile_decimal_literal(&mut self, num_str: &str, expected: Expected) -> CompileResult<CompiledValue> {
-        if let Expected::Type(ptype) = expected {
-            if ptype.is_decimal() {
-                return Ok(CompiledValue::Value { llvm_repr: num_str.to_string(), ptype: ptype.clone() });
+        let ptype = if let Expected::Type(pt) = &expected {
+            if pt.is_decimal() {
+                (*pt).clone()
+            } else {
+                ParserType::Named("f64".to_string())
             }
+        } else {
+            ParserType::Named("f64".to_string())
+        };
+        let n = num_str.parse::<f64>().unwrap().to_bits();
+        if ParserType::Named("f64".to_string()) != ptype {
+            return explicit_cast(&CompiledValue::Value { llvm_repr: format!("0x{:X}", n), ptype: ParserType::Named("f64".to_string()) }, &ptype, self.ctx, self.output);
         }
-        Ok(CompiledValue::Value { llvm_repr: num_str.to_string(), ptype: ParserType::Named("f64".to_string()) })
+        return Ok(CompiledValue::Value { llvm_repr: format!("0x{:X}", n), ptype: ParserType::Named("f64".to_string()) });
     }
     fn compile_assignment(&mut self, lhs: &Expr, rhs: &Expr, expected: Expected) -> CompileResult<CompiledValue> {
         let left_ptr = self.compile_lvalue(lhs)?;
@@ -571,7 +590,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             }
             UnaryOp::Negate => {
                 let value = self.compile_rvalue(operand_expr, expected)?;
-                if !value.get_type().is_integer() {
+                if !value.get_type().is_integer() && !value.get_type().is_decimal() {
                     return Err(CompileError::Generic("Cannot negate non-integer type".to_string()));
                 }
                 if value.is_literaly_number() {
@@ -580,7 +599,12 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
                 }
                 let type_str = get_llvm_type_str(value.get_type(), self.ctx.symbols, &self.ctx.current_function_name)?;
                 let temp_id = self.ctx.aquire_unique_temp_value_counter();
-                self.output.push_str(&format!("    %tmp{} = sub {} 0, {}\n", temp_id, type_str, value.get_llvm_repr()));
+                if value.get_type().is_decimal() {
+                    self.output.push_str(&format!("    %tmp{} = fsub {} 0.0, {}\n", temp_id, type_str, value.get_llvm_repr()));
+                }else{
+                    self.output.push_str(&format!("    %tmp{} = sub {} 0, {}\n", temp_id, type_str, value.get_llvm_repr()));
+                }
+                
                 Ok(CompiledValue::Value { llvm_repr: format!("%tmp{}", temp_id), ptype: value.get_type().clone() })
             }
             UnaryOp::Not => {
@@ -911,7 +935,18 @@ fn explicit_cast(
                 let ftype = LLVM_PRIMITIVE_TYPES[from_type_index];
                 let ttype = LLVM_PRIMITIVE_TYPES[to_type_index];
                 format!("{} {} {} to {}", op, ftype, value.get_llvm_repr(), ttype)
-            } else {
+            } else if let (Some(from_bits), Some(to_bits)) = (from_type.get_integer_bits(), to_type.get_decimal_bits())  {
+                let op = if from_type.is_unsigned_integer() { "uitofp" } else { "sitofp" };
+                let to_type_index = DECIMAL_TYPES.start + DECIMAL_TYPES.clone().position(|idx| PRIMITIVE_TYPES_SIZE[idx] == to_bits / 8).unwrap();
+                let ttype = LLVM_PRIMITIVE_TYPES[to_type_index];
+                format!("{} i{} {} to {}", op, from_bits, value.get_llvm_repr(), ttype)
+            } else if let (Some(from_bits), Some(to_bits)) = (from_type.get_decimal_bits(), to_type.get_integer_bits())  {
+                let op = if to_type.is_unsigned_integer() { "fptoui" } else { "fptosi" };
+                let from_type_index = DECIMAL_TYPES.start + DECIMAL_TYPES.clone().position(|idx| PRIMITIVE_TYPES_SIZE[idx] == from_bits / 8).unwrap();
+                let ftype = LLVM_PRIMITIVE_TYPES[from_type_index];
+                format!("{} {} {} to i{}", op, ftype, value.get_llvm_repr(), to_bits)
+            }
+            else {
                 return Err(CompileError::Generic(format!("Invalid cast from {:?} to {:?}", from_type, to_type)));
             }
         }

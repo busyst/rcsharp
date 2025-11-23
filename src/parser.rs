@@ -220,7 +220,8 @@ impl ParserType {
             ParserType::Named(name) => format!("{}", name.to_string()),
             ParserType::Generic(name, _) => format!("{}", name.to_string()),
             ParserType::NamespaceLink(link, core) => format!("{}.{}", link, core.type_name()),
-            _ => format!("{:?}", self)
+            ParserType::Function(ret, args) => format!("fn({}) :{}", args.iter().map(|x| x.debug_type_name()).collect::<Vec<_>>().join(", "), ret.debug_type_name() ),
+            ParserType::Pointer(core) => format!("*{}", core.debug_type_name()),
         }
     }
     pub fn get_absolute_path_or(&self, current_fallback: &str) -> String{
@@ -244,6 +245,20 @@ impl ParserType {
             }
             _ => panic!("Cannot get abs type of {:?}", self),
         }
+    }
+    
+    pub fn get_integer_bits(&self) -> Option<u32> {
+        if self.is_integer() {
+            return Some(self.type_name()[1..].parse::<u32>().unwrap());
+        }
+        None
+    }
+    
+    pub fn get_decimal_bits(&self) -> Option<u32> {
+        if self.is_decimal() {
+            return Some(self.type_name()[1..].parse::<u32>().unwrap());
+        }
+        None
     }
     
 
