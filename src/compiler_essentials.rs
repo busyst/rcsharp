@@ -1,8 +1,7 @@
-use std::cell::{Cell, RefCell};
-
+use std::{cell::{Cell, RefCell}, collections::HashMap};
 use ordered_hash_map::OrderedHashMap;
 
-use crate::{compiler::{CompileError, CompileResult, SymbolTable, POINTER_SIZE_IN_BYTES}, expression_parser::Expr, parser::{ParserType, Stmt, PRIMITIVE_TYPES, PRIMITIVE_TYPES_SIZE}};
+use crate::{compiler::{CodeGenContext, substitute_generic_type}, compiler_primitives::Layout, expression_compiler::size_and_alignment_of_type, expression_parser::Expr, parser::{ParserType, Stmt}};
 
 // ------------------------------------------------------------------------------------
 #[derive(Debug, Clone)]
@@ -51,6 +50,7 @@ impl Attribute {
 }
 
 // ------------------------------------------------------------------------------------
+
 pub enum StructFlags {
     Generic = 64,
     PrimitiveType = 128,
@@ -74,6 +74,7 @@ impl Struct {
     pub fn new_primitive(name: &str) -> Self {
         Self { path : "".into(), name: name.into(), fields : Box::new([]), attribs: Box::new([]), flags: Cell::new(StructFlags::PrimitiveType as u8), generic_params: Box::new([]), generic_implementations: RefCell::new(vec![]) }
     }
+
     pub fn is_primitive(&self) -> bool { self.flags.get() & StructFlags::PrimitiveType as u8 != 0 }
     pub fn is_generic(&self) -> bool { self.flags.get() & StructFlags::Generic as u8 != 0 }
     pub fn set_as_generic(&self) { self.flags.set(self.flags.get() | StructFlags::Generic as u8);}
@@ -86,40 +87,6 @@ impl Struct {
             format!("%struct.{}.{}", self.path, self.name)
         }
     }
-    pub fn get_size_of(&self, symbols: &SymbolTable) -> CompileResult<u32>{
-        if self.is_generic() {
-            return Err(CompileError::Generic("Cannot get the size of a generic type template.".to_string()));
-        }
-        if let Some(idx) = PRIMITIVE_TYPES.iter().position(|&x| x == self.name.as_ref()) {
-            let size = PRIMITIVE_TYPES_SIZE[idx];
-            if size == 0 {
-                return Err(CompileError::Generic(format!("Trying to get size of zero-sized type '{}'", self.name)));
-            }
-            return Ok(size);
-        }
-        let mut sum = 0;
-        for (field_name, field_type) in &self.fields {
-            if field_type.is_pointer() {
-                sum += POINTER_SIZE_IN_BYTES;
-            } 
-            else if let Some(pt) = field_type.as_primitive_type() {
-                if let Some(idx) = PRIMITIVE_TYPES.iter().position(|x| *x == pt) {
-                    let size = PRIMITIVE_TYPES_SIZE[idx];
-                    if size == 0 {
-                        return Err(CompileError::Generic(format!("Trying to get size of zero-sized type '{}'", self.name)));
-                    }
-                    sum += size;
-                }
-            }
-            else {
-                let r#struct = symbols.get_type(&field_type.type_name())
-                    .ok_or(CompileError::SymbolNotFound(format!("In struct '{}', cannot resolve type for field '{}'", self.name, field_name)))?;
-                sum += r#struct.get_size_of(symbols)?;
-            }
-
-        }
-        Ok(sum)
-    }
     
     pub(crate) fn full_path(&self) -> Box<str> {
         if self.path.is_empty() {
@@ -127,6 +94,94 @@ impl Struct {
         }
         format!("{}.{}", self.path, self.name).into()
     }
+}
+
+pub struct StructView<'a>{
+    r#struct : &'a Struct,
+    fields: Vec<(String, ParserType)>,
+    size_and_alligment: Layout,
+}
+impl<'a> StructView<'a> {
+    pub fn new_unspec(r#struct: &'a Struct) -> Self {
+        Self { r#struct, fields: Vec::new(),  size_and_alligment: Layout::new_not_valid() }
+    }
+    pub fn new(r#struct: &'a Struct) -> Self {
+        if r#struct.is_generic() {
+            panic!("Tried to get struct view of generic type without specifying generic parameters")
+        }
+        Self { r#struct, fields: Vec::new(), size_and_alligment: Layout::new_not_valid()}
+    }
+    pub fn new_generic(r#struct: &'a Struct, map: &HashMap<String, ParserType>) -> Self {
+        if !r#struct.is_generic() {
+            panic!("This type is not generic: {}", r#struct.full_path())
+        }
+        let all_generics_defined = r#struct.generic_params.iter().map(|x| map.contains_key(x)).all(|x| x == true);
+        if !all_generics_defined {
+            let definded = r#struct.generic_params.iter().filter(|x| map.contains_key(x.as_str())).cloned().collect::<Vec<_>>();
+            let undefinded = r#struct.generic_params.iter().filter(|x| !map.contains_key(x.as_str())).cloned().collect::<Vec<_>>();
+            panic!("Not all generic types defined in current context:\nDefined({}):{}\nUndefined({}):{}",
+                definded.len(), definded.join("\n"),
+                undefinded.len(), undefinded.join("\n"),
+            )
+        }
+        let implementation = r#struct.generic_params.iter().map(|x| map.get(x).unwrap().clone()).collect::<Box<_>>();
+        if implementation.len() != r#struct.generic_params.len() {
+            panic!("Tried to get struct view of generic type with invalid count of generic parameters provided {}, needed {}", implementation.len(), r#struct.generic_params.len())
+        }
+        let mut fields = r#struct.fields.to_vec();
+        {
+            let mut brw = r#struct.generic_implementations.borrow_mut(); 
+            if !brw.iter().any(|x| x.iter().eq(implementation.iter())) {
+                brw.push(implementation);
+            }
+            for x in fields.iter_mut() {
+                x.1 = substitute_generic_type(&x.1, map);
+            }
+        }
+        
+        Self { r#struct, fields, size_and_alligment: Layout::new_not_valid() }
+    }
+    pub fn calculate_size(&mut self, ctx : &mut CodeGenContext<'_>) -> Layout {
+        if self.size_and_alligment.is_valid(){
+            return self.size_and_alligment;
+        }
+        let mut current_offset = 0;
+        let mut max_alignment = 1;
+        for (_name, field_type) in self.field_types() {
+            let layout_of_type = size_and_alignment_of_type(field_type, ctx);
+            //println!("Calculating layout for field type: {}", field_type.debug_type_name());
+            if layout_of_type.align == 0 { continue; }
+            max_alignment = u32::max(max_alignment, layout_of_type.align);
+            let padding = (layout_of_type.align - (current_offset % layout_of_type.align)) % layout_of_type.align;
+            
+            current_offset += padding;
+            current_offset += layout_of_type.size;
+        }
+        let final_padding = (max_alignment - (current_offset % max_alignment)) % max_alignment;
+        let total_size = current_offset + final_padding;
+        self.size_and_alligment = Layout::new(total_size, max_alignment);
+        return Layout::new(total_size, max_alignment);
+    }
+    
+    pub fn field_types(&self) -> &[(String, ParserType)] {
+        if !self.is_generic() {
+            return &self.r#struct.fields;
+        }
+        self.fields.as_slice()
+    }
+    pub fn is_generic(&self) -> bool {
+        self.r#struct.is_generic()
+    }
+    pub fn path(&self) -> &str {
+        &self.r#struct.path
+    }
+    pub fn llvm_representation(&self) -> String {
+        self.r#struct.llvm_representation()
+    } 
+    pub fn generic_params(&self) -> &Box<[String]> {
+        &self.r#struct.generic_params
+    }
+    
 }
 
 // ------------------------------------------------------------------------------------
@@ -174,7 +229,7 @@ impl Function {
     pub fn set_as_imported(&self) { self.flags.set(self.flags.get() | FunctionFlags::Imported as u8);}
     pub fn flags(&self) -> u8 { self.flags.get() }
     
-    pub(crate) fn get_type(&self) -> ParserType {
+    pub fn get_type(&self) -> ParserType {
         ParserType::Function(Box::new(self.return_type.clone()), self.args.iter().map(|x| x.1.clone()).collect::<Vec<_>>().into_boxed_slice())
     }
     
@@ -185,7 +240,8 @@ impl Function {
     pub fn name(&self) -> &str {
         &self.name
     }
-    pub fn get_llvm_repr(&self) -> Box<str> {
+    
+    pub fn llvm_name(&self) -> Box<str> {
         if self.is_imported(){
             self.name.clone()
         }else{
@@ -302,9 +358,7 @@ impl Scope {
         }
         self.current_scope_variables.insert(name, (variable, unique_value_tag));
     }
-    pub fn leave_scope(&self, variable: (&String, &(Variable, u32))){
-        if variable.1.0.unusual_flags_to_string().is_empty() {
-        }
+    pub fn leave_scope(&self, _variable: (&String, &(Variable, u32))){
         //println!("Variable {}, has left scope.\nFlags:\t{}", variable.0, variable.1.0.unusual_flags_to_string());
     }
     

@@ -495,129 +495,129 @@ define void @"console.println_f64"(double %n){
     %v12 = alloca i64; var: digit
     store i32 6, i32* %v0
     store double %n, double* %v1
-    %tmp0 = fcmp olt double %n, 0x0
-    br i1 %tmp0, label %then0, label %endif0
+    %tmp1 = fcmp olt double %n, 0x0
+    br i1 %tmp1, label %then0, label %endif0
 then0:
     call void @console.print_char(i8 45)
-    %tmp1 = load double, double* %v1
-    %tmp2 = fsub double 0.0, %tmp1
-    store double %tmp2, double* %v1
+    %tmp2 = load double, double* %v1
+    %tmp3 = fsub double 0.0, %tmp2
+    store double %tmp3, double* %v1
     br label %endif0
 endif0:
     store double 0x3FE0000000000000, double* %v2
     store i32 0, i32* %v3
     br label %loop_body1
 loop_body1:
-    %tmp3 = load i32, i32* %v3
-    %tmp4 = load i32, i32* %v0
-    %tmp5 = icmp sge i32 %tmp3, %tmp4
-    br i1 %tmp5, label %then2, label %endif2
+    %tmp5 = load i32, i32* %v3
+    %tmp6 = load i32, i32* %v0
+    %tmp7 = icmp sge i32 %tmp5, %tmp6
+    br i1 %tmp7, label %then2, label %endif2
 then2:
     br label %loop_body1_exit
     br label %endif2
 endif2:
-    %tmp6 = load double, double* %v2
-    %tmp7 = fdiv double %tmp6, 0x4024000000000000
-    store double %tmp7, double* %v2
-    %tmp8 = load i32, i32* %v3
-    %tmp9 = add i32 %tmp8, 1
-    store i32 %tmp9, i32* %v3
+    %tmp8 = load double, double* %v2
+    %tmp10 = fdiv double %tmp8, 0x4024000000000000
+    store double %tmp10, double* %v2
+    %tmp11 = load i32, i32* %v3
+    %tmp12 = add i32 %tmp11, 1
+    store i32 %tmp12, i32* %v3
     br label %loop_body1
 loop_body1_exit:
-    %tmp10 = load double, double* %v1
-    %tmp11 = load double, double* %v2
-    %tmp12 = fadd double %tmp10, %tmp11
-    store double %tmp12, double* %v1
     %tmp13 = load double, double* %v1
-    %tmp14 = fptoui double %tmp13 to i64
-    store i64 %tmp14, i64* %v4
-    %tmp15 = load double, double* %v1
-    %tmp16 = load i64, i64* %v4
-    %tmp17 = uitofp i64 %tmp16 to double
-    %tmp18 = fsub double %tmp15, %tmp17
-    store double %tmp18, double* %v5
+    %tmp14 = load double, double* %v2
+    %tmp15 = fadd double %tmp13, %tmp14
+    store double %tmp15, double* %v1
+    %tmp16 = load double, double* %v1
+    %tmp17 = fptoui double %tmp16 to i64
+    store i64 %tmp17, i64* %v4
+    %tmp18 = load double, double* %v1
     %tmp19 = load i64, i64* %v4
-    %tmp20 = icmp eq i64 %tmp19, 0
-    br i1 %tmp20, label %then3, label %else3
+    %tmp20 = uitofp i64 %tmp19 to double
+    %tmp21 = fsub double %tmp18, %tmp20
+    store double %tmp21, double* %v5
+    %tmp22 = load i64, i64* %v4
+    %tmp23 = icmp eq i64 %tmp22, 0
+    br i1 %tmp23, label %then3, label %else3
 then3:
     call void @console.print_char(i8 48)
     br label %endif3
 else3:
-    %tmp21 = mul i64 1, 21
-    %tmp22 = alloca i8, i64 %tmp21
-    store i8* %tmp22, i8** %v6
+    %tmp24 = mul i64 1, 21
+    %tmp25 = alloca i8, i64 %tmp24
+    store i8* %tmp25, i8** %v6
     store i32 20, i32* %v7
-    %tmp23 = load i64, i64* %v4
-    store i64 %tmp23, i64* %v8
+    %tmp26 = load i64, i64* %v4
+    store i64 %tmp26, i64* %v8
     br label %loop_body4
 loop_body4:
-    %tmp24 = load i8*, i8** %v6
-    %tmp25 = load i32, i32* %v7
-    %tmp26 = getelementptr inbounds i8, i8* %tmp24, i32 %tmp25
-    %tmp27 = load i64, i64* %v8
-    %tmp28 = urem i64 %tmp27, 10
-    %tmp29 = trunc i64 %tmp28 to i8
-    %tmp30 = add i8 %tmp29, 48
-    store i8 %tmp30, i8* %tmp26
-    %tmp31 = load i64, i64* %v8
-    %tmp32 = udiv i64 %tmp31, 10
-    store i64 %tmp32, i64* %v8
-    %tmp33 = load i32, i32* %v7
-    %tmp34 = sub i32 %tmp33, 1
-    store i32 %tmp34, i32* %v7
-    %tmp35 = load i64, i64* %v8
-    %tmp36 = icmp eq i64 %tmp35, 0
-    br i1 %tmp36, label %then5, label %endif5
+    %tmp27 = load i8*, i8** %v6
+    %tmp28 = load i32, i32* %v7
+    %tmp29 = getelementptr inbounds i8, i8* %tmp27, i32 %tmp28
+    %tmp30 = load i64, i64* %v8
+    %tmp31 = urem i64 %tmp30, 10
+    %tmp32 = trunc i64 %tmp31 to i8
+    %tmp33 = add i8 %tmp32, 48
+    store i8 %tmp33, i8* %tmp29
+    %tmp34 = load i64, i64* %v8
+    %tmp35 = udiv i64 %tmp34, 10
+    store i64 %tmp35, i64* %v8
+    %tmp36 = load i32, i32* %v7
+    %tmp37 = sub i32 %tmp36, 1
+    store i32 %tmp37, i32* %v7
+    %tmp38 = load i64, i64* %v8
+    %tmp39 = icmp eq i64 %tmp38, 0
+    br i1 %tmp39, label %then5, label %endif5
 then5:
     br label %loop_body4_exit
     br label %endif5
 endif5:
     br label %loop_body4
 loop_body4_exit:
-    %tmp37 = load i8*, i8** %v6
-    %tmp38 = load i32, i32* %v7
-    %tmp39 = add i32 %tmp38, 1
-    %tmp40 = getelementptr inbounds i8, i8* %tmp37, i32 %tmp39
-    store i8* %tmp40, i8** %v9
-    %tmp41 = trunc i64 20 to i32
-    %tmp42 = load i32, i32* %v7
-    %tmp43 = sub i32 %tmp41, %tmp42
-    store i32 %tmp43, i32* %v10
-    %tmp44 = load i8*, i8** %v9
-    %tmp45 = load i32, i32* %v10
-    call void @console.write(i8* %tmp44, i32 %tmp45)
+    %tmp40 = load i8*, i8** %v6
+    %tmp41 = load i32, i32* %v7
+    %tmp42 = add i32 %tmp41, 1
+    %tmp43 = getelementptr inbounds i8, i8* %tmp40, i32 %tmp42
+    store i8* %tmp43, i8** %v9
+    %tmp44 = trunc i64 20 to i32
+    %tmp45 = load i32, i32* %v7
+    %tmp46 = sub i32 %tmp44, %tmp45
+    store i32 %tmp46, i32* %v10
+    %tmp47 = load i8*, i8** %v9
+    %tmp48 = load i32, i32* %v10
+    call void @console.write(i8* %tmp47, i32 %tmp48)
     br label %endif3
 endif3:
     call void @console.print_char(i8 46)
     store i32 0, i32* %v11
     br label %loop_body6
 loop_body6:
-    %tmp46 = load i32, i32* %v11
-    %tmp47 = load i32, i32* %v0
-    %tmp48 = icmp sge i32 %tmp46, %tmp47
-    br i1 %tmp48, label %then7, label %endif7
+    %tmp49 = load i32, i32* %v11
+    %tmp50 = load i32, i32* %v0
+    %tmp51 = icmp sge i32 %tmp49, %tmp50
+    br i1 %tmp51, label %then7, label %endif7
 then7:
     br label %loop_body6_exit
     br label %endif7
 endif7:
-    %tmp49 = load double, double* %v5
-    %tmp50 = fmul double %tmp49, 0x4024000000000000
-    store double %tmp50, double* %v5
-    %tmp51 = load double, double* %v5
-    %tmp52 = fptoui double %tmp51 to i64
-    store i64 %tmp52, i64* %v12
-    %tmp53 = load i64, i64* %v12
-    %tmp54 = trunc i64 %tmp53 to i8
-    %tmp55 = add i8 %tmp54, 48
-    call void @console.print_char(i8 %tmp55)
-    %tmp56 = load double, double* %v5
+    %tmp52 = load double, double* %v5
+    %tmp54 = fmul double %tmp52, 0x4024000000000000
+    store double %tmp54, double* %v5
+    %tmp55 = load double, double* %v5
+    %tmp56 = fptoui double %tmp55 to i64
+    store i64 %tmp56, i64* %v12
     %tmp57 = load i64, i64* %v12
-    %tmp58 = uitofp i64 %tmp57 to double
-    %tmp59 = fsub double %tmp56, %tmp58
-    store double %tmp59, double* %v5
-    %tmp60 = load i32, i32* %v11
-    %tmp61 = add i32 %tmp60, 1
-    store i32 %tmp61, i32* %v11
+    %tmp58 = trunc i64 %tmp57 to i8
+    %tmp59 = add i8 %tmp58, 48
+    call void @console.print_char(i8 %tmp59)
+    %tmp60 = load double, double* %v5
+    %tmp61 = load i64, i64* %v12
+    %tmp62 = uitofp i64 %tmp61 to double
+    %tmp63 = fsub double %tmp60, %tmp62
+    store double %tmp63, double* %v5
+    %tmp64 = load i32, i32* %v11
+    %tmp65 = add i32 %tmp64, 1
+    store i32 %tmp65, i32* %v11
     br label %loop_body6
 loop_body6_exit:
     call void @console.print_char(i8 10)

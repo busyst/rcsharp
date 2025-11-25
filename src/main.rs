@@ -1,41 +1,36 @@
-use std::{io::Read, str::FromStr, time::Instant};
+use std::{io::Read, time::Instant};
 use crate::{compiler::rcsharp_compile_to_file, parser::GeneralParser, token::{Lexer, LexingError, TokenData}};
-
 pub mod token;
 pub mod expression_parser;
 pub mod expression_compiler;
 pub mod parser;
 pub mod compiler;
 pub mod compiler_essentials;
-mod tests;
-
+pub mod compiler_primitives;
+pub mod tests;
 
 pub const ALLOW_EXTENTION_FUNCTIONS: bool = false;
 pub const USE_MULTIPLY_AS_POINTER_IN_TYPES: bool = true;
+
 
 fn lex_with_context(source: &str, filename: &str) -> Result<Vec<TokenData>, String> {
 	Lexer::new(source)
 		.collect::<Result<Vec<_>, LexingError>>()
 		.map_err(|err| {
-			let mut slice = &source[err.span.clone()];
-			if slice.len() > 60 {
-				slice = &slice[0..60];
-			}
-			if slice.len() == 60 {
-				return 
-				format!(
-					"Lexing error in {}:{}:{} | Span: {:?} | Partial Slice:\n{:?}\n and {} more symbols",
-					filename, err.row, err.col, err.span, slice, err.span.len() - 60
-				);
-			}
+			let full_slice = &source[err.span.clone()];
+			let (display_slice, remainder_info) = if full_slice.len() > 60 {
+				(&full_slice[..60], format!("\n... and {} more symbols", full_slice.len() - 60))
+			} else {
+				(full_slice, String::new())
+			};
 			format!(
-				"Lexing error in {}:{}:{} | Span: {:?} | Slice:\n{:?}",
-				filename, err.row, err.col, err.span, slice
+				"Lexing error in {}:{}:{} | Span: {:?}\nProblem:\n'{}'{}",
+				filename, err.row, err.col, err.span, display_slice, remainder_info
 			)
 		})
 }
 fn main() -> Result<(), String> {
-	let full_path = std::path::PathBuf::from_str("./src.rcsharp").unwrap().to_str().unwrap().to_string();
+	let full_path = "./src.rcsharp";
 	let program_start = Instant::now();
 	let base_structs_and_functions = {let mut buf = String::new(); std::fs::File::open(&full_path).map_err(|e| e.to_string())?.read_to_string(&mut buf).map_err(|e| e.to_string())?; buf};
 	let file1_read = Instant::now();

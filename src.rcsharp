@@ -24,6 +24,7 @@ fn main(): i32 {
     let tp : &fn() : i32 = &main;
 
     console::println_f64(f as f64);
+    //basic_functions();
     return &of_fn as i32;
 }
 

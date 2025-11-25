@@ -1,11 +1,19 @@
 use std::collections::HashMap;
 
-use crate::{compiler::{CodeGenContext, CompileError, CompileResult, LLVMOutputHandler, POINTER_SIZE_IN_BYTES, SymbolTable, get_llvm_type_str, substitute_generic_type}, compiler_essentials::Variable, expression_parser::{BinaryOp, Expr, UnaryOp}, parser::{BOOL_TYPE, DECIMAL_TYPES, LLVM_PRIMITIVE_TYPES, PRIMITIVE_TYPES, PRIMITIVE_TYPES_ALIGNMENT, PRIMITIVE_TYPES_SIZE, ParserType, Stmt}};
+use crate::{compiler::{CodeGenContext, CompileError, CompileResult, LLVMOutputHandler, POINTER_SIZE_IN_BYTES, SymbolTable, get_llvm_type_str, substitute_generic_type}, compiler_essentials::{StructView, Variable}, compiler_primitives::{BOOL_TYPE, Layout}, expression_parser::{BinaryOp, Expr, UnaryOp}, parser::{ParserType, Stmt}};
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expected<'a> {
     Type(&'a ParserType),
     Anything,
     NoReturn,
+}
+impl<'a> Expected<'a> {
+    pub fn get_type(&self) -> Option<&'a ParserType>{
+        match self {
+            Self::Type(x) => Some(x),
+            _ => None
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -144,9 +152,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
         }
         // Pointer math
         if left.get_type().is_pointer() && right.get_type().is_integer() {  // *(array_pointer + iterator)
-            if *op != BinaryOp::Add {
-                panic!("Pointer math with '+' not with {:?}", op)
-            }
+            assert!(matches!(op, BinaryOp::Add));
             let utvc = self.ctx.aquire_unique_temp_value_counter();
             let pointed_to_type = left.get_type().try_dereference_once();
             let llvm_pointed_to_type = get_llvm_type_str(pointed_to_type, self.ctx.symbols, &self.ctx.current_function_path)?;
@@ -167,7 +173,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
                 _ => todo!("{:?}", op)
             };
             let utvc = self.ctx.aquire_unique_temp_value_counter();
-            self.output.push_str(&format!("    %tmp{} = {} {} {}, {}\n", utvc, llvm_op, LLVM_PRIMITIVE_TYPES[BOOL_TYPE], left.get_llvm_repr(), right.get_llvm_repr()));
+            self.output.push_str(&format!("    %tmp{} = {} {} {}, {}\n", utvc, llvm_op, BOOL_TYPE.llvm_name, left.get_llvm_repr(), right.get_llvm_repr()));
             return Ok(CompiledValue::Value { llvm_repr: format!("%tmp{}",utvc), ptype: ParserType::Named("bool".to_string()) });
         }
         // Integer Arythmetic
@@ -275,7 +281,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
                     b.push(given_generic.clone().into());
                 }
             }
-            let llvm_struct_name = format!("{}<{}>", func.get_llvm_repr(), given_generic.iter().map(|x| get_llvm_type_str(x, symbols, current_namespace)).collect::<CompileResult<Vec<_>>>()?.join(", "));
+            let llvm_struct_name = format!("{}<{}>", func.llvm_name(), given_generic.iter().map(|x| get_llvm_type_str(x, symbols, current_namespace)).collect::<CompileResult<Vec<_>>>()?.join(", "));
             let mut type_map = HashMap::new();
             for (ind, prm) in func.generic_params.iter().enumerate() {
                 type_map.insert(prm.clone(), given_generic[ind].clone());
@@ -428,15 +434,15 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             let arg_string = compiled_arguments.join(", ");
 
             if return_type.is_void() {
-                self.output.push_str(&format!("    call void @{}({})\n", func.get_llvm_repr(), arg_string));
+                self.output.push_str(&format!("    call void @{}({})\n", func.llvm_name(), arg_string));
                 return Ok(CompiledValue::NoReturn);
             }
             if expected != Expected::NoReturn {
                 let utvc = self.ctx.aquire_unique_temp_value_counter();
-                self.output.push_str(&format!("    %tmp{} = call {} @{}({})\n", utvc, return_type_repr, func.get_llvm_repr(), arg_string));
+                self.output.push_str(&format!("    %tmp{} = call {} @{}({})\n", utvc, return_type_repr, func.llvm_name(), arg_string));
                 return Ok(CompiledValue::Value { llvm_repr: format!("%tmp{}", utvc), ptype: *return_type.clone() });
             }
-            self.output.push_str(&format!("    call {} @{}({})\n", return_type_repr, func.get_llvm_repr(), arg_string));
+            self.output.push_str(&format!("    call {} @{}({})\n", return_type_repr, func.llvm_name(), arg_string));
             return Ok(CompiledValue::NoReturn);
         }
         if let CompiledValue::Pointer { llvm_repr, ptype: ParserType::Function(return_type, required_arguments) } = &l {
@@ -513,20 +519,12 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
         Ok(CompiledValue::Value { llvm_repr: num_str.to_string(), ptype: ParserType::Named("i64".to_string()) })
     }
     fn compile_decimal_literal(&mut self, num_str: &str, expected: Expected) -> CompileResult<CompiledValue> {
-        let ptype = if let Expected::Type(pt) = &expected {
-            if pt.is_decimal() {
-                (*pt).clone()
-            } else {
-                ParserType::Named("f64".to_string())
-            }
-        } else {
-            ParserType::Named("f64".to_string())
+        let bits = num_str.parse::<f64>().unwrap().to_bits();
+        if let Some(x) = expected.get_type().filter(|x| x.is_decimal()) {
+            return explicit_cast(&CompiledValue::Value { llvm_repr: format!("0x{:X}", bits), ptype: ParserType::Named("f64".to_string()) }, &x, self.ctx, self.output);
         };
-        let n = num_str.parse::<f64>().unwrap().to_bits();
-        if ParserType::Named("f64".to_string()) != ptype {
-            return explicit_cast(&CompiledValue::Value { llvm_repr: format!("0x{:X}", n), ptype: ParserType::Named("f64".to_string()) }, &ptype, self.ctx, self.output);
-        }
-        return Ok(CompiledValue::Value { llvm_repr: format!("0x{:X}", n), ptype: ParserType::Named("f64".to_string()) });
+
+        return Ok(CompiledValue::Value { llvm_repr: format!("0x{:X}", bits), ptype: ParserType::Named("f64".to_string()) });
     }
     fn compile_assignment(&mut self, lhs: &Expr, rhs: &Expr, expected: Expected) -> CompileResult<CompiledValue> {
         let left_ptr = self.compile_lvalue(lhs)?;
@@ -759,7 +757,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
         
         let mut field_ptype = substitute_generic_type(&fields[field_index].1, &self.ctx.symbols.alias_types);
         if let ParserType::Generic(_, p) = obj_lvalue.get_type().dereference_full().full_delink() {
-            let q = self.ctx.symbols.get_type(&struct_fqn).unwrap();
+            let q = self.ctx.symbols.get_bare_type(&struct_fqn).unwrap();
             let mut type_map = HashMap::new();
             for (ind, prm) in q.generic_params.iter().enumerate() {
                 type_map.insert(prm.clone(), p[ind].clone());
@@ -828,57 +826,33 @@ fn get_path_from_expr(expr: &Expr) -> String {
     }
 }
 pub fn size_of_from_parser_type(ptype: &ParserType, ctx: &mut CodeGenContext) -> u32 {
-    size_and_alignment_of_type(ptype, ctx).0
+    size_and_alignment_of_type(ptype, ctx).size
 }
-fn size_and_alignment_of_type(ptype: &ParserType, ctx: &mut CodeGenContext) -> (u32, u32){
+pub fn size_and_alignment_of_type(ptype: &ParserType, ctx: &mut CodeGenContext) -> Layout{
+    assert!(!matches!(ptype, ParserType::Function(_, _)));
     if ptype.is_pointer() {
-        return (POINTER_SIZE_IN_BYTES, POINTER_SIZE_IN_BYTES);
+        return Layout::new(POINTER_SIZE_IN_BYTES, POINTER_SIZE_IN_BYTES);
     }
-    if let Some(pt) = ptype.as_primitive_type() {
-        if let Some(idx) = PRIMITIVE_TYPES.iter().position(|&x| x == pt) {
-            let size = PRIMITIVE_TYPES_SIZE[idx];
-            let align = PRIMITIVE_TYPES_ALIGNMENT[idx];
-            if size == 0 && pt != "void" {
-                panic!("{}", CompileError::Generic(format!("Trying to get size of zero-sized type '{}'", pt)));
-            }
-            return (size, align);
+    if let Some(info) = ptype.as_primitive_type() {
+        return info.layout;
+    }
+    // not a pointer
+    // not a primitive
+    let bare = ctx.symbols.get_bare_type(&format!("{}.{}", ctx.current_function_path, ptype.type_name())).or(ctx.symbols.get_bare_type(&ptype.type_name()));
+    if bare.is_none() {
+        panic!("Type not found {:?}", ptype)
+    }
+    let bare = bare.unwrap();
+    if let ParserType::Generic(_, imp) = ptype.full_delink() {
+        let mut type_map = HashMap::new();
+        for (ind, prm) in bare.generic_params.iter().enumerate() {
+            type_map.insert(prm.clone(), imp[ind].clone());
         }
+        return StructView::new_generic(bare, &type_map).calculate_size(ctx);
+    }else {
+        // not a generic
+        return StructView::new(bare).calculate_size(ctx);
     }
-    if let Some(struc) = ctx.symbols.get_type(&format!("{}.{}", ctx.current_function_path, ptype.type_name())).or(ctx.symbols.get_type(&ptype.type_name())) {
-        let field_types: Vec<ParserType> = if struc.is_generic() {
-            if let ParserType::Generic(_, concrete_types) = ptype {
-                if struc.generic_params.len() != concrete_types.len() {
-                    panic!("Mismatched number of generic arguments");
-                }
-                let mut type_map = HashMap::new();
-                for (ind, prm) in struc.generic_params.iter().enumerate() {
-                    type_map.insert(prm.clone(), concrete_types[ind].clone());
-                }
-                struc.fields.iter().map(|x| substitute_generic_type(&x.1, &ctx.symbols.alias_types)).collect::<Vec<_>>()
-            }
-            else {
-                panic!("Generic struct used without concrete types");
-            }
-        }else {
-            struc.fields.iter().map(|(_, field_type)| field_type.clone()).collect()
-        };
-        let mut current_offset = 0;
-        let mut max_alignment = 1;
-        for field_type in &field_types {
-            let (field_size, field_alignment) = size_and_alignment_of_type(field_type, ctx);
-
-            if field_alignment == 0 { continue; }
-            max_alignment = u32::max(max_alignment, field_alignment);
-            let padding = (field_alignment - (current_offset % field_alignment)) % field_alignment;
-            
-            current_offset += padding;
-            current_offset += field_size;
-        }
-        let final_padding = (max_alignment - (current_offset % max_alignment)) % max_alignment;
-        let total_size = current_offset + final_padding;
-        return (total_size, max_alignment);
-    }
-    panic!()
 }
 pub fn constant_integer_expression_compiler(expression: &Expr, _symbols: &SymbolTable) -> Result<i128, String> {
     match expression {
@@ -913,38 +887,26 @@ fn explicit_cast(
 
     let instruction = match (from_type, to_type) {
         (ParserType::Named(_), ParserType::Named(_)) => {
-            if let Some((from_bits, to_bits)) = from_type.is_both_integers(to_type) {
-                if from_bits == to_bits {
+            if let Some((from_info, to_info)) = from_type.as_both_integers(to_type) {
+                if from_info.layout == to_info.layout {
                     return Ok(value.clone_with_type(to_type.clone()));
                 }
-                let op = if from_bits < to_bits {
-                    if from_type.is_unsigned_integer() { "zext" } else { "sext" }
-                } else {
-                    "trunc"
-                };
-                format!("{} i{} {} to i{}", op, from_bits, value.get_llvm_repr(), to_bits)
-            } else if let Some((from_bits, to_bits)) = from_type.is_both_decimals(to_type){
-                let op = if from_bits < to_bits {
-                    "fpext"
-                } else {
-                    "fptrunc"
-                };
-                let from_type_index = DECIMAL_TYPES.start + DECIMAL_TYPES.clone().position(|idx| PRIMITIVE_TYPES_SIZE[idx] == from_bits / 8).unwrap();
-                let to_type_index = DECIMAL_TYPES.start + DECIMAL_TYPES.clone().position(|idx| PRIMITIVE_TYPES_SIZE[idx] == to_bits / 8).unwrap();
-                
-                let ftype = LLVM_PRIMITIVE_TYPES[from_type_index];
-                let ttype = LLVM_PRIMITIVE_TYPES[to_type_index];
-                format!("{} {} {} to {}", op, ftype, value.get_llvm_repr(), ttype)
-            } else if let (Some(from_bits), Some(to_bits)) = (from_type.get_integer_bits(), to_type.get_decimal_bits())  {
+                let op = if from_info.layout.size < to_info.layout.size {
+                if from_type.is_unsigned_integer() { "zext" } else { "sext" } } else {"trunc"};
+                format!("{} {} {} to {}", op, from_info.llvm_name, value.get_llvm_repr(), to_info.llvm_name)
+            } else if let Some((from_info, to_info)) = from_type.as_both_decimals(to_type){
+                if from_info.layout == to_info.layout {
+                    return Ok(value.clone_with_type(to_type.clone()));
+                }
+                if from_info.layout == to_info.layout { return Ok(value.clone_with_type(to_type.clone()));}
+                let op = if from_info.layout.size < to_info.layout.size {"fpext"} else {"fptrunc"};
+                format!("{} {} {} to {}", op, from_info.llvm_name, value.get_llvm_repr(), to_info.llvm_name)
+            } else if let (Some(from_info), Some(to_info)) = (from_type.as_integer(), to_type.as_decimal())  {
                 let op = if from_type.is_unsigned_integer() { "uitofp" } else { "sitofp" };
-                let to_type_index = DECIMAL_TYPES.start + DECIMAL_TYPES.clone().position(|idx| PRIMITIVE_TYPES_SIZE[idx] == to_bits / 8).unwrap();
-                let ttype = LLVM_PRIMITIVE_TYPES[to_type_index];
-                format!("{} i{} {} to {}", op, from_bits, value.get_llvm_repr(), ttype)
-            } else if let (Some(from_bits), Some(to_bits)) = (from_type.get_decimal_bits(), to_type.get_integer_bits())  {
+                format!("{} {} {} to {}", op, from_info.llvm_name, value.get_llvm_repr(), to_info.llvm_name)
+            } else if let (Some(from_info), Some(to_info)) = (from_type.as_decimal(), to_type.as_integer())  {
                 let op = if to_type.is_unsigned_integer() { "fptoui" } else { "fptosi" };
-                let from_type_index = DECIMAL_TYPES.start + DECIMAL_TYPES.clone().position(|idx| PRIMITIVE_TYPES_SIZE[idx] == from_bits / 8).unwrap();
-                let ftype = LLVM_PRIMITIVE_TYPES[from_type_index];
-                format!("{} {} {} to i{}", op, ftype, value.get_llvm_repr(), to_bits)
+                format!("{} {} {} to {}", op, from_info.llvm_name, value.get_llvm_repr(), to_info.llvm_name)
             }
             else {
                 return Err(CompileError::Generic(format!("Invalid cast from {:?} to {:?}", from_type, to_type)));

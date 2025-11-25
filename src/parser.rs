@@ -1,36 +1,4 @@
-use std::ops::Range;
-
-use crate::{compiler_essentials::{Attribute, FunctionFlags}, expression_parser::{Expr, ExpressionParser}, token::{Token, TokenData}};
-pub const PRIMITIVE_TYPES: &[&str] = &[
-    "void", "bool",
-    "i8", "i16", "i32", "i64",
-    "u8", "u16", "u32", "u64",
-    "f16", "f32", "f64"
-];
-pub const PRIMITIVE_TYPES_SIZE: &[u32] = &[
-    0, 1,
-    1, 2, 4, 8, 1, 2, 4, 8,
-    2, 4, 8
-];
-pub const PRIMITIVE_TYPES_ALIGNMENT: &[u32] = &[
-    1, 1,          // void (alignment 1 is a safe default), bool
-    1, 2, 4, 8,    // i8, i16, i32, i64
-    1, 2, 4, 8,    // u8, u16, u32, u64
-    2, 4, 8           // f16, f32, f64
-];
-pub const LLVM_PRIMITIVE_TYPES: &[&str] = &[
-    "void", "i1",
-    "i8", "i16", "i32", "i64", 
-    "i8", "i16", "i32", "i64",
-    "half", "float", "double"
-];
-pub const INTEGERS_TYPES: Range<usize> = 2..10;
-pub const SIGNED_TYPES: Range<usize> = 2..6;
-pub const UNSIGNED_TYPES: Range<usize> = 6..10;
-pub const DECIMAL_TYPES: Range<usize> = 10..13;
-
-pub const VOID_TYPE: usize = 0;
-pub const BOOL_TYPE: usize = 1;
+use crate::{compiler_essentials::{Attribute, FunctionFlags}, compiler_primitives::{PrimitiveInfo, PrimitiveKind, find_primitive_type}, expression_parser::{Expr, ExpressionParser}, token::{Token, TokenData}};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParsedFunction {
@@ -51,6 +19,7 @@ impl ParsedFunction {
         ParsedFunction { path: String::new().into(), attributes: Box::new([]), name, args, return_type, body, flags: FunctionFlags::Generic as u8, generic_params }
     }
 }
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Stmt {
     Hint(String, Box<[Expr]>), // #[...]
@@ -113,79 +82,63 @@ impl PartialEq for ParserType {
         }
     }
 }
-
 impl ParserType {
-    pub fn is_primitive_type(&self) -> bool {
+    
+    pub fn as_primitive_type(&self) -> Option<&'static PrimitiveInfo> {
         if let ParserType::Named(name) = self {
-            return PRIMITIVE_TYPES.contains(&name.as_str());
-        }
-        false
-    }
-    pub fn as_primitive_type(&self) -> Option<&str> {
-        if let ParserType::Named(name) = self {
-            if PRIMITIVE_TYPES.contains(&name.as_str()) {
-                return Some(name.as_str());
-            }
+            return find_primitive_type(&name);
         }
         None
     }
+    pub fn as_integer(&self) -> Option<&'static PrimitiveInfo> {
+        self.as_primitive_type().filter(|x| x.kind == PrimitiveKind::SignedInt || x.kind == PrimitiveKind::UnsignedInt)
+    }
+    pub fn as_decimal(&self) -> Option<&'static PrimitiveInfo> {
+        self.as_primitive_type().filter(|x| x.kind == PrimitiveKind::Decimal)
+    }
 
+
+    pub fn is_primitive_type(&self) -> bool {
+        self.as_primitive_type().is_some()
+    }
     pub fn is_integer(&self) -> bool {
-        if let ParserType::Named(name) = self {
-            return PRIMITIVE_TYPES[INTEGERS_TYPES].contains(&name.as_str());
-        }
-        false
+        self.as_integer().is_some()
     }
     pub fn is_unsigned_integer(&self) -> bool {
-        if let ParserType::Named(name) = self {
-            return PRIMITIVE_TYPES[UNSIGNED_TYPES].contains(&name.as_str());
-        }
-        false
+        self.as_primitive_type().filter(|x| x.kind == PrimitiveKind::UnsignedInt).is_some()
     }
     pub fn is_signed_integer(&self) -> bool {
-        if let ParserType::Named(name) = self {
-            return PRIMITIVE_TYPES[SIGNED_TYPES].contains(&name.as_str());
-        }
-        false
+        self.as_primitive_type().filter(|x| x.kind == PrimitiveKind::SignedInt).is_some()
     }
+
     pub fn is_decimal(&self) -> bool {
-        if let ParserType::Named(name) = self {
-            return PRIMITIVE_TYPES[DECIMAL_TYPES].contains(&name.as_str());
-        }
-        false
+        self.as_decimal().is_some()
     }
     pub fn is_bool(&self) -> bool{
-        if let ParserType::Named(name) = self {
-            return name == PRIMITIVE_TYPES[BOOL_TYPE];
-        }
-        false
+        self.as_primitive_type().filter(|x| x.kind == PrimitiveKind::Bool).is_some()
     }
-    pub fn is_void(&self) -> bool {
-        if let ParserType::Named(name) = self {
-            return name == PRIMITIVE_TYPES[VOID_TYPE];
-        }
-        false
+    pub fn is_void(&self) -> bool{
+        self.as_primitive_type().filter(|x| x.kind == PrimitiveKind::Void).is_some()
     }
+
     pub fn is_pointer(&self) -> bool{
         matches!(self, ParserType::Pointer(_))
     }
 
-    pub fn is_both_integers(&self, other: &ParserType) -> Option<(u32, u32)> {
-        if self.is_integer() && other.is_integer() {
-            let ln = self.type_name()[1..].parse::<u32>().unwrap();
-            let rn = other.type_name()[1..].parse::<u32>().unwrap();
-            return Some((ln, rn));
+    pub fn as_both_integers(&self, other: &ParserType) -> Option<(&'static PrimitiveInfo, &'static PrimitiveInfo)> {
+        if let (Some(x),Some(y)) = (self.as_integer(), other.as_integer()) {
+            return Some((x,y));
         }
         None
     }
-    pub fn is_both_decimals(&self, other: &ParserType) -> Option<(u32, u32)> {
-        if self.is_decimal() && other.is_decimal() {
-            let ln = self.type_name()[1..].parse::<u32>().unwrap();
-            let rn = other.type_name()[1..].parse::<u32>().unwrap();
-            return Some((ln, rn));
+    pub fn as_both_decimals(&self, other: &ParserType) -> Option<(&'static PrimitiveInfo, &'static PrimitiveInfo)> {
+        if let (Some(x),Some(y)) = (self.as_decimal(), other.as_decimal()) {
+            return Some((x,y));
         }
         None
     }
+
+    // Helper
     pub fn self_reference_once(self) -> ParserType{
         ParserType::Pointer(Box::new(self))
     }
@@ -224,44 +177,28 @@ impl ParserType {
             ParserType::Pointer(core) => format!("*{}", core.debug_type_name()),
         }
     }
-    pub fn get_absolute_path_or(&self, current_fallback: &str) -> String{
+    pub fn get_absolute_path_or(&self, current_path: &str) -> String{
         match self {
             ParserType::NamespaceLink(x, y) =>{
                 format!("{}.{}", x, y.type_name())
             }
             ParserType::Named(x) =>{
-                if current_fallback.is_empty() || self.is_primitive_type() {
+                if current_path.is_empty() || self.is_primitive_type() {
                     x.clone().to_string()
                 }else {
-                    format!("{}.{}",current_fallback, x.clone())
+                    format!("{}.{}", current_path, x.clone())
                 }
             }
             ParserType::Generic(x, _) =>{
-                if current_fallback.is_empty() || self.is_primitive_type() {
+                if current_path.is_empty() || self.is_primitive_type() {
                     x.clone().to_string()
                 }else {
-                    format!("{}.{}",current_fallback, x.clone())
+                    format!("{}.{}",current_path, x.clone())
                 }
             }
             _ => panic!("Cannot get abs type of {:?}", self),
         }
     }
-    
-    pub fn get_integer_bits(&self) -> Option<u32> {
-        if self.is_integer() {
-            return Some(self.type_name()[1..].parse::<u32>().unwrap());
-        }
-        None
-    }
-    
-    pub fn get_decimal_bits(&self) -> Option<u32> {
-        if self.is_decimal() {
-            return Some(self.type_name()[1..].parse::<u32>().unwrap());
-        }
-        None
-    }
-    
-
 }
 
 pub struct GeneralParser<'a> {

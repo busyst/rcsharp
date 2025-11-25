@@ -3,8 +3,9 @@ use std::cell::Cell;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::{io::Read};
 use ordered_hash_map::OrderedHashMap;
-use crate::compiler_essentials::FunctionFlags;
-use crate::parser::{GeneralParser, ParsedFunction, LLVM_PRIMITIVE_TYPES, PRIMITIVE_TYPES};
+use crate::compiler_essentials::{FunctionFlags, StructView};
+use crate::compiler_primitives::{PRIMITIVE_TYPES_INFO, find_primitive_type};
+use crate::parser::{GeneralParser, ParsedFunction};
 use crate::token::{Lexer, LexingError};
 use crate::{compiler_essentials::{Attribute, Enum, Function, Scope, Struct, Variable}, expression_compiler::{compile_expression, constant_integer_expression_compiler, Expected}, expression_parser::Expr, parser::{ParserType, Stmt}};
 
@@ -328,7 +329,7 @@ fn handle_enums(enums : Vec<(String, Box<[Attribute]>, (String, ParserType, Box<
         let full_path = if current_path.is_empty() { enum_name.clone() } else { format!("{}.{}", current_path, enum_name) };
         let mut compiler_enum_fields = vec![];
         let enum_type = qualify_type(&enum_type, &current_path, symbols);
-        if !enum_type.is_integer() {
+        if !enum_type.as_integer().is_some() {
             todo!("Not yet supported!")
         }
         for (field_name, field_expr) in fields {
@@ -360,7 +361,6 @@ fn handle_functions(functions : Vec<ParsedFunction>, symbols: &mut SymbolTable, 
         let function_attrs = pf.attributes;
         let function_generics = pf.generic_params;
         let function_body = pf.body;
-
         let return_type = qualify_type(&pf.return_type, &current_path, symbols);
         let args = pf.args.iter().map(|x| (x.0.clone(), qualify_type(&x.1, &current_path, symbols))).collect::<Box<[_]>>();
         let full_path = if current_path.is_empty() { function_name.to_string() } else { format!("{}.{}", current_path, function_name) };
@@ -396,10 +396,7 @@ fn qualify_type(ty: &ParserType, current_path: &str, symbols: &SymbolTable) -> P
                 return ty.clone();
             }
             let ty = nest_type_in_namespace_path(current_path, ty.clone());
-            if symbols.get_type(&ty.type_name()).is_some()  {
-                return ty.clone();
-            }
-            panic!()
+            return ty;
         }
         ParserType::Pointer(inner) => {
             ParserType::Pointer(Box::new(qualify_type(inner, current_path, symbols)))
@@ -421,8 +418,8 @@ fn nest_type_in_namespace_path(path: &str, base_type: ParserType) -> ParserType 
         })
 }
 fn populate_default_types(table: &mut SymbolTable) {
-    for primitive in PRIMITIVE_TYPES {
-        table.types.insert(primitive.to_string(), Struct::new_primitive(primitive));
+    for primitive in PRIMITIVE_TYPES_INFO {
+        table.types.insert(primitive.name.to_string(), Struct::new_primitive(primitive.name));
     }
 }
 fn collect_local_variables<'a>(stmts: &'a [Stmt], vars: &mut Vec<(&'a String, &'a ParserType)>) {
@@ -632,8 +629,8 @@ pub fn get_llvm_type_str(
                 return get_llvm_type_str(x, symbols, current_namespace);
             }
 
-            if let Some(index) = PRIMITIVE_TYPES.iter().position(|x| x == &name.as_str()) {
-                return Ok(LLVM_PRIMITIVE_TYPES[index].to_string());
+            if let Some(info) = find_primitive_type(name.as_str()) {
+                return Ok(info.llvm_name.to_string());
             }
             let abs = ptype.get_absolute_path_or(current_namespace);
             let rel = ptype.type_name();
@@ -651,18 +648,14 @@ pub fn get_llvm_type_str(
                 return get_llvm_type_str(&enm.base_type, symbols, current_namespace);
             }
         }
-        ParserType::NamespaceLink(_, c) => {
-            let fqn = ptype.get_absolute_path_or(current_namespace);
-            if let Some(x) = symbols.get_type(&fqn) {
-                if x.is_generic() {
-                    return get_llvm_type_str(c.full_delink(), symbols, &x.path);
-                }
-                return Ok(x.llvm_representation());
+        ParserType::NamespaceLink(x, c) => {
+            let mut path = format!("{x}");
+            let mut g = c.as_ref();
+            while let ParserType::NamespaceLink(link, c) = g {
+                path.push_str(&format!(".{}", link));
+                g = c.as_ref();
             }
-            if symbols.enums.contains_key(&fqn) {
-                return get_llvm_type_str(&symbols.enums[&fqn].base_type, symbols, current_namespace);
-            }
-            return Err(CompileError::Generic(format!("LLVM {{NAMESPACELINK}} error {:?}", ptype)));
+            return get_llvm_type_str(g, symbols, &path);
         }
         ParserType::Generic(_, generic_args) => {
             let concrete_types = generic_args
@@ -792,8 +785,26 @@ impl SymbolTable {
         }
         None
     }
-    pub fn get_type(&self, fqn: &str) -> Option<&Struct> {
+    pub fn get_bare_type(&self, fqn: &str) -> Option<&Struct> {
         self.types.get(fqn)
+    }
+    pub fn get_type<'a>(&'a self, fqn: &str) -> Option<StructView<'a>> {
+        if let Some(x) = self.types.get(fqn) {
+            if x.is_generic() {
+                return Some(StructView::new_generic(x, &self.alias_types));
+            }
+            return Some(StructView::new(x));
+        }
+        None
+    }
+    pub fn get_generic_type<'a>(&'a self, fqn: &str, aliases: &HashMap<String, ParserType>) -> Option<StructView<'a>> {
+        if let Some(x) = self.types.get(fqn) {
+            if x.is_generic() {
+                return Some(StructView::new_generic(x, aliases));
+            }
+            return None;
+        }
+        None
     }
     pub fn get_abs_path(struct_type: &ParserType, current_namespace: &str) -> String {
         debug_assert!(!struct_type.is_primitive_type());
