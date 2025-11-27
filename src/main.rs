@@ -1,40 +1,24 @@
 use std::{io::Read, time::Instant};
-use crate::{compiler::rcsharp_compile_to_file, parser::GeneralParser, token::{Lexer, LexingError, TokenData}};
-pub mod token;
-pub mod expression_parser;
+use crate::{compiler::rcsharp_compile_to_file};
+use rcsharp_lexer::{lex_file_with_context};
+use rcsharp_parser::parser::GeneralParser;
+
 pub mod expression_compiler;
-pub mod parser;
 pub mod compiler;
 pub mod compiler_essentials;
-pub mod compiler_primitives;
 pub mod tests;
 
 pub const ALLOW_EXTENTION_FUNCTIONS: bool = false;
 pub const USE_MULTIPLY_AS_POINTER_IN_TYPES: bool = true;
 
 
-fn lex_with_context(source: &str, filename: &str) -> Result<Vec<TokenData>, String> {
-	Lexer::new(source)
-		.collect::<Result<Vec<_>, LexingError>>()
-		.map_err(|err| {
-			let full_slice = &source[err.span.clone()];
-			let (display_slice, remainder_info) = if full_slice.len() > 60 {
-				(&full_slice[..60], format!("\n... and {} more symbols", full_slice.len() - 60))
-			} else {
-				(full_slice, String::new())
-			};
-			format!(
-				"Lexing error in {}:{}:{} | Span: {:?}\nProblem:\n'{}'{}",
-				filename, err.row, err.col, err.span, display_slice, remainder_info
-			)
-		})
-}
 fn main() -> Result<(), String> {
+	
 	let full_path = "./src.rcsharp";
 	let program_start = Instant::now();
 	let base_structs_and_functions = {let mut buf = String::new(); std::fs::File::open(&full_path).map_err(|e| e.to_string())?.read_to_string(&mut buf).map_err(|e| e.to_string())?; buf};
 	let file1_read = Instant::now();
-	let all_tokens = lex_with_context(&base_structs_and_functions, &full_path)?;
+	let all_tokens = lex_file_with_context(&base_structs_and_functions, &full_path)?;
 	let file1_lexed = Instant::now();
 
 	let y = GeneralParser::new(&all_tokens).parse_all()?;

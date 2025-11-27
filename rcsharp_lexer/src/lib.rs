@@ -352,3 +352,36 @@ fn handle_unicode_escape(chars: &mut std::iter::Peekable<std::str::Chars>, unesc
     unescaped.push_str(&hex);
     unescaped.push('}');
 }
+
+pub fn lex_file_with_context(source_path: &str, filename: &str) -> Result<Vec<TokenData>, String> {
+	Lexer::new(source_path)
+		.collect::<Result<Vec<_>, LexingError>>()
+		.map_err(|err| {
+			let full_slice = &source_path[err.span.clone()];
+			let (display_slice, remainder_info) = if full_slice.len() > 60 {
+				(&full_slice[..60], format!("\n... and {} more symbols", full_slice.len() - 60))
+			} else {
+				(full_slice, String::new())
+			};
+			format!(
+				"Lexing error in {}:{}:{} | Span: {:?}\nProblem:\n'{}'{}",
+				filename, err.row, err.col, err.span, display_slice, remainder_info
+			)
+		})
+}
+pub fn lex_string_with_file_context(source: &str, filename: &str) -> Result<Vec<TokenData>, String> {
+	Lexer::new(source)
+		.collect::<Result<Vec<_>, LexingError>>()
+		.map_err(|err| {
+			let full_slice = &source[err.span.clone()];
+			let (display_slice, remainder_info) = if full_slice.len() > 60 {
+				(&full_slice[..60], format!("\n... and {} more symbols", full_slice.len() - 60))
+			} else {
+				(full_slice, String::new())
+			};
+			format!(
+				"Lexing error in {}:{}:{} | Span: {:?}\nProblem:\n'{}'{}",
+				filename, err.row, err.col, err.span, display_slice, remainder_info
+			)
+		})
+}

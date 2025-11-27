@@ -1,11 +1,12 @@
 #[cfg(test)]
 mod parser_tests {
 
-    use crate::{expression_parser::{BinaryOp, Expr}, parser::{GeneralParser, ParsedFunction, ParserType, Stmt}};
+    use rcsharp_lexer::Lexer;
+    use rcsharp_parser::{expression_parser::{BinaryOp, Expr}, parser::{GeneralParser, ParsedFunction, ParserType, Stmt}};
 
     fn parse(src: &str) -> Result<Vec<Stmt>, String>{
         let mut tokens = vec![];
-        for x in crate::token::Lexer::new(&src) {
+        for x in Lexer::new(&src) {
             match x {
                 Ok(x) => tokens.push(x),
                 Err(x) => return Err(format!("{x}")),

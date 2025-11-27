@@ -1,4 +1,6 @@
-use crate::{parser::ParserType, token::{Token, TokenData}};
+use rcsharp_lexer::{Token, TokenData};
+
+use crate::{parser::ParserType};
 
 #[derive(Debug, Clone, PartialEq)] 
 pub enum Expr {
@@ -276,8 +278,7 @@ impl<'a> ExpressionParser<'a> {
             self.advance();
             Ok(ParserType::Pointer(Box::new(ParserType::Pointer(Box::new(self.parse_type()?)))))
         }
-        else if self.peek().token == Token::BinaryAnd ||
-            self.peek().token == Token::Multiply && crate::USE_MULTIPLY_AS_POINTER_IN_TYPES {
+        else if self.peek().token == Token::BinaryAnd {
             self.advance();
             Ok(ParserType::Pointer(Box::new(self.parse_type()?)))
         }

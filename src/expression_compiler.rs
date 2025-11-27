@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
-use crate::{compiler::{CodeGenContext, CompileError, CompileResult, LLVMOutputHandler, POINTER_SIZE_IN_BYTES, SymbolTable, get_llvm_type_str, substitute_generic_type}, compiler_essentials::{StructView, Variable}, compiler_primitives::{BOOL_TYPE, Layout}, expression_parser::{BinaryOp, Expr, UnaryOp}, parser::{ParserType, Stmt}};
+use rcsharp_parser::{compiler_primitives::{BOOL_TYPE, Layout}, expression_parser::{BinaryOp, Expr, UnaryOp}, parser::{ParserType, Stmt}};
+
+use crate::{compiler::{CodeGenContext, CompileError, CompileResult, LLVMOutputHandler, POINTER_SIZE_IN_BYTES, SymbolTable, get_llvm_type_str, substitute_generic_type}, compiler_essentials::{StructView, Variable}};
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expected<'a> {
     Type(&'a ParserType),

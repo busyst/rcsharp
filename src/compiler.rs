@@ -3,12 +3,12 @@ use std::cell::Cell;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::{io::Read};
 use ordered_hash_map::OrderedHashMap;
-use crate::compiler_essentials::{FunctionFlags, StructView};
-use crate::compiler_primitives::{PRIMITIVE_TYPES_INFO, find_primitive_type};
-use crate::parser::{GeneralParser, ParsedFunction};
-use crate::token::{Lexer, LexingError};
-use crate::{compiler_essentials::{Attribute, Enum, Function, Scope, Struct, Variable}, expression_compiler::{compile_expression, constant_integer_expression_compiler, Expected}, expression_parser::Expr, parser::{ParserType, Stmt}};
-
+use rcsharp_lexer::lex_string_with_file_context;
+use rcsharp_parser::compiler_primitives::{PRIMITIVE_TYPES_INFO, find_primitive_type};
+use rcsharp_parser::expression_parser::Expr;
+use rcsharp_parser::parser::{Attribute, GeneralParser, ParsedFunction, ParserType, Stmt};
+use crate::compiler_essentials::{Enum, Function, FunctionFlags, Scope, Struct, StructView, Variable};
+use crate::expression_compiler::{Expected, compile_expression, constant_integer_expression_compiler};
 pub const POINTER_SIZE_IN_BYTES : u32 = 8;
 
 #[derive(Debug)]
@@ -213,7 +213,7 @@ fn collect(stmts: &[Stmt],
                             let mut file = std::fs::File::open(include_path)?;
                             let mut buf = String::new();
                             file.read_to_string(&mut buf)?;
-                            let lex = Lexer::new(&buf).collect::<Result<Vec<_>, LexingError>>().unwrap();
+                            let lex = lex_string_with_file_context(&buf,include_path).unwrap();
                             let par = GeneralParser::new(&lex).parse_all().unwrap();
                             for stmt in par.into_iter().rev() {
                                 statements.push_front(stmt);
@@ -357,7 +357,7 @@ fn handle_functions(functions : Vec<ParsedFunction>, symbols: &mut SymbolTable, 
     for pf in functions {
         let current_path = pf.path;
         let function_name = pf.name;
-        let function_flags = pf.flags;
+        let function_prefixes = pf.prefixes;
         let function_attrs = pf.attributes;
         let function_generics = pf.generic_params;
         let function_body = pf.body;
@@ -365,14 +365,23 @@ fn handle_functions(functions : Vec<ParsedFunction>, symbols: &mut SymbolTable, 
         let args = pf.args.iter().map(|x| (x.0.clone(), qualify_type(&x.1, &current_path, symbols))).collect::<Box<[_]>>();
         let full_path = if current_path.is_empty() { function_name.to_string() } else { format!("{}.{}", current_path, function_name) };
         
-        let mut act_flags = function_flags;
+        let mut flags = 0;
+        if function_prefixes.iter().any(|x| x.as_str() == "public") {
+            flags |= FunctionFlags::Public as u8;
+        }
+        if function_prefixes.iter().any(|x| x.as_str() == "inline") {
+            flags |= FunctionFlags::Inline as u8;
+        }
+        if function_prefixes.iter().any(|x| x.as_str() == "constexpr") {
+            flags |= FunctionFlags::ConstExpression as u8;
+        }
         if function_attrs.iter().any(|x| x.name_equals("DllImport")) {
-            act_flags |= FunctionFlags::Imported as u8;
+            flags |= FunctionFlags::Imported as u8;
         }
         if !function_generics.is_empty() {
-            act_flags |= FunctionFlags::Generic as u8;
+            flags |= FunctionFlags::Generic as u8;
         }
-        let function = Function::new(current_path, function_name, args, return_type, function_body, act_flags.into(), function_attrs, function_generics);
+        let function = Function::new(current_path, function_name, args, return_type, function_body, flags.into(), function_attrs, function_generics);
         symbols.functions.insert(full_path, function);
     }
     Ok(())

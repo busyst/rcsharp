@@ -133,10 +133,25 @@ dependencies = [
 name = "rcsharp"
 version = "0.1.0"
 dependencies = [
- "logos",
  "ordered_hash_map",
+ "rcsharp_lexer",
+ "rcsharp_parser",
  "regex",
  "string-builder",
+]
+
+[[package]]
+name = "rcsharp_lexer"
+version = "0.1.0"
+dependencies = [
+ "logos",
+]
+
+[[package]]
+name = "rcsharp_parser"
+version = "0.1.0"
+dependencies = [
+ "rcsharp_lexer",
 ]
 
 [[package]]

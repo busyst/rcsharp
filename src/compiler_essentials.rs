@@ -1,7 +1,8 @@
 use std::{cell::{Cell, RefCell}, collections::HashMap};
 use ordered_hash_map::OrderedHashMap;
+use rcsharp_parser::{compiler_primitives::Layout, parser::{Attribute, ParserType, Stmt}};
 
-use crate::{compiler::{CodeGenContext, substitute_generic_type}, compiler_primitives::Layout, expression_compiler::size_and_alignment_of_type, expression_parser::Expr, parser::{ParserType, Stmt}};
+use crate::{compiler::{CodeGenContext, substitute_generic_type}, expression_compiler::size_and_alignment_of_type};
 
 // ------------------------------------------------------------------------------------
 #[derive(Debug, Clone)]
@@ -21,33 +22,6 @@ impl Enum {
     }
 }
 
-// ------------------------------------------------------------------------------------
-#[derive(Debug, Clone, PartialEq)]
-pub struct Attribute {
-    name: Box<str>,
-    arguments: Box<[Expr]>
-}
-impl Attribute {
-    pub fn new(name: Box<str>, arguments: Box<[Expr]>) -> Self {
-        Self { name, arguments }
-    }
-    pub fn name_equals(&self, to: &str) -> bool{
-        self.name == to.into()
-    }
-
-    /// Ensures that attribute has only one argument, and returns it.
-    pub fn one_argument(&self) -> Result<&Expr, String> {
-        if self.arguments.len() == 1 {
-            Ok(&self.arguments[0])
-        } else {
-            Err(format!(
-                "Attribute {} should have only one argument, but it has {}",
-                self.name,
-                self.arguments.len()
-            ))
-        }
-    }
-}
 
 // ------------------------------------------------------------------------------------
 
