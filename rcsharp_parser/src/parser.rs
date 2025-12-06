@@ -154,7 +154,9 @@ impl ParserType {
     pub fn is_pointer(&self) -> bool{
         matches!(self, ParserType::Pointer(_))
     }
-
+    pub fn is_function(&self) -> bool {
+        matches!(self, ParserType::Function(..))
+    }
     pub fn as_both_integers(&self, other: &ParserType) -> Option<(&'static PrimitiveInfo, &'static PrimitiveInfo)> {
         if let (Some(x),Some(y)) = (self.as_integer(), other.as_integer()) {
             return Some((x,y));
@@ -168,6 +170,7 @@ impl ParserType {
         None
     }
 
+    
     // Helper
     pub fn self_reference_once(self) -> ParserType{
         ParserType::Pointer(Box::new(self))
@@ -229,6 +232,7 @@ impl ParserType {
             _ => panic!("Cannot get abs type of {:?}", self),
         }
     }
+    
 }
 
 pub struct GeneralParser<'a> {
@@ -388,7 +392,7 @@ impl<'a> GeneralParser<'a> {
             self.advance();
             return Ok(Stmt::Function(ParsedFunction::new_parse(name.into_boxed_str(), args.into_boxed_slice(), return_type, Box::new([]))));
         } 
-        let body = self.parse_block_body()?;
+        let body = self.parse_block_body().map_err(|x| format!("{x}\nIn function '{name}'\n"))?;
         
         if !generic_types.is_empty() {
             return Ok(Stmt::Function(ParsedFunction::new_parse_generic(name.into(), args.into_boxed_slice(), return_type, body, generic_types.into())));
@@ -490,7 +494,7 @@ impl<'a> GeneralParser<'a> {
     }
     fn parse_statement(&mut self) -> Result<Stmt, String> {
         match &self.peek().token {
-            Token::KeywordVariableDeclaration => self.parse_let_statement(),
+            Token::KeywordVariableDeclaration => self.parse_let_statement().map_err(|x| format!("{x}\nIn variable declaration")),
             Token::KeywordIf => self.parse_if_statement(),
             Token::KeywordLoop => self.parse_loop_statement(),
             Token::KeywordReturn => self.parse_return_statement(),
@@ -572,7 +576,7 @@ impl<'a> GeneralParser<'a> {
     }
     fn parse_expression(&mut self) -> Result<Expr, String> {
         let mut expr_parser = ExpressionParser::new(&self.tokens[self.cursor..]);
-        let expr = expr_parser.parse_expression()?;
+        let expr = expr_parser.parse_expression().map_err(|x| format!("{x}\nwhile parsing expression:\n"))?;
         self.cursor += expr_parser.cursor();
         Ok(expr)
     }

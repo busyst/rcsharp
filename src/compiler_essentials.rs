@@ -2,7 +2,7 @@ use std::{cell::{Cell, RefCell}, collections::HashMap};
 use ordered_hash_map::OrderedHashMap;
 use rcsharp_parser::{compiler_primitives::Layout, parser::{Attribute, ParserType, Stmt}};
 
-use crate::{compiler::{CodeGenContext, substitute_generic_type}, expression_compiler::size_and_alignment_of_type};
+use crate::{compiler::{CodeGenContext, substitute_generic_type}, expression_compiler::{CompiledValue, size_and_alignment_of_type}};
 
 // ------------------------------------------------------------------------------------
 #[derive(Debug, Clone)]
@@ -62,7 +62,7 @@ impl Struct {
         }
     }
     
-    pub(crate) fn full_path(&self) -> Box<str> {
+    pub fn full_path(&self) -> Box<str> {
         if self.path.is_empty() {
             return self.name.to_string().into_boxed_str();
         }
@@ -184,28 +184,11 @@ impl Function {
     pub fn new(path: Box<str>, name: Box<str>, args: Box<[(String, ParserType)]>, return_type: ParserType, body: Box<[Stmt]>, flags: Cell<u8>, attribs: Box<[Attribute]>, generic_params: Box<[String]>) -> Self {
         Self { path, name, args, return_type, body, attribs, flags, generic_params, generic_implementations: RefCell::new(vec![]) }
     }
-    
-    pub fn effective_name(&self) -> Box<str> {
-        
-        if self.path.is_empty() {
-            self.name.clone()
-        }else{
-            let mut o = self.path.to_string();
-            o.push('.');
-            o.push_str(&self.name);
-            o.into_boxed_str()
-        }
-    }
-    
     pub fn is_generic(&self) -> bool { self.flags.get() & FunctionFlags::Generic as u8 != 0 }
     pub fn is_imported(&self) -> bool { self.flags.get() & FunctionFlags::Imported as u8 != 0 }
     pub fn is_inline(&self) -> bool { self.flags.get() & FunctionFlags::Inline as u8 != 0 }
     pub fn set_as_imported(&self) { self.flags.set(self.flags.get() | FunctionFlags::Imported as u8);}
     pub fn flags(&self) -> u8 { self.flags.get() }
-    
-    pub fn get_type(&self) -> ParserType {
-        ParserType::Function(Box::new(self.return_type.clone()), self.args.iter().map(|x| x.1.clone()).collect::<Vec<_>>().into_boxed_slice())
-    }
     
     pub fn path(&self) -> &str {
         &self.path
@@ -214,16 +197,129 @@ impl Function {
     pub fn name(&self) -> &str {
         &self.name
     }
-    
-    pub fn llvm_name(&self) -> Box<str> {
-        if self.is_imported(){
-            self.name.clone()
-        }else{
-            self.effective_name()
+}
+pub struct FunctionView<'a> {
+    func: &'a Function,
+    args: Vec<(String, ParserType)>,
+    return_type: ParserType,
+}
+impl<'a> FunctionView<'a> {
+    pub fn new_unspec(func: &'a Function) -> Self {
+        Self {
+            func,
+            args: func.args.to_vec(),
+            return_type: func.return_type.clone(),
         }
     }
-}
+    pub fn new(func: &'a Function) -> Self {
+        if func.is_generic() {
+            panic!("Tried to get function view of generic function without specifying generic parameters: {}", func.name())
+        }
+        Self {
+            func,
+            args: func.args.to_vec(),
+            return_type: func.return_type.clone(),
+        }
+    }
+    pub fn new_generic(func: &'a Function, map: &HashMap<String, ParserType>) -> Self {
+        if !func.is_generic() {
+            panic!("This function is not generic: {}", func.name)
+        }
+        let all_generics_defined = func.generic_params.iter().all(|x| map.contains_key(x));
+        
+        if !all_generics_defined {
+            let defined = func.generic_params.iter()
+                .filter(|x| map.contains_key(x.as_str()))
+                .cloned()
+                .collect::<Vec<_>>();
+            let undefined = func.generic_params.iter()
+                .filter(|x| !map.contains_key(x.as_str()))
+                .cloned()
+                .collect::<Vec<_>>();
+                
+            panic!("Not all generic types defined in current context for function {}:\nDefined({}):{}\nUndefined({}):{}",
+                func.name,
+                defined.len(), defined.join(", "),
+                undefined.len(), undefined.join(", "),
+            )
+        }
 
+        let implementation = func.generic_params.iter()
+            .map(|x| map.get(x).unwrap().clone())
+            .collect::<Box<_>>();
+
+        {
+            let mut brw = func.generic_implementations.borrow_mut();
+            if !brw.iter().any(|x| x.iter().eq(implementation.iter())) {
+                brw.push(implementation);
+            }
+        }
+
+        let mut args = func.args.to_vec();
+        for arg in args.iter_mut() {
+            arg.1 = substitute_generic_type(&arg.1, map);
+        }
+
+        let return_type = substitute_generic_type(&func.return_type, map);
+
+        Self {
+            func,
+            args,
+            return_type,
+        }
+    }
+
+    pub fn args(&self) -> &[(String, ParserType)] {
+        &self.args
+    }
+    pub fn path(&self) -> &str {
+        &self.func.path
+    }
+
+    pub fn return_type(&self) -> &ParserType {
+        &self.return_type
+    }
+
+    pub fn body(&self) -> &[Stmt] {
+        &self.func.body
+    }
+
+    pub fn llvm_name(&self) -> Box<str> {
+        if self.func.is_imported(){
+            self.func.name.clone()
+        }else{
+            self.full_path()
+        }
+    }
+    
+    pub fn is_inline(&self) -> bool {
+        self.func.is_inline()
+    }
+
+    pub fn generic_params(&self) -> &[String] {
+        &self.func.generic_params
+    }
+    
+    pub fn definition(&self) -> &'a Function {
+        self.func
+    }
+    pub fn full_path(&self) -> Box<str> {
+        if self.func.path.is_empty() {
+            self.func.name.clone()
+        }else{
+            format!("{}.{}", self.func.path, self.func.name).into_boxed_str()
+        }
+    }
+    pub fn get_type(&self) -> ParserType {
+        ParserType::Function(Box::new(self.return_type.clone()), self.args.iter().map(|x| x.1.clone()).collect::<Vec<_>>().into_boxed_slice())
+    }
+    pub fn get_compiled_value(&self) -> CompiledValue{
+        if self.func.is_generic(){
+            return CompiledValue::GenericFunction { effective_name: self.full_path().to_string(), ptype: self.get_type() };
+        }
+        CompiledValue::Function { effective_name: self.full_path().to_string(), ptype: self.get_type() }
+    }
+}
 // ------------------------------------------------------------------------------------
 #[repr(u8)]
 pub enum VariableFlags {

@@ -35,6 +35,7 @@ declare dllimport i64 @DispatchMessageA(%struct.window.MSG*)
 declare dllimport i64 @DefWindowProcA(i8*,i32,i64,i64)
 declare dllimport void @PostQuitMessage(i32)
 declare dllimport i8* @GetModuleHandleA(i8*)
+declare dllimport i32 @MessageBoxA(i8*,i8*,i8*,i32)
 @.str.0 = private unnamed_addr constant [12 x i8] c"Exception: \00"
 @.str.1 = private unnamed_addr constant [33 x i8] c"Failed to lock heap for walking.\00"
 @.str.2 = private unnamed_addr constant [26 x i8] c"stdout handle was invalid\00"
@@ -127,6 +128,7 @@ declare dllimport i8* @GetModuleHandleA(i8*)
 %"struct.list.ListNode<i32>" = type { i32, %"struct.list.ListNode<i32>"* }
 %"struct.vector.Vec<i8>" = type { i8*, i32, i32 }
 %"struct.vector.Vec<%struct.string.String>" = type { %struct.string.String*, i32, i32 }
+%"struct.test.QPair<i64, i64>" = type { i64, i64 }
 
 define void @"__chkstk"(){
     ret void
@@ -2403,17 +2405,49 @@ define void ()** ()** @"of_fn"(){
     %tmp0 = call void ()** ()** @of_fn()
     ret void ()** ()** %tmp0
 }
+define %"struct.test.QPair<i64, i64>" @"test.geg"(){
+    %v0 = alloca %"struct.test.QPair<i64, i64>"; var: temp
+    %tmp0 = getelementptr inbounds %"struct.test.QPair<i64, i64>", %"struct.test.QPair<i64, i64>"* %v0, i32 0, i32 0
+    store i64 1337, i64* %tmp0
+    %tmp1 = getelementptr inbounds %"struct.test.QPair<i64, i64>", %"struct.test.QPair<i64, i64>"* %v0, i32 0, i32 1
+    store i64 1226, i64* %tmp1
+    %tmp2 = getelementptr inbounds %"struct.test.QPair<i64, i64>", %"struct.test.QPair<i64, i64>"* %v0, i32 0, i32 0
+    %tmp3 = getelementptr inbounds %"struct.test.QPair<i64, i64>", %"struct.test.QPair<i64, i64>"* %v0, i32 0, i32 0
+    %tmp4 = load i64, i64* %tmp3
+    %tmp5 = getelementptr inbounds %"struct.test.QPair<i64, i64>", %"struct.test.QPair<i64, i64>"* %v0, i32 0, i32 1
+    %tmp6 = load i64, i64* %tmp5
+    %tmp7 = sub i64 %tmp4, %tmp6
+    store i64 %tmp7, i64* %tmp2
+    %tmp8 = load %"struct.test.QPair<i64, i64>", %"struct.test.QPair<i64, i64>"* %v0
+    ret %"struct.test.QPair<i64, i64>" %tmp8
+}
+define %"struct.test.QPair<i64, i64>" @"xq"(){
+    %v0 = alloca %"struct.test.QPair<i64, i64>" ()**; var: y
+    store %"struct.test.QPair<i64, i64>" ()** @test.geg, %"struct.test.QPair<i64, i64>" ()*** %v0
+    %tmp0 = load %"struct.test.QPair<i64, i64>" ()**, %"struct.test.QPair<i64, i64>" ()*** %v0
+    %tmp1 = call %"struct.test.QPair<i64, i64>" %tmp0()
+    ret %"struct.test.QPair<i64, i64>" %tmp1
+}
 define i32 @"main"(){
-    %v0 = alloca float; var: f
+    %v0 = alloca double; var: f
     %v1 = alloca i32 ()**; var: tp
-    %tmp0 = fptrunc double 0x40DEADDD3B80D02E to float
-    store float %tmp0, float* %v0
+    %v2 = alloca %"struct.test.QPair<i64, i64>"; var: temp
+    store double 0x40DEADDD3B80D02E, double* %v0
     store i32 ()** @main, i32 ()*** %v1
-    %tmp1 = load float, float* %v0
-    %tmp2 = fpext float %tmp1 to double
-    call void @console.println_f64(double %tmp2)
-    %tmp3 = ptrtoint void ()** ()** ()** @of_fn to i32
-    ret i32 %tmp3
+    %tmp1 = load double, double* %v0
+    call void @console.println_f64(double %tmp1)
+    call i32 @AllocConsole()
+    call void @tests.run()
+    call void @window.start()
+    call i32 @FreeConsole()
+    br label %inline_exit0
+inline_exit0:
+    %tmp3 = call %"struct.test.QPair<i64, i64>" @xq()
+    store %"struct.test.QPair<i64, i64>" %tmp3, %"struct.test.QPair<i64, i64>"* %v2
+    %tmp4 = getelementptr inbounds %"struct.test.QPair<i64, i64>", %"struct.test.QPair<i64, i64>"* %v2, i32 0, i32 0
+    %tmp5 = load i64, i64* %tmp4
+    %tmp6 = trunc i64 %tmp5 to i32
+    ret i32 %tmp6
 }
 define i64 @"window.WindowProc"(i8* %hWnd, i32 %uMsg, i64 %wParam, i64 %lParam){
     %tmp0 = icmp eq i32 %uMsg, 16
@@ -2557,6 +2591,17 @@ endif7:
 endif6:
     br label %loop_body5
 loop_body5_exit:
+    ret void
+}
+define void @"window.message_box"(i8* %content, i8* %title){
+    %v0 = alloca i32; var: MB_OK
+    %v1 = alloca i32; var: MB_ICONINFO
+    store i32 0, i32* %v0
+    store i32 64, i32* %v1
+    %tmp0 = load i32, i32* %v0
+    %tmp1 = load i32, i32* %v1
+    %tmp2 = or i32 %tmp0, %tmp1
+    call i32 @MessageBoxA(i8* null, i8* %content, i8* %title, i32 %tmp2)
     ret void
 }
 define %"struct.list.List<i32>" @"list.new<i32>"(){

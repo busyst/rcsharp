@@ -7,9 +7,8 @@ use rcsharp_lexer::lex_string_with_file_context;
 use rcsharp_parser::compiler_primitives::{PRIMITIVE_TYPES_INFO, find_primitive_type};
 use rcsharp_parser::expression_parser::Expr;
 use rcsharp_parser::parser::{Attribute, GeneralParser, ParsedFunction, ParserType, Stmt};
-use crate::compiler_essentials::{Enum, Function, FunctionFlags, Scope, Struct, StructView, Variable};
+use crate::compiler_essentials::{Enum, Function, FunctionFlags, FunctionView, Scope, Struct, StructView, Variable};
 use crate::expression_compiler::{Expected, compile_expression, constant_integer_expression_compiler};
-pub const POINTER_SIZE_IN_BYTES : u32 = 8;
 
 #[derive(Debug)]
 pub enum CompileError {
@@ -475,7 +474,7 @@ fn compile_function_body(function: &Function, full_function_name: &str, symbols:
     for stmt in function.body.iter(){
         //break;
         compile_statement(stmt, &mut ctx, output)
-            .map_err(|e| CompileError::Generic(format!("In function '{}':\n{}", function.effective_name(), e)))?;
+            .map_err(|e| CompileError::Generic(format!("In function '{}':\n{}", function.name(), e)))?;
     }
     if !matches!(function.body.last(), Some(Stmt::Return(_))) {
         if function.return_type.is_void() {
@@ -521,9 +520,9 @@ pub fn compile_statement(stmt: &Stmt, ctx: &mut CodeGenContext, output: &mut LLV
         }
         Stmt::Return(expression) => {
             let func = ctx.get_current_function().ok_or(CompileError::Generic(format!("Curent function couldnt be found path.name:({}.{})",ctx.current_function_path,ctx.current_function_name)))?;
-            let return_type = &substitute_generic_type(&func.return_type, &ctx.symbols.alias_types);
+            let return_type = &substitute_generic_type(func.return_type(), &ctx.symbols.alias_types);
             if expression.is_some() && return_type.is_void() {
-                return Err(CompileError::Generic(format!("Function {} does not return anything", func.name())));
+                return Err(CompileError::Generic(format!("Function {} does not return anything", func.full_path())));
             }
             if let Some(expr) = expression {
                 let value = compile_expression(expr, Expected::Type(return_type), ctx, output)?;
@@ -785,12 +784,42 @@ impl SymbolTable {
         populate_default_types(&mut table);
         table
     }
-    pub fn get_function(&self, fqn: &str, current_namespace: &str) -> Option<&Function> {
-        if let Some(r#fn) = self.functions.get(&format!("{}.{}", current_namespace, fqn)) {
-            return Some(r#fn);
+    pub fn get_bare_function<'a>(&'a self, fqn: &str, current_namespace: &str) -> Option<FunctionView<'a>> {
+        if let Some(x) = self.functions.get(&format!("{}.{}", current_namespace, fqn)) {
+            return Some(FunctionView::new_unspec(x));
         }
-        if let Some(r#fn) = self.functions.get(fqn) {
-            return Some(r#fn);
+        if let Some(x) = self.functions.get(fqn) {
+            return Some(FunctionView::new_unspec(x));
+        }
+        None
+    }
+    pub fn get_function<'a>(&'a self, fqn: &str, current_namespace: &str) -> Option<FunctionView<'a>> {
+        if let Some(x) = self.functions.get(&format!("{}.{}", current_namespace, fqn)) {
+            if x.is_generic() {
+                return Some(FunctionView::new_generic(x,  &self.alias_types));
+            }
+
+        }
+        if let Some(x) = self.functions.get(fqn) {
+            if x.is_generic() {
+                return Some(FunctionView::new_generic(x,  &self.alias_types));
+            }
+            return Some(FunctionView::new(x));
+        }
+        None
+    }
+    pub fn get_generic_function<'a>(&'a self, fqn: &str, current_namespace: &str, aliases: &HashMap<String, ParserType>) -> Option<FunctionView<'a>> {
+        if let Some(x) = self.functions.get(&format!("{}.{}", current_namespace, fqn)) {
+            if x.is_generic() {
+                return Some(FunctionView::new_generic(x,  &aliases));
+            }
+            return None;
+        }
+        if let Some(x) = self.functions.get(fqn) {
+            if x.is_generic() {
+                return Some(FunctionView::new_generic(x,  &aliases));
+            }
+            return None;
         }
         None
     }
@@ -867,8 +896,8 @@ impl<'a> CodeGenContext<'a> {
             logic_counter: Cell::new(0),
         }
     }
-    pub fn get_current_function(&self) -> Option<&'a Function> {
-        self.symbols.get_function(&self.current_function_name, &self.current_function_path)
+    pub fn get_current_function(&self) -> Option<FunctionView<'a>> {
+        self.symbols.get_bare_function(&self.current_function_name, &self.current_function_path)
     }
     pub fn fully_qualified_name(&self, name: &str) -> String {
         if self.current_function_path.is_empty() {

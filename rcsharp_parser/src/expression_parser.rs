@@ -199,7 +199,7 @@ impl<'a> ExpressionParser<'a> {
     }
 
     fn parse_call(&mut self, callee: Expr) -> Result<Expr, String> {
-        self.consume(&Token::LParen)?; 
+        self.consume(&Token::LParen)?;
         if callee == Expr::Name("sizeof".to_string()) {
             let t = self.parse_type()?;
             self.consume(&Token::RParen)?; 
@@ -237,6 +237,9 @@ impl<'a> ExpressionParser<'a> {
             if self.peek().token == Token::Comma {
                 self.advance();
             }
+        }
+        if self.peek().token == Token::SemiColon {
+            return Ok(Expr::Type(ParserType::Generic(exprtoparsertype(&callee), generic_types.into())));
         }
         self.consume(&Token::LParen)?;
         let mut args = Vec::new();
@@ -345,4 +348,14 @@ impl<'a> ExpressionParser<'a> {
     pub fn cursor(&self) -> usize {
         self.cursor
     }
+}
+
+fn exprtoparsertype(callee: &Expr) -> String {
+    if let Expr::Name(x) = callee {
+        return x.to_string();
+    }
+    if let Expr::StaticAccess(x, y) = callee {
+        return format!("{}.{}", exprtoparsertype(x), y);
+    }
+    todo!("{:?}", callee)
 }

@@ -23,7 +23,7 @@ pub struct PrimitiveInfo {
     pub kind: PrimitiveKind,
 }
 
-pub const PRIMITIVE_TYPES_INFO: &[PrimitiveInfo] = &[
+pub const PRIMITIVE_TYPES_INFO: &'static [PrimitiveInfo] = &[
     PrimitiveInfo { name: "void", layout: Layout::new(0, 1), llvm_name: "void", kind: PrimitiveKind::Void },
     PrimitiveInfo { name: "bool", layout: Layout::new(1, 1), llvm_name: "i1", kind: PrimitiveKind::Bool },
     // SInts
@@ -40,9 +40,12 @@ pub const PRIMITIVE_TYPES_INFO: &[PrimitiveInfo] = &[
     PrimitiveInfo { name: "f16", layout: Layout::new(2, 2), llvm_name: "half", kind: PrimitiveKind::Decimal },
     PrimitiveInfo { name: "f32", layout: Layout::new(4, 4), llvm_name: "float", kind: PrimitiveKind::Decimal },
     PrimitiveInfo { name: "f64", layout: Layout::new(8, 8), llvm_name: "double", kind: PrimitiveKind::Decimal },
+
+    PrimitiveInfo { name: "isize", layout: Layout::new(8, 8), llvm_name: "i64", kind: PrimitiveKind::SignedInt },
+    PrimitiveInfo { name: "usize", layout: Layout::new(8, 8), llvm_name: "i64", kind: PrimitiveKind::UnsignedInt },
 ];
-pub const VOID_TYPE: &PrimitiveInfo = &PRIMITIVE_TYPES_INFO[0];
-pub const BOOL_TYPE: &PrimitiveInfo = &PRIMITIVE_TYPES_INFO[1];
+pub const VOID_TYPE: &'static PrimitiveInfo = &PRIMITIVE_TYPES_INFO[0];
+pub const BOOL_TYPE: &'static PrimitiveInfo = &PRIMITIVE_TYPES_INFO[1];
 
 pub fn find_primitive_type(name: &str) -> Option<&'static PrimitiveInfo> {
     PRIMITIVE_TYPES_INFO.iter().find(|x| x.name == name)
