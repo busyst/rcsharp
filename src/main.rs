@@ -16,15 +16,15 @@ fn main() -> Result<(), String> {
 	
 	let full_path = "./src.rcsharp";
 	let program_start = Instant::now();
-	let base_structs_and_functions = {let mut buf = String::new(); std::fs::File::open(&full_path).map_err(|e| e.to_string())?.read_to_string(&mut buf).map_err(|e| e.to_string())?; buf};
+	let base_structs_and_functions = {let mut buf = String::new(); std::fs::File::open(full_path).map_err(|e| e.to_string())?.read_to_string(&mut buf).map_err(|e| e.to_string())?; buf};
 	let file1_read = Instant::now();
-	let all_tokens = lex_file_with_context(&base_structs_and_functions, &full_path)?;
+	let all_tokens = lex_file_with_context(&base_structs_and_functions, full_path)?;
 	let file1_lexed = Instant::now();
 
 	let y = GeneralParser::new(&all_tokens).parse_all()?;
 	let tokens_parsed = Instant::now();
 	
-	rcsharp_compile_to_file(&y, &full_path)?;
+	rcsharp_compile_to_file(&y, full_path)?;
 	let compiled_and_wrote = Instant::now();
 	println!("\t\tBase Source");
 	println!("read \t{:?}", file1_read - program_start);

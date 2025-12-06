@@ -1,5 +1,6 @@
-fn __chkstk() : void{ /*Needed*/}
-fn _fltused() : i32{ return 0; /*Needed*/}
+fn __chkstk() : void { /*Needed*/}
+fn _fltused() : i32 { return 0; /*Needed*/}
+
 namespace process{
     #[DllImport("kernel32.dll")]
     fn ExitProcess(code:i32): void;
@@ -150,7 +151,7 @@ namespace list{
     }
     fn extend<T>(list: &List<T>, data: T){
         let node_to_add: &ListNode<T> = mem::malloc(sizeof(ListNode<T>)) as &ListNode<T>;
-        node_to_add.next_node = 0 as &ListNode<T>;
+        new_node::<T>(node_to_add);
         node_to_add.data = data;
 
         if list.head == 0 as &ListNode<T> {

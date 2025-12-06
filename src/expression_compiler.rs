@@ -649,18 +649,10 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
     }
     fn compile_string_literal(&mut self, str_val: &str) -> CompileResult<CompiledValue> { // ---
         let str_len = str_val.len() + 1;
-        let const_id = self.output.aquire_unique_const_vector_counter();
-        let const_name = format!("@.str.{}", const_id);
-        let escaped_val = str_val.replace("\"", "\\22")
-            .replace("\n", "\\0A")
-            .replace("\r", "\\0D")
-            .replace("\t", "\\09");
-        self.output.push_str_header(&format!(
-            "{} = private unnamed_addr constant [{} x i8] c\"{}\\00\"\n",
-            const_name, str_len, escaped_val
-        ));
+        let const_id = self.output.add_to_strings_header(str_val.to_string());
         let ptr_id = self.ctx.aquire_unique_temp_value_counter();
-        self.output.push_str(&format!("    %tmp{} = getelementptr inbounds [{} x i8], [{} x i8]* {}, i64 0, i64 0\n", ptr_id, str_len, str_len, const_name));
+
+        self.output.push_str(&format!("    %tmp{} = getelementptr inbounds [{} x i8], [{} x i8]* @.str.{}, i64 0, i64 0\n", ptr_id, str_len, str_len, const_id));
         Ok(CompiledValue::Value {
             llvm_repr: format!("%tmp{}", ptr_id),
             ptype: ParserType::Pointer(Box::new(ParserType::Named("i8".to_string()))),
@@ -740,21 +732,28 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             let struct_type = obj_lvalue.get_type().clone();
             (obj_lvalue.get_llvm_repr(), struct_type)
         };
-        
-        let (struct_fqn, fields) = self.ctx.symbols.get_struct_representation(&struct_type_to_index, &self.ctx.current_function_path)?;
-        let field_index = fields.iter().position(|(name, _)| name == member)
-            .ok_or_else(|| CompileError::Generic(format!("Member '{}' not found in struct '{}'", member, struct_fqn)))?;
-        
-        let mut field_ptype = substitute_generic_type(&fields[field_index].1, &self.ctx.symbols.alias_types);
-        if let ParserType::Generic(_, p) = obj_lvalue.get_type().dereference_full().full_delink() {
-            let q = self.ctx.symbols.get_bare_type(&struct_fqn).unwrap();
-            let mut type_map = HashMap::new();
-            for (ind, prm) in q.generic_params.iter().enumerate() {
-                type_map.insert(prm.clone(), p[ind].clone());
+        let name = SymbolTable::get_abs_path(&struct_type_to_index, &self.ctx.current_function_path);
+        let r#struct = self.ctx.symbols.get_bare_type(&name).unwrap();
+        let (field_type, index, llvm_struct_type) = if r#struct.is_generic() {
+            let x = if let ParserType::Generic(_, gener) = struct_type_to_index.dereference_full().full_delink() {
+                gener
+            }else {
+                panic!()
+            };
+            let mut map = HashMap::new();
+            for c in r#struct.definition().generic_params.iter().enumerate() {
+                map.insert(c.1.to_string(), x[c.0].clone());
             }
-            field_ptype = substitute_generic_type(&field_ptype, &type_map);
-        }
-        let llvm_struct_type = get_llvm_type_str(&struct_type_to_index, self.ctx.symbols, &self.ctx.current_function_path)?;
+            let sv = StructView::new_generic(r#struct.definition(), &map);
+            let p = sv.field_types();
+            let index = p.iter().position(|(name, _)| name == member).unwrap();
+            
+            (p[index].1.clone(), index, format!("{}", sv.llvm_representation(self.ctx.symbols)))
+        }else {
+            let p = r#struct.field_types();
+            let index = p.iter().position(|(name, _)| name == member).unwrap();
+            (p[index].1.clone(), index, r#struct.llvm_representation(self.ctx.symbols).to_string())
+        };
         
         let gep_id = self.ctx.aquire_unique_temp_value_counter();
         let gep_result_reg = format!("%tmp{}", gep_id);
@@ -767,9 +766,9 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             llvm_struct_type,
             llvm_struct_ptr_type,
             base_ptr_repr,
-            field_index
+            index
         ));
-        Ok(CompiledValue::Pointer { llvm_repr: gep_result_reg, ptype: field_ptype })
+        Ok(CompiledValue::Pointer { llvm_repr: gep_result_reg, ptype: field_type })
     }
     fn compile_deref_lvalue(&mut self, operand: &Expr) -> CompileResult<CompiledValue> {
         let pointer_rval = self.compile_rvalue(operand, Expected::Anything)?;
@@ -857,13 +856,13 @@ pub fn size_and_alignment_of_type(ptype: &ParserType, ctx: &mut CodeGenContext) 
     let bare = bare.unwrap();
     if let ParserType::Generic(_, imp) = ptype.full_delink() {
         let mut type_map = HashMap::new();
-        for (ind, prm) in bare.generic_params.iter().enumerate() {
+        for (ind, prm) in bare.generic_params().iter().enumerate() {
             type_map.insert(prm.clone(), imp[ind].clone());
         }
-        return StructView::new_generic(bare, &type_map).calculate_size(ctx);
+        return StructView::new_generic(bare.definition(), &type_map).calculate_size(ctx);
     }else {
         // not a generic
-        return StructView::new(bare).calculate_size(ctx);
+        return StructView::new(bare.definition()).calculate_size(ctx);
     }
 }
 pub fn constant_integer_expression_compiler(expression: &Expr, _symbols: &SymbolTable) -> Result<i128, String> {

@@ -2,7 +2,7 @@ use std::{cell::{Cell, RefCell}, collections::HashMap};
 use ordered_hash_map::OrderedHashMap;
 use rcsharp_parser::{compiler_primitives::Layout, parser::{Attribute, ParserType, Stmt}};
 
-use crate::{compiler::{CodeGenContext, substitute_generic_type}, expression_compiler::{CompiledValue, size_and_alignment_of_type}};
+use crate::{compiler::{CodeGenContext, CompileResult, SymbolTable, get_llvm_type_str, substitute_generic_type}, expression_compiler::{CompiledValue, size_and_alignment_of_type}};
 
 // ------------------------------------------------------------------------------------
 #[derive(Debug, Clone)]
@@ -61,7 +61,15 @@ impl Struct {
             format!("%struct.{}.{}", self.path, self.name)
         }
     }
-    
+    pub fn llvm_representation_without_percent(&self) -> String {
+        if self.is_primitive() {
+            self.name.to_string()
+        } else if self.path.is_empty() {
+            format!("struct.{}", self.name)
+        } else {
+            format!("struct.{}.{}", self.path, self.name)
+        }
+    }
     pub fn full_path(&self) -> Box<str> {
         if self.path.is_empty() {
             return self.name.to_string().into_boxed_str();
@@ -74,22 +82,23 @@ pub struct StructView<'a>{
     r#struct : &'a Struct,
     fields: Vec<(String, ParserType)>,
     size_and_alligment: Layout,
+    implementation_index: isize
 }
 impl<'a> StructView<'a> {
     pub fn new_unspec(r#struct: &'a Struct) -> Self {
-        Self { r#struct, fields: Vec::new(),  size_and_alligment: Layout::new_not_valid() }
+        Self { r#struct, fields: Vec::new(),  size_and_alligment: Layout::new_not_valid(), implementation_index: -1 }
     }
     pub fn new(r#struct: &'a Struct) -> Self {
         if r#struct.is_generic() {
             panic!("Tried to get struct view of generic type without specifying generic parameters")
         }
-        Self { r#struct, fields: Vec::new(), size_and_alligment: Layout::new_not_valid()}
+        Self { r#struct, fields: Vec::new(), size_and_alligment: Layout::new_not_valid(), implementation_index: -1}
     }
     pub fn new_generic(r#struct: &'a Struct, map: &HashMap<String, ParserType>) -> Self {
         if !r#struct.is_generic() {
             panic!("This type is not generic: {}", r#struct.full_path())
         }
-        let all_generics_defined = r#struct.generic_params.iter().map(|x| map.contains_key(x)).all(|x| x == true);
+        let all_generics_defined = r#struct.generic_params.iter().map(|x| map.contains_key(x)).all(|x| x);
         if !all_generics_defined {
             let definded = r#struct.generic_params.iter().filter(|x| map.contains_key(x.as_str())).cloned().collect::<Vec<_>>();
             let undefinded = r#struct.generic_params.iter().filter(|x| !map.contains_key(x.as_str())).cloned().collect::<Vec<_>>();
@@ -102,10 +111,14 @@ impl<'a> StructView<'a> {
         if implementation.len() != r#struct.generic_params.len() {
             panic!("Tried to get struct view of generic type with invalid count of generic parameters provided {}, needed {}", implementation.len(), r#struct.generic_params.len())
         }
+        let implementation_index;
         let mut fields = r#struct.fields.to_vec();
         {
             let mut brw = r#struct.generic_implementations.borrow_mut(); 
-            if !brw.iter().any(|x| x.iter().eq(implementation.iter())) {
+            if let Some(idx) = brw.iter().position(|x| x.iter().eq(implementation.iter())) {
+                implementation_index = idx as isize;
+            }else {
+                implementation_index = brw.len() as isize;
                 brw.push(implementation);
             }
             for x in fields.iter_mut() {
@@ -113,7 +126,7 @@ impl<'a> StructView<'a> {
             }
         }
         
-        Self { r#struct, fields, size_and_alligment: Layout::new_not_valid() }
+        Self { r#struct, fields, size_and_alligment: Layout::new_not_valid(), implementation_index }
     }
     pub fn calculate_size(&mut self, ctx : &mut CodeGenContext<'_>) -> Layout {
         if self.size_and_alligment.is_valid(){
@@ -134,9 +147,11 @@ impl<'a> StructView<'a> {
         let final_padding = (max_alignment - (current_offset % max_alignment)) % max_alignment;
         let total_size = current_offset + final_padding;
         self.size_and_alligment = Layout::new(total_size, max_alignment);
-        return Layout::new(total_size, max_alignment);
+        Layout::new(total_size, max_alignment)
     }
-    
+    pub fn definition(&self) -> &'a Struct {
+        self.r#struct
+    }
     pub fn field_types(&self) -> &[(String, ParserType)] {
         if !self.is_generic() {
             return &self.r#struct.fields;
@@ -149,10 +164,17 @@ impl<'a> StructView<'a> {
     pub fn path(&self) -> &str {
         &self.r#struct.path
     }
-    pub fn llvm_representation(&self) -> String {
+    pub fn llvm_representation(&self, symbols: &SymbolTable) -> String {
+        if self.r#struct.is_generic() {
+            let x = self.implementation_index as usize;
+            let i = self.r#struct.generic_implementations.borrow().get(x).unwrap().iter()
+            .map(|x| get_llvm_type_str(x, symbols, &self.definition().path)).collect::<CompileResult<Vec<_>>>().unwrap().join(", ");
+
+            return format!("%\"{}<{}>\"", self.r#struct.llvm_representation_without_percent(), i);
+        }
         self.r#struct.llvm_representation()
     } 
-    pub fn generic_params(&self) -> &Box<[String]> {
+    pub fn generic_params(&self) -> &[String] {
         &self.r#struct.generic_params
     }
     
@@ -179,14 +201,16 @@ pub struct Function {
 
     pub generic_params: Box<[String]>,
     pub generic_implementations: RefCell<Vec<Box<[ParserType]>>>,
+    pub times_used : Cell<usize>
 }
 impl Function {
     pub fn new(path: Box<str>, name: Box<str>, args: Box<[(String, ParserType)]>, return_type: ParserType, body: Box<[Stmt]>, flags: Cell<u8>, attribs: Box<[Attribute]>, generic_params: Box<[String]>) -> Self {
-        Self { path, name, args, return_type, body, attribs, flags, generic_params, generic_implementations: RefCell::new(vec![]) }
+        Self { path, name, args, return_type, body, attribs, flags, generic_params, generic_implementations: RefCell::new(vec![]), times_used: Cell::new(0) }
     }
     pub fn is_generic(&self) -> bool { self.flags.get() & FunctionFlags::Generic as u8 != 0 }
     pub fn is_imported(&self) -> bool { self.flags.get() & FunctionFlags::Imported as u8 != 0 }
     pub fn is_inline(&self) -> bool { self.flags.get() & FunctionFlags::Inline as u8 != 0 }
+    pub fn is_normal(&self) -> bool { !(self.is_generic() || self.is_inline() || self.is_imported()) }
     pub fn set_as_imported(&self) { self.flags.set(self.flags.get() | FunctionFlags::Imported as u8);}
     pub fn flags(&self) -> u8 { self.flags.get() }
     
@@ -196,6 +220,9 @@ impl Function {
     
     pub fn name(&self) -> &str {
         &self.name
+    }
+    pub fn use_fn(&self){
+        self.times_used.replace(self.times_used.get() + 1);
     }
 }
 pub struct FunctionView<'a> {

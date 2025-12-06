@@ -10,6 +10,10 @@ use rcsharp_parser::parser::{Attribute, GeneralParser, ParsedFunction, ParserTyp
 use crate::compiler_essentials::{Enum, Function, FunctionFlags, FunctionView, Scope, Struct, StructView, Variable};
 use crate::expression_compiler::{Expected, compile_expression, constant_integer_expression_compiler};
 
+pub const LAZY_FUNCTION_COMPILE : bool = true;
+pub const APPEND_DEBUG_FUNCTION_INFO : bool = false;
+pub const DONT_INSERT_REDUNDAND_STRINGS : bool = true;
+
 #[derive(Debug)]
 pub enum CompileError {
     Io(std::io::Error),
@@ -487,17 +491,24 @@ fn compile_function_body(function: &Function, full_function_name: &str, symbols:
     Ok(())
 }
 fn compile(symbols: &mut SymbolTable, output: &mut LLVMOutputHandler) -> CompileResult<()>{    
+    for (full_path, function) in symbols.functions.iter().filter(|x| x.1.is_normal()) {
+        compile_function_body(function, full_path, symbols, output)?;
+    }
+    if APPEND_DEBUG_FUNCTION_INFO {
+        for (full_path, function) in symbols.functions.iter() {
+            output.push_str_tail(&format!(";fn {} used times {}\n", full_path, function.times_used.get()));
+        }
+    }
     for (_, function) in symbols.functions.iter().filter(|x| x.1.is_imported()) {
+        if LAZY_FUNCTION_COMPILE && function.times_used.get() == 0 {
+            continue;
+        }
         // declare dllimport i32 @GetModuleFileNameA(i8*,i8*,i32)
         let current_namespace = &function.path;
         let rt = get_llvm_type_str(&function.return_type, symbols, current_namespace)?;
         let args = function.args.iter().map(|x| get_llvm_type_str(&x.1, symbols, current_namespace)).collect::<CompileResult<Vec<_>>>()?.join(",");
-        output.push_str_header(&format!("declare dllimport {} @{}({})\n", rt, function.name() , args));
+        output.push_str_include_header(&format!("declare dllimport {} @{}({})\n", rt, function.name() , args));
     }
-    for (full_path, function) in symbols.functions.iter().filter(|x| !x.1.is_imported() && !x.1.is_inline() && !x.1.is_generic()) {
-        compile_function_body(function, full_path, symbols, output)?;
-    }
-    
     Ok(())
 }
 pub fn compile_statement(stmt: &Stmt, ctx: &mut CodeGenContext, output: &mut LLVMOutputHandler) -> CompileResult<()>{
@@ -752,21 +763,44 @@ pub fn get_llvm_type_str_int(
 #[derive(Debug, Default)]
 pub struct LLVMOutputHandler{
     header: String,
+    strings_header: Vec<String>,
+    include_header: String,
     main: String,
-    unique_counter: Cell<u32>
+    tail: String,
 }
 impl LLVMOutputHandler {
     pub fn push_str(&mut self, s: &str) {
         self.main.push_str(s);
     }
+    pub fn push_str_include_header(&mut self, s: &str) {
+        self.include_header.push_str(s);
+    }
     pub fn push_str_header(&mut self, s: &str) {
         self.header.push_str(s);
     }
-    pub fn build(self) -> String {
-        format!("{}\n{}", self.header, self.main)
+    pub fn push_str_tail(&mut self, s: &str) {
+        self.tail.push_str(s);
     }
-    pub fn aquire_unique_const_vector_counter(&self) -> u32 {
-        self.unique_counter.replace(self.unique_counter.get() + 1)
+    pub fn add_to_strings_header(&mut self, string: String) -> usize{
+        if DONT_INSERT_REDUNDAND_STRINGS {
+            if let Some(id) = self.strings_header.iter().position(|x| x == string.as_str()) {
+                return id;
+            }
+        }
+        self.strings_header.push(string);
+        return self.strings_header.len() - 1;
+    }
+    pub fn build(self) -> String {
+        let x = self.strings_header.iter().enumerate().map(|(index,x)|{
+            let escaped_val = x.replace("\"", "\\22")
+                .replace("\n", "\\0A")
+                .replace("\r", "\\0D")
+                .replace("\t", "\\09");
+            let str_len = x.len() + 1;
+            format!("@.str.{} = private unnamed_addr constant [{} x i8] c\"{}\\00\"", index, str_len, escaped_val)
+        }).collect::<Vec<String>>().join("\n");
+
+        format!("{}\n{}\n{}\n{}\n{}", self.header, self.include_header, x, self.main, self.tail)
     }
 }
 
@@ -785,65 +819,41 @@ impl SymbolTable {
         table
     }
     pub fn get_bare_function<'a>(&'a self, fqn: &str, current_namespace: &str) -> Option<FunctionView<'a>> {
-        if let Some(x) = self.functions.get(&format!("{}.{}", current_namespace, fqn)) {
-            return Some(FunctionView::new_unspec(x));
-        }
-        if let Some(x) = self.functions.get(fqn) {
+        if let Some(x) = self.functions.get(&format!("{}.{}", current_namespace, fqn)).or(self.functions.get(fqn)) {
+            x.use_fn();
             return Some(FunctionView::new_unspec(x));
         }
         None
     }
     pub fn get_function<'a>(&'a self, fqn: &str, current_namespace: &str) -> Option<FunctionView<'a>> {
-        if let Some(x) = self.functions.get(&format!("{}.{}", current_namespace, fqn)) {
-            if x.is_generic() {
-                return Some(FunctionView::new_generic(x,  &self.alias_types));
+        if let Some(x) = self.get_bare_function(fqn, current_namespace) {
+            if x.definition().is_generic() {
+                return Some(FunctionView::new_generic(x.definition(),  &self.alias_types));
             }
-
-        }
-        if let Some(x) = self.functions.get(fqn) {
-            if x.is_generic() {
-                return Some(FunctionView::new_generic(x,  &self.alias_types));
-            }
-            return Some(FunctionView::new(x));
+            return Some(x);
         }
         None
     }
     pub fn get_generic_function<'a>(&'a self, fqn: &str, current_namespace: &str, aliases: &HashMap<String, ParserType>) -> Option<FunctionView<'a>> {
-        if let Some(x) = self.functions.get(&format!("{}.{}", current_namespace, fqn)) {
-            if x.is_generic() {
-                return Some(FunctionView::new_generic(x,  &aliases));
-            }
-            return None;
-        }
-        if let Some(x) = self.functions.get(fqn) {
-            if x.is_generic() {
-                return Some(FunctionView::new_generic(x,  &aliases));
-            }
-            return None;
-        }
-        None
+        self.get_bare_function(fqn, current_namespace).filter(|x| x.definition().is_generic()).map(|x| FunctionView::new_generic(x.definition(), aliases))
     }
-    pub fn get_bare_type(&self, fqn: &str) -> Option<&Struct> {
-        self.types.get(fqn)
+
+    pub fn get_bare_type<'a>(&'a self, fqn: &str) -> Option<StructView<'a>> {
+        self.types.get(fqn).map(|x| StructView::new_unspec(x))
     }
     pub fn get_type<'a>(&'a self, fqn: &str) -> Option<StructView<'a>> {
-        if let Some(x) = self.types.get(fqn) {
-            if x.is_generic() {
-                return Some(StructView::new_generic(x, &self.alias_types));
+        if let Some(x) = self.get_bare_type(fqn) {
+            if x.definition().is_generic() {
+                return Some(StructView::new_generic(x.definition(),  &self.alias_types));
             }
-            return Some(StructView::new(x));
+            return Some(x);
         }
         None
     }
     pub fn get_generic_type<'a>(&'a self, fqn: &str, aliases: &HashMap<String, ParserType>) -> Option<StructView<'a>> {
-        if let Some(x) = self.types.get(fqn) {
-            if x.is_generic() {
-                return Some(StructView::new_generic(x, aliases));
-            }
-            return None;
-        }
-        None
+        self.get_bare_type(fqn).filter(|x| x.definition().is_generic()).map(|x| StructView::new_generic(x.definition(), aliases))
     }
+
     pub fn get_abs_path(struct_type: &ParserType, current_namespace: &str) -> String {
         debug_assert!(!struct_type.is_primitive_type());
         debug_assert!(!struct_type.is_pointer());
@@ -865,12 +875,6 @@ impl SymbolTable {
             }
         };
         todo!()
-    }
-    pub fn get_struct_representation(&self, struct_type: &ParserType, current_namespace: &str) -> CompileResult<(Box<str>, &Box<[(String, ParserType)]>)> {
-        debug_assert!(!struct_type.is_primitive_type());
-        debug_assert!(!struct_type.is_pointer());
-        let x = self.types.get(&SymbolTable::get_abs_path(struct_type, current_namespace)).ok_or(CompileError::SymbolNotFound(format!("Type:{:?}, Namespace {}",struct_type, current_namespace)))?;
-        Ok((x.full_path(), &x.fields))
     }
 }
 
@@ -898,13 +902,6 @@ impl<'a> CodeGenContext<'a> {
     }
     pub fn get_current_function(&self) -> Option<FunctionView<'a>> {
         self.symbols.get_bare_function(&self.current_function_name, &self.current_function_path)
-    }
-    pub fn fully_qualified_name(&self, name: &str) -> String {
-        if self.current_function_path.is_empty() {
-            name.to_string()
-        } else {
-            format!("{}.{}", self.current_function_path, name)
-        }
     }
     pub fn aquire_unique_temp_value_counter(&self) -> u32{
         self.temp_value_counter.replace(self.temp_value_counter.get() + 1)
