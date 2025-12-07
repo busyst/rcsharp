@@ -269,7 +269,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
         let l: CompiledValue = self.compile_lvalue(callee)?;
         if let CompiledValue::GenericFunction { effective_name, ptype: ParserType::Function(_, required_arguments)} = &l {
             
-            let func = self.ctx.symbols.get_bare_function(effective_name, &self.ctx.current_function_path)
+            let func = self.ctx.symbols.get_bare_function(effective_name, &self.ctx.current_function_path, true)
                 .ok_or(CompileError::Generic(format!("Function (effective path):({}) couldnt be found inside:({}.{})",effective_name,self.ctx.current_function_path, self.ctx.current_function_name)))?;
             if func.generic_params().len() != given_generic.len() {
                 return Err(CompileError::Generic(format!("Amount of generic params provided '{}' does not equal to amount requested by function '{}'", required_arguments.len(), given_args.len())));
@@ -706,7 +706,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             };
             return Ok(CompiledValue::Pointer { llvm_repr, ptype });
         }
-        if let Some(function) = self.ctx.symbols.get_bare_function(name, &self.ctx.current_function_path) {
+        if let Some(function) = self.ctx.symbols.get_bare_function(name, &self.ctx.current_function_path, true) {
             return Ok(function.get_compiled_value());
         }
         Err(CompileError::SymbolNotFound(format!("Lvalue '{}' not found", name)))
@@ -716,7 +716,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
         if let Some((variable, _)) = self.ctx.scope.get_variable(&path) {
             return Ok(CompiledValue::Pointer { llvm_repr: format!("%{}", &path), ptype: variable.compiler_type.clone() });
         }
-        if let Some(function) = self.ctx.symbols.get_bare_function(&path, &self.ctx.current_function_path) {
+        if let Some(function) = self.ctx.symbols.get_bare_function(&path, &self.ctx.current_function_path, true) {
             return Ok(function.get_compiled_value());
         }
         Err(CompileError::SymbolNotFound(format!("Static symbol '{}' not found", path)))
@@ -813,7 +813,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             if !q.get_type().is_function() {
                 return Err(CompileError::Generic(format!("{} is not a function", r_type.debug_type_name())));
             }
-            if let Some(func) = self.ctx.symbols.get_bare_function(&x, &self.ctx.current_function_path) {
+            if let Some(func) = self.ctx.symbols.get_bare_function(&x, &self.ctx.current_function_path, true) {
                 let mut type_map = HashMap::new();
                 for (ind, prm) in func.generic_params().iter().enumerate() {
                     type_map.insert(prm.clone(), given_generic[ind].clone());

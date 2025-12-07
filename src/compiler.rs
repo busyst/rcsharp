@@ -11,7 +11,7 @@ use crate::compiler_essentials::{Enum, Function, FunctionFlags, FunctionView, Sc
 use crate::expression_compiler::{Expected, compile_expression, constant_integer_expression_compiler};
 
 pub const LAZY_FUNCTION_COMPILE : bool = true;
-pub const APPEND_DEBUG_FUNCTION_INFO : bool = false;
+pub const APPEND_DEBUG_FUNCTION_INFO : bool = true;
 pub const DONT_INSERT_REDUNDAND_STRINGS : bool = true;
 
 #[derive(Debug)]
@@ -818,15 +818,17 @@ impl SymbolTable {
         populate_default_types(&mut table);
         table
     }
-    pub fn get_bare_function<'a>(&'a self, fqn: &str, current_namespace: &str) -> Option<FunctionView<'a>> {
+    pub fn get_bare_function<'a>(&'a self, fqn: &str, current_namespace: &str, increment_use: bool) -> Option<FunctionView<'a>> {
         if let Some(x) = self.functions.get(&format!("{}.{}", current_namespace, fqn)).or(self.functions.get(fqn)) {
-            x.use_fn();
+            if increment_use {
+                x.use_fn();
+            }
             return Some(FunctionView::new_unspec(x));
         }
         None
     }
     pub fn get_function<'a>(&'a self, fqn: &str, current_namespace: &str) -> Option<FunctionView<'a>> {
-        if let Some(x) = self.get_bare_function(fqn, current_namespace) {
+        if let Some(x) = self.get_bare_function(fqn, current_namespace, true) {
             if x.definition().is_generic() {
                 return Some(FunctionView::new_generic(x.definition(),  &self.alias_types));
             }
@@ -835,7 +837,7 @@ impl SymbolTable {
         None
     }
     pub fn get_generic_function<'a>(&'a self, fqn: &str, current_namespace: &str, aliases: &HashMap<String, ParserType>) -> Option<FunctionView<'a>> {
-        self.get_bare_function(fqn, current_namespace).filter(|x| x.definition().is_generic()).map(|x| FunctionView::new_generic(x.definition(), aliases))
+        self.get_bare_function(fqn, current_namespace, true).filter(|x| x.definition().is_generic()).map(|x| FunctionView::new_generic(x.definition(), aliases))
     }
 
     pub fn get_bare_type<'a>(&'a self, fqn: &str) -> Option<StructView<'a>> {
@@ -901,7 +903,7 @@ impl<'a> CodeGenContext<'a> {
         }
     }
     pub fn get_current_function(&self) -> Option<FunctionView<'a>> {
-        self.symbols.get_bare_function(&self.current_function_name, &self.current_function_path)
+        self.symbols.get_bare_function(&self.current_function_name, &self.current_function_path, false)
     }
     pub fn aquire_unique_temp_value_counter(&self) -> u32{
         self.temp_value_counter.replace(self.temp_value_counter.get() + 1)
