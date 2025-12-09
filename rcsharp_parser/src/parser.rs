@@ -94,7 +94,7 @@ pub enum ParserType {
     Named(String),
     Pointer(Box<ParserType>),
     // return type, arguments
-    Function(Box<ParserType>,Box<[ParserType]>),
+    Function(Box<ParserType>, Box<[ParserType]>),
     NamespaceLink(String, Box<ParserType>),
     Generic(String, Box<[ParserType]>),
 }
@@ -106,6 +106,7 @@ impl PartialEq for ParserType {
             (Self::Function(l0, l1), Self::Function(r0, r1)) => l0 == r0 && l1 == r1,
             (Self::NamespaceLink(l0, l1), Self::NamespaceLink(r0, r1)) => l0 == r0 && l1 == r1,
             (Self::Generic(l0, l1), Self::Generic(r0, r1)) => l0 == r0 && l1 == r1,
+
             (Self::NamespaceLink(_, l), r) => r.eq(l),
             (l, Self::NamespaceLink(_, r)) => l.eq(r),
             _ => false,
@@ -113,7 +114,6 @@ impl PartialEq for ParserType {
     }
 }
 impl ParserType {
-    
     pub fn as_primitive_type(&self) -> Option<&'static PrimitiveInfo> {
         if let ParserType::Named(name) = self {
             return find_primitive_type(&name);
@@ -156,6 +156,9 @@ impl ParserType {
     }
     pub fn is_function(&self) -> bool {
         matches!(self, ParserType::Function(..))
+    }
+    pub fn is_generic(&self) -> bool {
+        matches!(self, ParserType::Generic(..))
     }
     pub fn as_both_integers(&self, other: &ParserType) -> Option<(&'static PrimitiveInfo, &'static PrimitiveInfo)> {
         if let (Some(x),Some(y)) = (self.as_integer(), other.as_integer()) {
@@ -232,7 +235,6 @@ impl ParserType {
             _ => panic!("Cannot get abs type of {:?}", self),
         }
     }
-    
 }
 
 pub struct GeneralParser<'a> {

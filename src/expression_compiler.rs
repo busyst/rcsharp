@@ -269,7 +269,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
         let l: CompiledValue = self.compile_lvalue(callee)?;
         if let CompiledValue::GenericFunction { effective_name, ptype: ParserType::Function(_, required_arguments)} = &l {
             
-            let func = self.ctx.symbols.get_bare_function(effective_name, &self.ctx.current_function_path, true)
+            let func = self.ctx.symbols.get_bare_function(effective_name, &self.ctx.current_function_path, false)
                 .ok_or(CompileError::Generic(format!("Function (effective path):({}) couldnt be found inside:({}.{})",effective_name,self.ctx.current_function_path, self.ctx.current_function_name)))?;
             if func.generic_params().len() != given_generic.len() {
                 return Err(CompileError::Generic(format!("Amount of generic params provided '{}' does not equal to amount requested by function '{}'", required_arguments.len(), given_args.len())));
@@ -279,7 +279,11 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             
             let mut type_map = HashMap::new();
             for (ind, prm) in func.generic_params().iter().enumerate() {
-                type_map.insert(prm.clone(), given_generic[ind].clone());
+                if self.ctx.symbols.get_bare_type(given_generic[ind].type_name().as_str()).is_none() {
+                    type_map.insert(prm.clone(), ParserType::NamespaceLink(self.ctx.current_function_path.to_string(), Box::new(given_generic[ind].clone())));
+                }else {
+                    type_map.insert(prm.clone(), given_generic[ind].clone());
+                }
             }
 
             let func = self.ctx.symbols.get_generic_function(effective_name, &self.ctx.current_function_path, &type_map)
@@ -299,7 +303,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
                 let sub = substitute_generic_type(&required_arguments[i], &self.ctx.symbols.alias_types);
                 let x = self.compile_rvalue(&given_args[i], Expected::Type(&sub))?;
                 if *x.get_type() != sub {
-                    return CompileResult::Err(CompileError::InvalidExpression(format!("{:?} vs {:?} type missmatch with {}th argument", x.get_type(), &required_arguments[i], i + 1)));
+                    return CompileResult::Err(CompileError::InvalidExpression(format!("Expected {:?} vs got {:?} type missmatch with {}th argument", required_arguments[i].debug_type_name(), x.get_type().debug_type_name(), i + 1)));
                 }
                 compiled_arguments.push(x.get_llvm_repr_with_type(self.ctx)?);
             }
@@ -807,7 +811,6 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
     }
     
     fn compile_type(&mut self, r_type: &ParserType) -> Result<CompiledValue, CompileError> {
-        println!("{:?}", r_type);
         if let ParserType::Generic(x, given_generic) = r_type {
             let q = self.compile_name_lvalue(x)?;
             if !q.get_type().is_function() {
@@ -816,6 +819,9 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             if let Some(func) = self.ctx.symbols.get_bare_function(&x, &self.ctx.current_function_path, true) {
                 let mut type_map = HashMap::new();
                 for (ind, prm) in func.generic_params().iter().enumerate() {
+                    if self.ctx.symbols.get_bare_type(given_generic[ind].type_name().as_str()).is_none() {
+                        panic!()
+                    }
                     type_map.insert(prm.clone(), given_generic[ind].clone());
                 }
                 let x = self.ctx.symbols.get_generic_function(&x, &self.ctx.current_function_path, &type_map).unwrap();

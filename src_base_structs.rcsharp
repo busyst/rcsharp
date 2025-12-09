@@ -867,7 +867,7 @@ namespace tests{
     fn funny(){
         let path: &i8 = "D:\\Projects\\rcsharp\\src_base_structs.rcsharp";
         if fs::create_file(path) == 1 {
-            fs::delete_file(path);
+            fs::delete_file(path); 
             return;
         }
         let file: string::String = fs::read_full_file_as_string(path);
@@ -877,7 +877,7 @@ namespace tests{
         let index: i32;
         
         let data: vector::Vec<string::String> = vector::new::<string::String>();
-        //let tokens: vector::Vec<LexerTokens> = vector::new::<LexerTokens>();
+        let tokens: vector::Vec<LexerTokens> = vector::new::<LexerTokens>();
         loop{
             if iterator >= file.len {
                 break;
@@ -932,6 +932,7 @@ namespace tests{
                 let temp_string: string::String = string::with_size(iterator - index);
                 mem::copy(file.data + index, temp_string.data, temp_string.len as i64);
                 vector::push::<string::String>(&data, temp_string);
+                //vector::push::<LexerTokens>(&tokens, LexerTokens::String as i32); TODO
                 continue;
             }
             if char == '\''{
