@@ -332,7 +332,7 @@ fn handle_enums(enums : Vec<(String, Box<[Attribute]>, (String, ParserType, Box<
         let full_path = if current_path.is_empty() { enum_name.clone() } else { format!("{}.{}", current_path, enum_name) };
         let mut compiler_enum_fields = vec![];
         let enum_type = qualify_type(&enum_type, &current_path, symbols);
-        if !enum_type.as_integer().is_some() {
+        if enum_type.as_integer().is_none() {
             todo!("Not yet supported!")
         }
         for (field_name, field_expr) in fields {
@@ -407,8 +407,8 @@ fn qualify_type(ty: &ParserType, current_path: &str, symbols: &SymbolTable) -> P
             if symbols.get_type(&ty.type_name()).is_some()  {
                 return ty.clone();
             }
-            let ty = nest_type_in_namespace_path(current_path, ty.clone());
-            return ty;
+            
+            nest_type_in_namespace_path(current_path, ty.clone())
         }
         ParserType::Pointer(inner) => {
             ParserType::Pointer(Box::new(qualify_type(inner, current_path, symbols)))
@@ -630,7 +630,7 @@ pub fn get_llvm_type_str(
             if inner_type.is_void() {
                 return Ok("i8*".to_string());
             }
-            return Ok(format!("{}*", get_llvm_type_str(inner_type, symbols, current_namespace)?));
+            Ok(format!("{}*", get_llvm_type_str(inner_type, symbols, current_namespace)?))
         }
         ParserType::Function(return_type, param_types) => {
             let ret_llvm = get_llvm_type_str(return_type, symbols, current_namespace)?;
@@ -638,7 +638,7 @@ pub fn get_llvm_type_str(
                 .iter()
                 .map(|param_type| get_llvm_type_str(param_type, symbols, current_namespace))
                 .collect::<CompileResult<Vec<String>>>()?;
-            return Ok(format!("{} ({})*", ret_llvm, params_llvm.join(", ")));
+            Ok(format!("{} ({})*", ret_llvm, params_llvm.join(", ")))
         }
         ParserType::Named(name) => {
             if let Some(x) = symbols.alias_types.get(name) {
@@ -659,10 +659,10 @@ pub fn get_llvm_type_str(
             if let Some(enm) = symbols.enums.get(&abs).or(symbols.enums.get(&rel)) {
                 return get_llvm_type_str(&enm.base_type, symbols, current_namespace);
             }
-            return Err(CompileError::Generic(format!("GENERIC LLVM ERROR NAMED {:?}", ptype)));
+            Err(CompileError::Generic(format!("GENERIC LLVM ERROR NAMED {:?}", ptype)))
         }
         ParserType::NamespaceLink(x, c) => {
-            let mut path = format!("{x}");
+            let mut path = x.to_string();
             let mut g = c.as_ref();
             while let ParserType::NamespaceLink(link, c) = g {
                 path.push_str(&format!(".{}", link));
@@ -679,7 +679,7 @@ pub fn get_llvm_type_str(
                 }
                 panic!()
             }
-            return get_llvm_type_str(&g, symbols, &path);
+            get_llvm_type_str(g, symbols, &path)
         }
         ParserType::Generic(_, generic_args) => {
             let concrete_types = generic_args
@@ -708,10 +708,10 @@ pub fn get_llvm_type_str(
                     return Ok(format!("%\"struct.{}<{}>\"", type_name_for_string, arg_type_strings));
                 }
             }
-            return Err(CompileError::Generic(format!(
+            Err(CompileError::Generic(format!(
                 "Could not find definition for generic type '{:?}'",
                 ptype
-            )));
+            )))
         }
     }
 }
@@ -790,7 +790,7 @@ impl LLVMOutputHandler {
             }
         }
         self.strings_header.push(string);
-        return self.strings_header.len() - 1;
+        self.strings_header.len() - 1
     }
     pub fn build(self) -> String {
         let x = self.strings_header.iter().enumerate().map(|(index,x)|{
@@ -843,10 +843,10 @@ impl SymbolTable {
     }
 
     pub fn get_bare_type<'a>(&'a self, fqn: &str) -> Option<StructView<'a>> {
-        self.types.get(fqn).map(|x| StructView::new_unspec(x))
+        self.types.get(fqn).map(StructView::new_unspec)
     }
     pub fn get_bare_enum<'a>(&'a self, fqn: &str) -> Option<&'a Enum> {
-        self.enums.get(fqn).map(|x| x)
+        self.enums.get(fqn)
     }
     pub fn get_type<'a>(&'a self, fqn: &str) -> Option<StructView<'a>> {
         if let Some(x) = self.get_bare_type(fqn) {

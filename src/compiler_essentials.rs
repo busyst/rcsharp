@@ -98,7 +98,7 @@ impl<'a> StructView<'a> {
         if !r#struct.is_generic() {
             panic!("This type is not generic: {}", r#struct.full_path())
         }
-        let all_generics_defined = r#struct.generic_params.iter().map(|x| map.contains_key(x)).all(|x| x);
+        let all_generics_defined = r#struct.generic_params.iter().all(|x| map.contains_key(x));
         if !all_generics_defined {
             let definded = r#struct.generic_params.iter().filter(|x| map.contains_key(x.as_str())).cloned().collect::<Vec<_>>();
             let undefinded = r#struct.generic_params.iter().filter(|x| !map.contains_key(x.as_str())).cloned().collect::<Vec<_>>();

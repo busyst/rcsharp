@@ -116,7 +116,7 @@ impl PartialEq for ParserType {
 impl ParserType {
     pub fn as_primitive_type(&self) -> Option<&'static PrimitiveInfo> {
         if let ParserType::Named(name) = self {
-            return find_primitive_type(&name);
+            return find_primitive_type(name);
         }
         None
     }
@@ -198,16 +198,16 @@ impl ParserType {
     }
     pub fn type_name(&self) -> String{
         match self {
-            ParserType::Named(name) => format!("{}", name.to_string()),
-            ParserType::Generic(name, _) => format!("{}", name.to_string()),
+            ParserType::Named(name) => name.to_string(),
+            ParserType::Generic(name, _) => name.to_string(),
             ParserType::NamespaceLink(link, core) => format!("{}.{}", link, core.type_name()),
             _ => panic!("{:?}", self)
         }
     }
     pub fn debug_type_name(&self) -> String{
         match self {
-            ParserType::Named(name) => format!("{}", name.to_string()),
-            ParserType::Generic(name, _) => format!("{}", name.to_string()),
+            ParserType::Named(name) => name.to_string(),
+            ParserType::Generic(name, _) => name.to_string(),
             ParserType::NamespaceLink(link, core) => format!("{}.{}", link, core.type_name()),
             ParserType::Function(ret, args) => format!("fn({}) :{}", args.iter().map(|x| x.debug_type_name()).collect::<Vec<_>>().join(", "), ret.debug_type_name() ),
             ParserType::Pointer(core) => format!("*{}", core.debug_type_name()),
@@ -296,7 +296,7 @@ impl<'a> GeneralParser<'a> {
                 self.advance();
                 let mut x = self.parse_toplevel_item()?;
                 if let Stmt::Function(func) = &mut x {
-                    let mut p = func.prefixes.to_vec(); p.push(format!("inline"));
+                    let mut p = func.prefixes.to_vec(); p.push("inline".to_string());
                     func.prefixes = p.into_boxed_slice();
                     return Ok(x);
                 }
@@ -306,7 +306,7 @@ impl<'a> GeneralParser<'a> {
                 self.advance();
                 let mut x = self.parse_toplevel_item()?;
                 if let Stmt::Function(func) = &mut x {
-                    let mut p = func.prefixes.to_vec(); p.push(format!("constexpr"));
+                    let mut p = func.prefixes.to_vec(); p.push("constexpr".to_string());
                     func.prefixes = p.into_boxed_slice();
                     return Ok(x);
                 }
@@ -316,7 +316,7 @@ impl<'a> GeneralParser<'a> {
                 self.advance();
                 let mut x = self.parse_toplevel_item()?;
                 if let Stmt::Function(func) = &mut x {
-                    let mut p = func.prefixes.to_vec(); p.push(format!("public"));
+                    let mut p = func.prefixes.to_vec(); p.push("public".to_string());
                     func.prefixes = p.into_boxed_slice();
                     return Ok(x);
                 }

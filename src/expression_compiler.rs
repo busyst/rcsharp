@@ -296,7 +296,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             
             
 
-            let return_type_repr = get_llvm_type_str(&func.return_type(), symbols, current_namespace)?;
+            let return_type_repr = get_llvm_type_str(func.return_type(), symbols, current_namespace)?;
             let mut compiled_arguments = vec![];
             let required_arguments = required_arguments.iter().map(|x| substitute_generic_type(x, &type_map)).collect::<Vec<_>>();
             for i in 0..required_arguments.len() {
@@ -335,7 +335,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
 
             let func = self.ctx.symbols.get_function(effective_name, &self.ctx.current_function_path)
                 .ok_or(CompileError::Generic(format!("Function (effective name):({}) couldnt be found inside:({}.{})",effective_name,self.ctx.current_function_path, self.ctx.current_function_name)))?;
-            let return_type_repr = get_llvm_type_str(return_type, self.ctx.symbols, &func.path())?;
+            let return_type_repr = get_llvm_type_str(return_type, self.ctx.symbols, func.path())?;
             if func.is_inline() {
                 if func.body().is_empty() {
                     if func.return_type().is_void() {
@@ -367,7 +367,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
                             if llvm_repr.chars().nth(1).map(|x| x == 'v').unwrap_or(false) {
                                 // Variable
                                 let utvc = self.ctx.aquire_unique_temp_value_counter();
-                                let repr = get_llvm_type_str(ptype, self.ctx.symbols, &func.path())?;
+                                let repr = get_llvm_type_str(ptype, self.ctx.symbols, func.path())?;
                                 self.output.push_str(&format!("    %tmp{} = bitcast {}* {} to {}*\n",utvc, repr, llvm_repr, repr));
                                 prepared_args.push((arg_name, ptype.clone(), utvc));
                                 continue;
@@ -524,10 +524,10 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
     fn compile_decimal_literal(&mut self, num_str: &str, expected: Expected) -> CompileResult<CompiledValue> {
         let bits = num_str.parse::<f64>().unwrap().to_bits();
         if let Some(x) = expected.get_type().filter(|x| x.is_decimal()) {
-            return explicit_cast(&CompiledValue::Value { llvm_repr: format!("0x{:X}", bits), ptype: ParserType::Named("f64".to_string()) }, &x, self.ctx, self.output);
+            return explicit_cast(&CompiledValue::Value { llvm_repr: format!("0x{:X}", bits), ptype: ParserType::Named("f64".to_string()) }, x, self.ctx, self.output);
         };
 
-        return Ok(CompiledValue::Value { llvm_repr: format!("0x{:X}", bits), ptype: ParserType::Named("f64".to_string()) });
+        Ok(CompiledValue::Value { llvm_repr: format!("0x{:X}", bits), ptype: ParserType::Named("f64".to_string()) })
     }
     fn compile_assignment(&mut self, lhs: &Expr, rhs: &Expr, expected: Expected) -> CompileResult<CompiledValue> {
         let left_ptr = self.compile_lvalue(lhs)?;
@@ -752,7 +752,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             let p = sv.field_types();
             let index = p.iter().position(|(name, _)| name == member).unwrap();
             
-            (p[index].1.clone(), index, format!("{}", sv.llvm_representation(self.ctx.symbols)))
+            (p[index].1.clone(), index, sv.llvm_representation(self.ctx.symbols).to_string())
         }else {
             let p = r#struct.field_types();
             let index = p.iter().position(|(name, _)| name == member).unwrap();
@@ -816,7 +816,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             if !q.get_type().is_function() {
                 return Err(CompileError::Generic(format!("{} is not a function", r_type.debug_type_name())));
             }
-            if let Some(func) = self.ctx.symbols.get_bare_function(&x, &self.ctx.current_function_path, true) {
+            if let Some(func) = self.ctx.symbols.get_bare_function(x, &self.ctx.current_function_path, true) {
                 let mut type_map = HashMap::new();
                 for (ind, prm) in func.generic_params().iter().enumerate() {
                     if self.ctx.symbols.get_bare_type(given_generic[ind].type_name().as_str()).is_none() {
@@ -824,7 +824,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
                     }
                     type_map.insert(prm.clone(), given_generic[ind].clone());
                 }
-                let x = self.ctx.symbols.get_generic_function(&x, &self.ctx.current_function_path, &type_map).unwrap();
+                let x = self.ctx.symbols.get_generic_function(x, &self.ctx.current_function_path, &type_map).unwrap();
                 let llvm_struct_name = format!("\"{}<{}>\"", func.llvm_name(), x.definition().generic_params.iter().map(|x| get_llvm_type_str(type_map.get(x).unwrap(), self.ctx.symbols, &self.ctx.current_function_path)).collect::<CompileResult<Vec<_>>>()?.join(", "));
                 
                 return Ok(CompiledValue::Function { effective_name: llvm_struct_name, ptype: x.get_type() });
@@ -865,10 +865,10 @@ pub fn size_and_alignment_of_type(ptype: &ParserType, ctx: &mut CodeGenContext) 
         for (ind, prm) in bare.generic_params().iter().enumerate() {
             type_map.insert(prm.clone(), imp[ind].clone());
         }
-        return StructView::new_generic(bare.definition(), &type_map).calculate_size(ctx);
+        StructView::new_generic(bare.definition(), &type_map).calculate_size(ctx)
     }else {
         // not a generic
-        return StructView::new(bare.definition()).calculate_size(ctx);
+        StructView::new(bare.definition()).calculate_size(ctx)
     }
 }
 pub fn constant_integer_expression_compiler(expression: &Expr, _symbols: &SymbolTable) -> Result<i128, String> {
