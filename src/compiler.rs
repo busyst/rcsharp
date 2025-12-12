@@ -4,9 +4,9 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::{io::Read};
 use ordered_hash_map::OrderedHashMap;
 use rcsharp_lexer::lex_string_with_file_context;
-use rcsharp_parser::compiler_primitives::{PRIMITIVE_TYPES_INFO, find_primitive_type};
+use rcsharp_parser::compiler_primitives::{BASIC_INTEGER_TYPE, PRIMITIVE_TYPES_INFO, find_primitive_type};
 use rcsharp_parser::expression_parser::Expr;
-use rcsharp_parser::parser::{Attribute, GeneralParser, ParsedFunction, ParserType, Stmt};
+use rcsharp_parser::parser::{Attribute, GeneralParser, ParsedEnum, ParsedFunction, ParsedStruct, ParserType, Stmt};
 use crate::compiler_essentials::{Enum, Function, FunctionFlags, FunctionView, Scope, Struct, StructView, Variable};
 use crate::expression_compiler::{Expected, compile_expression, constant_integer_expression_compiler};
 
@@ -192,8 +192,8 @@ fn handle_generics(symbols: &mut SymbolTable, output: &mut LLVMOutputHandler) ->
     Ok(())
 }
 fn collect(stmts: &[Stmt], 
-    enums: &mut Vec<(String, Box<[Attribute]>, (String, ParserType, Box<[(String, Expr)]>))>, 
-    structs : &mut Vec<(String, Box<[Attribute]>, (String, Box<[(String, ParserType)]>), Box<[String]>)>, 
+    enums: &mut Vec<ParsedEnum>, 
+    structs : &mut Vec<ParsedStruct>, 
     functions : &mut Vec<ParsedFunction>,
 ) -> CompileResult<()>{
     let mut statements: VecDeque<Stmt> = stmts.to_vec().into();
@@ -242,7 +242,13 @@ fn collect(stmts: &[Stmt],
                 continue;
             }
             if let Stmt::Struct(struct_name, fields, generic_args) = x {
-                structs.push((current_path.join("."), stack_hints.clone().into_boxed_slice(), (struct_name, fields), generic_args));
+                structs.push(ParsedStruct::new_parse(
+                    current_path.join(".").into(),
+                        stack_hints.clone().into_boxed_slice(),
+                        struct_name.into_boxed_str(),
+                        fields,
+                        generic_args
+                ));
                 stack_hints.clear();
                 continue;
             }
@@ -255,7 +261,12 @@ fn collect(stmts: &[Stmt],
                 continue;
             }
             if let Stmt::Enum(enum_name, enum_type, fields) = x {
-                enums.push((current_path.join("."), stack_hints.clone().into_boxed_slice(), (enum_name, enum_type.unwrap_or(ParserType::Named("i32".to_string())), fields)));
+                enums.push(ParsedEnum::new_parse(
+                    current_path.join(",").into_boxed_str(),
+                    enum_name.into_boxed_str(),
+                    fields,
+                    enum_type.unwrap_or(ParserType::Named(BASIC_INTEGER_TYPE.name.to_string()))
+                ));
                 stack_hints.clear();
                 continue;
             }
@@ -264,46 +275,47 @@ fn collect(stmts: &[Stmt],
     }
     Ok(())
 }
-fn handle_types(structs : Vec<(String, Box<[Attribute]>, (String, Box<[(String, ParserType)]>), Box<[String]>)>, symbols: &mut SymbolTable, output: &mut LLVMOutputHandler) -> CompileResult<()>{ 
+fn handle_types(structs : Vec<ParsedStruct>, symbols: &mut SymbolTable, output: &mut LLVMOutputHandler) -> CompileResult<()>{ 
     let mut registered_types = vec![];
-    for (path, _, (struct_name, _), _) in &structs {
-        registered_types.push((path.clone(), struct_name.clone()));
+    for str in &structs {
+        registered_types.push((str.path.to_string(), str.name.to_string()));
     }
-    for (current_path, _, (struct_name, _), _) in &structs {
-        let full_path = if current_path.is_empty() { struct_name.clone() } else { format!("{}.{}", current_path, struct_name) };
+    for str in &structs {
+        let full_path = if str.path.is_empty() { str.name.to_string() } else { format!("{}.{}", str.path, str.name) };
         symbols.types.insert(full_path.clone(), Struct::new_primitive("name"));
     }
-    for (current_path, attrs, (struct_name, fields), generics) in structs {
+    for str in structs {
         let mut compiler_struct_fields = vec![];
-        let full_path = if current_path.is_empty() { struct_name.clone() } else { format!("{}.{}", current_path, struct_name) };
+        let path = str.path;
+        let full_path = if path.is_empty() { str.name.to_string() } else { format!("{}.{}", path, str.name) };
         symbols.alias_types.clear();
-        for prm in &generics {
+        for prm in &str.generic_params {
             symbols.alias_types.insert(prm.clone(), ParserType::Named(prm.clone()));
         }
-        for (name, attr_type) in fields {
+        for (name, attr_type) in &str.fields {
             if matches!(attr_type.dereference_full(), ParserType::Generic(_, _)) {
-                compiler_struct_fields.push((name, qualify_type(&attr_type, &current_path, symbols) ));
+                compiler_struct_fields.push((name.to_string(), qualify_type(attr_type, &path, symbols) ));
                 continue;
             }
             let dereferenced_type = attr_type.dereference_full();
             if !dereferenced_type.is_primitive_type() {
                 if let ParserType::Named(named) = dereferenced_type {
                     let is_found = registered_types.iter().any(|(p, n)| {
-                        (p == &current_path || p.is_empty()) && n == named
+                        (p == &*path || p.is_empty()) && n == named
                     });
 
-                    if !is_found && generics.is_empty() {
+                    if !is_found && str.generic_params.is_empty() {
                         return Err(CompileError::SymbolNotFound(format!(
                             "Type '{}' for field '{}' in struct '{}' was not found.",
-                            named, name, struct_name
+                            named, name, str.name
                         )));
                     }
                 }
 
             }
-            compiler_struct_fields.push((name, qualify_type(&attr_type, &current_path, symbols) ));
+            compiler_struct_fields.push((name.to_string(), qualify_type(attr_type, &path, symbols) ));
         }
-        symbols.types.insert(full_path, Struct::new(current_path.into(), struct_name.into(), compiler_struct_fields.into(), attrs, generics.clone()));
+        symbols.types.insert(full_path, Struct::new(path, str.name, compiler_struct_fields.into_boxed_slice(), str.attributes, str.generic_params.clone()));
     }
     symbols.alias_types.clear();
     let user_defined_structs: Vec<&Struct> = symbols.types.values()
@@ -321,15 +333,17 @@ fn handle_types(structs : Vec<(String, Box<[Attribute]>, (String, Box<[(String, 
     }
     Ok(())
 }
-fn handle_enums(enums : Vec<(String, Box<[Attribute]>, (String, ParserType, Box<[(String, Expr)]>))>, symbols: &mut SymbolTable, _output: &mut LLVMOutputHandler) -> CompileResult<()>{ 
+fn handle_enums(enums : Vec<ParsedEnum>, symbols: &mut SymbolTable, _output: &mut LLVMOutputHandler) -> CompileResult<()>{ 
     let mut registered_enums = vec![];
     for s in &enums {
         //let full_path = if s.0.is_empty() { s.2.0.clone() } else { format!("{}.{}", s.0, s.2.0) };
-        registered_enums.push((s.0.clone(), s.2.0.clone()));
+        registered_enums.push((s.path.clone(), s.name.clone()));
         //output.push_str(&format!("enum_{}\n", full_path));
     }
-    for (current_path, attrs, (enum_name, enum_type, fields)) in enums {
-        let full_path = if current_path.is_empty() { enum_name.clone() } else { format!("{}.{}", current_path, enum_name) };
+    for enm in enums {
+        let (current_path, attrs, (enum_name, enum_type, fields)) = (enm.path, enm.attributes, (enm.name, enm.enum_type, enm.fields));
+
+        let full_path = if current_path.is_empty() { enum_name.to_string() } else { format!("{}.{}", current_path, enum_name) };
         let mut compiler_enum_fields = vec![];
         let enum_type = qualify_type(&enum_type, &current_path, symbols);
         if enum_type.as_integer().is_none() {
@@ -346,7 +360,7 @@ fn handle_enums(enums : Vec<(String, Box<[Attribute]>, (String, ParserType, Box<
             }
             todo!("Expr {:?}", field_expr);
         }
-        symbols.enums.insert(full_path, Enum::new(current_path.into_boxed_str(), enum_name.into_boxed_str(), enum_type, compiler_enum_fields.into_boxed_slice(), attrs));
+        symbols.enums.insert(full_path, Enum::new(current_path, enum_name, enum_type, compiler_enum_fields.into_boxed_slice(), attrs));
     }
     Ok(())
 }
@@ -496,7 +510,7 @@ fn compile(symbols: &mut SymbolTable, output: &mut LLVMOutputHandler) -> Compile
     }
     if APPEND_DEBUG_FUNCTION_INFO {
         for (full_path, function) in symbols.functions.iter() {
-            output.push_str_tail(&format!(";fn {} used times {}\n", full_path, function.times_used.get()));
+            output.push_str_footer(&format!(";fn {} used times {}\n", full_path, function.times_used.get()));
         }
     }
     for (_, function) in symbols.functions.iter().filter(|x| x.1.is_imported()) {
@@ -768,7 +782,7 @@ pub struct LLVMOutputHandler{
     strings_header: Vec<String>,
     include_header: String,
     main: String,
-    tail: String,
+    footer: String,
 }
 impl LLVMOutputHandler {
     pub fn push_str(&mut self, s: &str) {
@@ -780,8 +794,8 @@ impl LLVMOutputHandler {
     pub fn push_str_header(&mut self, s: &str) {
         self.header.push_str(s);
     }
-    pub fn push_str_tail(&mut self, s: &str) {
-        self.tail.push_str(s);
+    pub fn push_str_footer(&mut self, s: &str) {
+        self.footer.push_str(s);
     }
     pub fn add_to_strings_header(&mut self, string: String) -> usize{
         if DONT_INSERT_REDUNDAND_STRINGS {
@@ -802,7 +816,7 @@ impl LLVMOutputHandler {
             format!("@.str.{} = private unnamed_addr constant [{} x i8] c\"{}\\00\"", index, str_len, escaped_val)
         }).collect::<Vec<String>>().join("\n");
 
-        format!("{}\n{}\n{}\n{}\n{}", self.header, self.include_header, x, self.main, self.tail)
+        format!("{}\n{}\n{}\n{}\n{}", self.header, self.include_header, x, self.main, self.footer)
     }
 }
 

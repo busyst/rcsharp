@@ -12,7 +12,7 @@ target triple = "x86_64-pc-windows-msvc"
 %"struct.list.ListNode<i32>" = type { i32, %"struct.list.ListNode<i32>"* }
 %"struct.vector.Vec<i8>" = type { i8*, i32, i32 }
 %"struct.vector.Vec<%struct.string.String>" = type { %struct.string.String*, i32, i32 }
-%"struct.vector.Vec<i32>" = type { i32*, i32, i32 }
+%"struct.vector.Vec<i64>" = type { i64*, i32, i32 }
 %"struct.test.QPair<i64, i64>" = type { i64, i64 }
 
 declare dllimport void @ExitProcess(i32)
@@ -1932,7 +1932,7 @@ define void @"tests.funny"(){
     %v4 = alloca i8; var: next_char
     %v5 = alloca i32; var: index
     %v6 = alloca %"struct.vector.Vec<%struct.string.String>"; var: data
-    %v7 = alloca %"struct.vector.Vec<i32>"; var: tokens
+    %v7 = alloca %"struct.vector.Vec<i64>"; var: tokens
     %v8 = alloca %struct.string.String; var: temp_string
     %v9 = alloca %struct.string.String; var: temp_string
     %v10 = alloca %struct.string.String; var: temp_string
@@ -1955,8 +1955,8 @@ endif0:
     store i32 0, i32* %v2
     %tmp7 = call %"struct.vector.Vec<%struct.string.String>" @"vector.new<%struct.string.String>"()
     store %"struct.vector.Vec<%struct.string.String>" %tmp7, %"struct.vector.Vec<%struct.string.String>"* %v6
-    %tmp8 = call %"struct.vector.Vec<i32>" @"vector.new<i32>"()
-    store %"struct.vector.Vec<i32>" %tmp8, %"struct.vector.Vec<i32>"* %v7
+    %tmp8 = call %"struct.vector.Vec<i64>" @"vector.new<i64>"()
+    store %"struct.vector.Vec<i64>" %tmp8, %"struct.vector.Vec<i64>"* %v7
     br label %loop_body1
 loop_body1:
     %tmp9 = load i32, i32* %v2
@@ -3064,16 +3064,16 @@ define %"struct.vector.Vec<%struct.string.String>" @"vector.new<%struct.string.S
     %tmp3 = load %"struct.vector.Vec<%struct.string.String>", %"struct.vector.Vec<%struct.string.String>"* %v0
     ret %"struct.vector.Vec<%struct.string.String>" %tmp3
 }
-define %"struct.vector.Vec<i32>" @"vector.new<i32>"(){
-    %v0 = alloca %"struct.vector.Vec<i32>"; var: vec
-    %tmp0 = getelementptr inbounds %"struct.vector.Vec<i32>", %"struct.vector.Vec<i32>"* %v0, i32 0, i32 0
-    store i32* null, i32** %tmp0
-    %tmp1 = getelementptr inbounds %"struct.vector.Vec<i32>", %"struct.vector.Vec<i32>"* %v0, i32 0, i32 1
+define %"struct.vector.Vec<i64>" @"vector.new<i64>"(){
+    %v0 = alloca %"struct.vector.Vec<i64>"; var: vec
+    %tmp0 = getelementptr inbounds %"struct.vector.Vec<i64>", %"struct.vector.Vec<i64>"* %v0, i32 0, i32 0
+    store i64* null, i64** %tmp0
+    %tmp1 = getelementptr inbounds %"struct.vector.Vec<i64>", %"struct.vector.Vec<i64>"* %v0, i32 0, i32 1
     store i32 0, i32* %tmp1
-    %tmp2 = getelementptr inbounds %"struct.vector.Vec<i32>", %"struct.vector.Vec<i32>"* %v0, i32 0, i32 2
+    %tmp2 = getelementptr inbounds %"struct.vector.Vec<i64>", %"struct.vector.Vec<i64>"* %v0, i32 0, i32 2
     store i32 0, i32* %tmp2
-    %tmp3 = load %"struct.vector.Vec<i32>", %"struct.vector.Vec<i32>"* %v0
-    ret %"struct.vector.Vec<i32>" %tmp3
+    %tmp3 = load %"struct.vector.Vec<i64>", %"struct.vector.Vec<i64>"* %v0
+    ret %"struct.vector.Vec<i64>" %tmp3
 }
 define void @"vector.push<i8>"(%"struct.vector.Vec<i8>"* %vec, i8 %data){
     %v0 = alloca i32; var: new_capacity

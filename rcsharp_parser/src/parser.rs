@@ -28,12 +28,43 @@ impl Attribute {
         }
     }
 }
+#[derive(Debug, Clone, PartialEq)]
+pub struct ParsedStruct {
+    pub path: Box<str>,
+    pub attributes: Box<[Attribute]>,
 
+    pub name: Box<str>,
+    pub fields: Box<[(String, ParserType)]>,
 
+    pub generic_params: Box<[String]>,
+    pub prefixes: Box<[String]>,
+}
+impl ParsedStruct {
+    pub fn new_parse(path: Box<str>, attributes: Box<[Attribute]>, name: Box<str>, fields: Box<[(String, ParserType)]>, generic_params: Box<[String]>) -> ParsedStruct {
+        ParsedStruct {path, attributes, name, fields, generic_params, prefixes: Box::new([])}
+    }
+}
+#[derive(Debug, Clone, PartialEq)]
+pub struct ParsedEnum {
+    pub path: Box<str>,
+    pub attributes: Box<[Attribute]>,
+
+    pub name: Box<str>,
+    pub fields: Box<[(String, Expr)]>,
+    pub enum_type: ParserType,
+
+    pub prefixes: Box<[String]>,
+}
+impl ParsedEnum {
+    pub fn new_parse(path: Box<str>, name: Box<str>, fields: Box<[(String, Expr)]>, enum_type: ParserType) -> ParsedEnum {
+        ParsedEnum {path, attributes: Box::new([]), name, fields, enum_type, prefixes: Box::new([])}
+    }
+}
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParsedFunction {
     pub path: Box<str>,
     pub attributes: Box<[Attribute]>,
+
     pub name: Box<str>,
     pub args: Box<[(String, ParserType)]>,
     pub return_type: ParserType,

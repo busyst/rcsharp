@@ -46,6 +46,7 @@ pub const PRIMITIVE_TYPES_INFO: &[PrimitiveInfo] = &[
 ];
 pub const VOID_TYPE: &PrimitiveInfo = &PRIMITIVE_TYPES_INFO[0];
 pub const BOOL_TYPE: &PrimitiveInfo = &PRIMITIVE_TYPES_INFO[1];
+pub const BASIC_INTEGER_TYPE: &PrimitiveInfo = &PRIMITIVE_TYPES_INFO[5];
 
 pub fn find_primitive_type(name: &str) -> Option<&'static PrimitiveInfo> {
     PRIMITIVE_TYPES_INFO.iter().find(|x| x.name == name)
