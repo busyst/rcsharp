@@ -925,9 +925,17 @@ fn explicit_cast(
                 let op = if to_type.is_unsigned_integer() { "fptoui" } else { "fptosi" };
                 format!("{} {} {} to {}", op, from_info.llvm_name, value.get_llvm_repr(), to_info.llvm_name)
             }
+            else if from_type.is_bool() {
+                if let Some(to_info) = to_type.as_integer() {
+                    format!("zext i1 {} to {}", value.get_llvm_repr(), to_info.llvm_name)
+                }else {
+                    return Err(CompileError::Generic(format!("Invalid cast from {:?} to {:?}", from_type, to_type)));
+                }
+            }
             else {
                 return Err(CompileError::Generic(format!("Invalid cast from {:?} to {:?}", from_type, to_type)));
             }
+            
         }
         (ParserType::Named(n), ParserType::Pointer(_)) if n.starts_with('i') || n.starts_with('u') => {
             let from_str = value.get_llvm_repr_with_type(ctx)?;

@@ -3,13 +3,14 @@ fn _fltused() : i32 { return 0; /*Needed*/}
 
 namespace process{
     #[DllImport("kernel32.dll")]
-    fn ExitProcess(code:i32): void;
+    fn ExitProcess(code: i32): void;
     
     #[DllImport("kernel32.dll")]
     fn GetModuleFileNameA(hModule: &i8, lpFilename: &i8, nSize: u32): u32;
 
     fn get_executable_path() : string::String {
-        let string : string::String = string::with_size(260);
+        let size: u32 = 260;
+        let string : string::String = string::with_size(size as i32);
         let len : u32 = GetModuleFileNameA(0 as &i8, string.data, string.len as u32);
         string.len = len as i32;
         return string;
@@ -26,16 +27,12 @@ namespace process{
         string.len = (index + 1) as i32;
         return string;
     }
-    fn throw(exception: &i8) : void{
+    fn throw(exception: &i8) : void {
         let len: i32 = string_utils::c_str_len(exception);
         console::AllocConsole();
-        let chars_written: i32;
         let stdout_handle: &i8 = console::GetStdHandle(-11 as i32);
-        let e: &i8 = "Exception: ";
-        console::WriteConsoleA(stdout_handle, e, string_utils::c_str_len(e), &chars_written, 0 as &i8);
-        console::WriteConsoleA(stdout_handle, exception, len, &chars_written, 0 as &i8);
-        let nl : i8 = 10;
-        console::WriteConsoleA(stdout_handle, &nl, 1, &chars_written, 0 as &i8);
+        console::writeln("Exception: ", 11);
+        console::writeln(exception, len);
         ExitProcess(-1);
     }
 }
@@ -56,41 +53,69 @@ namespace mem{
     #[DllImport("kernel32.dll")]
     fn HeapAlloc(hHeap: &i32, dwFlags: i32, dwBytes: i64): &void;
     #[DllImport("kernel32.dll")]
+    fn HeapReAlloc(hHeap: &i32, dwFlags: i32, lpMem: &void, dwBytes: i64): &void; // Added
+    #[DllImport("kernel32.dll")]
     fn HeapFree(hHeap: &i32, dwFlags: i32, lpMem: &void): i32;
     #[DllImport("kernel32.dll")]
-    fn HeapSize(hHeap: &i32,dwFlags : i32, lpMem : &i8) : i64;
+    fn HeapSize(hHeap: &i32, dwFlags : i32, lpMem : &i8) : i64;
     #[DllImport("kernel32.dll")]
-    
     fn HeapWalk(hHeap: &i32, lpEntry: &PROCESS_HEAP_ENTRY) : i32;
     #[DllImport("kernel32.dll")]
     fn HeapLock(hHeap: &i32) : i32;
     #[DllImport("kernel32.dll")]
     fn HeapUnlock(hHeap: &i32) : i32;
 
-    fn malloc(size:i64) : &void{ return HeapAlloc(GetProcessHeap(), 0, size); }
-    fn free(ptr: &void) : void { HeapFree(GetProcessHeap(), 0, ptr); }
+    fn malloc(size: i64) : &void { 
+        let ptr: &void = HeapAlloc(GetProcessHeap(), 0, size);
+        if ptr == 0 as &void {
+            process::throw("Out of memory");
+        }
+        return ptr;
+    }
+    fn realloc(ptr: &void, size: i64) : &void {
+        if ptr == 0 as &void {
+            return malloc(size);
+        }
+        let new_ptr: &void = HeapReAlloc(GetProcessHeap(), 0, ptr, size);
+        if new_ptr == 0 as &void {
+            process::throw("Realloc failed");
+        }
+        return new_ptr;
+    }
+    fn free(ptr: &void) : void { 
+        if ptr != 0 as &void {
+            HeapFree(GetProcessHeap(), 0, ptr); 
+        }
+    }
     fn copy(src: &i8, dest:&i8, len: i64) {
         let i: i64 = 0;
-        loop{
-            if i >= len{
-                break;
-            }
+        loop {
+            if i >= len { break; }
             dest[i] = src[i];
             i = i + 1;
         }
     }
-    fn zero_fill(dest:&i8, len: i64) {
-        fill(0, dest, len);
-    }
-    fn fill(val: i8, dest:&i8, len: i64) {
+    // Returns 0 if equal, -1 if left < right, 1 if left > right
+    fn compare(left: &i8, right: &i8, len: i64) : i32 {
         let i: i64 = 0;
-        loop{
-            if i >= len{
-                break;
-            }
+        loop {
+            if i >= len { break; }
+            if left[i] < right[i] { return -1; }
+            if left[i] > right[i] { return 1; }
+            i = i + 1;
+        }
+        return 0;
+    }
+    fn fill(val: i8, dest: &i8, len: i64) {
+        let i: i64 = 0;
+        loop {
+            if i >= len { break; }
             dest[i] = val;
             i = i + 1;
         }
+    }
+    fn zero_fill(dest: &i8, len: i64) {
+        fill(0, dest, len);
     }
     fn default_fill<T>(val: T, dest:&T, len: i64) {
         let i: i64 = 0;
@@ -105,7 +130,6 @@ namespace mem{
     fn get_total_allocated_memory_external() : i64 {
         let hHeap: &i32 = GetProcessHeap();
         let total_size: i64 = 0;
-
         let entry: PROCESS_HEAP_ENTRY;
         entry.lpData = 0 as &void; 
 
@@ -114,15 +138,12 @@ namespace mem{
         }
 
         loop {
-            if HeapWalk(hHeap, &entry) == 0 {
-                break;
-            }
+            if HeapWalk(hHeap, &entry) == 0 { break; }
             if (entry.wFlags & 0x00000004) != 0 {
                 total_size = total_size + (entry.cbData as i64);
             }
         }
         HeapUnlock(hHeap);
-
         return total_size;
     }
 }
@@ -209,24 +230,11 @@ namespace vector{
     fn push<T>(vec: &Vec<T>, data: T){
         if vec.length >= vec.capacity {
             let new_capacity : u32 = 4;
-            if vec.capacity != 0 as u32{
+            if vec.capacity != 0 as u32 {
                 new_capacity = vec.capacity * 2 as u32;
             }
-            
-            let new_array: &T = mem::malloc(sizeof(T) * new_capacity as i64) as &T;
-
-            if vec.array != 0 as &T {
-                let i : u32 = 0;
-                loop{
-                    if i >= vec.length {
-                        break;
-                    }
-                    new_array[i] = vec.array[i];
-                    i = i + 1 as u32;
-                }
-                mem::free(vec.array as &void);
-            }
-            vec.array = new_array;
+            let new_size_bytes: i64 = sizeof(T) * new_capacity as i64;
+            vec.array = mem::realloc(vec.array as &void, new_size_bytes) as &T;
             vec.capacity = new_capacity;
         }
         vec.array[vec.length] = data;
@@ -235,13 +243,24 @@ namespace vector{
     #[ExtentionOf(Vec)]
     fn push_bulk<T>(vec: &Vec<T>, data: &T, data_len: i32){
         let index : i32 = 0;
-        loop{
-            if index >= data_len{
-                break;
-            }
+        loop {
+            if index >= data_len { break; }
             push::<T>(vec, data[index]);
             index = index + 1;
         }
+    }
+        #[ExtentionOf(Vec)]
+    fn remove_at<T>(vec: &Vec<T>, index: u32) {
+        if index >= vec.length {
+            process::throw("Vector index out of bounds");
+        }
+        let i: u32 = index;
+        loop {
+            if i >= vec.length - 1 { break; }
+            vec.array[i] = vec.array[i + 1];
+            i = i + 1;
+        }
+        vec.length = vec.length - 1;
     }
     #[ExtentionOf(Vec)]
     fn free<T>(vec: &Vec<T>) {
@@ -337,7 +356,7 @@ namespace console{
 
         buffer[21] = '\n';
         let start_ptr : &i8 = &buffer[i + 1];
-        let len: i32 = 21 as i32 - (i + 1) + 1;
+        let len: i32 = 21 as i32 - i;
         write(start_ptr, len);
     }
     fn println_f64(n: f64) {
@@ -402,49 +421,51 @@ namespace string{
     // USE ONLY WITH NULL TERMINATED STRINGS (from_c_string("...");)
     fn from_c_string(c_string: &i8) : String{
         let x: String;
-        x.len = string_utils::c_str_len(c_string) as i32;
-        x.data = mem::malloc(sizeof(i8) * x.len as i64) as &i8;
+        x.len = string_utils::c_str_len(c_string);
+        x.data = mem::malloc(sizeof(i8) * (x.len + 1) as i64) as &i8; 
         mem::copy(c_string, x.data, x.len as i64);
+        x.data[x.len] = 0;
         return x;
     }
-    fn empty() : String{
+    fn empty() : String {
         let x: String;
         x.data = 0 as &i8;
         x.len = 0;
         return x;
     }
-    fn with_size(size: i32) : String{
+    fn with_size(size: i32) : String {
         let x: String;
         x.len = size;
-        x.data = mem::malloc(sizeof(i8) * size as i64) as &i8;
+        x.data = mem::malloc(sizeof(i8) * (size + 1) as i64) as &i8;
+        mem::zero_fill(x.data, (size + 1) as i64);
         return x;
     }
-
-    fn concat_with_c_string(src_string: &String, c_string: &i8) : String{
+    fn clone(src: &String) : String {
+        let x: String;
+        x.len = src.len;
+        x.data = mem::malloc(sizeof(i8) * (x.len + 1) as i64) as &i8;
+        mem::copy(src.data, x.data, x.len as i64);
+        x.data[x.len] = 0;
+        return x;
+    }
+    fn concat_with_c_string(src_string: &String, c_string: &i8) : String {
         let c_string_len : i32 = string_utils::c_str_len(c_string);
-        let combined : &i8 = mem::malloc(sizeof(i8) * (c_string_len + src_string.len) as i64)  as &i8;
+        let new_len: i32 = c_string_len + src_string.len;
+        
+        let combined : &i8 = mem::malloc(sizeof(i8) * (new_len + 1) as i64) as &i8;
+        
         mem::copy(src_string.data, combined, src_string.len as i64);
         mem::copy(c_string, (combined + src_string.len as i64), c_string_len as i64);
+        combined[new_len] = 0;
+
         let str: String;
         str.data = combined;
-        str.len = c_string_len + src_string.len;
+        str.len = new_len;
         return str;
     }
     fn equal(first: &String, second: &String) : bool{
-        if first.len != second.len{
-            return 0 as bool;
-        }
-        let iter: i32 = first.len - 1;
-        loop{
-            if iter < 0 {
-                break;
-            }
-            if  first.data[iter] != second.data[iter] {
-                return 0 as bool;
-            }
-            iter = iter - 1;
-        }
-        return 1 as bool;
+        if first.len != second.len { return 0 as bool; }
+        return mem::compare(first.data, second.data, first.len as i64) == 0;
     }
 
     fn free(str: &String){
@@ -488,81 +509,42 @@ namespace string_utils{
         return (char >= '0' && char <= '9') || (char >= 'A' && char <= 'F') || (char >= 'a' && char <= 'f');
     }
 }
-
 namespace fs{
     #[DllImport("kernel32.dll")]
-    fn CreateFileA(
-        lpFileName: &i8,
-        dwDesiredAccess: u32,
-        dwShareMode: u32,
-        lpSecurityAttributes: &i8,
-        dwCreationDisposition: u32,
-        dwFlagsAndAttributes: u32,
-        hTemplateFile: &i8
-    ) : &void; // Returns a HANDLE
-
+    fn CreateFileA(lpFileName: &i8, dwDesiredAccess: u32, dwShareMode: u32, lpSecurityAttributes: &i8, dwCreationDisposition: u32, dwFlagsAndAttributes: u32, hTemplateFile: &i8) : &void;
     #[DllImport("kernel32.dll")]
-    fn WriteFile(
-        hFile: &void,
-        lpBuffer: &i8,
-        nNumberOfBytesToWrite: u32,
-        lpNumberOfBytesWritten: &u32,
-        lpOverlapped: &i8
-    ) : i32; // Returns a BOOL
-
+    fn WriteFile(hFile: &void, lpBuffer: &i8, nNumberOfBytesToWrite: u32, lpNumberOfBytesWritten: &u32, lpOverlapped: &i8) : i32;
     #[DllImport("kernel32.dll")]
-    fn ReadFile(
-        hFile: &void,
-        lpBuffer: &i8,
-        nNumberOfBytesToRead: u32,
-        lpNumberOfBytesRead: &u32,
-        lpOverlapped: &i8
-    ) : i32; // Returns a BOOL
-    
+    fn ReadFile(hFile: &void, lpBuffer: &i8, nNumberOfBytesToRead: u32, lpNumberOfBytesRead: &u32, lpOverlapped: &i8) : i32;
     #[DllImport("kernel32.dll")]
-    fn GetFileSizeEx(hFile: &void, lpFileSize: &i64): i32; // Returns BOOL
-
+    fn GetFileSizeEx(hFile: &void, lpFileSize: &i64): i32;
     #[DllImport("kernel32.dll")]
-    fn CloseHandle(hObject: &void) : i32; // Returns a BOOL
-
+    fn CloseHandle(hObject: &void) : i32;
     #[DllImport("kernel32.dll")]
-    fn DeleteFileA(lpFileName: &i8) : i32; // Returns a BOOL
-
+    fn DeleteFileA(lpFileName: &i8) : i32;
+    #[DllImport("kernel32.dll")]
+    fn GetFileAttributesA(lpFileName: &i8) : u32;
     fn write_to_file(path: &i8, content: &i8, content_len: u32) : i32 {
         let CREATE_ALWAYS: u32 = 2;
         let GENERIC_WRITE: u32 = 0x40000000;
         let FILE_ATTRIBUTE_NORMAL: u32 = 0x80;
         let hFile: &void = CreateFileA(path, GENERIC_WRITE, 0, 0 as &i8, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0 as &i8);
-        let INVALID_HANDLE_VALUE: &void = -1 as &void;
-        if hFile == INVALID_HANDLE_VALUE {
-            return 0;
-        }
+        if hFile == -1 as &void { return 0; }
 
         let bytes_written: u32 = 0;
         let success: i32 = WriteFile(hFile, content, content_len, &bytes_written, 0 as &i8);
-
         CloseHandle(hFile);
 
-        if success == 0 {
-            return 0;
-        }
-        if bytes_written != content_len {
-            return 0;
-        }
-
-        return 1;
+        return (success != 0 && bytes_written == content_len) as i32;
     }
     fn read_full_file_as_string(path: &i8) : string::String {
         let GENERIC_READ: u32 = 0x80000000;
-        let FILE_ATTRIBUTE_NORMAL: u32 = 0x80;
         let OPEN_EXISTING: u32 = 3; 
-        let hFile: &void = CreateFileA(path, GENERIC_READ, 0, 0 as &i8, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0 as &i8);
-        let INVALID_HANDLE_VALUE: &void = -1 as &void;
-
-        if hFile == INVALID_HANDLE_VALUE {
-            process::throw(string_utils::insert("File  was not found", path, 5));
+        let hFile: &void = CreateFileA(path, GENERIC_READ, 1, 0 as &i8, OPEN_EXISTING, 0x80, 0 as &i8); // Shared Read
+        
+        if hFile == -1 as &void {
+            process::throw(string_utils::insert("File not found: ", path, 16));
         }
-
 
         let file_size: i64 = 0;
         if GetFileSizeEx(hFile, &file_size) == 0 {
@@ -570,47 +552,32 @@ namespace fs{
             return string::empty();
         }
 
-        let buffer: string::String = string::with_size(file_size as i32 + 1);
-        
-
+        let buffer: string::String = string::with_size(file_size as i32);
         let bytes_read: u32 = 0;
         let success: i32 = ReadFile(hFile, buffer.data, file_size as u32, &bytes_read, 0 as &i8);
-        
         CloseHandle(hFile);
 
-        if success == 0 || (bytes_read as i64) != file_size {
+        if success == 0 {
             string::free(&buffer);
             process::throw("File read failed");
         }
         buffer.len = file_size as i32;
-        
+        buffer.data[buffer.len] = 0;
         return buffer;
     }
     fn create_file(path: &i8) : i32 {
-        let CREATE_NEW: u32 = 1;
-        let GENERIC_WRITE: u32 = 0x40000000;
-        let FILE_ATTRIBUTE_NORMAL: u32 = 0x80;
-        
-        let hFile: &void = CreateFileA(
-            path,
-            GENERIC_WRITE,
-            0, // dwShareMode: No sharing
-            0 as &i8, // lpSecurityAttributes: Default security
-            CREATE_NEW,
-            FILE_ATTRIBUTE_NORMAL,
-            0 as &i8 // hTemplateFile: No template
-        );
-
-        let INVALID_HANDLE_VALUE: &void = -1 as &void;
-        if hFile == INVALID_HANDLE_VALUE {
-            return 0;
-        }
+        let hFile: &void = CreateFileA(path, 0x40000000, 0, 0 as &i8, 1, 0x80, 0 as &i8);
+        if hFile == -1 as &void { return 0; }
         CloseHandle(hFile);
-
         return 1;
     }
     fn delete_file(path: &i8) : i32 {
         return DeleteFileA(path);
+    }
+    fn file_exists(path: &i8) : bool {
+        let INVALID_FILE_ATTRIBUTES: u32 = 0xFFFFFFFF;
+        let attributes: u32 = GetFileAttributesA(path);
+        return attributes != INVALID_FILE_ATTRIBUTES;
     }
 }
 
@@ -1076,5 +1043,690 @@ namespace tests{
         }
         vector::free::<string::String>(&data);
         string::free(&file);
+    }
+}
+
+
+namespace window{
+    // Down from here, ai assisted code
+    
+    // https://program-day.tistory.com/22
+    enum WM : u32 {
+        NULL = 0x0000,
+        CREATE = 0x0001,
+        DESTROY = 0x0002,
+        MOVE = 0x0003,
+        SIZE = 0x0005,
+        ACTIVATE = 0x0006,
+        SETFOCUS = 0x0007,
+        KILLFOCUS = 0x0008,
+        ENABLE = 0x000A,
+        SETREDRAW = 0x000B,
+        SETTEXT = 0x000C,
+        GETTEXT = 0x000D,
+        GETTEXTLENGTH = 0x000E,
+        PAINT = 0x000F,
+        CLOSE = 0x0010,
+        QUERYENDSESSION = 0x0011,
+        QUERYOPEN = 0x0013,
+        ENDSESSION = 0x0016,
+        QUIT = 0x0012,
+        ERASEBKGND = 0x0014,
+        SYSCOLORCHANGE = 0x0015,
+        SHOWWINDOW = 0x0018,
+        WININICHANGE = 0x001A,
+        SETTINGCHANGE = 0x001A,
+        DEVMODECHANGE = 0x001B,
+        ACTIVATEAPP = 0x001C,
+        FONTCHANGE = 0x001D,
+        TIMECHANGE = 0x001E,
+        CANCELMODE = 0x001F,
+        SETCURSOR = 0x0020,
+        MOUSEACTIVATE = 0x0021,
+        CHILDACTIVATE = 0x0022,
+        QUEUESYNC = 0x0023,
+        GETMINMAXINFO = 0x0024,
+        PAINTICON = 0x0026,
+        ICONERASEBKGND = 0x0027,
+        NEXTDLGCTL = 0x0028,
+        SPOOLERSTATUS = 0x002A,
+        DRAWITEM = 0x002B,
+        MEASUREITEM = 0x002C,
+        DELETEITEM = 0x002D,
+        VKEYTOITEM = 0x002E,
+        CHARTOITEM = 0x002F,
+        SETFONT = 0x0030,
+        GETFONT = 0x0031,
+        SETHOTKEY = 0x0032,
+        GETHOTKEY = 0x0033,
+        QUERYDRAGICON = 0x0037,
+        COMPAREITEM = 0x0039,
+        GETOBJECT = 0x003D,
+        COMPACTING = 0x0041,
+        COMMNOTIFY = 0x0044,
+        WINDOWPOSCHANGING = 0x0046,
+        WINDOWPOSCHANGED = 0x0047,
+        POWER = 0x0048,
+        COPYDATA = 0x004A,
+        CANCELJOURNAL = 0x004B,
+        NOTIFY = 0x004E,
+        INPUTLANGCHANGEREQUEST = 0x0050,
+        INPUTLANGCHANGE = 0x0051,
+        TCARD = 0x0052,
+        HELP = 0x0053,
+        USERCHANGED = 0x0054,
+        NOTIFYFORMAT = 0x0055,
+        CONTEXTMENU = 0x007B,
+        STYLECHANGING = 0x007C,
+        STYLECHANGED = 0x007D,
+        DISPLAYCHANGE = 0x007E,
+        GETICON = 0x007F,
+        SETICON = 0x0080,
+        NCCREATE = 0x0081,
+        NCDESTROY = 0x0082,
+        NCCALCSIZE = 0x0083,
+        NCHITTEST = 0x0084,
+        NCPAINT = 0x0085,
+        NCACTIVATE = 0x0086,
+        GETDLGCODE = 0x0087,
+        SYNCPAINT = 0x0088,
+        NCMOUSEMOVE = 0x00A0,
+        NCLBUTTONDOWN = 0x00A1,
+        NCLBUTTONUP = 0x00A2,
+        NCLBUTTONDBLCLK = 0x00A3,
+        NCRBUTTONDOWN = 0x00A4,
+        NCRBUTTONUP = 0x00A5,
+        NCRBUTTONDBLCLK = 0x00A6,
+        NCMBUTTONDOWN = 0x00A7,
+        NCMBUTTONUP = 0x00A8,
+        NCMBUTTONDBLCLK = 0x00A9,
+        NCXBUTTONDOWN = 0x00AB,
+        NCXBUTTONUP = 0x00AC,
+        NCXBUTTONDBLCLK = 0x00AD,
+        INPUT_DEVICE_CHANGE = 0x00FE,
+        INPUT = 0x00FF,
+        KEYFIRST = 0x0100,
+        KEYDOWN = 0x0100,
+        KEYUP = 0x0101,
+        CHAR = 0x0102,
+        DEADCHAR = 0x0103,
+        SYSKEYDOWN = 0x0104,
+        SYSKEYUP = 0x0105,
+        SYSCHAR = 0x0106,
+        SYSDEADCHAR = 0x0107,
+        UNICHAR = 0x0109,
+        KEYLAST = 0x0109,
+        INITDIALOG = 0x0110,
+        COMMAND = 0x0111,
+        SYSCOMMAND = 0x0112,
+        TIMER = 0x0113,
+        HSCROLL = 0x0114,
+        VSCROLL = 0x0115,
+        INITMENU = 0x0116,
+        INITMENUPOPUP = 0x0117,
+        MENUSELECT = 0x011F,
+        MENUCHAR = 0x0120,
+        ENTERIDLE = 0x0121,
+        MENURBUTTONUP = 0x0122,
+        MENUDRAG = 0x0123,
+        MENUGETOBJECT = 0x0124,
+        UNINITMENUPOPUP = 0x0125,
+        MENUCOMMAND = 0x0126,
+        CHANGEUISTATE = 0x0127,
+        UPDATEUISTATE = 0x0128,
+        QUERYUISTATE = 0x0129,
+        CTLCOLORMSGBOX = 0x0132,
+        CTLCOLOREDIT = 0x0133,
+        CTLCOLORLISTBOX = 0x0134,
+        CTLCOLORBTN = 0x0135,
+        CTLCOLORDLG = 0x0136,
+        CTLCOLORSCROLLBAR = 0x0137,
+        CTLCOLORSTATIC = 0x0138,
+        MOUSEFIRST = 0x0200,
+        MOUSEMOVE = 0x0200,
+        LBUTTONDOWN = 0x0201,
+        LBUTTONUP = 0x0202,
+        LBUTTONDBLCLK = 0x0203,
+        RBUTTONDOWN = 0x0204,
+        RBUTTONUP = 0x0205,
+        RBUTTONDBLCLK = 0x0206,
+        MBUTTONDOWN = 0x0207,
+        MBUTTONUP = 0x0208,
+        MBUTTONDBLCLK = 0x0209,
+        MOUSEWHEEL = 0x020A,
+        XBUTTONDOWN = 0x020B,
+        XBUTTONUP = 0x020C,
+        XBUTTONDBLCLK = 0x020D,
+        MOUSEHWHEEL = 0x020E,
+        MOUSELAST = 0x020E,
+        PARENTNOTIFY = 0x0210,
+        ENTERMENULOOP = 0x0211,
+        EXITMENULOOP = 0x0212,
+        NEXTMENU = 0x0213,
+        SIZING = 0x0214,
+        CAPTURECHANGED = 0x0215,
+        MOVING = 0x0216,
+        POWERBROADCAST = 0x0218,
+        DEVICECHANGE = 0x0219,
+        MDICREATE = 0x0220,
+        MDIDESTROY = 0x0221,
+        MDIACTIVATE = 0x0222,
+        MDIRESTORE = 0x0223,
+        MDINEXT = 0x0224,
+        MDIMAXIMIZE = 0x0225,
+        MDITILE = 0x0226,
+        MDICASCADE = 0x0227,
+        MDIICONARRANGE = 0x0228,
+        MDIGETACTIVE = 0x0229,
+        MDISETMENU = 0x0230,
+        ENTERSIZEMOVE = 0x0231,
+        EXITSIZEMOVE = 0x0232,
+        DROPFILES = 0x0233,
+        MDIREFRESHMENU = 0x0234,
+        DPICHANGED = 0x02E0,
+        THEMECHANGED = 0x031A,
+        CLIPBOARDUPDATE = 0x031D,
+        USER = 0x0400,
+        APP = 0x8000,
+    }
+    enum CS : u32 {
+        VREDRAW = 0x0001,
+        HREDRAW = 0x0002,
+        DBLCLKS = 0x0008,
+        OWNDC = 0x0020,
+        CLASSDC = 0x0040,
+        PARENTDC = 0x0080,
+        NOCLOSE = 0x0200,
+        SAVEBITS = 0x0800,
+        BYTEALIGNCLIENT = 0x1000,
+        BYTEALIGNWINDOW = 0x2000,
+        GLOBALCLASS = 0x4000,
+        IME = 0x00010000,
+        DROPSHADOW = 0x00020000,
+    }
+    enum WS : u32 {
+        // Primary window types
+        OVERLAPPED = 0x00000000,
+        POPUP = 0x80000000,
+        CHILD = 0x40000000,
+
+        // Control styles
+        MINIMIZE = 0x20000000,
+        VISIBLE = 0x10000000,
+        DISABLED = 0x08000000,
+        CLIPSIBLINGS = 0x04000000,
+        CLIPCHILDREN = 0x02000000,
+        MAXIMIZE = 0x01000000,
+        
+        // Border and caption styles
+        CAPTION = 0x00C00000, // WS_BORDER | WS_DLGFRAME
+        BORDER = 0x00800000,
+        DLGFRAME = 0x00400000,
+        
+        // Scrollbar styles
+        VSCROLL = 0x00200000,
+        HSCROLL = 0x00100000,
+        
+        // Standard window components
+        SYSMENU = 0x00080000,
+        THICKFRAME = 0x00040000,
+        
+        // Grouping and tabbing
+        GROUP = 0x00020000,
+        TABSTOP = 0x00010000,
+
+        // Box styles
+        MINIMIZEBOX = 0x00020000,
+        MAXIMIZEBOX = 0x00010000,
+
+        // Aliases
+        TILED = 0x00000000,
+        ICONIC = 0x20000000,
+        SIZEBOX = 0x00040000,
+
+        // Common composite styles
+        TILEDWINDOW = 0x00000000 | 0x00C00000 | 0x00080000 | 0x00040000 | 0x00020000 | 0x00010000,
+        OVERLAPPEDWINDOW = 0x00000000 | 0x00C00000 | 0x00080000 | 0x00040000 | 0x00020000 | 0x00010000,
+        POPUPWINDOW = 0x80000000 | 0x00800000 | 0x00080000,
+        CHILDWINDOW = 0x40000000,
+    }
+    enum WS_EX : u32 {
+        DLGMODALFRAME = 0x00000001,
+        NOPARENTNOTIFY = 0x00000004,
+        TOPMOST = 0x00000008,
+        ACCEPTFILES = 0x00000010,
+        TRANSPARENT = 0x00000020,
+        MDICHILD = 0x00000040,
+        TOOLWINDOW = 0x00000080,
+        WINDOWEDGE = 0x00000100,
+        CLIENTEDGE = 0x00000200,
+        CONTEXTHELP = 0x00000400,
+        RIGHT = 0x00001000,
+        LEFT = 0x00000000,
+        RTLREADING = 0x00002000,
+        LTRREADING = 0x00000000,
+        LEFTSCROLLBAR = 0x00004000,
+        RIGHTSCROLLBAR = 0x00000000,
+        CONTROLPARENT = 0x00010000,
+        STATICEDGE = 0x00020000,
+        APPWINDOW = 0x00040000,
+        LAYERED = 0x00080000,
+        NOINHERITLAYOUT = 0x00100000,
+        NOREDIRECTIONBITMAP = 0x00200000,
+        LAYOUTRTL = 0x00400000,
+        COMPOSITED = 0x02000000,
+        NOACTIVATE = 0x08000000,
+        
+        // Common composite styles
+        OVERLAPPEDWINDOW = 0x00000100 | 0x00000200,
+        PALETTEWINDOW = 0x00000100 | 0x00000080 | 0x00000008,
+    }
+    enum SW : i32 {
+        HIDE = 0,
+        SHOWNORMAL = 1,
+        NORMAL = 1,
+        SHOWMINIMIZED = 2,
+        SHOWMAXIMIZED = 3,
+        MAXIMIZE = 3,
+        SHOWNOACTIVATE = 4,
+        SHOW = 5,
+        MINIMIZE = 6,
+        SHOWMINNOACTIVE = 7,
+        SHOWNA = 8,
+        RESTORE = 9,
+        SHOWDEFAULT = 10,
+        FORCEMINIMIZE = 11,
+        MAX = 11,
+    }
+    enum SYS_COLOR : i32 {
+        SCROLLBAR = 0,
+        BACKGROUND = 1,
+        DESKTOP = 1,
+        ACTIVECAPTION = 2,
+        INACTIVECAPTION = 3,
+        MENU = 4,
+        WINDOW = 5,
+        WINDOWFRAME = 6,
+        MENUTEXT = 7,
+        WINDOWTEXT = 8,
+        CAPTIONTEXT = 9,
+        ACTIVEBORDER = 10,
+        INACTIVEBORDER = 11,
+        APPWORKSPACE = 12,
+        HIGHLIGHT = 13,
+        HIGHLIGHTTEXT = 14,
+        BTNFACE = 15,
+        THREEDFACE = 15,
+        BTNSHADOW = 16,
+        THREEDSHADOW = 16,
+        GRAYTEXT = 17,
+        BTNTEXT = 18,
+        INACTIVECAPTIONTEXT = 19,
+        BTNHIGHLIGHT = 20,
+        THREEDHIGHLIGHT = 20,
+        BTNHILIGHT = 20,
+        THREEDHILIGHT = 20,
+        THREEDDKSHADOW = 21,
+        THREEDLIGHT = 22,
+        INFOTEXT = 23,
+        INFOBK = 24,
+        HOTLIGHT = 26,
+        GRADIENTACTIVECAPTION = 27,
+        GRADIENTINACTIVECAPTION = 28,
+        MENUHILIGHT = 29,
+        MENUBAR = 30,
+    }
+    #[DllImport("user32.dll")]
+    fn RegisterClassA(lpWndClass: &WNDCLASSA): u16;
+
+    #[DllImport("user32.dll")]
+    fn CreateWindowExA(
+        dwExStyle: u32,
+        lpClassName: &i8,
+        lpWindowName: &i8,
+        dwStyle: u32,
+        x: i32,
+        y: i32,
+        nWidth: i32,
+        nHeight: i32,
+        hWndParent: &void,
+        hMenu: &void,
+        hInstance: &void,
+        lpParam: &void
+    ): &void;
+
+    #[DllImport("user32.dll")]
+    fn DefWindowProcA(hWnd: &void, Msg: u32, wParam: u64, lParam: u64): i64;
+
+    #[DllImport("user32.dll")]
+    fn GetMessageA(lpMsg: &MSG, hWnd: &void, wMsgFilterMin: u32, wMsgFilterMax: u32): i32;
+
+    #[DllImport("user32.dll")]
+    fn TranslateMessage(lpMsg: &MSG): i32;
+
+    #[DllImport("user32.dll")]
+    fn DispatchMessageA(lpMsg: &MSG): i64;
+
+    #[DllImport("user32.dll")]
+    fn PostQuitMessage(nExitCode: i32): void;
+
+    #[DllImport("user32.dll")]
+    fn BeginPaint(hWnd: &void, lpPaint: &PAINTSTRUCT): &void;
+
+    #[DllImport("user32.dll")]
+    fn EndPaint(hWnd: &void, lpPaint: &PAINTSTRUCT): i32;
+
+    #[DllImport("user32.dll")]
+    fn GetDC(hWnd: &void): &void;
+
+    #[DllImport("user32.dll")]
+    fn ReleaseDC(hWnd: &void, hDC: &void): i32;
+
+    #[DllImport("user32.dll")]
+    fn LoadCursorA(hInstance: &void, lpCursorName: &i8): &void;
+
+    #[DllImport("user32.dll")]
+    fn LoadIconA(hInstance: &void, lpIconName: &i8): &void;
+    
+    #[DllImport("user32.dll")]
+    fn LoadImageA(hInst: &void, name: &i8, type: u32, cx: i32, cy: i32, fuLoad: u32) : &void;
+    
+    #[DllImport("user32.dll")]
+    fn GetClientRect(hWnd: &void, lpRect: &RECT) : i32;
+    
+    #[DllImport("user32.dll")]
+    fn InvalidateRect(hWnd: &void, lpRect: &RECT, bErase: i32) : i32;
+
+    #[DllImport("kernel32.dll")]
+    fn GetModuleHandleA(lpModuleName: &i8): &void;
+    #[DllImport("user32.dll")]
+    fn RegisterClassExA(lpwcx: &WNDCLASSEXA): u16;
+    #[DllImport("user32.dll")]
+    fn ShowWindow(hWnd: &void, nCmdShow: i32): i32;
+    #[DllImport("gdi32.dll")]
+    fn CreateCompatibleDC(hdc: &void): &void;
+    
+    #[DllImport("gdi32.dll")]
+    fn SelectObject(hdc: &void, h: &void): &void;
+    
+    #[DllImport("gdi32.dll")]
+    fn BitBlt(hdc: &void, x: i32, y: i32, cx: i32, cy: i32, hdcSrc: &void, x1: i32, y1: i32, rop: u32): i32;
+    
+    #[DllImport("gdi32.dll")]
+    fn DeleteDC(hdc: &void): i32;
+    
+    #[DllImport("gdi32.dll")]
+    fn DeleteObject(hObject: &void): i32;
+    
+    #[DllImport("gdi32.dll")]
+    fn GetObjectA(h: &void, c: i32, pv: &BITMAP) : i32;
+    
+    #[DllImport("gdi32.dll")]
+    fn SetStretchBltMode(hdc: &void, mode: i32) : i32;
+    
+    #[DllImport("gdi32.dll")]
+    fn StretchBlt(hdcDest: &void, xDest: i32, yDest: i32, wDest: i32, hDest: i32, hdcSrc: &void, xSrc: i32, ySrc: i32, wSrc: i32, hSrc: i32, rop: u32) : i32;
+    
+    #[DllImport("user32.dll")]
+    fn SetWindowLongPtrA(hWnd: &void, nIndex: i32, dwNewLong: &void): i64;
+
+    #[DllImport("user32.dll")]
+    fn GetWindowLongPtrA(hWnd: &void, nIndex: i32): &void;
+
+    struct POINT {
+        x: i32,
+        y: i32,
+    }
+
+    struct MSG {
+        hwnd: &void,
+        message: u32,
+        wParam: u64,
+        lParam: i64,
+        time: u32,
+        pt: POINT,
+    }
+    struct WNDCLASSEXA {
+        cbSize: u32,                            // UINT
+        style: u32,                             // UINT
+        lpfnWndProc: &fn(&void, u32, u64, u64): i64, // WNDPROC (function pointer)
+        cbClsExtra: i32,                        // INT
+        cbWndExtra: i32,                        // INT
+        hInstance: &void,                         // HINSTANCE
+        hIcon: &void,                             // HICON
+        hCursor: &void,                           // HCURSOR
+        hbrBackground: &void,                     // HBRUSH
+        lpszMenuName: &i8,                      // LPCSTR
+        lpszClassName: &i8,                     // LPCSTR
+        hIconSm: &void,                           // HICON
+    }
+    struct RECT {
+        left: i32,
+        top: i32,
+        right: i32,
+        bottom: i32,
+    }
+    struct PAINTSTRUCT {
+        hdc: &void,
+        fErase: i32,
+        rcPaint: RECT,
+        fRestore: i32,
+        fIncUpdate: i32,
+        rgbReserved: &i8, // Array of 32 bytes technically
+    }
+    struct BITMAP {
+        bmType: i32,
+        bmWidth: i32,
+        bmHeight: i32,
+        bmWidthBytes: i32,
+        bmPlanes: u16,
+        bmBitsPixel: u16,
+        bmBits: &void
+    }
+
+    fn WindowProc(hWnd: &void, uMsg: u32, wParam: u64, lParam: u64): i64 {
+        if uMsg == WM::CLOSE {
+            PostQuitMessage(0);
+            return 0;
+        }
+        if uMsg == WM::DESTROY {
+            PostQuitMessage(0);
+            return 0;
+        }
+        if uMsg == WM::KEYDOWN {
+            if wParam == 27 { // ESC
+                PostQuitMessage(0);
+                return 0;
+            }
+            console::print_char(wParam as i8);
+        }
+        if uMsg == WM::KILLFOCUS {
+            PostQuitMessage(0);
+            return 0;
+        }
+        if uMsg == WM::NCHITTEST {
+            let result: i64 = DefWindowProcA(hWnd, uMsg, wParam, lParam);
+            if result == 1 {
+                return 2;
+            }
+            return result;
+        }
+        if uMsg == WM::NCLBUTTONDBLCLK {
+            return 0;
+        }
+    
+        if uMsg == WM::PAINT {
+            let ps: PAINTSTRUCT;
+            let hdc: &void = BeginPaint(hWnd, &ps);
+            let hStoredImage: &void = GetWindowLongPtrA(hWnd, -21);
+            if hStoredImage != 0 as &void {
+                draw_bitmap(hdc, hStoredImage, 0, 0);
+            }
+            EndPaint(hWnd, &ps);
+            return 0;
+        }
+        return DefWindowProcA(hWnd, uMsg, wParam, lParam);
+    }
+    enum StartError: i32 { Ok = 0, GetModuleHandleFailed = 1, RegisterClassFailed = 2, CreateWindowFailed = 3 }
+
+    fn load_bitmap_from_file(path: &i8) : &void {
+        if !fs::file_exists(path){
+            process::throw("File not found! While loading Bitmap");
+        }
+        return LoadImageA(0 as &void, path, 0, 0, 0, 16);
+    }
+    fn get_bitmap_dimensions(hBitmap: &void, width: &i32, height: &i32) {
+        let bm: BITMAP;
+        GetObjectA(hBitmap, sizeof(BITMAP) as i32, &bm);
+        *width = bm.bmWidth;
+        *height = bm.bmHeight;
+    }
+    fn draw_bitmap(hdc: &void, hBitmap: &void, x: i32, y: i32) {
+        if hBitmap == 0 as &void { return; }
+
+        let hMemDC: &void = CreateCompatibleDC(hdc);
+        let hOldBitmap: &void = SelectObject(hMemDC, hBitmap);
+
+        let bm: BITMAP;
+        GetObjectA(hBitmap, sizeof(BITMAP) as i32, &bm);
+
+        BitBlt(hdc, x, y, bm.bmWidth, bm.bmHeight, hMemDC, 0, 0, 13369376);
+
+        SelectObject(hMemDC, hOldBitmap);
+        DeleteDC(hMemDC);
+    }
+    fn draw_bitmap_stretched(hdc: &void, hBitmap: &void, x: i32, y: i32, width: i32, height: i32) {
+        if hBitmap == 0 as &void { return; }
+
+        let hMemDC: &void = CreateCompatibleDC(hdc);
+        let hOldBitmap: &void = SelectObject(hMemDC, hBitmap);
+
+        let bm: BITMAP;
+        GetObjectA(hBitmap, sizeof(BITMAP) as i32, &bm);
+        
+        SetStretchBltMode(hdc, 3); 
+        
+        StretchBlt(hdc, x, y, width, height, hMemDC, 0, 0, bm.bmWidth, bm.bmHeight, 13369376);
+
+        SelectObject(hMemDC, hOldBitmap);
+        DeleteDC(hMemDC);
+    }
+    inline fn is_null(p: &void): bool { return p == 0 as &void; }
+
+    fn start(){
+        // CW apparently stands for Control Word. https://stackoverflow.com/questions/48079439/winapi-cw-usedefault-vs-cw-default
+        let CW_USEDEFAULT: i32 = 0x80000000;
+
+        let hInstance: &void = GetModuleHandleA(0 as &i8);
+        if is_null(hInstance) { process::throw("Window error: StartError::GetModuleHandleFailed"); }
+
+        let className: &i8 = "MyWindowClass";
+        let wc: WNDCLASSEXA;
+        wc.cbSize = sizeof(WNDCLASSEXA);
+        wc.style = CS::HREDRAW | CS::VREDRAW;
+        wc.lpfnWndProc = &WindowProc;
+        wc.cbClsExtra = 0;
+        wc.cbWndExtra = 0;
+        wc.hInstance = hInstance;
+        wc.hIcon = 0 as &void;
+        wc.hCursor = 0 as &void;
+        wc.hbrBackground = (SYS_COLOR::WINDOW + 1) as &void;
+        wc.lpszMenuName = 0 as &i8;
+        wc.lpszClassName = className;
+        wc.hIconSm = 0 as &void;
+
+        if RegisterClassExA(&wc) == 0 { process::throw("Window error: StartError::RegisterClassFailed"); }
+
+        let windowTitle: &i8 = "Hello, World!";
+        let hWnd: &void = CreateWindowExA(
+            0,                      // Extended window style
+            className,              // Window class name
+            windowTitle,            // Window title
+            WS::TILEDWINDOW,        // Window style
+            CW_USEDEFAULT,          // X position
+            CW_USEDEFAULT,          // Y position
+            800,                    // Width
+            600,                    // Height
+            0 as &void,               // Parent window
+            0 as &void,               // Menu
+            hInstance,              // Application instance handle
+            0 as &void                // Additional application data
+        );
+
+        if is_null(hWnd) { process::throw("Window error: StartError::CreateWindowFailed"); }
+        ShowWindow(hWnd, SW::SHOW);
+
+        let msg: MSG;
+        loop {
+            if GetMessageA(&msg, 0 as &void, 0, 0) <= 0{
+                break;
+            }
+            TranslateMessage(&msg);
+            DispatchMessageA(&msg);
+        }
+    }
+    fn start_image_window(imagePath: &i8) {
+       let hInstance: &void = GetModuleHandleA(0 as &i8);
+        
+        let local_hImage: &void = load_bitmap_from_file(imagePath);
+        if local_hImage == 0 as &void {
+            process::throw("Failed to load image. not valid .BMP file");
+        }
+        let imgW: i32 = 0;
+        let imgH: i32 = 0;
+        get_bitmap_dimensions(local_hImage, &imgW, &imgH);
+
+        let className: &i8 = "BorderlessImageClass";
+        let wc: WNDCLASSEXA;
+        wc.cbSize = sizeof(WNDCLASSEXA);
+        wc.style = CS::HREDRAW | CS::VREDRAW;
+        wc.lpfnWndProc = &WindowProc;
+        wc.cbClsExtra = 0;
+        wc.cbWndExtra = 0;
+        wc.hInstance = hInstance;
+        wc.hIcon = 0 as &void;
+        wc.hCursor = LoadCursorA(0 as &void, 32512 as &i8);
+        wc.hbrBackground = (SYS_COLOR::WINDOW + 1) as &void;
+        wc.lpszMenuName = 0 as &i8;
+        wc.lpszClassName = className;
+        wc.hIconSm = 0 as &void;
+
+        if RegisterClassExA(&wc) == 0 { 
+            process::throw("Window error: RegisterClassFailed"); 
+        }
+        let hWnd: &void = CreateWindowExA(
+            WS_EX::TOPMOST,
+            className,
+            "ImageWindow",
+            WS::POPUP | WS::VISIBLE,
+            100,
+            100,
+            imgW,
+            imgH,
+            0 as &void,
+            0 as &void,
+            hInstance,
+            0 as &void
+        );
+
+        if is_null(hWnd) { 
+            process::throw("Window error: CreateWindowFailed"); 
+        }
+
+        SetWindowLongPtrA(hWnd, -21, local_hImage);
+
+        ShowWindow(hWnd, SW::SHOW);
+        let rect: RECT;
+        GetClientRect(hWnd, &rect);
+        InvalidateRect(hWnd, &rect, 1);
+
+        let msg: MSG;
+        loop {
+            if GetMessageA(&msg, 0 as &void, 0, 0) <= 0{
+                break;
+            }
+            TranslateMessage(&msg);
+            DispatchMessageA(&msg);
+        }
     }
 }

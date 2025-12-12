@@ -13,18 +13,17 @@ pub const USE_MULTIPLY_AS_POINTER_IN_TYPES: bool = true;
 
 
 fn main() -> Result<(), String> {
-	
-	let full_path = "./src.rcsharp";
+	let full_path = std::env::args().nth(1).unwrap_or("./src.rcsharp".to_string());
 	let program_start = Instant::now();
-	let base_structs_and_functions = {let mut buf = String::new(); std::fs::File::open(full_path).map_err(|e| e.to_string())?.read_to_string(&mut buf).map_err(|e| e.to_string())?; buf};
+	let base_structs_and_functions = {let mut buf = String::new(); std::fs::File::open(full_path.as_str()).map_err(|e| e.to_string())?.read_to_string(&mut buf).map_err(|e| e.to_string())?; buf};
 	let file1_read = Instant::now();
-	let all_tokens = lex_file_with_context(&base_structs_and_functions, full_path)?;
+	let all_tokens = lex_file_with_context(&base_structs_and_functions, full_path.as_str())?;
 	let file1_lexed = Instant::now();
 
 	let y = GeneralParser::new(&all_tokens).parse_all()?;
 	let tokens_parsed = Instant::now();
 	
-	rcsharp_compile_to_file(&y, full_path)?;
+	rcsharp_compile_to_file(&y, full_path.as_str())?;
 	let compiled_and_wrote = Instant::now();
 	println!("\t\tBase Source");
 	println!("read \t{:?}", file1_read - program_start);

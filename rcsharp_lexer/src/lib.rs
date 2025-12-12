@@ -285,11 +285,9 @@ fn handle_hex_escape(chars: &mut std::iter::Peekable<std::str::Chars>, unescaped
         }
     }
 
-    if hex.len() == 2 {
-        if let Ok(byte) = u8::from_str_radix(&hex, 16) {
-            unescaped.push(byte as char);
-            return;
-        }
+    if hex.len() == 2 && let Ok(byte) = u8::from_str_radix(&hex, 16) {
+        unescaped.push(byte as char);
+        return;
     }
     unescaped.push_str("\\x");
     unescaped.push_str(&hex);
@@ -342,11 +340,9 @@ fn handle_unicode_escape(chars: &mut std::iter::Peekable<std::str::Chars>, unesc
         }
     }
 
-    if let Ok(code) = u32::from_str_radix(&hex, 16) {
-        if let Some(c) = std::char::from_u32(code) {
-            unescaped.push(c);
-            return;
-        }
+    if let Ok(code) = u32::from_str_radix(&hex, 16) && let Some(c) = std::char::from_u32(code) {
+        unescaped.push(c);
+        return;
     }
     unescaped.push_str("\\u{");
     unescaped.push_str(&hex);
