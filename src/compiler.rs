@@ -6,7 +6,7 @@ use ordered_hash_map::OrderedHashMap;
 use rcsharp_lexer::lex_string_with_file_context;
 use rcsharp_parser::compiler_primitives::{BASIC_INTEGER_TYPE, PRIMITIVE_TYPES_INFO, find_primitive_type};
 use rcsharp_parser::expression_parser::Expr;
-use rcsharp_parser::parser::{Attribute, GeneralParser, ParsedEnum, ParsedFunction, ParsedStruct, ParserType, Stmt, StmtData};
+use rcsharp_parser::parser::{Attribute, GeneralParser, ParsedEnum, ParsedFunction, ParsedStruct, ParserResultExt, ParserType, Stmt, StmtData};
 use crate::compiler_essentials::{Enum, Function, FunctionFlags, FunctionView, Scope, Struct, StructView, Variable};
 use crate::expression_compiler::{Expected, compile_expression, constant_integer_expression_compiler};
 
@@ -217,7 +217,7 @@ fn collect(stmts: &[StmtData],
                             let mut buf = String::new();
                             file.read_to_string(&mut buf)?;
                             let lex = lex_string_with_file_context(&buf,include_path).unwrap();
-                            let par = GeneralParser::new(&lex).parse_all().unwrap();
+                            let par = GeneralParser::new(&lex).parse_all().unwrap_error_extended(&lex, &include_path).map_err(|x| {println!("{}", x); String::new()}).unwrap();
                             for stmt in par.into_iter().rev() {
                                 statements.push_front(stmt);
                             }
