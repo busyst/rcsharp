@@ -1,12 +1,13 @@
 use rcsharp_lexer::{Token, TokenData};
 
-use crate::{parser::ParserType};
-
+use crate::parser::{ParserError, ParserResult, ParserType, Span};
 #[derive(Debug, Clone, PartialEq)] 
 pub enum Expr {
     Decimal(String),
     Integer(String),
     Name(String),
+    StringConst(String),
+    Type(ParserType),
 
     BinaryOp(Box<Expr>, BinaryOp, Box<Expr>),
     UnaryOp(UnaryOp, Box<Expr>),
@@ -15,20 +16,19 @@ pub enum Expr {
     Cast(Box<Expr>, ParserType),
     MemberAccess(Box<Expr>, String), 
     StaticAccess(Box<Expr>, String), 
-    StringConst(String),
+    
     Call(Box<Expr>, Box<[Expr]>),
     CallGeneric(Box<Expr>, Box<[Expr]>, Box<[ParserType]>),
     Index(Box<Expr>, Box<Expr>),
-    Type(ParserType),
 }
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum BinaryOp {
     Add, Subtract, Multiply, Divide, Modulo,
     Equals, NotEqual, Less, LessEqual, Greater, GreaterEqual,
     And, Or, BitAnd, BitOr, BitXor, ShiftLeft, ShiftRight,
 }
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum UnaryOp {
     Negate, Not, Deref, Pointer,
 }
@@ -61,11 +61,17 @@ impl<'a> ExpressionParser<'a> {
     pub fn new(tokens: &'a [TokenData]) -> Self {
         Self { tokens, cursor: 0 }
     }
+
     pub fn is_at_end(&self) -> bool {
         self.cursor >= self.tokens.len()
     }
+
+    pub fn cursor(&self) -> usize {
+        self.cursor
+    }
+
     fn peek(&self) -> &TokenData {
-        const DUMMY_EOF: TokenData = TokenData { 
+        static DUMMY_EOF: TokenData = TokenData { 
             token: Token::DummyToken,
             span: 0..0,
             row: 0,
@@ -73,29 +79,52 @@ impl<'a> ExpressionParser<'a> {
         };
         self.tokens.get(self.cursor).unwrap_or(&DUMMY_EOF)
     }
+    fn peek_span(&self) -> Span {
+        Span::new(self.cursor, self.cursor + 1)
+    }
+    
     fn advance(&mut self) -> &TokenData {
         if !self.is_at_end() {
             self.cursor += 1;
         }
         &self.tokens[self.cursor - 1]
     }
-    fn consume(&mut self, expected: &Token) -> Result<&TokenData, String> {
+    fn consume(&mut self, expected: &Token) -> ParserResult<&TokenData> {
         let token_data = self.peek();
         if &token_data.token != expected {
-            return Err(format!(
-                "Expected token {:?}, found {:?} at row {}, col {}",
-                expected,
-                token_data.token,
-                token_data.row,
-                token_data.col
+            return Err((
+                self.peek_span(),
+                (token_data.row as usize, token_data.col as usize),
+                ParserError::UnexpectedToken {
+                    expected: format!("{:?}", expected),
+                    found: format!("{:?}", token_data.token)
+                }
             ));
         }
         Ok(self.advance())
     }
-    pub fn parse_expression(&mut self) -> Result<Expr, String> {
+    fn consume_name(&mut self) -> ParserResult<String> {
+        let token_data = self.peek();
+        match &token_data.token {
+            Token::Name(name) => {
+                let name = name.to_string();
+                self.advance();
+                Ok(name)
+            },
+            _ => {
+                let found = format!("{:?}", token_data.token);
+                Err((
+                    Span::new(self.cursor, self.cursor + 1),
+                    (token_data.row as usize, token_data.col as usize),
+                    ParserError::ExpectedIdentifier { found }
+                ))
+            }
+        }
+    }
+    pub fn parse_expression(&mut self) -> ParserResult<Expr> {
         self.parse_expression_with_precedence(0)
     }
-    fn parse_expression_with_precedence(&mut self, min_precedence: u8) -> Result<Expr, String> {
+    fn parse_expression_with_precedence(&mut self, min_precedence: u8) -> ParserResult<Expr> {
         let mut left = self.parse_prefix()?;
 
         while !self.is_at_end() && min_precedence < get_precedence(&self.peek().token) {
@@ -104,12 +133,13 @@ impl<'a> ExpressionParser<'a> {
 
         Ok(left)
     }
-    fn parse_prefix(&mut self) -> Result<Expr, String> {
-        let token_data = self.advance();
+    
+    fn parse_prefix(&mut self) -> ParserResult<Expr> {
+        let token_data = self.advance().clone();
         match &token_data.token {
             Token::Integer(val) => Ok(Expr::Integer(val.to_string())),
+            Token::Char(val) => Ok(Expr::Integer((val.parse::<char>().unwrap() as u64).to_string())),
             Token::Decimal(val) => Ok(Expr::Decimal(val.to_string())),
-            Token::Char(val) => {  Ok(Expr::Integer(val.to_string()))},
             Token::String(val) => Ok(Expr::StringConst(val.to_string())),
             Token::Name(name) => Ok(Expr::Name(name.to_string())),
 
@@ -126,20 +156,20 @@ impl<'a> ExpressionParser<'a> {
             Token::LogicAnd => {
                 Ok(Expr::UnaryOp(UnaryOp::Pointer, Box::new(Expr::UnaryOp(UnaryOp::Pointer, Box::new(self.parse_prefix()?)))))
             },
-            _ => Err(format!(
-                "Unexpected token {:?} in expression at row {}, col {}",
-                token_data.token, token_data.row, token_data.col
-            )),
+            _ => Err((self.peek_span(), (token_data.row as usize, token_data.col as usize), ParserError::UnexpectedToken {
+                expected: "expression".to_string(),
+                found: format!("{:?}", token_data.token)
+            })),
         }
     }
-    fn parse_unary(&mut self, op: UnaryOp) -> Result<Expr, String> {
+    fn parse_unary(&mut self, op: UnaryOp) -> ParserResult<Expr> {
         let precedence = 13;
         let right = self.parse_expression_with_precedence(precedence)?;
         Ok(Expr::UnaryOp(op, Box::new(right)))
     }
-    fn parse_infix(&mut self, left: Expr) -> Result<Expr, String> {
-        let token = &self.peek().token.clone();
-        match token {
+    fn parse_infix(&mut self, left: Expr) -> ParserResult<Expr> {
+        let token_data = &self.peek().clone();
+        match &token_data.token {
             Token::Plus | Token::Minus | Token::Multiply | Token::Divide | Token::Modulo |
             Token::LogicEqual | Token::LogicNotEqual | Token::LogicLess | Token::LogicLessEqual |
             Token::LogicGreater | Token::LogicGreaterEqual | Token::LogicAnd | Token::LogicOr |
@@ -154,17 +184,14 @@ impl<'a> ExpressionParser<'a> {
             Token::DoubleColon => self.parse_static_access_or_generic_call(left),
 
             Token::KeywordAs => self.parse_cast(left),
-
-            _ => Err(format!(
-                "Unexpected token {:?} in expression at row {}, col {}",
-                token,
-                self.peek().row,
-                self.peek().col
-            )),
+            _ => Err((self.peek_span(), (token_data.row as usize, token_data.col as usize), ParserError::UnexpectedToken {
+                expected: "expression".to_string(),
+                found: format!("{:?}", token_data.token)
+            })),
         }
     }
-    fn parse_binary(&mut self, left: Expr) -> Result<Expr, String> {
-        let op_token = self.advance();
+    fn parse_binary(&mut self, left: Expr) -> ParserResult<Expr> {
+        let op_token = self.advance().clone();
         let precedence = get_precedence(&op_token.token);
 
         let op = match op_token.token {
@@ -191,14 +218,17 @@ impl<'a> ExpressionParser<'a> {
                 let right = self.parse_expression_with_precedence(precedence)?;
                 return Ok(Expr::Assign(Box::new(left), Box::new(right)));
             }
-            _ => return Err(format!("{:?} is not valid binary operator", op_token)),
+            _ => return Err((self.peek_span(), (op_token.row as usize, op_token.col as usize), ParserError::UnexpectedToken {
+                expected: "binary operator".to_string(),
+                found: format!("{:?}", op_token.token)
+            })),
         };
         
         let right = self.parse_expression_with_precedence(precedence)?;
         Ok(Expr::BinaryOp(Box::new(left), op, Box::new(right)))
     }
 
-    fn parse_call(&mut self, callee: Expr) -> Result<Expr, String> {
+    fn parse_call(&mut self, callee: Expr) -> ParserResult<Expr> {
         self.consume(&Token::LParen)?;
         if callee == Expr::Name("sizeof".to_string()) {
             let t = self.parse_type()?;
@@ -219,7 +249,7 @@ impl<'a> ExpressionParser<'a> {
         self.consume(&Token::RParen)?;
         Ok(Expr::Call(Box::new(callee), args.into_boxed_slice()))
     }
-    fn parse_generic_call(&mut self, callee: Expr) -> Result<Expr, String> {
+    fn parse_generic_call(&mut self, callee: Expr) -> ParserResult<Expr> {
         self.advance();
         self.consume(&Token::DoubleColon)?;
         self.consume(&Token::LogicLess)?;
@@ -256,7 +286,7 @@ impl<'a> ExpressionParser<'a> {
         self.consume(&Token::RParen)?;
         Ok(Expr::CallGeneric(Box::new(callee), args.into(), generic_types.into()))
     }
-    fn parse_index(&mut self, left: Expr) -> Result<Expr, String> {
+    fn parse_index(&mut self, left: Expr) -> ParserResult<Expr> {
     self.consume(&Token::LSquareBrace)?;
 
     let index_expr = self.parse_expression_with_precedence(0)?;
@@ -265,18 +295,18 @@ impl<'a> ExpressionParser<'a> {
 
     Ok(Expr::Index(Box::new(left), Box::new(index_expr)))
 }
-    fn parse_member_access(&mut self, left: Expr) -> Result<Expr, String> {
+    fn parse_member_access(&mut self, left: Expr) -> ParserResult<Expr> {
         self.consume(&Token::Dot)?;
 
-        let member_name = self.advance().expect_name_token()?;
+        let member_name = self.consume_name()?;
 
         Ok(Expr::MemberAccess(Box::new(left), member_name))
     }
-    fn parse_cast(&mut self, left: Expr) -> Result<Expr, String> {
+    fn parse_cast(&mut self, left: Expr) -> ParserResult<Expr> {
         self.consume(&Token::KeywordAs)?;
         Ok(Expr::Cast(Box::new(left), self.parse_type()?))
     }
-    pub fn parse_type(&mut self) -> Result<ParserType, String> {
+    pub fn parse_type(&mut self) -> ParserResult<ParserType> {
         if self.peek().token == Token::LogicAnd {
             self.advance();
             Ok(ParserType::Pointer(Box::new(ParserType::Pointer(Box::new(self.parse_type()?)))))
@@ -307,7 +337,7 @@ impl<'a> ExpressionParser<'a> {
             Ok(ParserType::Function(return_type, arguments.into_boxed_slice()))
         }
         else {
-            let link_or_name = self.advance().expect_name_token()?;
+            let link_or_name = self.consume_name()?;
             if self.peek().token == Token::DoubleColon {
                 self.advance();
                 return Ok(ParserType::NamespaceLink(link_or_name, Box::new(self.parse_type()?)))
@@ -335,18 +365,15 @@ impl<'a> ExpressionParser<'a> {
             Ok(ParserType::Named(link_or_name))
         }
     }
-    fn parse_static_access_or_generic_call(&mut self, left: Expr) -> Result<Expr, String> {
+    fn parse_static_access_or_generic_call(&mut self, left: Expr) -> ParserResult<Expr> {
         self.consume(&Token::DoubleColon)?;
         if self.peek().token == Token::LogicLess {
             self.cursor -= 2;
             return self.parse_generic_call(left);
         }
-        let member_name = self.advance().expect_name_token()?;
+        let member_name = self.consume_name()?;
 
         Ok(Expr::StaticAccess(Box::new(left), member_name))
-    }
-    pub fn cursor(&self) -> usize {
-        self.cursor
     }
 }
 

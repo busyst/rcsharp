@@ -8,14 +8,6 @@ pub struct TokenData {
     pub row: u32,
     pub col: u32,
 }
-impl TokenData {
-    pub fn expect_name_token(&self) -> Result<String, String>{
-        if let Token::Name(str) = &self.token{
-            return Ok(str.to_string());
-        }
-        Err(format!("Expected name token, found {:?} at {}:{}", self.token, self.row, self.col))
-    }
-}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LexingError {
@@ -119,7 +111,7 @@ pub enum Token {
     String(Box<str>),
     
     #[regex(r"'([^'\\]|\\.)*'", unescape_char)]
-    Char(i32),
+    Char(Box<str>),
 }
 
 pub struct Lexer<'source> {
@@ -186,7 +178,7 @@ fn unescape_string(lex: &mut logos::Lexer<Token>) -> Box<str> {
     let content = &slice[1..slice.len() - 1];
     unescape_content(content, true).into_boxed_str()
 }
-fn unescape_char(lex: &mut logos::Lexer<Token>) -> i32 {
+fn unescape_char(lex: &mut logos::Lexer<Token>) -> Box<str> {
     let slice = lex.slice();
     let content = &slice[1..slice.len() - 1];
     let unescaped = unescape_content(content, false);
@@ -198,7 +190,7 @@ fn unescape_char(lex: &mut logos::Lexer<Token>) -> i32 {
         panic!("Character literal may only contain one character");
     }
     
-    first as i32
+    first.to_string().into_boxed_str()
 }
 fn unhex_num(lex: &mut logos::Lexer<Token>) -> Box<str> {
     let slice = lex.slice();

@@ -1,6 +1,6 @@
 use std::{cell::{Cell, RefCell}, collections::HashMap};
 use ordered_hash_map::OrderedHashMap;
-use rcsharp_parser::{compiler_primitives::Layout, parser::{Attribute, ParserType, Stmt}};
+use rcsharp_parser::{compiler_primitives::Layout, parser::{Attribute, ParserType, StmtData}};
 
 use crate::{compiler::{CodeGenContext, CompileResult, SymbolTable, get_llvm_type_str, substitute_generic_type}, expression_compiler::{CompiledValue, size_and_alignment_of_type}};
 
@@ -195,7 +195,7 @@ pub struct Function {
     pub name: Box<str>,
     pub args: Box<[(String, ParserType)]>, 
     pub return_type: ParserType,
-    pub body: Box<[Stmt]>,
+    pub body: Box<[StmtData]>,
     pub attribs: Box<[Attribute]>, 
     flags: Cell<u8>,
 
@@ -204,7 +204,7 @@ pub struct Function {
     pub times_used : Cell<usize>
 }
 impl Function {
-    pub fn new(path: Box<str>, name: Box<str>, args: Box<[(String, ParserType)]>, return_type: ParserType, body: Box<[Stmt]>, flags: Cell<u8>, attribs: Box<[Attribute]>, generic_params: Box<[String]>) -> Self {
+    pub fn new(path: Box<str>, name: Box<str>, args: Box<[(String, ParserType)]>, return_type: ParserType, body: Box<[StmtData]>, flags: Cell<u8>, attribs: Box<[Attribute]>, generic_params: Box<[String]>) -> Self {
         Self { path, name, args, return_type, body, attribs, flags, generic_params, generic_implementations: RefCell::new(vec![]), times_used: Cell::new(0) }
     }
     pub fn is_generic(&self) -> bool { self.flags.get() & FunctionFlags::Generic as u8 != 0 }
@@ -241,7 +241,7 @@ impl<'a> FunctionView<'a> {
     pub fn new(func: &'a Function) -> Self {
         if func.is_generic() {
             panic!("Tried to get function view of generic function without specifying generic parameters: {}", func.name())
-        }
+        } 
         Self {
             func,
             args: func.args.to_vec(),
@@ -307,7 +307,7 @@ impl<'a> FunctionView<'a> {
         &self.return_type
     }
 
-    pub fn body(&self) -> &[Stmt] {
+    pub fn body(&self) -> &[StmtData] {
         &self.func.body
     }
 

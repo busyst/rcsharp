@@ -6,7 +6,7 @@ use ordered_hash_map::OrderedHashMap;
 use rcsharp_lexer::lex_string_with_file_context;
 use rcsharp_parser::compiler_primitives::{BASIC_INTEGER_TYPE, PRIMITIVE_TYPES_INFO, find_primitive_type};
 use rcsharp_parser::expression_parser::Expr;
-use rcsharp_parser::parser::{Attribute, GeneralParser, ParsedEnum, ParsedFunction, ParsedStruct, ParserType, Stmt};
+use rcsharp_parser::parser::{Attribute, GeneralParser, ParsedEnum, ParsedFunction, ParsedStruct, ParserType, Stmt, StmtData};
 use crate::compiler_essentials::{Enum, Function, FunctionFlags, FunctionView, Scope, Struct, StructView, Variable};
 use crate::expression_compiler::{Expected, compile_expression, constant_integer_expression_compiler};
 
@@ -49,7 +49,7 @@ impl From<std::io::Error> for CompileError {
 }
 pub type CompileResult<T> = Result<T, CompileError>;
 
-pub fn rcsharp_compile_to_file(stmts: &[Stmt], full_path: &str) -> Result<(), String> {
+pub fn rcsharp_compile_to_file(stmts: &[StmtData], full_path: &str) -> Result<(), String> {
     match rcsharp_compile(stmts, full_path) {
         Ok(llvm_ir) => {
             std::fs::write("output.ll", llvm_ir.build())
@@ -62,7 +62,7 @@ pub fn rcsharp_compile_to_file(stmts: &[Stmt], full_path: &str) -> Result<(), St
 fn is_global_hint(name: &str) -> bool {
     matches!(name, "include" | "-pop")
 }
-pub fn rcsharp_compile(stmts: &[Stmt], absolute_file_path: &str) -> CompileResult<LLVMOutputHandler>  {
+pub fn rcsharp_compile(stmts: &[StmtData], absolute_file_path: &str) -> CompileResult<LLVMOutputHandler>  {
     let mut symbols = SymbolTable::new();
     let mut output = LLVMOutputHandler::default();
     output.push_str_header("target triple = \"x86_64-pc-windows-msvc\"\n");
@@ -191,12 +191,12 @@ fn handle_generics(symbols: &mut SymbolTable, output: &mut LLVMOutputHandler) ->
     }
     Ok(())
 }
-fn collect(stmts: &[Stmt], 
+fn collect(stmts: &[StmtData], 
     enums: &mut Vec<ParsedEnum>, 
     structs : &mut Vec<ParsedStruct>, 
     functions : &mut Vec<ParsedFunction>,
 ) -> CompileResult<()>{
-    let mut statements: VecDeque<Stmt> = stmts.to_vec().into();
+    let mut statements: VecDeque<StmtData> = stmts.to_vec().into();
 
     let mut stack_hints = vec![];
     let mut current_path = Vec::new();
@@ -204,7 +204,7 @@ fn collect(stmts: &[Stmt],
 
     while !statements.is_empty() {
         while let Some(x) = statements.pop_front() {
-            if let Stmt::Hint(h, ex) = x {
+            if let Stmt::Hint(h, ex) = x.stmt {
                 if is_global_hint(&h) {
                     if h == "include" {
                         if let Some(Expr::StringConst(include_path)) = ex.first() {
@@ -226,24 +226,24 @@ fn collect(stmts: &[Stmt],
                         current_path.pop();
                     }
                 }else {
-                    stack_hints.push(Attribute::new(h.into(), ex));
+                    stack_hints.push(Attribute::new(h, ex));
                 }
                 continue;
             }
-            if let Stmt::Namespace(namespace, body) = x {
+            if let Stmt::Namespace(namespace, body) = x.stmt {
                 if !stack_hints.is_empty() {
                     return Err(CompileError::Generic("Hints are not applicable to namespaces".to_string()));
                 }
                 current_path.push(namespace);
-                statements.push_front(Stmt::Hint("-pop".to_string(), Box::new([])));
+                statements.push_front(Stmt::Hint("-pop".to_string(), Box::new([])).dummy_data());
                 for stmt in body.iter().rev() {
                     statements.push_front(stmt.clone());
                 }
                 continue;
             }
-            if let Stmt::Struct(struct_name, fields, generic_args) = x {
+            if let Stmt::Struct(struct_name, fields, generic_args) = x.stmt {
                 structs.push(ParsedStruct::new_parse(
-                    current_path.join(".").into(),
+                    current_path.join("."),
                         stack_hints.clone().into_boxed_slice(),
                         struct_name.into_boxed_str(),
                         fields,
@@ -252,7 +252,7 @@ fn collect(stmts: &[Stmt],
                 stack_hints.clear();
                 continue;
             }
-            if let Stmt::Function(mut x) = x {
+            if let Stmt::Function(mut x) = x.stmt {
                 
                 x.path = current_path.join(".").into();
                 x.attributes = stack_hints.clone().into_boxed_slice();
@@ -260,7 +260,7 @@ fn collect(stmts: &[Stmt],
                 stack_hints.clear();
                 continue;
             }
-            if let Stmt::Enum(enum_name, enum_type, fields) = x {
+            if let Stmt::Enum(enum_name, enum_type, fields) = x.stmt {
                 enums.push(ParsedEnum::new_parse(
                     current_path.join(",").into_boxed_str(),
                     enum_name.into_boxed_str(),
@@ -448,9 +448,9 @@ fn populate_default_types(table: &mut SymbolTable) {
         table.types.insert(primitive.name.to_string(), Struct::new_primitive(primitive.name));
     }
 }
-fn collect_local_variables<'a>(stmts: &'a [Stmt], vars: &mut Vec<(&'a String, &'a ParserType)>) {
+fn collect_local_variables<'a>(stmts: &'a [StmtData], vars: &mut Vec<(&'a String, &'a ParserType)>) {
     for stmt in stmts {
-        match stmt {
+        match &stmt.stmt {
             Stmt::Let(name, var_type, _) => {
                 vars.push((name, var_type));
             }
@@ -491,10 +491,10 @@ fn compile_function_body(function: &Function, full_function_name: &str, symbols:
 
     for stmt in function.body.iter(){
         //break;
-        compile_statement(stmt, &mut ctx, output)
+        compile_statement(&stmt.stmt, &mut ctx, output)
             .map_err(|e| CompileError::Generic(format!("In function '{}':\n{}", function.name(), e)))?;
     }
-    if !matches!(function.body.last(), Some(Stmt::Return(_))) {
+    if !matches!(function.body.last().map(|x| &x.stmt), Some(Stmt::Return(_))) {
         if function.return_type.is_void() {
             output.push_str("    ret void\n");
         } else {
@@ -596,7 +596,7 @@ pub fn compile_statement(stmt: &Stmt, ctx: &mut CodeGenContext, output: &mut LLV
             output.push_str(&format!("{}:\n", then_label));
             let original_scope = ctx.scope.clone_and_enter();
             for then_stmt in then_body {
-                compile_statement(then_stmt, ctx, output)?;
+                compile_statement(&then_stmt.stmt, ctx, output)?;
             }
             ctx.scope.swap_and_exit(original_scope);
             output.push_str(&format!("    br label %{}\n", end_label));
@@ -605,7 +605,7 @@ pub fn compile_statement(stmt: &Stmt, ctx: &mut CodeGenContext, output: &mut LLV
                 output.push_str(&format!("{}:\n", else_label));
                 let original_scope = ctx.scope.clone_and_enter();
                 for else_stmt in else_body {
-                    compile_statement(else_stmt, ctx, output)?;
+                    compile_statement(&else_stmt.stmt, ctx, output)?;
                 }
                 ctx.scope.swap_and_exit(original_scope);
                 output.push_str(&format!("    br label %{}\n", end_label));
@@ -621,7 +621,7 @@ pub fn compile_statement(stmt: &Stmt, ctx: &mut CodeGenContext, output: &mut LLV
             let original_scope = ctx.scope.clone_and_enter();
             ctx.scope.set_loop_index(Some(lc));
             for x in statement {
-                compile_statement(x, ctx, output)?;
+                compile_statement(&x.stmt, ctx, output)?;
             }
             ctx.scope.swap_and_exit(original_scope);
             output.push_str(&format!("    br label %loop_body{}\n", lc));

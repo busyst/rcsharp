@@ -388,7 +388,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
                     self.ctx.scope.add_variable(arg.0.to_string(), Variable::new_alias(arg.1.clone()), arg.2);
                 }
                 for x in func.body() {
-                    match x {
+                    match &x.stmt {
                         Stmt::Let(name, var_type, expr) =>{
                             let llvm_type = get_llvm_type_str(var_type, self.ctx.symbols, &self.ctx.current_function_path)?;
                             let x = self.ctx.aquire_unique_temp_value_counter() + u32::MAX / 2; // Hack
@@ -416,7 +416,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
                             }
                             self.output.push_str(&format!("    br label %inline_exit{}\n",inline_exit));
                         }
-                        _ => crate::compiler::compile_statement(x, self.ctx, self.output)?,
+                        _ => crate::compiler::compile_statement(&x.stmt, self.ctx, self.output)?,
                     }
                 }
                 self.output.push_str(&format!("    br label %inline_exit{}\n",inline_exit));
