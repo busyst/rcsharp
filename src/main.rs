@@ -18,7 +18,7 @@ fn main() -> Result<(), String> {
 	let y = GeneralParser::new(&all_tokens).parse_all().unwrap_error_extended(&all_tokens, &full_path).map_err(|x| {println!("{}", x); String::new()})?;
 	let tokens_parsed = Instant::now();
 	
-	rcsharp_compile_to_file(&y, full_path.as_str())?;
+	rcsharp_compile_to_file(&y, full_path.as_str()).map_err(|x| {println!("{}", x); format!("")})?;
 	let compiled_and_wrote = Instant::now();
 	println!("\t\tBase Source");
 	println!("read \t{:?}", file1_read - program_start);

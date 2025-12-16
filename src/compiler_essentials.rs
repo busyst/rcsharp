@@ -342,9 +342,9 @@ impl<'a> FunctionView<'a> {
     }
     pub fn get_compiled_value(&self) -> CompiledValue{
         if self.func.is_generic(){
-            return CompiledValue::GenericFunction { effective_name: self.full_path().to_string(), ptype: self.get_type() };
+            return CompiledValue::GenericFunction { effective_internal_name: self.full_path().to_string()};
         }
-        CompiledValue::Function { effective_name: self.full_path().to_string(), ptype: self.get_type() }
+        CompiledValue::Function { effective_internal_name: self.full_path().to_string() }
     }
 }
 // ------------------------------------------------------------------------------------
@@ -384,7 +384,6 @@ impl Variable {
         }
         &self.compiler_type
     }
-    
     pub fn is_argument(&self) -> bool {
         self.flags.get() & VariableFlags::Argument as u8 != 0
     }
