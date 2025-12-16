@@ -13,6 +13,7 @@ use crate::expression_compiler::{Expected, compile_expression, constant_integer_
 pub const LAZY_FUNCTION_COMPILE : bool = true;
 pub const APPEND_DEBUG_FUNCTION_INFO : bool = true;
 pub const DONT_INSERT_REDUNDAND_STRINGS : bool = true;
+pub const INTERGER_EXPRESION_OPTIMISATION : bool = true;
 
 #[derive(Debug)]
 pub enum CompileError {

@@ -171,7 +171,7 @@ namespace list{
         list.data = 0 as i32;
     }
     fn extend<T>(list: &List<T>, data: T){
-        let node_to_add: &ListNode<T> = mem::malloc(sizeof(ListNode<T>)) as &ListNode<T>;
+        let node_to_add: &ListNode<T> = mem::malloc(sizeof::<ListNode<T> >()) as &ListNode<T>;
         new_node::<T>(node_to_add);
         node_to_add.data = data;
 
@@ -233,7 +233,7 @@ namespace vector{
             if vec.capacity != 0 as u32 {
                 new_capacity = vec.capacity * 2 as u32;
             }
-            let new_size_bytes: i64 = sizeof(T) * new_capacity as i64;
+            let new_size_bytes: i64 = sizeof::<T>() * new_capacity as i64;
             vec.array = mem::realloc(vec.array as &void, new_size_bytes) as &T;
             vec.capacity = new_capacity;
         }
@@ -337,7 +337,7 @@ namespace console{
         }
     }
     fn println_u64(n: u64) {
-        let buffer : &i8 = stalloc(sizeof(i8) * 22);
+        let buffer : &i8 = stalloc::<i8>(22);
         let i: i32 = 20; 
         if n == 0 {
             write("0\n", 2);
@@ -382,7 +382,7 @@ namespace console{
         if integer_part == 0 {
             print_char('0');
         }else{
-            let buffer : &i8 = stalloc(sizeof(i8) * 21); 
+            let buffer : &i8 = stalloc::<i8>(21); 
             let i: i32 = 20;
             let temp_int : u64 = integer_part;
             loop {
@@ -422,7 +422,7 @@ namespace string{
     fn from_c_string(c_string: &i8) : String{
         let x: String;
         x.len = string_utils::c_str_len(c_string);
-        x.data = mem::malloc(sizeof(i8) * (x.len + 1) as i64) as &i8; 
+        x.data = mem::malloc(sizeof::<i8>() * (x.len + 1) as i64) as &i8; 
         mem::copy(c_string, x.data, x.len as i64);
         x.data[x.len] = 0;
         return x;
@@ -436,14 +436,14 @@ namespace string{
     fn with_size(size: i32) : String {
         let x: String;
         x.len = size;
-        x.data = mem::malloc(sizeof(i8) * (size + 1) as i64) as &i8;
+        x.data = mem::malloc(sizeof::<i8>() * (size + 1) as i64) as &i8;
         mem::zero_fill(x.data, (size + 1) as i64);
         return x;
     }
     fn clone(src: &String) : String {
         let x: String;
         x.len = src.len;
-        x.data = mem::malloc(sizeof(i8) * (x.len + 1) as i64) as &i8;
+        x.data = mem::malloc(sizeof::<i8>() * (x.len + 1) as i64) as &i8;
         mem::copy(src.data, x.data, x.len as i64);
         x.data[x.len] = 0;
         return x;
@@ -452,7 +452,7 @@ namespace string{
         let c_string_len : i32 = string_utils::c_str_len(c_string);
         let new_len: i32 = c_string_len + src_string.len;
         
-        let combined : &i8 = mem::malloc(sizeof(i8) * (new_len + 1) as i64) as &i8;
+        let combined : &i8 = mem::malloc(sizeof::<i8>() * (new_len + 1) as i64) as &i8;
         
         mem::copy(src_string.data, combined, src_string.len as i64);
         mem::copy(c_string, (combined + src_string.len as i64), c_string_len as i64);
@@ -790,7 +790,7 @@ namespace tests{
         let env_path : string::String = process::get_executable_env_path();
         let new_file_path: string::String = string::concat_with_c_string(&env_path, "test.txt");
 
-        let c_string : &i8 = stalloc(sizeof(i8) * (new_file_path.len + 1) as i64);
+        let c_string : &i8 = stalloc::<i8>((new_file_path.len + 1) as i64);
         string::as_c_string_stalloc(&new_file_path, c_string);
 
         fs::create_file(c_string);
@@ -1577,7 +1577,7 @@ namespace window{
     }
     fn get_bitmap_dimensions(hBitmap: &void, width: &i32, height: &i32) {
         let bm: BITMAP;
-        GetObjectA(hBitmap, sizeof(BITMAP) as i32, &bm);
+        GetObjectA(hBitmap, sizeof::<BITMAP>() as i32, &bm);
         *width = bm.bmWidth;
         *height = bm.bmHeight;
     }
@@ -1588,7 +1588,7 @@ namespace window{
         let hOldBitmap: &void = SelectObject(hMemDC, hBitmap);
 
         let bm: BITMAP;
-        GetObjectA(hBitmap, sizeof(BITMAP) as i32, &bm);
+        GetObjectA(hBitmap, sizeof::<BITMAP>() as i32, &bm);
 
         BitBlt(hdc, x, y, bm.bmWidth, bm.bmHeight, hMemDC, 0, 0, 13369376);
 
@@ -1602,7 +1602,7 @@ namespace window{
         let hOldBitmap: &void = SelectObject(hMemDC, hBitmap);
 
         let bm: BITMAP;
-        GetObjectA(hBitmap, sizeof(BITMAP) as i32, &bm);
+        GetObjectA(hBitmap, sizeof::<BITMAP>() as i32, &bm);
         
         SetStretchBltMode(hdc, 3); 
         
@@ -1622,7 +1622,7 @@ namespace window{
 
         let className: &i8 = "MyWindowClass";
         let wc: WNDCLASSEXA;
-        wc.cbSize = sizeof(WNDCLASSEXA);
+        wc.cbSize = sizeof::<WNDCLASSEXA>();
         wc.style = CS::HREDRAW | CS::VREDRAW;
         wc.lpfnWndProc = &WindowProc;
         wc.cbClsExtra = 0;
@@ -1678,7 +1678,7 @@ namespace window{
 
         let className: &i8 = "BorderlessImageClass";
         let wc: WNDCLASSEXA;
-        wc.cbSize = sizeof(WNDCLASSEXA);
+        wc.cbSize = sizeof::<WNDCLASSEXA>();
         wc.style = CS::HREDRAW | CS::VREDRAW;
         wc.lpfnWndProc = &WindowProc;
         wc.cbClsExtra = 0;
