@@ -67,23 +67,23 @@ namespace mem{
 
     fn malloc(size: i64) : &void { 
         let ptr: &void = HeapAlloc(GetProcessHeap(), 0, size);
-        if ptr == 0 as &void {
+        if ptr == bitcast::<&void>(0) {
             process::throw("Out of memory");
         }
         return ptr;
     }
     fn realloc(ptr: &void, size: i64) : &void {
-        if ptr == 0 as &void {
+        if ptr == bitcast::<&void>(0) {
             return malloc(size);
         }
         let new_ptr: &void = HeapReAlloc(GetProcessHeap(), 0, ptr, size);
-        if new_ptr == 0 as &void {
+        if new_ptr == bitcast::<&void>(0) {
             process::throw("Realloc failed");
         }
         return new_ptr;
     }
     fn free(ptr: &void) : void { 
-        if ptr != 0 as &void {
+        if ptr != bitcast::<&void>(0) {
             HeapFree(GetProcessHeap(), 0, ptr); 
         }
     }
@@ -249,7 +249,7 @@ namespace vector{
             index = index + 1;
         }
     }
-        #[ExtentionOf(Vec)]
+    #[ExtentionOf(Vec)]
     fn remove_at<T>(vec: &Vec<T>, index: u32) {
         if index >= vec.length {
             process::throw("Vector index out of bounds");
@@ -293,7 +293,7 @@ namespace console{
 
     fn get_stdout() : &i8 {
         let stdout_handle: &i8 = GetStdHandle(-11 as i32);
-        if (stdout_handle == -1 as &i8) {
+        if (stdout_handle == bitcast::<&i8>(-1)) {
             process::throw("stdout handle was invalid");
         }
         return stdout_handle;
@@ -529,7 +529,7 @@ namespace fs{
         let GENERIC_WRITE: u32 = 0x40000000;
         let FILE_ATTRIBUTE_NORMAL: u32 = 0x80;
         let hFile: &void = CreateFileA(path, GENERIC_WRITE, 0, 0 as &i8, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0 as &i8);
-        if hFile == -1 as &void { return 0; }
+        if hFile == bitcast::<&void>(-1) { return 0; }
 
         let bytes_written: u32 = 0;
         let success: i32 = WriteFile(hFile, content, content_len, &bytes_written, 0 as &i8);
@@ -542,7 +542,7 @@ namespace fs{
         let OPEN_EXISTING: u32 = 3; 
         let hFile: &void = CreateFileA(path, GENERIC_READ, 1, 0 as &i8, OPEN_EXISTING, 0x80, 0 as &i8); // Shared Read
         
-        if hFile == -1 as &void {
+        if hFile == bitcast::<&void>(-1) {
             process::throw(string_utils::insert("File not found: ", path, 16));
         }
 
@@ -567,7 +567,7 @@ namespace fs{
     }
     fn create_file(path: &i8) : i32 {
         let hFile: &void = CreateFileA(path, 0x40000000, 0, 0 as &i8, 1, 0x80, 0 as &i8);
-        if hFile == -1 as &void { return 0; }
+        if hFile == bitcast::<&void>(-1) { return 0; }
         CloseHandle(hFile);
         return 1;
     }
@@ -1036,8 +1036,8 @@ namespace tests{
             if i >= data.length {
                 break;
             }
-            console::write_string(&data.array[i]);
-            console::write("\n", 1);
+            //console::write_string(&data.array[i]);
+            //console::write("\n", 1);
             string::free(&data.array[i]);
             i = i + 1;
         }
@@ -1617,7 +1617,7 @@ namespace window{
         // CW apparently stands for Control Word. https://stackoverflow.com/questions/48079439/winapi-cw-usedefault-vs-cw-default
         let CW_USEDEFAULT: i32 = 0x80000000;
 
-        let hInstance: &void = GetModuleHandleA(0 as &i8);
+        let hInstance: &void = GetModuleHandleA(bitcast::<&i8>(0));
         if is_null(hInstance) { process::throw("Window error: StartError::GetModuleHandleFailed"); }
 
         let className: &i8 = "MyWindowClass";
@@ -1628,12 +1628,12 @@ namespace window{
         wc.cbClsExtra = 0;
         wc.cbWndExtra = 0;
         wc.hInstance = hInstance;
-        wc.hIcon = 0 as &void;
-        wc.hCursor = 0 as &void;
-        wc.hbrBackground = (SYS_COLOR::WINDOW + 1) as &void;
-        wc.lpszMenuName = 0 as &i8;
+        wc.hIcon = bitcast::<&void>(0);
+        wc.hCursor = bitcast::<&void>(0);
+        wc.hbrBackground = bitcast::<&void>(SYS_COLOR::WINDOW + 1);
+        wc.lpszMenuName = bitcast::<&i8>(0);
         wc.lpszClassName = className;
-        wc.hIconSm = 0 as &void;
+        wc.hIconSm = bitcast::<&void>(0);
 
         if RegisterClassExA(&wc) == 0 { process::throw("Window error: StartError::RegisterClassFailed"); }
 
@@ -1647,10 +1647,10 @@ namespace window{
             CW_USEDEFAULT,          // Y position
             800,                    // Width
             600,                    // Height
-            0 as &void,               // Parent window
-            0 as &void,               // Menu
+            bitcast::<&void>(0),               // Parent window
+            bitcast::<&void>(0),               // Menu
             hInstance,              // Application instance handle
-            0 as &void                // Additional application data
+            bitcast::<&void>(0)                // Additional application data
         );
 
         if is_null(hWnd) { process::throw("Window error: StartError::CreateWindowFailed"); }
@@ -1658,7 +1658,7 @@ namespace window{
 
         let msg: MSG;
         loop {
-            if GetMessageA(&msg, 0 as &void, 0, 0) <= 0{
+            if GetMessageA(&msg, bitcast::<&void>(0), 0, 0) <= 0{
                 break;
             }
             TranslateMessage(&msg);
@@ -1666,12 +1666,14 @@ namespace window{
         }
     }
     fn start_image_window(imagePath: &i8) {
-       let hInstance: &void = GetModuleHandleA(0 as &i8);
-        
+        let hInstance: &void = GetModuleHandleA(bitcast::<&i8>(0));
+        if is_null(hInstance) { process::throw("Window error: StartError::GetModuleHandleFailed"); }
+
         let local_hImage: &void = load_bitmap_from_file(imagePath);
-        if local_hImage == 0 as &void {
+        if local_hImage == bitcast::<&void>(0) {
             process::throw("Failed to load image. not valid .BMP file");
         }
+        
         let imgW: i32 = 0;
         let imgH: i32 = 0;
         get_bitmap_dimensions(local_hImage, &imgW, &imgH);
@@ -1684,16 +1686,15 @@ namespace window{
         wc.cbClsExtra = 0;
         wc.cbWndExtra = 0;
         wc.hInstance = hInstance;
-        wc.hIcon = 0 as &void;
-        wc.hCursor = LoadCursorA(0 as &void, 32512 as &i8);
-        wc.hbrBackground = (SYS_COLOR::WINDOW + 1) as &void;
-        wc.lpszMenuName = 0 as &i8;
+        wc.hIcon = bitcast::<&void>(0);
+        wc.hCursor = bitcast::<&void>(0);
+        wc.hbrBackground = bitcast::<&void>(SYS_COLOR::WINDOW + 1);
+        wc.lpszMenuName = bitcast::<&i8>(0);
         wc.lpszClassName = className;
-        wc.hIconSm = 0 as &void;
+        wc.hIconSm = bitcast::<&void>(0);
 
-        if RegisterClassExA(&wc) == 0 { 
-            process::throw("Window error: RegisterClassFailed"); 
-        }
+        if RegisterClassExA(&wc) == 0 { process::throw("Window error: StartError::RegisterClassFailed"); }
+        
         let hWnd: &void = CreateWindowExA(
             WS_EX::TOPMOST,
             className,
@@ -1703,15 +1704,12 @@ namespace window{
             100,
             imgW,
             imgH,
-            0 as &void,
-            0 as &void,
+            bitcast::<&void>(0),               // Parent window
+            bitcast::<&void>(0),               // Menu
             hInstance,
-            0 as &void
+            bitcast::<&void>(0)                // Additional application data
         );
-
-        if is_null(hWnd) { 
-            process::throw("Window error: CreateWindowFailed"); 
-        }
+        if is_null(hWnd) { process::throw("Window error: StartError::CreateWindowFailed"); }
 
         SetWindowLongPtrA(hWnd, -21, local_hImage);
 
@@ -1722,7 +1720,7 @@ namespace window{
 
         let msg: MSG;
         loop {
-            if GetMessageA(&msg, 0 as &void, 0, 0) <= 0{
+            if GetMessageA(&msg, bitcast::<&void>(0), 0, 0) <= 0{
                 break;
             }
             TranslateMessage(&msg);

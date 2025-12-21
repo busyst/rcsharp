@@ -15,7 +15,9 @@ pub enum Expr {
     
     Cast(Box<Expr>, ParserType),
     MemberAccess(Box<Expr>, String), 
-    StaticAccess(Box<Expr>, String), 
+    StaticAccess(Box<Expr>, String),
+    
+    NameWithGenerics(Box<Expr>, Box<[ParserType]>),
     
     Call(Box<Expr>, Box<[Expr]>),
     CallGeneric(Box<Expr>, Box<[Expr]>, Box<[ParserType]>),
@@ -270,6 +272,9 @@ impl<'a> ExpressionParser<'a> {
         }
         if self.peek().token == Token::SemiColon {
             return Ok(Expr::Type(ParserType::Generic(exprtoparsertype(&callee), generic_types.into())));
+        }
+        if self.peek().token != Token::LParen {
+            return Ok(Expr::NameWithGenerics(Box::new(callee), generic_types.into()));
         }
         self.consume(&Token::LParen)?;
         let mut args = Vec::new();

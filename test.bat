@@ -8,7 +8,10 @@ cargo run -q -- %1 || (
     echo Error: cargo run failed
     exit /b %errorlevel%
 )
-
+llvm-as -disable-output output.ll || (
+    echo Error: LLVM IR Syntax/Type Error
+    exit /b %errorlevel%
+)
 llc -filetype=obj output.ll -o output.obj || (
     echo Error: Failed to compile LLVM IR
     exit /b %errorlevel%

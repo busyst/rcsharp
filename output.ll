@@ -13,6 +13,8 @@ target triple = "x86_64-pc-windows-msvc"
 %"struct.vector.Vec<i8>" = type { i8*, i32, i32 }
 %"struct.vector.Vec<%struct.string.String>" = type { %struct.string.String*, i32, i32 }
 %"struct.vector.Vec<i64>" = type { i64*, i32, i32 }
+%"struct.Pair<i32, struct.Pair<i8, %struct.string.String>>" = type { i32, %"struct.Pair<i8, %struct.string.String>" }
+%"struct.Pair<i8, %struct.string.String>" = type { i8, %struct.string.String }
 %"struct.test.QPair<i64, i64>" = type { i64, i64 }
 
 declare dllimport void @ExitProcess(i32)
@@ -26,7 +28,6 @@ declare dllimport i32 @HeapLock(i32*)
 declare dllimport i32 @HeapUnlock(i32*)
 declare dllimport i32 @AllocConsole()
 declare dllimport i8* @GetStdHandle(i32)
-declare dllimport i32 @FreeConsole()
 declare dllimport i32 @WriteConsoleA(i8*,i8*,i32,i32*,i8*)
 declare dllimport i8* @CreateFileA(i8*,i32,i32,i8*,i32,i32,i8*)
 declare dllimport i32 @WriteFile(i8*,i8*,i32,i32*,i8*)
@@ -43,7 +44,6 @@ declare dllimport i64 @DispatchMessageA(%struct.window.MSG*)
 declare dllimport void @PostQuitMessage(i32)
 declare dllimport i8* @BeginPaint(i8*,%struct.window.PAINTSTRUCT*)
 declare dllimport i32 @EndPaint(i8*,%struct.window.PAINTSTRUCT*)
-declare dllimport i8* @LoadCursorA(i8*,i8*)
 declare dllimport i8* @LoadImageA(i8*,i8*,i32,i32,i32,i32)
 declare dllimport i32 @GetClientRect(i8*,%struct.window.RECT*)
 declare dllimport i32 @InvalidateRect(i8*,%struct.window.RECT*,i32)
@@ -136,18 +136,15 @@ declare dllimport i8* @GetWindowLongPtrA(i8*,i32)
 @.str.73 = private unnamed_addr constant [9 x i8] c"test.txt\00"
 @.str.74 = private unnamed_addr constant [38 x i8] c"Filesystem test failed, data mismatch\00"
 @.str.75 = private unnamed_addr constant [45 x i8] c"D:\Projects\rcsharp\src_base_structs.rcsharp\00"
-@.str.76 = private unnamed_addr constant [2 x i8] c"\0A\00"
-@.str.77 = private unnamed_addr constant [37 x i8] c"File not found! While loading Bitmap\00"
-@.str.78 = private unnamed_addr constant [48 x i8] c"Window error: StartError::GetModuleHandleFailed\00"
-@.str.79 = private unnamed_addr constant [14 x i8] c"MyWindowClass\00"
-@.str.80 = private unnamed_addr constant [46 x i8] c"Window error: StartError::RegisterClassFailed\00"
-@.str.81 = private unnamed_addr constant [14 x i8] c"Hello, World!\00"
-@.str.82 = private unnamed_addr constant [45 x i8] c"Window error: StartError::CreateWindowFailed\00"
-@.str.83 = private unnamed_addr constant [42 x i8] c"Failed to load image. not valid .BMP file\00"
-@.str.84 = private unnamed_addr constant [21 x i8] c"BorderlessImageClass\00"
-@.str.85 = private unnamed_addr constant [34 x i8] c"Window error: RegisterClassFailed\00"
-@.str.86 = private unnamed_addr constant [12 x i8] c"ImageWindow\00"
-@.str.87 = private unnamed_addr constant [33 x i8] c"Window error: CreateWindowFailed\00"
+@.str.76 = private unnamed_addr constant [37 x i8] c"File not found! While loading Bitmap\00"
+@.str.77 = private unnamed_addr constant [48 x i8] c"Window error: StartError::GetModuleHandleFailed\00"
+@.str.78 = private unnamed_addr constant [14 x i8] c"MyWindowClass\00"
+@.str.79 = private unnamed_addr constant [46 x i8] c"Window error: StartError::RegisterClassFailed\00"
+@.str.80 = private unnamed_addr constant [14 x i8] c"Hello, World!\00"
+@.str.81 = private unnamed_addr constant [45 x i8] c"Window error: StartError::CreateWindowFailed\00"
+@.str.82 = private unnamed_addr constant [42 x i8] c"Failed to load image. not valid .BMP file\00"
+@.str.83 = private unnamed_addr constant [21 x i8] c"BorderlessImageClass\00"
+@.str.84 = private unnamed_addr constant [12 x i8] c"ImageWindow\00"
 define void @"__chkstk"(){
     ret void
 }
@@ -232,45 +229,49 @@ define i8* @"mem.malloc"(i64 %size){
     %tmp1 = call i8* @HeapAlloc(i32* %tmp0, i32 0, i64 %size)
     store i8* %tmp1, i8** %v0
     %tmp2 = load i8*, i8** %v0
-    %tmp3 = icmp eq ptr %tmp2, null
-    br i1 %tmp3, label %then0, label %endif0
+    %tmp3 = inttoptr i64 0 to i8*
+    %tmp4 = icmp eq ptr %tmp2, %tmp3
+    br i1 %tmp4, label %then0, label %endif0
 then0:
-    %tmp4 = getelementptr inbounds [14 x i8], [14 x i8]* @.str.1, i64 0, i64 0
-    call void @process.throw(i8* %tmp4)
+    %tmp5 = getelementptr inbounds [14 x i8], [14 x i8]* @.str.1, i64 0, i64 0
+    call void @process.throw(i8* %tmp5)
     br label %endif0
 endif0:
-    %tmp5 = load i8*, i8** %v0
-    ret i8* %tmp5
+    %tmp6 = load i8*, i8** %v0
+    ret i8* %tmp6
 }
 define i8* @"mem.realloc"(i8* %ptr, i64 %size){
     %v0 = alloca i8*; var: new_ptr
-    %tmp0 = icmp eq ptr %ptr, null
-    br i1 %tmp0, label %then0, label %endif0
+    %tmp0 = inttoptr i64 0 to i8*
+    %tmp1 = icmp eq ptr %ptr, %tmp0
+    br i1 %tmp1, label %then0, label %endif0
 then0:
-    %tmp1 = call i8* @mem.malloc(i64 %size)
-    ret i8* %tmp1
+    %tmp2 = call i8* @mem.malloc(i64 %size)
+    ret i8* %tmp2
     br label %endif0
 endif0:
-    %tmp2 = call i32* @GetProcessHeap()
-    %tmp3 = call i8* @HeapReAlloc(i32* %tmp2, i32 0, i8* %ptr, i64 %size)
-    store i8* %tmp3, i8** %v0
-    %tmp4 = load i8*, i8** %v0
-    %tmp5 = icmp eq ptr %tmp4, null
-    br i1 %tmp5, label %then1, label %endif1
+    %tmp3 = call i32* @GetProcessHeap()
+    %tmp4 = call i8* @HeapReAlloc(i32* %tmp3, i32 0, i8* %ptr, i64 %size)
+    store i8* %tmp4, i8** %v0
+    %tmp5 = load i8*, i8** %v0
+    %tmp6 = inttoptr i64 0 to i8*
+    %tmp7 = icmp eq ptr %tmp5, %tmp6
+    br i1 %tmp7, label %then1, label %endif1
 then1:
-    %tmp6 = getelementptr inbounds [15 x i8], [15 x i8]* @.str.2, i64 0, i64 0
-    call void @process.throw(i8* %tmp6)
+    %tmp8 = getelementptr inbounds [15 x i8], [15 x i8]* @.str.2, i64 0, i64 0
+    call void @process.throw(i8* %tmp8)
     br label %endif1
 endif1:
-    %tmp7 = load i8*, i8** %v0
-    ret i8* %tmp7
+    %tmp9 = load i8*, i8** %v0
+    ret i8* %tmp9
 }
 define void @"mem.free"(i8* %ptr){
-    %tmp0 = icmp ne ptr %ptr, null
-    br i1 %tmp0, label %then0, label %endif0
+    %tmp0 = inttoptr i64 0 to i8*
+    %tmp1 = icmp ne ptr %ptr, %tmp0
+    br i1 %tmp1, label %then0, label %endif0
 then0:
-    %tmp1 = call i32* @GetProcessHeap()
-    call i32 @HeapFree(i32* %tmp1, i32 0, i8* %ptr)
+    %tmp2 = call i32* @GetProcessHeap()
+    call i32 @HeapFree(i32* %tmp2, i32 0, i8* %ptr)
     br label %endif0
 endif0:
     ret void
@@ -2479,17 +2480,10 @@ endif45:
     %tmp254 = load %struct.string.String*, %struct.string.String** %tmp253
     %tmp255 = load i32, i32* %v11
     %tmp256 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp254, i32 %tmp255
-    call void @console.write_string(%struct.string.String* %tmp256)
-    %tmp257 = getelementptr inbounds [2 x i8], [2 x i8]* @.str.76, i64 0, i64 0
-    call void @console.write(i8* %tmp257, i32 1)
-    %tmp258 = getelementptr inbounds %"struct.vector.Vec<%struct.string.String>", %"struct.vector.Vec<%struct.string.String>"* %v6, i32 0, i32 0
-    %tmp259 = load %struct.string.String*, %struct.string.String** %tmp258
-    %tmp260 = load i32, i32* %v11
-    %tmp261 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp259, i32 %tmp260
-    call void @string.free(%struct.string.String* %tmp261)
-    %tmp262 = load i32, i32* %v11
-    %tmp263 = add i32 %tmp262, 1
-    store i32 %tmp263, i32* %v11
+    call void @string.free(%struct.string.String* %tmp256)
+    %tmp257 = load i32, i32* %v11
+    %tmp258 = add i32 %tmp257, 1
+    store i32 %tmp258, i32* %v11
     br label %loop_body44
 loop_body44_exit:
     call void @"vector.free<%struct.string.String>"(%"struct.vector.Vec<%struct.string.String>"* %v6)
@@ -2586,7 +2580,7 @@ define i8* @"window.load_bitmap_from_file"(i8* %path){
     %tmp1 = xor i1 %tmp0, 1
     br i1 %tmp1, label %then0, label %endif0
 then0:
-    %tmp2 = getelementptr inbounds [37 x i8], [37 x i8]* @.str.77, i64 0, i64 0
+    %tmp2 = getelementptr inbounds [37 x i8], [37 x i8]* @.str.76, i64 0, i64 0
     call void @process.throw(i8* %tmp2)
     br label %endif0
 endif0:
@@ -2672,89 +2666,98 @@ define void @"window.start"(){
     %v5 = alloca i8*; var: hWnd
     %v6 = alloca %struct.window.MSG; var: msg
     store i32 2147483648, i32* %v0
-    %tmp0 = call i8* @GetModuleHandleA(i8* null)
-    store i8* %tmp0, i8** %v1
-    %iv1 = alloca i1
-    %tmp2 = load i8*, i8** %v1
-    %tmp3 = icmp eq ptr %tmp2, null
-    store i1 %tmp3, i1* %iv1
+    %tmp0 = inttoptr i64 0 to i8*
+    %tmp1 = call i8* @GetModuleHandleA(i8* %tmp0)
+    store i8* %tmp1, i8** %v1
+    %iv2 = alloca i1
+    %tmp3 = load i8*, i8** %v1
+    %tmp4 = icmp eq ptr %tmp3, null
+    store i1 %tmp4, i1* %iv2
     br label %inline_exit0
 inline_exit0:
-    %tmp4 = load i1, i1* %iv1
-    br i1 %tmp4, label %then1, label %endif1
+    %tmp5 = load i1, i1* %iv2
+    br i1 %tmp5, label %then1, label %endif1
 then1:
-    %tmp5 = getelementptr inbounds [48 x i8], [48 x i8]* @.str.78, i64 0, i64 0
-    call void @process.throw(i8* %tmp5)
+    %tmp6 = getelementptr inbounds [48 x i8], [48 x i8]* @.str.77, i64 0, i64 0
+    call void @process.throw(i8* %tmp6)
     br label %endif1
 endif1:
-    %tmp6 = getelementptr inbounds [14 x i8], [14 x i8]* @.str.79, i64 0, i64 0
-    store i8* %tmp6, i8** %v2
-    %tmp7 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v3, i32 0, i32 0
-    store i32 80, i32* %tmp7
-    %tmp8 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v3, i32 0, i32 1
-    %tmp9 = or i32 2, 1
-    store i32 %tmp9, i32* %tmp8
-    %tmp10 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v3, i32 0, i32 2
-    store i64 (i8*, i32, i64, i64)** @window.WindowProc, i64 (i8*, i32, i64, i64)*** %tmp10
-    %tmp11 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v3, i32 0, i32 3
-    store i32 0, i32* %tmp11
-    %tmp12 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v3, i32 0, i32 4
+    %tmp7 = getelementptr inbounds [14 x i8], [14 x i8]* @.str.78, i64 0, i64 0
+    store i8* %tmp7, i8** %v2
+    %tmp8 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v3, i32 0, i32 0
+    store i32 80, i32* %tmp8
+    %tmp9 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v3, i32 0, i32 1
+    %tmp10 = or i32 2, 1
+    store i32 %tmp10, i32* %tmp9
+    %tmp11 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v3, i32 0, i32 2
+    store i64 (i8*, i32, i64, i64)** @window.WindowProc, i64 (i8*, i32, i64, i64)*** %tmp11
+    %tmp12 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v3, i32 0, i32 3
     store i32 0, i32* %tmp12
-    %tmp13 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v3, i32 0, i32 5
-    %tmp14 = load i8*, i8** %v1
-    store i8* %tmp14, i8** %tmp13
-    %tmp15 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v3, i32 0, i32 6
-    store i8* null, i8** %tmp15
-    %tmp16 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v3, i32 0, i32 7
-    store i8* null, i8** %tmp16
-    %tmp17 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v3, i32 0, i32 8
-    %tmp18 = add i32 5, 1
-    %tmp19 = inttoptr i32 %tmp18 to i8*
-    store i8* %tmp19, i8** %tmp17
-    %tmp20 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v3, i32 0, i32 9
-    store i8* null, i8** %tmp20
-    %tmp21 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v3, i32 0, i32 10
-    %tmp22 = load i8*, i8** %v2
-    store i8* %tmp22, i8** %tmp21
-    %tmp23 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v3, i32 0, i32 11
-    store i8* null, i8** %tmp23
-    %tmp24 = call i16 @RegisterClassExA(%struct.window.WNDCLASSEXA* %v3)
-    %tmp25 = icmp eq i16 %tmp24, 0
-    br i1 %tmp25, label %then2, label %endif2
+    %tmp13 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v3, i32 0, i32 4
+    store i32 0, i32* %tmp13
+    %tmp14 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v3, i32 0, i32 5
+    %tmp15 = load i8*, i8** %v1
+    store i8* %tmp15, i8** %tmp14
+    %tmp16 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v3, i32 0, i32 6
+    %tmp17 = inttoptr i64 0 to i8*
+    store i8* %tmp17, i8** %tmp16
+    %tmp18 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v3, i32 0, i32 7
+    %tmp19 = inttoptr i64 0 to i8*
+    store i8* %tmp19, i8** %tmp18
+    %tmp20 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v3, i32 0, i32 8
+    %tmp21 = add i32 5, 1
+    %tmp22 = inttoptr i32 %tmp21 to i8*
+    store i8* %tmp22, i8** %tmp20
+    %tmp23 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v3, i32 0, i32 9
+    %tmp24 = inttoptr i64 0 to i8*
+    store i8* %tmp24, i8** %tmp23
+    %tmp25 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v3, i32 0, i32 10
+    %tmp26 = load i8*, i8** %v2
+    store i8* %tmp26, i8** %tmp25
+    %tmp27 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v3, i32 0, i32 11
+    %tmp28 = inttoptr i64 0 to i8*
+    store i8* %tmp28, i8** %tmp27
+    %tmp29 = call i16 @RegisterClassExA(%struct.window.WNDCLASSEXA* %v3)
+    %tmp30 = icmp eq i16 %tmp29, 0
+    br i1 %tmp30, label %then2, label %endif2
 then2:
-    %tmp26 = getelementptr inbounds [46 x i8], [46 x i8]* @.str.80, i64 0, i64 0
-    call void @process.throw(i8* %tmp26)
+    %tmp31 = getelementptr inbounds [46 x i8], [46 x i8]* @.str.79, i64 0, i64 0
+    call void @process.throw(i8* %tmp31)
     br label %endif2
 endif2:
-    %tmp27 = getelementptr inbounds [14 x i8], [14 x i8]* @.str.81, i64 0, i64 0
-    store i8* %tmp27, i8** %v4
-    %tmp28 = load i8*, i8** %v2
-    %tmp29 = load i8*, i8** %v4
-    %tmp30 = load i32, i32* %v0
-    %tmp31 = load i32, i32* %v0
-    %tmp32 = load i8*, i8** %v1
-    %tmp33 = call i8* @CreateWindowExA(i32 0, i8* %tmp28, i8* %tmp29, i32 13565952, i32 %tmp30, i32 %tmp31, i32 800, i32 600, i8* null, i8* null, i8* %tmp32, i8* null)
-    store i8* %tmp33, i8** %v5
-    %iv34 = alloca i1
-    %tmp35 = load i8*, i8** %v5
-    %tmp36 = icmp eq ptr %tmp35, null
-    store i1 %tmp36, i1* %iv34
+    %tmp32 = getelementptr inbounds [14 x i8], [14 x i8]* @.str.80, i64 0, i64 0
+    store i8* %tmp32, i8** %v4
+    %tmp33 = load i8*, i8** %v2
+    %tmp34 = load i8*, i8** %v4
+    %tmp35 = load i32, i32* %v0
+    %tmp36 = load i32, i32* %v0
+    %tmp37 = inttoptr i64 0 to i8*
+    %tmp38 = inttoptr i64 0 to i8*
+    %tmp39 = load i8*, i8** %v1
+    %tmp40 = inttoptr i64 0 to i8*
+    %tmp41 = call i8* @CreateWindowExA(i32 0, i8* %tmp33, i8* %tmp34, i32 13565952, i32 %tmp35, i32 %tmp36, i32 800, i32 600, i8* %tmp37, i8* %tmp38, i8* %tmp39, i8* %tmp40)
+    store i8* %tmp41, i8** %v5
+    %iv42 = alloca i1
+    %tmp43 = load i8*, i8** %v5
+    %tmp44 = icmp eq ptr %tmp43, null
+    store i1 %tmp44, i1* %iv42
     br label %inline_exit3
 inline_exit3:
-    %tmp37 = load i1, i1* %iv34
-    br i1 %tmp37, label %then4, label %endif4
+    %tmp45 = load i1, i1* %iv42
+    br i1 %tmp45, label %then4, label %endif4
 then4:
-    %tmp38 = getelementptr inbounds [45 x i8], [45 x i8]* @.str.82, i64 0, i64 0
-    call void @process.throw(i8* %tmp38)
+    %tmp46 = getelementptr inbounds [45 x i8], [45 x i8]* @.str.81, i64 0, i64 0
+    call void @process.throw(i8* %tmp46)
     br label %endif4
 endif4:
-    %tmp39 = load i8*, i8** %v5
-    call i32 @ShowWindow(i8* %tmp39, i32 5)
+    %tmp47 = load i8*, i8** %v5
+    call i32 @ShowWindow(i8* %tmp47, i32 5)
     br label %loop_body5
 loop_body5:
-    %tmp40 = call i32 @GetMessageA(%struct.window.MSG* %v6, i8* null, i32 0, i32 0)
-    %tmp41 = icmp sle i32 %tmp40, 0
-    br i1 %tmp41, label %then6, label %endif6
+    %tmp48 = inttoptr i64 0 to i8*
+    %tmp49 = call i32 @GetMessageA(%struct.window.MSG* %v6, i8* %tmp48, i32 0, i32 0)
+    %tmp50 = icmp sle i32 %tmp49, 0
+    br i1 %tmp50, label %then6, label %endif6
 then6:
     br label %loop_body5_exit
     br label %endif6
@@ -2775,106 +2778,127 @@ define void @"window.start_image_window"(i8* %imagePath){
     %v6 = alloca i8*; var: hWnd
     %v7 = alloca %struct.window.RECT; var: rect
     %v8 = alloca %struct.window.MSG; var: msg
-    %tmp0 = call i8* @GetModuleHandleA(i8* null)
-    store i8* %tmp0, i8** %v0
-    %tmp1 = call i8* @window.load_bitmap_from_file(i8* %imagePath)
-    store i8* %tmp1, i8** %v1
-    %tmp2 = load i8*, i8** %v1
-    %tmp3 = icmp eq ptr %tmp2, null
-    br i1 %tmp3, label %then0, label %endif0
-then0:
-    %tmp4 = getelementptr inbounds [42 x i8], [42 x i8]* @.str.83, i64 0, i64 0
-    call void @process.throw(i8* %tmp4)
-    br label %endif0
-endif0:
-    store i32 0, i32* %v2
-    store i32 0, i32* %v3
-    %tmp5 = load i8*, i8** %v1
-    call void @window.get_bitmap_dimensions(i8* %tmp5, i32* %v2, i32* %v3)
-    %tmp6 = getelementptr inbounds [21 x i8], [21 x i8]* @.str.84, i64 0, i64 0
-    store i8* %tmp6, i8** %v4
-    %tmp7 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v5, i32 0, i32 0
-    store i32 80, i32* %tmp7
-    %tmp8 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v5, i32 0, i32 1
-    %tmp9 = or i32 2, 1
-    store i32 %tmp9, i32* %tmp8
-    %tmp10 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v5, i32 0, i32 2
-    store i64 (i8*, i32, i64, i64)** @window.WindowProc, i64 (i8*, i32, i64, i64)*** %tmp10
-    %tmp11 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v5, i32 0, i32 3
-    store i32 0, i32* %tmp11
-    %tmp12 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v5, i32 0, i32 4
-    store i32 0, i32* %tmp12
-    %tmp13 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v5, i32 0, i32 5
-    %tmp14 = load i8*, i8** %v0
-    store i8* %tmp14, i8** %tmp13
-    %tmp15 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v5, i32 0, i32 6
-    store i8* null, i8** %tmp15
-    %tmp16 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v5, i32 0, i32 7
-    %tmp17 = inttoptr i64 32512 to i8*
-    %tmp18 = call i8* @LoadCursorA(i8* null, i8* %tmp17)
-    store i8* %tmp18, i8** %tmp16
-    %tmp19 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v5, i32 0, i32 8
-    %tmp20 = add i32 5, 1
-    %tmp21 = inttoptr i32 %tmp20 to i8*
-    store i8* %tmp21, i8** %tmp19
-    %tmp22 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v5, i32 0, i32 9
-    store i8* null, i8** %tmp22
-    %tmp23 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v5, i32 0, i32 10
-    %tmp24 = load i8*, i8** %v4
-    store i8* %tmp24, i8** %tmp23
-    %tmp25 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v5, i32 0, i32 11
-    store i8* null, i8** %tmp25
-    %tmp26 = call i16 @RegisterClassExA(%struct.window.WNDCLASSEXA* %v5)
-    %tmp27 = icmp eq i16 %tmp26, 0
-    br i1 %tmp27, label %then1, label %endif1
+    %tmp0 = inttoptr i64 0 to i8*
+    %tmp1 = call i8* @GetModuleHandleA(i8* %tmp0)
+    store i8* %tmp1, i8** %v0
+    %iv2 = alloca i1
+    %tmp3 = load i8*, i8** %v0
+    %tmp4 = icmp eq ptr %tmp3, null
+    store i1 %tmp4, i1* %iv2
+    br label %inline_exit0
+inline_exit0:
+    %tmp5 = load i1, i1* %iv2
+    br i1 %tmp5, label %then1, label %endif1
 then1:
-    %tmp28 = getelementptr inbounds [34 x i8], [34 x i8]* @.str.85, i64 0, i64 0
-    call void @process.throw(i8* %tmp28)
+    %tmp6 = getelementptr inbounds [48 x i8], [48 x i8]* @.str.77, i64 0, i64 0
+    call void @process.throw(i8* %tmp6)
     br label %endif1
 endif1:
-    %tmp29 = load i8*, i8** %v4
-    %tmp30 = getelementptr inbounds [12 x i8], [12 x i8]* @.str.86, i64 0, i64 0
-    %tmp31 = or i32 2147483648, 268435456
-    %tmp32 = load i32, i32* %v2
-    %tmp33 = load i32, i32* %v3
-    %tmp34 = load i8*, i8** %v0
-    %tmp35 = call i8* @CreateWindowExA(i32 8, i8* %tmp29, i8* %tmp30, i32 %tmp31, i32 100, i32 100, i32 %tmp32, i32 %tmp33, i8* null, i8* null, i8* %tmp34, i8* null)
-    store i8* %tmp35, i8** %v6
-    %iv36 = alloca i1
-    %tmp37 = load i8*, i8** %v6
-    %tmp38 = icmp eq ptr %tmp37, null
-    store i1 %tmp38, i1* %iv36
-    br label %inline_exit2
-inline_exit2:
-    %tmp39 = load i1, i1* %iv36
-    br i1 %tmp39, label %then3, label %endif3
+    %tmp7 = call i8* @window.load_bitmap_from_file(i8* %imagePath)
+    store i8* %tmp7, i8** %v1
+    %tmp8 = load i8*, i8** %v1
+    %tmp9 = inttoptr i64 0 to i8*
+    %tmp10 = icmp eq ptr %tmp8, %tmp9
+    br i1 %tmp10, label %then2, label %endif2
+then2:
+    %tmp11 = getelementptr inbounds [42 x i8], [42 x i8]* @.str.82, i64 0, i64 0
+    call void @process.throw(i8* %tmp11)
+    br label %endif2
+endif2:
+    store i32 0, i32* %v2
+    store i32 0, i32* %v3
+    %tmp12 = load i8*, i8** %v1
+    call void @window.get_bitmap_dimensions(i8* %tmp12, i32* %v2, i32* %v3)
+    %tmp13 = getelementptr inbounds [21 x i8], [21 x i8]* @.str.83, i64 0, i64 0
+    store i8* %tmp13, i8** %v4
+    %tmp14 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v5, i32 0, i32 0
+    store i32 80, i32* %tmp14
+    %tmp15 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v5, i32 0, i32 1
+    %tmp16 = or i32 2, 1
+    store i32 %tmp16, i32* %tmp15
+    %tmp17 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v5, i32 0, i32 2
+    store i64 (i8*, i32, i64, i64)** @window.WindowProc, i64 (i8*, i32, i64, i64)*** %tmp17
+    %tmp18 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v5, i32 0, i32 3
+    store i32 0, i32* %tmp18
+    %tmp19 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v5, i32 0, i32 4
+    store i32 0, i32* %tmp19
+    %tmp20 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v5, i32 0, i32 5
+    %tmp21 = load i8*, i8** %v0
+    store i8* %tmp21, i8** %tmp20
+    %tmp22 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v5, i32 0, i32 6
+    %tmp23 = inttoptr i64 0 to i8*
+    store i8* %tmp23, i8** %tmp22
+    %tmp24 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v5, i32 0, i32 7
+    %tmp25 = inttoptr i64 0 to i8*
+    store i8* %tmp25, i8** %tmp24
+    %tmp26 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v5, i32 0, i32 8
+    %tmp27 = add i32 5, 1
+    %tmp28 = inttoptr i32 %tmp27 to i8*
+    store i8* %tmp28, i8** %tmp26
+    %tmp29 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v5, i32 0, i32 9
+    %tmp30 = inttoptr i64 0 to i8*
+    store i8* %tmp30, i8** %tmp29
+    %tmp31 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v5, i32 0, i32 10
+    %tmp32 = load i8*, i8** %v4
+    store i8* %tmp32, i8** %tmp31
+    %tmp33 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v5, i32 0, i32 11
+    %tmp34 = inttoptr i64 0 to i8*
+    store i8* %tmp34, i8** %tmp33
+    %tmp35 = call i16 @RegisterClassExA(%struct.window.WNDCLASSEXA* %v5)
+    %tmp36 = icmp eq i16 %tmp35, 0
+    br i1 %tmp36, label %then3, label %endif3
 then3:
-    %tmp40 = getelementptr inbounds [33 x i8], [33 x i8]* @.str.87, i64 0, i64 0
-    call void @process.throw(i8* %tmp40)
+    %tmp37 = getelementptr inbounds [46 x i8], [46 x i8]* @.str.79, i64 0, i64 0
+    call void @process.throw(i8* %tmp37)
     br label %endif3
 endif3:
-    %tmp41 = load i8*, i8** %v6
-    %tmp42 = load i8*, i8** %v1
-    call i64 @SetWindowLongPtrA(i8* %tmp41, i32 -21, i8* %tmp42)
-    %tmp43 = load i8*, i8** %v6
-    call i32 @ShowWindow(i8* %tmp43, i32 5)
-    %tmp44 = load i8*, i8** %v6
-    call i32 @GetClientRect(i8* %tmp44, %struct.window.RECT* %v7)
-    %tmp45 = load i8*, i8** %v6
-    call i32 @InvalidateRect(i8* %tmp45, %struct.window.RECT* %v7, i32 1)
-    br label %loop_body4
-loop_body4:
-    %tmp46 = call i32 @GetMessageA(%struct.window.MSG* %v8, i8* null, i32 0, i32 0)
-    %tmp47 = icmp sle i32 %tmp46, 0
-    br i1 %tmp47, label %then5, label %endif5
+    %tmp38 = load i8*, i8** %v4
+    %tmp39 = getelementptr inbounds [12 x i8], [12 x i8]* @.str.84, i64 0, i64 0
+    %tmp40 = or i32 2147483648, 268435456
+    %tmp41 = load i32, i32* %v2
+    %tmp42 = load i32, i32* %v3
+    %tmp43 = inttoptr i64 0 to i8*
+    %tmp44 = inttoptr i64 0 to i8*
+    %tmp45 = load i8*, i8** %v0
+    %tmp46 = inttoptr i64 0 to i8*
+    %tmp47 = call i8* @CreateWindowExA(i32 8, i8* %tmp38, i8* %tmp39, i32 %tmp40, i32 100, i32 100, i32 %tmp41, i32 %tmp42, i8* %tmp43, i8* %tmp44, i8* %tmp45, i8* %tmp46)
+    store i8* %tmp47, i8** %v6
+    %iv48 = alloca i1
+    %tmp49 = load i8*, i8** %v6
+    %tmp50 = icmp eq ptr %tmp49, null
+    store i1 %tmp50, i1* %iv48
+    br label %inline_exit4
+inline_exit4:
+    %tmp51 = load i1, i1* %iv48
+    br i1 %tmp51, label %then5, label %endif5
 then5:
-    br label %loop_body4_exit
+    %tmp52 = getelementptr inbounds [45 x i8], [45 x i8]* @.str.81, i64 0, i64 0
+    call void @process.throw(i8* %tmp52)
     br label %endif5
 endif5:
+    %tmp53 = load i8*, i8** %v6
+    %tmp54 = load i8*, i8** %v1
+    call i64 @SetWindowLongPtrA(i8* %tmp53, i32 -21, i8* %tmp54)
+    %tmp55 = load i8*, i8** %v6
+    call i32 @ShowWindow(i8* %tmp55, i32 5)
+    %tmp56 = load i8*, i8** %v6
+    call i32 @GetClientRect(i8* %tmp56, %struct.window.RECT* %v7)
+    %tmp57 = load i8*, i8** %v6
+    call i32 @InvalidateRect(i8* %tmp57, %struct.window.RECT* %v7, i32 1)
+    br label %loop_body6
+loop_body6:
+    %tmp58 = inttoptr i64 0 to i8*
+    %tmp59 = call i32 @GetMessageA(%struct.window.MSG* %v8, i8* %tmp58, i32 0, i32 0)
+    %tmp60 = icmp sle i32 %tmp59, 0
+    br i1 %tmp60, label %then7, label %endif7
+then7:
+    br label %loop_body6_exit
+    br label %endif7
+endif7:
     call i32 @TranslateMessage(%struct.window.MSG* %v8)
     call i64 @DispatchMessageA(%struct.window.MSG* %v8)
-    br label %loop_body4
-loop_body4_exit:
+    br label %loop_body6
+loop_body6_exit:
     ret void
 }
 define void ()** ()** @"of_fn"(){
@@ -2907,23 +2931,42 @@ define %"struct.test.QPair<i64, i64>" @"xq"(){
 define i32 @"main"(){
     %v0 = alloca double; var: f
     %v1 = alloca i32 ()**; var: tp
-    %v2 = alloca %"struct.test.QPair<i64, i64>"; var: temp
+    %v2 = alloca %"struct.Pair<i32, struct.Pair<i8, %struct.string.String>>" ()**; var: tx
+    %v3 = alloca %"struct.Pair<i32, struct.Pair<i8, %struct.string.String>>"; var: y
+    %v4 = alloca %"struct.test.QPair<i64, i64>"; var: temp
     store double 0x40DEADDD3B80D02E, double* %v0
     store i32 ()** @main, i32 ()*** %v1
-    %tmp1 = load double, double* %v0
-    call void @console.println_f64(double %tmp1)
-    call i32 @AllocConsole()
-    call void @tests.run()
-    call void @window.start()
-    call i32 @FreeConsole()
-    br label %inline_exit0
-inline_exit0:
-    %tmp3 = call %"struct.test.QPair<i64, i64>" @xq()
-    store %"struct.test.QPair<i64, i64>" %tmp3, %"struct.test.QPair<i64, i64>"* %v2
-    %tmp4 = getelementptr inbounds %"struct.test.QPair<i64, i64>", %"struct.test.QPair<i64, i64>"* %v2, i32 0, i32 0
-    %tmp5 = load i64, i64* %tmp4
-    %tmp6 = trunc i64 %tmp5 to i32
-    ret i32 %tmp6
+    store %"struct.Pair<i32, struct.Pair<i8, %struct.string.String>>" ()** @"ax<i32>", %"struct.Pair<i32, struct.Pair<i8, %struct.string.String>>" ()*** %v2
+    %tmp1 = load %"struct.Pair<i32, struct.Pair<i8, %struct.string.String>>" ()**, %"struct.Pair<i32, struct.Pair<i8, %struct.string.String>>" ()*** %v2
+    %tmp2 = call %"struct.Pair<i32, struct.Pair<i8, %struct.string.String>>" %tmp1()
+    store %"struct.Pair<i32, struct.Pair<i8, %struct.string.String>>" %tmp2, %"struct.Pair<i32, struct.Pair<i8, %struct.string.String>>"* %v3
+    %tmp3 = getelementptr inbounds %"struct.Pair<i32, struct.Pair<i8, %struct.string.String>>", %"struct.Pair<i32, struct.Pair<i8, %struct.string.String>>"* %v3, i32 0, i32 1
+    %tmp4 = getelementptr inbounds %"struct.Pair<i8, %struct.string.String>", %"struct.Pair<i8, %struct.string.String>"* %tmp3, i32 0, i32 0
+    %tmp5 = load i8, i8* %tmp4
+    %tmp6 = sext i8 %tmp5 to i64
+    call void @console.println_i64(i64 %tmp6)
+    %tmp7 = load double, double* %v0
+    call void @console.println_f64(double %tmp7)
+    %tmp8 = load double, double* %v0
+    %tmp9 = fptosi double %tmp8 to i64
+    call void @console.println_i64(i64 %tmp9)
+    %tmp10 = load double, double* %v0
+    %tmp11 = bitcast double %tmp10 to i64
+    call void @console.println_i64(i64 %tmp11)
+    %tmp12 = load double, double* %v0
+    %tmp13 = bitcast double %tmp12 to i64
+    %tmp14 = add i64 %tmp13, 123123123123
+    %tmp15 = bitcast i64 %tmp14 to double
+    call void @console.println_f64(double %tmp15)
+    %tmp16 = call %"struct.test.QPair<i64, i64>" @xq()
+    store %"struct.test.QPair<i64, i64>" %tmp16, %"struct.test.QPair<i64, i64>"* %v4
+    %tmp17 = load %"struct.Pair<i32, struct.Pair<i8, %struct.string.String>>" ()**, %"struct.Pair<i32, struct.Pair<i8, %struct.string.String>>" ()*** %v2
+    %tmp18 = ptrtoint %"struct.Pair<i32, struct.Pair<i8, %struct.string.String>>" ()** %tmp17 to i64
+    %tmp19 = load i32 ()**, i32 ()*** %v1
+    %tmp20 = ptrtoint i32 ()** %tmp19 to i64
+    %tmp21 = sub i64 %tmp18, %tmp20
+    %tmp22 = trunc i64 %tmp21 to i32
+    ret i32 %tmp22
 }
 define %"struct.list.List<i32>" @"list.new<i32>"(){
     %v0 = alloca %"struct.list.List<i32>"; var: list
@@ -3239,6 +3282,16 @@ endif0:
     store i32 0, i32* %tmp8
     ret void
 }
+define %"struct.Pair<i32, struct.Pair<i8, %struct.string.String>>" @"ax<i32>"(){
+    %v0 = alloca %"struct.Pair<i32, struct.Pair<i8, %struct.string.String>>"; var: p
+    %tmp0 = getelementptr inbounds %"struct.Pair<i32, struct.Pair<i8, %struct.string.String>>", %"struct.Pair<i32, struct.Pair<i8, %struct.string.String>>"* %v0, i32 0, i32 0
+    store i32 43, i32* %tmp0
+    %tmp1 = getelementptr inbounds %"struct.Pair<i32, struct.Pair<i8, %struct.string.String>>", %"struct.Pair<i32, struct.Pair<i8, %struct.string.String>>"* %v0, i32 0, i32 1
+    %tmp2 = getelementptr inbounds %"struct.Pair<i8, %struct.string.String>", %"struct.Pair<i8, %struct.string.String>"* %tmp1, i32 0, i32 0
+    store i8 126, i8* %tmp2
+    %tmp3 = load %"struct.Pair<i32, struct.Pair<i8, %struct.string.String>>", %"struct.Pair<i32, struct.Pair<i8, %struct.string.String>>"* %v0
+    ret %"struct.Pair<i32, struct.Pair<i8, %struct.string.String>>" %tmp3
+}
 define void @"list.new_node<i32>"(%"struct.list.ListNode<i32>"* %list){
     %tmp0 = getelementptr inbounds %"struct.list.ListNode<i32>", %"struct.list.ListNode<i32>"* %list, i32 0, i32 1
     store %"struct.list.ListNode<i32>"* null, %"struct.list.ListNode<i32>"** %tmp0
@@ -3253,7 +3306,7 @@ define void @"list.new_node<i32>"(%"struct.list.ListNode<i32>"* %list){
 ;fn process.GetModuleFileNameA used times 1
 ;fn process.get_executable_path used times 2
 ;fn process.get_executable_env_path used times 2
-;fn process.throw used times 50
+;fn process.throw used times 51
 ;fn mem.GetProcessHeap used times 4
 ;fn mem.HeapAlloc used times 1
 ;fn mem.HeapReAlloc used times 1
@@ -3281,18 +3334,18 @@ define void @"list.new_node<i32>"(%"struct.list.ListNode<i32>"* %list){
 ;fn vector.push_bulk used times 2
 ;fn vector.remove_at used times 0
 ;fn vector.free used times 4
-;fn console.AllocConsole used times 2
+;fn console.AllocConsole used times 1
 ;fn console.GetStdHandle used times 2
-;fn console.FreeConsole used times 1
+;fn console.FreeConsole used times 0
 ;fn console.WriteConsoleA used times 4
 ;fn console.get_stdout used times 4
-;fn console.write used times 19
-;fn console.write_string used times 1
+;fn console.write used times 18
+;fn console.write_string used times 0
 ;fn console.writeln used times 15
 ;fn console.print_char used times 9
-;fn console.println_i64 used times 4
+;fn console.println_i64 used times 7
 ;fn console.println_u64 used times 3
-;fn console.println_f64 used times 1
+;fn console.println_f64 used times 2
 ;fn string.from_c_string used times 5
 ;fn string.empty used times 1
 ;fn string.with_size used times 5
@@ -3318,7 +3371,7 @@ define void @"list.new_node<i32>"(%"struct.list.ListNode<i32>"* %list){
 ;fn fs.create_file used times 3
 ;fn fs.delete_file used times 3
 ;fn fs.file_exists used times 1
-;fn tests.run used times 1
+;fn tests.run used times 0
 ;fn tests.mem_test used times 1
 ;fn tests.string_utils_test used times 1
 ;fn tests.string_test used times 1
@@ -3343,7 +3396,7 @@ define void @"list.new_node<i32>"(%"struct.list.ListNode<i32>"* %list){
 ;fn window.EndPaint used times 1
 ;fn window.GetDC used times 0
 ;fn window.ReleaseDC used times 0
-;fn window.LoadCursorA used times 1
+;fn window.LoadCursorA used times 0
 ;fn window.LoadIconA used times 0
 ;fn window.LoadImageA used times 1
 ;fn window.GetClientRect used times 1
@@ -3366,11 +3419,11 @@ define void @"list.new_node<i32>"(%"struct.list.ListNode<i32>"* %list){
 ;fn window.get_bitmap_dimensions used times 1
 ;fn window.draw_bitmap used times 1
 ;fn window.draw_bitmap_stretched used times 0
-;fn window.is_null used times 3
-;fn window.start used times 1
+;fn window.is_null used times 4
+;fn window.start used times 0
 ;fn window.start_image_window used times 0
-;fn basic_functions used times 1
-;fn ax used times 0
+;fn basic_functions used times 0
+;fn ax used times 1
 ;fn of_fn used times 1
 ;fn test.geg used times 1
 ;fn xq used times 1

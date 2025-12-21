@@ -218,7 +218,7 @@ fn collect(stmts: &[StmtData],
                             let mut buf = String::new();
                             file.read_to_string(&mut buf)?;
                             let lex = lex_string_with_file_context(&buf,include_path).unwrap();
-                            let par = GeneralParser::new(&lex).parse_all().unwrap_error_extended(&lex, &include_path).map_err(|x| {println!("{}", x); String::new()}).unwrap();
+                            let par = GeneralParser::new(&lex).parse_all().unwrap_error_extended(&lex, include_path).map_err(|x| {println!("{}", x); String::new()}).unwrap();
                             for stmt in par.into_iter().rev() {
                                 statements.push_front(stmt);
                             }
@@ -294,7 +294,7 @@ fn handle_types(structs : Vec<ParsedStruct>, symbols: &mut SymbolTable, output: 
             symbols.alias_types.insert(prm.clone(), ParserType::Named(prm.clone()));
         }
         for (name, attr_type) in &str.fields {
-            if matches!(attr_type.dereference_full(), ParserType::Generic(_, _)) {
+            if matches!(attr_type.dereference_full(), ParserType::Generic(..)) {
                 compiler_struct_fields.push((name.to_string(), qualify_type(attr_type, &path, symbols) ));
                 continue;
             }
@@ -369,7 +369,6 @@ fn handle_functions(functions : Vec<ParsedFunction>, symbols: &mut SymbolTable, 
     let mut registered_funcs = vec![];
     for s in &functions {
         let full_path = if s.path.is_empty() { s.name.to_string() } else { format!("{}.{}", s.path, s.name) };
-        //output.push_str(&format!(";func_{}\n", full_path));
         registered_funcs.push(full_path);
     }
     for pf in functions {
@@ -710,8 +709,10 @@ pub fn get_llvm_type_str(
             for (lookup_key, type_name_for_string) in lookups {
                 if let Some(type_info) = symbols.types.get(lookup_key) {
                     {
-                        let mut implementations = type_info.generic_implementations.borrow_mut();
+                        let implementations = type_info.generic_implementations.borrow();
                         if !implementations.iter().any(|existing| existing.as_ref() == concrete_types.as_ref()) {
+                            drop(implementations);
+                            let mut implementations = type_info.generic_implementations.borrow_mut();
                             implementations.push(concrete_types.clone());
                         }
                     }
@@ -750,8 +751,10 @@ pub fn get_llvm_type_str_int(
             for (lookup_key, type_name_for_string) in lookups {
                 if let Some(type_info) = symbols.types.get(lookup_key) {
                     {
-                        let mut implementations = type_info.generic_implementations.borrow_mut();
+                        let implementations = type_info.generic_implementations.borrow();
                         if !implementations.iter().any(|existing| existing.as_ref() == concrete_types.as_ref()) {
+                            drop(implementations);
+                            let mut implementations = type_info.generic_implementations.borrow_mut();
                             implementations.push(concrete_types.clone());
                         }
                     }
@@ -897,6 +900,12 @@ impl SymbolTable {
             }
         };
         todo!()
+    }
+
+    pub fn get_effective_generic_function_name(effective_internal_name: &str, type_map: &HashMap<String, ParserType>, symbols: &SymbolTable) -> String {
+        return format!("{}<{}>", effective_internal_name, type_map.iter().map(|(_k,v)| {
+            get_llvm_type_str(v, symbols, "").unwrap()
+        }).collect::<Vec<String>>().join(", "));
     }
 }
 
