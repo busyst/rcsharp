@@ -3,7 +3,7 @@
 fn main() : i32{
     let s1 : string::String = process::get_executable_env_path();
     let s4 : string::String = string::concat_with_c_string(&s1, "example.bmp");
-    let q1 : &i8 = stalloc((s4.len + 1) as i64);
+    let q1 : &i8 = stalloc::<i8>((s4.len + 1) as i64);
     string::as_c_string_stalloc(&s4, q1);
     q1[s4.len] = 0;
     console::writeln(q1, s4.len);

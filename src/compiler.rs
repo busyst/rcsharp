@@ -4,9 +4,9 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::{io::Read};
 use ordered_hash_map::OrderedHashMap;
 use rcsharp_lexer::lex_string_with_file_context;
-use rcsharp_parser::compiler_primitives::{BASIC_INTEGER_TYPE, PRIMITIVE_TYPES_INFO, find_primitive_type};
+use rcsharp_parser::compiler_primitives::{PRIMITIVE_TYPES_INFO, find_primitive_type};
 use rcsharp_parser::expression_parser::Expr;
-use rcsharp_parser::parser::{Attribute, GeneralParser, ParsedEnum, ParsedFunction, ParsedStruct, ParserResultExt, ParserType, Stmt, StmtData};
+use rcsharp_parser::parser::{Attribute, GeneralParser, ParsedEnum, ParsedFunction, ParsedStruct, ParserResultExt, ParserType, Span, Stmt, StmtData};
 use crate::compiler_essentials::{Enum, Function, FunctionFlags, FunctionView, Scope, Struct, StructView, Variable};
 use crate::expression_compiler::{Expected, compile_expression, constant_integer_expression_compiler};
 
@@ -58,10 +58,6 @@ pub fn rcsharp_compile_to_file(stmts: &[StmtData], full_path: &str) -> Result<()
         }
         Err(e) => Err(e.to_string()),
     }
-}
-
-fn is_global_hint(name: &str) -> bool {
-    matches!(name, "include" | "-pop")
 }
 pub fn rcsharp_compile(stmts: &[StmtData], absolute_file_path: &str) -> CompileResult<LLVMOutputHandler>  {
     let mut symbols = SymbolTable::new();
@@ -199,16 +195,15 @@ fn collect(stmts: &[StmtData],
 ) -> CompileResult<()>{
     let mut statements: VecDeque<StmtData> = stmts.to_vec().into();
 
-    let mut stack_hints = vec![];
     let mut current_path = Vec::new();
-    let mut included_files = HashSet::new();
+    let mut included_files: HashSet<String> = HashSet::new();
 
     while !statements.is_empty() {
         while let Some(x) = statements.pop_front() {
-            if let Stmt::Hint(h, ex) = x.stmt {
-                if is_global_hint(&h) {
-                    if h == "include" {
-                        if let Some(Expr::StringConst(include_path)) = ex.first() {
+            if let Stmt::CompilerHint(attr) = &x.stmt {
+                if attr.name_equals("include") {
+                    if let Some(x) = attr.one_argument() {
+                        if let Expr::StringConst(include_path) = x {
                             if included_files.contains(include_path) {
                                 continue;
                             }
@@ -222,55 +217,41 @@ fn collect(stmts: &[StmtData],
                             for stmt in par.into_iter().rev() {
                                 statements.push_front(stmt);
                             }
+                            continue;
                         }
-                    } else if h == "-pop" {
-                        current_path.pop();
                     }
-                }else {
-                    stack_hints.push(Attribute::new(h, ex));
                 }
-                continue;
+                if attr.name_equals("-pop") {
+                    current_path.pop();
+                    continue;
+                }
+                
+                panic!("Invalid compiler hint in global context: {:?}", attr);
             }
             if let Stmt::Namespace(namespace, body) = x.stmt {
-                if !stack_hints.is_empty() {
-                    return Err(CompileError::Generic("Hints are not applicable to namespaces".to_string()));
-                }
                 current_path.push(namespace);
-                statements.push_front(Stmt::Hint("-pop".to_string(), Box::new([])).dummy_data());
+                statements.push_front(Stmt::CompilerHint(Attribute { name: "-pop".into(), arguments: Box::new([]), span: Span { start: 0, end: 0 } }).dummy_data());
                 for stmt in body.iter().rev() {
                     statements.push_front(stmt.clone());
                 }
                 continue;
             }
-            if let Stmt::Struct(struct_name, fields, generic_args) = x.stmt {
-                structs.push(ParsedStruct::new_parse(
-                    current_path.join("."),
-                        stack_hints.clone().into_boxed_slice(),
-                        struct_name.into_boxed_str(),
-                        fields,
-                        generic_args
-                ));
-                stack_hints.clear();
+            if let Stmt::Struct(mut parsed_struct) = x.stmt {
+                parsed_struct.path = current_path.join(".").into();
+                structs.push(parsed_struct);
                 continue;
             }
             if let Stmt::Function(mut x) = x.stmt {
-                
                 x.path = current_path.join(".").into();
-                x.attributes = stack_hints.clone().into_boxed_slice();
                 functions.push(x);
-                stack_hints.clear();
                 continue;
             }
-            if let Stmt::Enum(enum_name, enum_type, fields) = x.stmt {
-                enums.push(ParsedEnum::new_parse(
-                    current_path.join(",").into_boxed_str(),
-                    enum_name.into_boxed_str(),
-                    fields,
-                    enum_type.unwrap_or(ParserType::Named(BASIC_INTEGER_TYPE.name.to_string()))
-                ));
-                stack_hints.clear();
+            if let Stmt::Enum(mut parsed_enum) = x.stmt {
+                parsed_enum.path = current_path.join(",").into();
+                enums.push(parsed_enum);
                 continue;
             }
+            
             return Err(CompileError::InvalidStatementInContext(format!("{:?}", x)));
         }
     }
@@ -627,7 +608,7 @@ pub fn compile_statement(stmt: &Stmt, ctx: &mut CodeGenContext, output: &mut LLV
             output.push_str(&format!("    br label %loop_body{}\n", lc));
             output.push_str(&format!("loop_body{}_exit:\n", lc));
         }
-        Stmt::Function(..) | Stmt::Struct(..) | Stmt::Enum(..) | Stmt::Namespace(..) | Stmt::Hint(..) => {
+        Stmt::Function(..) | Stmt::Struct(..) | Stmt::Enum(..) | Stmt::Namespace(..) | Stmt::CompilerHint(..) => {
             return Err(CompileError::InvalidStatementInContext(format!("{:?}", stmt)));
         }
     }
@@ -764,7 +745,6 @@ pub fn get_llvm_type_str_int(
                         .collect::<CompileResult<Vec<_>>>()?
                         .join(", ");
 
-                    // Format the final LLVM type string and return.
                     return Ok(format!("struct.{}<{}>", type_name_for_string, arg_type_strings));
                 }
             }

@@ -11,7 +11,7 @@ namespace process{
     fn get_executable_path() : string::String {
         let size: u32 = 260;
         let string : string::String = string::with_size(size as i32);
-        let len : u32 = GetModuleFileNameA(0 as &i8, string.data, string.len as u32);
+        let len : u32 = GetModuleFileNameA(null, string.data, string.len as u32);
         string.len = len as i32;
         return string;
     }
@@ -131,7 +131,7 @@ namespace mem{
         let hHeap: &i32 = GetProcessHeap();
         let total_size: i64 = 0;
         let entry: PROCESS_HEAP_ENTRY;
-        entry.lpData = 0 as &void; 
+        entry.lpData = null; 
 
         if HeapLock(hHeap) == 0 {
             process::throw("Failed to lock heap for walking.");
@@ -161,21 +161,21 @@ namespace list{
     }
     fn new<T>() : List<T>{
         let list : List<T>;
-        list.head = 0 as &ListNode<T>;
-        list.foot = 0 as &ListNode<T>;
+        list.head = null;
+        list.foot = null;
         list.length = 0 as u32;
         return list;
     }
     fn new_node<T>(list: &ListNode<T>){
-        list.next_node = 0 as &ListNode<T>;
+        list.next_node = null;
         list.data = 0 as i32;
     }
     fn extend<T>(list: &List<T>, data: T){
-        let node_to_add: &ListNode<T> = mem::malloc(sizeof::<ListNode<T> >()) as &ListNode<T>;
+        let node_to_add: &ListNode<T> = mem::malloc(sizeof::<ListNode<T>>()) as &ListNode<T>;
         new_node::<T>(node_to_add);
         node_to_add.data = data;
 
-        if list.head == 0 as &ListNode<T> {
+        if list.head == null {
             list.head = node_to_add;
             list.foot = node_to_add;
         } else {
@@ -188,7 +188,7 @@ namespace list{
         let l : u32 = 0 as u32;
         let ptr : &ListNode<T> = list.head;
         loop {
-            if (ptr == 0 as &ListNode<T>){
+            if (ptr == null){
                 break;
             }
             l = l + 1 as u32;
@@ -199,15 +199,15 @@ namespace list{
     fn free<T>(list: &List<T>) {
         let current: &ListNode<T> = list.head;
         loop {
-            if (current == 0 as &ListNode<T>) {
+            if (current == null) {
                 break;
             }
             let next: &ListNode<T> = current.next_node;
             mem::free(current as &void); 
             current = next; 
         }
-        list.head = 0 as &ListNode<T>;
-        list.foot = 0 as &ListNode<T>;
+        list.head = null;
+        list.foot = null;
         list.length = 0;
     }
 }
@@ -221,7 +221,7 @@ namespace vector{
     #[ExtentionOf(Vec)]
     fn new<T>() : Vec<T>{
         let vec : Vec<T>;
-        vec.array = 0 as &T;
+        vec.array = null;
         vec.length = 0;
         vec.capacity = 0;
         return vec;
@@ -264,10 +264,10 @@ namespace vector{
     }
     #[ExtentionOf(Vec)]
     fn free<T>(vec: &Vec<T>) {
-        if vec.array != 0 as &T {
+        if vec.array != null {
             mem::free(vec.array as &void);
         }
-        vec.array = 0 as &T;
+        vec.array = null;
         vec.length = 0;
         vec.capacity = 0;
     }
@@ -300,14 +300,14 @@ namespace console{
     }
     fn write(buffer: &i8, len: i32){
         let chars_written: i32;
-        WriteConsoleA(get_stdout(), buffer, len, &chars_written, 0 as &i8);
+        WriteConsoleA(get_stdout(), buffer, len, &chars_written, null);
         if len != chars_written{
             process::ExitProcess(-2);
         }
     }
     fn write_string(str: &string::String){
         let chars_written: i32;
-        WriteConsoleA(get_stdout(), str.data, str.len, &chars_written, 0 as &i8);
+        WriteConsoleA(get_stdout(), str.data, str.len, &chars_written, null);
         if str.len != chars_written{
             process::ExitProcess(-2);
         }
@@ -317,12 +317,12 @@ namespace console{
             return;
         }
         let chars_written: i32;
-        WriteConsoleA(get_stdout(), buffer, len, &chars_written, 0 as &i8);
+        WriteConsoleA(get_stdout(), buffer, len, &chars_written, null);
         if len != chars_written{
             process::ExitProcess(-2);
         }
         let nl : i8 = 10;
-        WriteConsoleA(get_stdout(), &nl, 1, &chars_written, 0 as &i8);
+        WriteConsoleA(get_stdout(), &nl, 1, &chars_written, null);
     }
     fn print_char(n: i8) {
         let b : i8 = n;
@@ -429,7 +429,7 @@ namespace string{
     }
     fn empty() : String {
         let x: String;
-        x.data = 0 as &i8;
+        x.data = null;
         x.len = 0;
         return x;
     }
@@ -464,7 +464,7 @@ namespace string{
         return str;
     }
     fn equal(first: &String, second: &String) : bool{
-        if first.len != second.len { return 0 as bool; }
+        if first.len != second.len { return false; }
         return mem::compare(first.data, second.data, first.len as i64) == 0;
     }
 
@@ -528,11 +528,11 @@ namespace fs{
         let CREATE_ALWAYS: u32 = 2;
         let GENERIC_WRITE: u32 = 0x40000000;
         let FILE_ATTRIBUTE_NORMAL: u32 = 0x80;
-        let hFile: &void = CreateFileA(path, GENERIC_WRITE, 0, 0 as &i8, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0 as &i8);
+        let hFile: &void = CreateFileA(path, GENERIC_WRITE, 0, null, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, null);
         if hFile == bitcast::<&void>(-1) { return 0; }
 
         let bytes_written: u32 = 0;
-        let success: i32 = WriteFile(hFile, content, content_len, &bytes_written, 0 as &i8);
+        let success: i32 = WriteFile(hFile, content, content_len, &bytes_written, null);
         CloseHandle(hFile);
 
         return (success != 0 && bytes_written == content_len) as i32;
@@ -540,7 +540,7 @@ namespace fs{
     fn read_full_file_as_string(path: &i8) : string::String {
         let GENERIC_READ: u32 = 0x80000000;
         let OPEN_EXISTING: u32 = 3; 
-        let hFile: &void = CreateFileA(path, GENERIC_READ, 1, 0 as &i8, OPEN_EXISTING, 0x80, 0 as &i8); // Shared Read
+        let hFile: &void = CreateFileA(path, GENERIC_READ, 1, null, OPEN_EXISTING, 0x80, null); // Shared Read
         
         if hFile == bitcast::<&void>(-1) {
             process::throw(string_utils::insert("File not found: ", path, 16));
@@ -554,7 +554,7 @@ namespace fs{
 
         let buffer: string::String = string::with_size(file_size as i32);
         let bytes_read: u32 = 0;
-        let success: i32 = ReadFile(hFile, buffer.data, file_size as u32, &bytes_read, 0 as &i8);
+        let success: i32 = ReadFile(hFile, buffer.data, file_size as u32, &bytes_read, null);
         CloseHandle(hFile);
 
         if success == 0 {
@@ -566,7 +566,7 @@ namespace fs{
         return buffer;
     }
     fn create_file(path: &i8) : i32 {
-        let hFile: &void = CreateFileA(path, 0x40000000, 0, 0 as &i8, 1, 0x80, 0 as &i8);
+        let hFile: &void = CreateFileA(path, 0x40000000, 0, null, 1, 0x80, null);
         if hFile == bitcast::<&void>(-1) { return 0; }
         CloseHandle(hFile);
         return 1;
@@ -604,7 +604,7 @@ namespace tests{
         
         let size: i64 = 16;
         let buffer1: &i8 = mem::malloc(size) as &i8;
-        if buffer1 == 0 as &i8 { process::throw("mem_test: malloc failed"); }
+        if buffer1 == null { process::throw("mem_test: malloc failed"); }
         
         // Test fill
         mem::fill('X', buffer1, size);
@@ -625,7 +625,7 @@ namespace tests{
         
         // Test copy
         let buffer2: &i8 = mem::malloc(size) as &i8;
-        if buffer2 == 0 as &i8 { process::throw("mem_test: malloc for copy failed"); }
+        if buffer2 == null { process::throw("mem_test: malloc for copy failed"); }
         mem::fill('Y', buffer2, size);
         mem::copy(buffer2, buffer1, size);
         i = 0;
@@ -712,7 +712,7 @@ namespace tests{
         if v.array[5] != 'A' || v.array[6] != 'B' { process::throw("vector_test: push_bulk content failed"); }
         
         vector::free::<i8>(&v);
-        if v.length != 0 || v.capacity != 0 || v.array != 0 as &i8 { process::throw("vector_test: free failed"); }
+        if v.length != 0 || v.capacity != 0 || v.array != null { process::throw("vector_test: free failed"); }
         
         console::writeln("OK", 2);
     }
@@ -721,7 +721,7 @@ namespace tests{
 
         let l: list::List<i32> = list::new::<i32>();
         
-        if l.length != 0 || l.head != 0 as &list::ListNode<i32> { process::throw("list_test: new failed"); }
+        if l.length != 0 || l.head != null { process::throw("list_test: new failed"); }
 
         list::extend::<i32>(&l, 100);
         list::extend::<i32>(&l, 200);
@@ -739,7 +739,7 @@ namespace tests{
         if current != l.foot { process::throw("list_test: foot pointer mismatch"); }
         
         list::free::<i32>(&l);
-        if l.length != 0 || l.head != 0 as &list::ListNode<i32> { process::throw("list_test: free failed"); }
+        if l.length != 0 || l.head != null { process::throw("list_test: free failed"); }
 
         console::writeln("OK", 2);
     }
@@ -1559,7 +1559,7 @@ namespace window{
             let ps: PAINTSTRUCT;
             let hdc: &void = BeginPaint(hWnd, &ps);
             let hStoredImage: &void = GetWindowLongPtrA(hWnd, -21);
-            if hStoredImage != 0 as &void {
+            if hStoredImage != null {
                 draw_bitmap(hdc, hStoredImage, 0, 0);
             }
             EndPaint(hWnd, &ps);
@@ -1573,7 +1573,7 @@ namespace window{
         if !fs::file_exists(path){
             process::throw("File not found! While loading Bitmap");
         }
-        return LoadImageA(0 as &void, path, 0, 0, 0, 16);
+        return LoadImageA(null, path, 0, 0, 0, 16);
     }
     fn get_bitmap_dimensions(hBitmap: &void, width: &i32, height: &i32) {
         let bm: BITMAP;
@@ -1582,7 +1582,7 @@ namespace window{
         *height = bm.bmHeight;
     }
     fn draw_bitmap(hdc: &void, hBitmap: &void, x: i32, y: i32) {
-        if hBitmap == 0 as &void { return; }
+        if hBitmap == null { return; }
 
         let hMemDC: &void = CreateCompatibleDC(hdc);
         let hOldBitmap: &void = SelectObject(hMemDC, hBitmap);
@@ -1596,7 +1596,7 @@ namespace window{
         DeleteDC(hMemDC);
     }
     fn draw_bitmap_stretched(hdc: &void, hBitmap: &void, x: i32, y: i32, width: i32, height: i32) {
-        if hBitmap == 0 as &void { return; }
+        if hBitmap == null { return; }
 
         let hMemDC: &void = CreateCompatibleDC(hdc);
         let hOldBitmap: &void = SelectObject(hMemDC, hBitmap);
@@ -1611,7 +1611,7 @@ namespace window{
         SelectObject(hMemDC, hOldBitmap);
         DeleteDC(hMemDC);
     }
-    inline fn is_null(p: &void): bool { return p == 0 as &void; }
+    inline fn is_null(p: &void): bool { return p == null; }
 
     fn start(){
         // CW apparently stands for Control Word. https://stackoverflow.com/questions/48079439/winapi-cw-usedefault-vs-cw-default
@@ -1624,7 +1624,7 @@ namespace window{
         let wc: WNDCLASSEXA;
         wc.cbSize = sizeof::<WNDCLASSEXA>();
         wc.style = CS::HREDRAW | CS::VREDRAW;
-        wc.lpfnWndProc = &WindowProc;
+        wc.lpfnWndProc = ptr_of(WindowProc);
         wc.cbClsExtra = 0;
         wc.cbWndExtra = 0;
         wc.hInstance = hInstance;
@@ -1682,7 +1682,7 @@ namespace window{
         let wc: WNDCLASSEXA;
         wc.cbSize = sizeof::<WNDCLASSEXA>();
         wc.style = CS::HREDRAW | CS::VREDRAW;
-        wc.lpfnWndProc = &WindowProc;
+        wc.lpfnWndProc = ptr_of(WindowProc);
         wc.cbClsExtra = 0;
         wc.cbWndExtra = 0;
         wc.hInstance = hInstance;
@@ -1704,10 +1704,10 @@ namespace window{
             100,
             imgW,
             imgH,
-            bitcast::<&void>(0),               // Parent window
-            bitcast::<&void>(0),               // Menu
+            bitcast::<&void>(0),
+            bitcast::<&void>(0),
             hInstance,
-            bitcast::<&void>(0)                // Additional application data
+            bitcast::<&void>(0)
         );
         if is_null(hWnd) { process::throw("Window error: StartError::CreateWindowFailed"); }
 

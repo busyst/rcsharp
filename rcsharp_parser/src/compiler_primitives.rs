@@ -1,3 +1,5 @@
+use crate::parser::ParserType;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Layout {
     pub size: u32,
@@ -44,12 +46,19 @@ pub const PRIMITIVE_TYPES_INFO: &[PrimitiveInfo] = &[
     PrimitiveInfo { name: "isize", layout: Layout::new(8, 8), llvm_name: "i64", kind: PrimitiveKind::SignedInt },
     PrimitiveInfo { name: "usize", layout: Layout::new(8, 8), llvm_name: "i64", kind: PrimitiveKind::UnsignedInt },
 ];
+impl Into<ParserType> for &'static PrimitiveInfo {
+    fn into(self) -> ParserType {
+        ParserType::Named(self.name.to_string())
+    }
+}
+
 pub const VOID_TYPE: &PrimitiveInfo = &PRIMITIVE_TYPES_INFO[0];
 pub const BOOL_TYPE: &PrimitiveInfo = &PRIMITIVE_TYPES_INFO[1];
 pub const BYTE_TYPE: &PrimitiveInfo = &PRIMITIVE_TYPES_INFO[6];
 pub const CHAR_TYPE: &PrimitiveInfo = &PRIMITIVE_TYPES_INFO[2];
-pub const BASIC_INTEGER_TYPE: &PrimitiveInfo = &PRIMITIVE_TYPES_INFO[5];
-pub const BASIC_DECIMAL_TYPE: &PrimitiveInfo = &PRIMITIVE_TYPES_INFO[12];
+
+pub const DEFAULT_INTEGER_TYPE: &PrimitiveInfo = &PRIMITIVE_TYPES_INFO[5];
+pub const DEFAULT_DECIMAL_TYPE: &PrimitiveInfo = &PRIMITIVE_TYPES_INFO[12];
 
 pub fn find_primitive_type(name: &str) -> Option<&'static PrimitiveInfo> {
     PRIMITIVE_TYPES_INFO.iter().find(|x| x.name == name)

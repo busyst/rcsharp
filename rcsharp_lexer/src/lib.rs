@@ -100,6 +100,7 @@ pub enum Token {
     #[token("namespace")] KeywordNamespace,
     #[token("true")] KeywordTrue,
     #[token("false")] KeywordFalse,
+    #[token("null")] KeywordNull,
     DummyToken,
     #[regex(r"[a-zA-Z_]\w*", |lex| lex.slice().to_string().into_boxed_str())]
     Name(Box<str>),

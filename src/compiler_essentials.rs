@@ -102,7 +102,8 @@ impl<'a> StructView<'a> {
         if !all_generics_defined {
             let definded = r#struct.generic_params.iter().filter(|x| map.contains_key(x.as_str())).cloned().collect::<Vec<_>>();
             let undefinded = r#struct.generic_params.iter().filter(|x| !map.contains_key(x.as_str())).cloned().collect::<Vec<_>>();
-            panic!("Not all generic types defined in current context:\nDefined({}):{}\nUndefined({}):{}",
+            panic!("Not all generic types defined in current context for struct {}:\nDefined({}):{}\nUndefined({}):{}",
+                r#struct.full_path(),
                 definded.len(), definded.join("\n"),
                 undefinded.len(), undefinded.join("\n"),
             )
@@ -135,7 +136,6 @@ impl<'a> StructView<'a> {
         let mut max_alignment = 1;
         for (_name, field_type) in self.field_types() {
             let layout_of_type = size_and_alignment_of_type(field_type, ctx);
-            //println!("Calculating layout for field type: {}", field_type.debug_type_name());
             if layout_of_type.align == 0 { continue; }
             max_alignment = u32::max(max_alignment, layout_of_type.align);
             let padding = (layout_of_type.align - (current_offset % layout_of_type.align)) % layout_of_type.align;
@@ -176,7 +176,13 @@ impl<'a> StructView<'a> {
     pub fn generic_params(&self) -> &[String] {
         &self.r#struct.generic_params
     }
-    
+    pub fn parser_type(&self) -> ParserType {
+        if self.path().is_empty() {
+            return ParserType::Named(self.r#struct.name.to_string());
+        }else {
+            return ParserType::NamespaceLink(self.path().to_string(), Box::new(ParserType::Named(self.r#struct.name.to_string())));
+        }
+    }
 }
 
 // ------------------------------------------------------------------------------------

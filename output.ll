@@ -3424,6 +3424,7 @@ define void @"list.new_node<i32>"(%"struct.list.ListNode<i32>"* %list){
 ;fn window.start_image_window used times 0
 ;fn basic_functions used times 0
 ;fn ax used times 1
+;fn ay used times 0
 ;fn of_fn used times 1
 ;fn test.geg used times 1
 ;fn xq used times 1
