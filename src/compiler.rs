@@ -189,8 +189,8 @@ fn handle_generics(symbols: &mut SymbolTable, output: &mut LLVMOutputHandler) ->
     Ok(())
 }
 fn collect(stmts: &[StmtData], 
-    enums: &mut Vec<ParsedEnum>, 
-    structs : &mut Vec<ParsedStruct>, 
+    enums: &mut Vec<ParsedEnum>,
+    structs : &mut Vec<ParsedStruct>,
     functions : &mut Vec<ParsedFunction>,
 ) -> CompileResult<()>{
     let mut statements: VecDeque<StmtData> = stmts.to_vec().into();
@@ -261,10 +261,6 @@ fn handle_types(structs : Vec<ParsedStruct>, symbols: &mut SymbolTable, output: 
     let mut registered_types = vec![];
     for str in &structs {
         registered_types.push((str.path.to_string(), str.name.to_string()));
-    }
-    for str in &structs {
-        let full_path = if str.path.is_empty() { str.name.to_string() } else { format!("{}.{}", str.path, str.name) };
-        symbols.types.insert(full_path.clone(), Struct::new_primitive("name"));
     }
     for str in structs {
         let mut compiler_struct_fields = vec![];
@@ -508,6 +504,11 @@ fn compile(symbols: &mut SymbolTable, output: &mut LLVMOutputHandler) -> Compile
 }
 pub fn compile_statement(stmt: &Stmt, ctx: &mut CodeGenContext, output: &mut LLVMOutputHandler) -> CompileResult<()>{
     match &stmt {
+        Stmt::ConstLet(name, var_type, expr) => {
+            let var: Variable = Variable::new(qualify_type(&substitute_generic_type(var_type, &ctx.symbols.alias_types), &ctx.current_function_path, ctx.symbols), true);
+            var.set_value(Some(compile_expression(expr, Expected::Type(&var_type), ctx, output)?.get_llvm_rep().clone()));
+            ctx.scope.add_variable(name.clone(), var, 0);
+        }
         Stmt::Let(name, var_type, expr) => {
             let x = ctx.aquire_unique_variable_index();
             ctx.scope.add_variable(name.clone(), Variable::new(qualify_type(&substitute_generic_type(var_type, &ctx.symbols.alias_types), &ctx.current_function_path, ctx.symbols), false), x);
@@ -536,7 +537,7 @@ pub fn compile_statement(stmt: &Stmt, ctx: &mut CodeGenContext, output: &mut LLV
                     return Err(CompileError::TypeMismatch { expected: return_type.clone(), found: value.get_type().clone() });
                 }
                 let llvm_type_str = get_llvm_type_str(return_type, ctx.symbols, &ctx.current_function_path)?;
-                output.push_str(&format!("    ret {} {}\n", llvm_type_str, value.get_llvm_repr()));
+                output.push_str(&format!("    ret {} {}\n", llvm_type_str, value.get_llvm_rep()));
             } else {
                 if !return_type.is_void() {
                     return Err(CompileError::Generic("Cannot return without a value from a non-void function.".to_string()));
@@ -572,23 +573,23 @@ pub fn compile_statement(stmt: &Stmt, ctx: &mut CodeGenContext, output: &mut LLV
             let end_label = format!("endif{}", logic_id);
             
             let target_else = if else_body.is_empty() { &end_label } else { &else_label };
-            output.push_str(&format!("    br i1 {}, label %{}, label %{}\n", cond_val.get_llvm_repr(), then_label, target_else));
+            output.push_str(&format!("    br i1 {}, label %{}, label %{}\n", cond_val.get_llvm_rep(), then_label, target_else));
 
             output.push_str(&format!("{}:\n", then_label));
-            let original_scope = ctx.scope.clone_and_enter();
+            ctx.scope.enter_scope();
             for then_stmt in then_body {
                 compile_statement(&then_stmt.stmt, ctx, output)?;
             }
-            ctx.scope.swap_and_exit(original_scope);
+            ctx.scope.exit_scope();
             output.push_str(&format!("    br label %{}\n", end_label));
 
             if !else_body.is_empty() {
                 output.push_str(&format!("{}:\n", else_label));
-                let original_scope = ctx.scope.clone_and_enter();
+                ctx.scope.enter_scope();
                 for else_stmt in else_body {
                     compile_statement(&else_stmt.stmt, ctx, output)?;
                 }
-                ctx.scope.swap_and_exit(original_scope);
+                ctx.scope.exit_scope();
                 output.push_str(&format!("    br label %{}\n", end_label));
             }
 
@@ -599,12 +600,12 @@ pub fn compile_statement(stmt: &Stmt, ctx: &mut CodeGenContext, output: &mut LLV
             
             output.push_str(&format!("    br label %loop_body{}\n", lc));
             output.push_str(&format!("loop_body{}:\n", lc));
-            let original_scope = ctx.scope.clone_and_enter();
+            ctx.scope.enter_scope();
             ctx.scope.set_loop_index(Some(lc));
             for x in statement {
                 compile_statement(&x.stmt, ctx, output)?;
             }
-            ctx.scope.swap_and_exit(original_scope);
+            ctx.scope.exit_scope();
             output.push_str(&format!("    br label %loop_body{}\n", lc));
             output.push_str(&format!("loop_body{}_exit:\n", lc));
         }
@@ -905,7 +906,7 @@ impl<'a> CodeGenContext<'a> {
             symbols,
             current_function_path: function.path.to_string(),
             current_function_name: function.name.to_string(),
-            scope: Scope::default(),
+            scope: Scope::new(),
             temp_value_counter: Cell::new(0),
             variable_counter: Cell::new(0),
             logic_counter: Cell::new(0),

@@ -1,6 +1,6 @@
 #include("./src_base_structs.rcsharp")
 
-inline fn basic_functions(){
+inline fn basic_functions() {
     console::AllocConsole();
     tests::run();
     window::start();
@@ -30,21 +30,20 @@ namespace test{
     }
 }
 fn xq() : test::QPair<i64, i64>{
-    let y : &fn() : test::QPair<i64, i64> = ptr_of(test::geg);
+    const y : &fn() : test::QPair<i64, i64> = ptr_of(test::geg);
     return (*y)();
 }
 fn main(): i32 {
-    let f : f64 = 31415.45675678567895636231454568;
-    let tp : &fn() : i32 = ptr_of(main);
-    let tx : &fn() : Pair<i32, Pair<i8, string::String>> = ptr_of(ax::<i32>);
+    const f : f64 = 31415.45675678567895636231454568;
+    const tp : &fn() : i32 = ptr_of(main);
+    const tx : &fn() : Pair<i32, Pair<i8, string::String>> = ptr_of(ax::<i32>);
     let y : Pair<i32, Pair<i8, string::String>> = (*tx)();
     console::println_i64(y.second.first as i64);
-
     console::println_f64(f as f64);
     console::println_i64(f as i64);
     console::println_i64(bitcast::<i64>(f));
     console::println_f64(bitcast::<f64>(bitcast::<i64>(f) + 123123123123));
-    //basic_functions();
-    let temp : test::QPair<i64, i64> = xq();
+    basic_functions();
+    const temp : test::QPair<i64, i64> = xq();
     return (bitcast::<i64>(tx) - bitcast::<i64>(tp)) as i32;
 }

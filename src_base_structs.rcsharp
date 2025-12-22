@@ -9,9 +9,9 @@ namespace process{
     fn GetModuleFileNameA(hModule: &i8, lpFilename: &i8, nSize: u32): u32;
 
     fn get_executable_path() : string::String {
-        let size: u32 = 260;
+        const size: u32 = 260;
         let string : string::String = string::with_size(size as i32);
-        let len : u32 = GetModuleFileNameA(null, string.data, string.len as u32);
+        const len : u32 = GetModuleFileNameA(null, string.data, string.len as u32);
         string.len = len as i32;
         return string;
     }
@@ -28,9 +28,9 @@ namespace process{
         return string;
     }
     fn throw(exception: &i8) : void {
-        let len: i32 = string_utils::c_str_len(exception);
+        const len: i32 = string_utils::c_str_len(exception);
         console::AllocConsole();
-        let stdout_handle: &i8 = console::GetStdHandle(-11 as i32);
+        const stdout_handle: &i8 = console::GetStdHandle(-11 as i32);
         console::writeln("Exception: ", 11);
         console::writeln(exception, len);
         ExitProcess(-1);
@@ -66,7 +66,7 @@ namespace mem{
     fn HeapUnlock(hHeap: &i32) : i32;
 
     fn malloc(size: i64) : &void { 
-        let ptr: &void = HeapAlloc(GetProcessHeap(), 0, size);
+        const ptr: &void = HeapAlloc(GetProcessHeap(), 0, size);
         if ptr == bitcast::<&void>(0) {
             process::throw("Out of memory");
         }
@@ -76,7 +76,7 @@ namespace mem{
         if ptr == bitcast::<&void>(0) {
             return malloc(size);
         }
-        let new_ptr: &void = HeapReAlloc(GetProcessHeap(), 0, ptr, size);
+        const new_ptr: &void = HeapReAlloc(GetProcessHeap(), 0, ptr, size);
         if new_ptr == bitcast::<&void>(0) {
             process::throw("Realloc failed");
         }
@@ -128,7 +128,7 @@ namespace mem{
         }
     }
     fn get_total_allocated_memory_external() : i64 {
-        let hHeap: &i32 = GetProcessHeap();
+        const hHeap: &i32 = GetProcessHeap();
         let total_size: i64 = 0;
         let entry: PROCESS_HEAP_ENTRY;
         entry.lpData = null; 
@@ -233,7 +233,7 @@ namespace vector{
             if vec.capacity != 0 as u32 {
                 new_capacity = vec.capacity * 2 as u32;
             }
-            let new_size_bytes: i64 = sizeof::<T>() * new_capacity as i64;
+            const new_size_bytes: i64 = sizeof::<T>() * new_capacity as i64;
             vec.array = mem::realloc(vec.array as &void, new_size_bytes) as &T;
             vec.capacity = new_capacity;
         }
@@ -337,7 +337,7 @@ namespace console{
         }
     }
     fn println_u64(n: u64) {
-        let buffer : &i8 = stalloc::<i8>(22);
+        const buffer : &i8 = stalloc::<i8>(22);
         let i: i32 = 20; 
         if n == 0 {
             write("0\n", 2);
@@ -355,12 +355,12 @@ namespace console{
         }
 
         buffer[21] = '\n';
-        let start_ptr : &i8 = &buffer[i + 1];
-        let len: i32 = 21 as i32 - i;
+        const start_ptr : &i8 = &buffer[i + 1];
+        const len: i32 = 21 as i32 - i;
         write(start_ptr, len);
     }
     fn println_f64(n: f64) {
-        let PRECISION: i32 = 6;
+        const PRECISION: i32 = 6;
         let mut_n : f64 = n;
         if n < 0.0 {
             print_char('-');
@@ -377,7 +377,7 @@ namespace console{
             i = i + 1;
         }
         mut_n = mut_n + rounder;
-        let integer_part : u64 = mut_n as u64;
+        const integer_part : u64 = mut_n as u64;
         let fractional_part : f64 = mut_n - (integer_part as f64);
         if integer_part == 0 {
             print_char('0');
@@ -449,10 +449,10 @@ namespace string{
         return x;
     }
     fn concat_with_c_string(src_string: &String, c_string: &i8) : String {
-        let c_string_len : i32 = string_utils::c_str_len(c_string);
-        let new_len: i32 = c_string_len + src_string.len;
+        const c_string_len : i32 = string_utils::c_str_len(c_string);
+        const new_len: i32 = c_string_len + src_string.len;
         
-        let combined : &i8 = mem::malloc(sizeof::<i8>() * (new_len + 1) as i64) as &i8;
+        const combined : &i8 = mem::malloc(sizeof::<i8>() * (new_len + 1) as i64) as &i8;
         
         mem::copy(src_string.data, combined, src_string.len as i64);
         mem::copy(c_string, (combined + src_string.len as i64), c_string_len as i64);
@@ -480,9 +480,9 @@ namespace string{
 }
 namespace string_utils{
     fn insert(src1: &i8, src2: &i8, index: i32) : &i8{
-        let len1 : i32 = c_str_len(src1);
-        let len2 : i32 = c_str_len(src2);
-        let output : &i8 = mem::malloc((len1 + len2 + 1) as i64) as &i8;
+        const len1 : i32 = c_str_len(src1);
+        const len2 : i32 = c_str_len(src2);
+        const output : &i8 = mem::malloc((len1 + len2 + 1) as i64) as &i8;
         mem::copy(src1, output, index as i64);
         mem::copy(src2, (output + index), len2 as i64);
         mem::copy((src1 + index), (output + index + len2), (len1 - index) as i64);
@@ -525,22 +525,22 @@ namespace fs{
     #[DllImport("kernel32.dll")]
     fn GetFileAttributesA(lpFileName: &i8) : u32;
     fn write_to_file(path: &i8, content: &i8, content_len: u32) : i32 {
-        let CREATE_ALWAYS: u32 = 2;
-        let GENERIC_WRITE: u32 = 0x40000000;
-        let FILE_ATTRIBUTE_NORMAL: u32 = 0x80;
-        let hFile: &void = CreateFileA(path, GENERIC_WRITE, 0, null, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, null);
+        const CREATE_ALWAYS: u32 = 2;
+        const GENERIC_WRITE: u32 = 0x40000000;
+        const FILE_ATTRIBUTE_NORMAL: u32 = 0x80;
+        const hFile: &void = CreateFileA(path, GENERIC_WRITE, 0, null, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, null);
         if hFile == bitcast::<&void>(-1) { return 0; }
 
         let bytes_written: u32 = 0;
-        let success: i32 = WriteFile(hFile, content, content_len, &bytes_written, null);
+        const success: i32 = WriteFile(hFile, content, content_len, &bytes_written, null);
         CloseHandle(hFile);
 
         return (success != 0 && bytes_written == content_len) as i32;
     }
     fn read_full_file_as_string(path: &i8) : string::String {
-        let GENERIC_READ: u32 = 0x80000000;
-        let OPEN_EXISTING: u32 = 3; 
-        let hFile: &void = CreateFileA(path, GENERIC_READ, 1, null, OPEN_EXISTING, 0x80, null); // Shared Read
+        const GENERIC_READ: u32 = 0x80000000;
+        const OPEN_EXISTING: u32 = 3; 
+        const hFile: &void = CreateFileA(path, GENERIC_READ, 1, null, OPEN_EXISTING, 0x80, null); // Shared Read
         
         if hFile == bitcast::<&void>(-1) {
             process::throw(string_utils::insert("File not found: ", path, 16));
@@ -554,7 +554,7 @@ namespace fs{
 
         let buffer: string::String = string::with_size(file_size as i32);
         let bytes_read: u32 = 0;
-        let success: i32 = ReadFile(hFile, buffer.data, file_size as u32, &bytes_read, null);
+        const success: i32 = ReadFile(hFile, buffer.data, file_size as u32, &bytes_read, null);
         CloseHandle(hFile);
 
         if success == 0 {
@@ -566,7 +566,7 @@ namespace fs{
         return buffer;
     }
     fn create_file(path: &i8) : i32 {
-        let hFile: &void = CreateFileA(path, 0x40000000, 0, null, 1, 0x80, null);
+        const hFile: &void = CreateFileA(path, 0x40000000, 0, null, 1, 0x80, null);
         if hFile == bitcast::<&void>(-1) { return 0; }
         CloseHandle(hFile);
         return 1;
@@ -575,15 +575,15 @@ namespace fs{
         return DeleteFileA(path);
     }
     fn file_exists(path: &i8) : bool {
-        let INVALID_FILE_ATTRIBUTES: u32 = 0xFFFFFFFF;
-        let attributes: u32 = GetFileAttributesA(path);
+        const INVALID_FILE_ATTRIBUTES: u32 = 0xFFFFFFFF;
+        const attributes: u32 = GetFileAttributesA(path);
         return attributes != INVALID_FILE_ATTRIBUTES;
     }
 }
 
 namespace tests{
     fn run(){
-        let pre_test_mem: i64 = mem::get_total_allocated_memory_external();
+        const pre_test_mem: i64 = mem::get_total_allocated_memory_external();
         mem_test();
         string_utils_test();
         string_test();
@@ -594,16 +594,16 @@ namespace tests{
         fs_test();
 
         funny();
-        let post_test_mem: i64 = mem::get_total_allocated_memory_external();
-        let delta: i64 = post_test_mem - pre_test_mem;
+        const post_test_mem: i64 = mem::get_total_allocated_memory_external();
+        const delta: i64 = post_test_mem - pre_test_mem;
         console::write("test malloc delta: ", 19);
         console::println_i64(delta);
     }
     fn mem_test(){
         console::write("mem_test: ", 10);
         
-        let size: i64 = 16;
-        let buffer1: &i8 = mem::malloc(size) as &i8;
+        const size: i64 = 16;
+        const buffer1: &i8 = mem::malloc(size) as &i8;
         if buffer1 == null { process::throw("mem_test: malloc failed"); }
         
         // Test fill
@@ -624,7 +624,7 @@ namespace tests{
         }
         
         // Test copy
-        let buffer2: &i8 = mem::malloc(size) as &i8;
+        const buffer2: &i8 = mem::malloc(size) as &i8;
         if buffer2 == null { process::throw("mem_test: malloc for copy failed"); }
         mem::fill('Y', buffer2, size);
         mem::copy(buffer2, buffer1, size);
@@ -650,8 +650,8 @@ namespace tests{
         if !string_utils::is_ascii_char('a') || string_utils::is_ascii_char('9') { process::throw("string_utils_test: is_ascii_char failed"); }
         if !string_utils::is_ascii_hex('F') || string_utils::is_ascii_hex('G') { process::throw("string_utils_test: is_ascii_hex failed"); }
 
-        let inserted: &i8 = string_utils::insert("ac", "b", 1);
-        let expected: &i8 = "abc";
+        const inserted: &i8 = string_utils::insert("ac", "b", 1);
+        const expected: &i8 = "abc";
         let i: i32 = 0;
         loop {
             if inserted[i] == 0 && expected[i] == 0 { break; }
@@ -706,7 +706,7 @@ namespace tests{
         if v.length != 5 || v.capacity != 8 { process::throw("vector_test: realloc failed"); }
         if v.array[4] != 50 || v.array[0] != 10 { process::throw("vector_test: realloc content failed"); }
         
-        let data_to_push: &i8 = "AB";
+        const data_to_push: &i8 = "AB";
         vector::push_bulk::<i8>(&v, data_to_push, 2);
         if v.length != 7 { process::throw("vector_test: push_bulk length failed"); }
         if v.array[5] != 'A' || v.array[6] != 'B' { process::throw("vector_test: push_bulk content failed"); }
@@ -716,6 +716,7 @@ namespace tests{
         
         console::writeln("OK", 2);
     }
+    
     fn list_test() {
         console::write("list_test: ", 11);
 
@@ -743,6 +744,7 @@ namespace tests{
 
         console::writeln("OK", 2);
     }
+    
     fn process_test() {
         console::write("process_test: ", 14);
         
@@ -790,7 +792,7 @@ namespace tests{
         let env_path : string::String = process::get_executable_env_path();
         let new_file_path: string::String = string::concat_with_c_string(&env_path, "test.txt");
 
-        let c_string : &i8 = stalloc::<i8>((new_file_path.len + 1) as i64);
+        const c_string : &i8 = stalloc::<i8>((new_file_path.len + 1) as i64);
         string::as_c_string_stalloc(&new_file_path, c_string);
 
         fs::create_file(c_string);
@@ -816,7 +818,7 @@ namespace tests{
             if *iterator >= file.len {
                 break;
             }
-            let char : i8 = file.data[*iterator];
+            const char : i8 = file.data[*iterator];
             if (*condition)(char) {
                 *iterator = *iterator + 1;
             } else {
@@ -1545,7 +1547,7 @@ namespace window{
             return 0;
         }
         if uMsg == WM::NCHITTEST {
-            let result: i64 = DefWindowProcA(hWnd, uMsg, wParam, lParam);
+            const result: i64 = DefWindowProcA(hWnd, uMsg, wParam, lParam);
             if result == 1 {
                 return 2;
             }
@@ -1557,8 +1559,8 @@ namespace window{
     
         if uMsg == WM::PAINT {
             let ps: PAINTSTRUCT;
-            let hdc: &void = BeginPaint(hWnd, &ps);
-            let hStoredImage: &void = GetWindowLongPtrA(hWnd, -21);
+            const hdc: &void = BeginPaint(hWnd, &ps);
+            const hStoredImage: &void = GetWindowLongPtrA(hWnd, -21);
             if hStoredImage != null {
                 draw_bitmap(hdc, hStoredImage, 0, 0);
             }
@@ -1584,8 +1586,8 @@ namespace window{
     fn draw_bitmap(hdc: &void, hBitmap: &void, x: i32, y: i32) {
         if hBitmap == null { return; }
 
-        let hMemDC: &void = CreateCompatibleDC(hdc);
-        let hOldBitmap: &void = SelectObject(hMemDC, hBitmap);
+        const hMemDC: &void = CreateCompatibleDC(hdc);
+        const hOldBitmap: &void = SelectObject(hMemDC, hBitmap);
 
         let bm: BITMAP;
         GetObjectA(hBitmap, sizeof::<BITMAP>() as i32, &bm);
@@ -1598,8 +1600,8 @@ namespace window{
     fn draw_bitmap_stretched(hdc: &void, hBitmap: &void, x: i32, y: i32, width: i32, height: i32) {
         if hBitmap == null { return; }
 
-        let hMemDC: &void = CreateCompatibleDC(hdc);
-        let hOldBitmap: &void = SelectObject(hMemDC, hBitmap);
+        const hMemDC: &void = CreateCompatibleDC(hdc);
+        const hOldBitmap: &void = SelectObject(hMemDC, hBitmap);
 
         let bm: BITMAP;
         GetObjectA(hBitmap, sizeof::<BITMAP>() as i32, &bm);
@@ -1615,12 +1617,12 @@ namespace window{
 
     fn start(){
         // CW apparently stands for Control Word. https://stackoverflow.com/questions/48079439/winapi-cw-usedefault-vs-cw-default
-        let CW_USEDEFAULT: i32 = 0x80000000;
+        const CW_USEDEFAULT: i32 = 0x80000000;
 
-        let hInstance: &void = GetModuleHandleA(bitcast::<&i8>(0));
+        const hInstance: &void = GetModuleHandleA(bitcast::<&i8>(0));
         if is_null(hInstance) { process::throw("Window error: StartError::GetModuleHandleFailed"); }
 
-        let className: &i8 = "MyWindowClass";
+        const className: &i8 = "MyWindowClass";
         let wc: WNDCLASSEXA;
         wc.cbSize = sizeof::<WNDCLASSEXA>();
         wc.style = CS::HREDRAW | CS::VREDRAW;
@@ -1637,8 +1639,8 @@ namespace window{
 
         if RegisterClassExA(&wc) == 0 { process::throw("Window error: StartError::RegisterClassFailed"); }
 
-        let windowTitle: &i8 = "Hello, World!";
-        let hWnd: &void = CreateWindowExA(
+        const windowTitle: &i8 = "Hello, World!";
+        const hWnd: &void = CreateWindowExA(
             0,                      // Extended window style
             className,              // Window class name
             windowTitle,            // Window title
@@ -1666,10 +1668,10 @@ namespace window{
         }
     }
     fn start_image_window(imagePath: &i8) {
-        let hInstance: &void = GetModuleHandleA(bitcast::<&i8>(0));
+        const hInstance: &void = GetModuleHandleA(bitcast::<&i8>(0));
         if is_null(hInstance) { process::throw("Window error: StartError::GetModuleHandleFailed"); }
 
-        let local_hImage: &void = load_bitmap_from_file(imagePath);
+        const local_hImage: &void = load_bitmap_from_file(imagePath);
         if local_hImage == bitcast::<&void>(0) {
             process::throw("Failed to load image. not valid .BMP file");
         }
@@ -1678,7 +1680,7 @@ namespace window{
         let imgH: i32 = 0;
         get_bitmap_dimensions(local_hImage, &imgW, &imgH);
 
-        let className: &i8 = "BorderlessImageClass";
+        const className: &i8 = "BorderlessImageClass";
         let wc: WNDCLASSEXA;
         wc.cbSize = sizeof::<WNDCLASSEXA>();
         wc.style = CS::HREDRAW | CS::VREDRAW;
@@ -1695,7 +1697,7 @@ namespace window{
 
         if RegisterClassExA(&wc) == 0 { process::throw("Window error: StartError::RegisterClassFailed"); }
         
-        let hWnd: &void = CreateWindowExA(
+        const hWnd: &void = CreateWindowExA(
             WS_EX::TOPMOST,
             className,
             "ImageWindow",

@@ -2,7 +2,7 @@ use std::{cell::{Cell, RefCell}, collections::HashMap};
 use ordered_hash_map::OrderedHashMap;
 use rcsharp_parser::{compiler_primitives::Layout, parser::{Attribute, ParserType, StmtData}};
 
-use crate::{compiler::{CodeGenContext, CompileResult, SymbolTable, get_llvm_type_str_int, substitute_generic_type}, expression_compiler::{CompiledValue, size_and_alignment_of_type}};
+use crate::{compiler::{CodeGenContext, CompileResult, LLVMOutputHandler, SymbolTable, get_llvm_type_str, get_llvm_type_str_int, substitute_generic_type}, expression_compiler::{CompiledValue, LLVMVal, size_and_alignment_of_type}};
 
 // ------------------------------------------------------------------------------------
 #[derive(Debug, Clone)]
@@ -364,21 +364,25 @@ pub enum VariableFlags {
 }
 #[derive(Debug, Clone)]
 pub struct Variable{
-    pub compiler_type: ParserType,
-    pub flags: Cell<u8>,
+    compiler_type: ParserType,
+    flags: Cell<u8>,
+    value: RefCell<Option<LLVMVal>>
 }
 impl Variable {
     pub fn new(comp_type: ParserType, is_const: bool) -> Self {
         let flags = if is_const { VariableFlags::Constant as u8 } else { 0 };
-        Self { compiler_type: comp_type, flags: Cell::new(flags) }
+        Self { compiler_type: comp_type, flags: Cell::new(flags), value: RefCell::new(None) }
     }
     pub fn new_argument(comp_type: ParserType) -> Self {
-        Self { compiler_type: comp_type, flags: Cell::new(VariableFlags::Argument as u8) }
+        Self { compiler_type: comp_type, flags: Cell::new(VariableFlags::Argument as u8), value: RefCell::new(None) }
     }
     pub fn new_alias(comp_type: ParserType) -> Self {
-        Self { compiler_type: comp_type, flags: Cell::new(VariableFlags::Argument as u8 | VariableFlags::AliasValue as u8) }
+        Self { compiler_type: comp_type, flags: Cell::new(VariableFlags::Argument as u8 | VariableFlags::AliasValue as u8), value: RefCell::new(None) }
     }
     pub fn get_type(&self, write: bool, modify_content: bool) -> &ParserType{
+        if self.is_constant() && (write || modify_content){
+            panic!("Tried to mark constant variable as read or written");
+        }
         if write {
             self.flags.replace(self.flags.get() | VariableFlags::HasWrote as u8);
         }else {
@@ -395,6 +399,10 @@ impl Variable {
     // Used only in inlining
     pub fn is_alias_value(&self) -> bool {
         self.flags.get() & VariableFlags::AliasValue as u8 != 0
+    }
+
+    pub fn is_constant(&self) -> bool {
+        self.flags.get() & VariableFlags::Constant as u8 != 0
     }
 
     pub fn has_read(&self) -> bool{
@@ -422,83 +430,101 @@ impl Variable {
 
         output
     }
+    pub fn set_value(&self, value: Option<LLVMVal>) {
+        self.value.replace(value);
+    }
+    
+    pub fn value(&self) -> &RefCell<Option<LLVMVal>> {
+        &self.value
+    }
+    
+    pub fn compiler_type(&self) -> &ParserType {
+        &self.compiler_type
+    }
+    pub fn get_llvm_value(&self, var_id: u32, var_name: &str, ctx: &CodeGenContext, output: &mut LLVMOutputHandler) -> CompileResult<LLVMVal> {
+        if let Some(val) = self.value.borrow().as_ref() {
+            return Ok(val.clone());
+        }
+        if self.is_argument() {
+            let llvm_repr = if self.is_alias_value() {
+                LLVMVal::Register(var_id)
+            } else {
+                LLVMVal::VariableName(var_name.to_string())
+            };
+            return Ok(llvm_repr);
+        }
+        let ptype = self.compiler_type.clone();
+        
+        let type_str = get_llvm_type_str(&ptype, ctx.symbols, &ctx.current_function_path)?;
+        let temp_id = ctx.aquire_unique_temp_value_counter();
+        output.push_str(&format!("    %tmp{} = load {}, {}* %v{}\n", temp_id, type_str, type_str, var_id));
+        Ok(LLVMVal::Register(temp_id))
+    }
 }
 
 // ------------------------------------------------------------------------------------
-#[derive(Debug, Clone, Default)]
-pub struct Scope{
-    upper_scope_variables: OrderedHashMap<String, (Variable, u32)>,
-    current_scope_variables: OrderedHashMap<String, (Variable, u32)>,
+#[derive(Debug, Clone)]
+struct ScopeLayer{
+    variables: OrderedHashMap<String, (Variable, u32)>,
     loop_index: Option<u32>,
 }
+#[derive(Debug, Clone)]
+pub struct Scope {
+    layers: Vec<ScopeLayer>,
+}
+
 impl Scope {
-    pub fn new(upper_scope_variables: OrderedHashMap<String, (Variable, u32)>, current_scope_variables: OrderedHashMap<String, (Variable, u32)>, loop_index: Option<u32>) -> Self {
-        Self { upper_scope_variables, current_scope_variables, loop_index }
+    pub fn new() -> Self {
+        Self { layers: vec![ScopeLayer { variables: OrderedHashMap::new(), loop_index: None }] }
     }
-    pub fn empty() -> Self {
-        Self { upper_scope_variables: OrderedHashMap::new(), current_scope_variables: OrderedHashMap::new(), loop_index: None }
+    pub fn clear(&mut self) {
+        self.layers.clear();
+        self.layers.push(ScopeLayer { variables: OrderedHashMap::new(), loop_index: None });
     }
-    
-    pub fn clear(&mut self){
-        self.current_scope_variables.clear();
-        self.upper_scope_variables.clear();
-    }
-    pub fn get_variable(&self, name: &str) -> Option<&(Variable, u32)>{
-        if self.current_scope_variables.contains_key(name) {
-            return Some(&self.current_scope_variables[name]);
-        }
-        if self.upper_scope_variables.contains_key(name) {
-            return Some(&self.upper_scope_variables[name]);
+    pub fn get_variable(&self, name: &str) -> Option<&(Variable, u32)> {
+        for layer in self.layers.iter().rev() {
+            if let Some(var) = layer.variables.get(name) {
+                return Some(var);
+            }
         }
         None
     }
     pub fn add_variable(&mut self, name: String, variable: Variable, unique_value_tag: u32) {
-        if self.current_scope_variables.contains_key(&name) {
-            let var = self.current_scope_variables.remove(&name).unwrap();
+        let current_layer = self.layers.last_mut().expect("Scope stack is empty");
+        
+        if current_layer.variables.contains_key(&name) {
+            let var = current_layer.variables.remove(&name).unwrap();
             self.leave_scope((&name, &var));
         }
-        self.current_scope_variables.insert(name, (variable, unique_value_tag));
+
+        let current_layer = self.layers.last_mut().expect("Scope stack is empty");
+        current_layer.variables.insert(name, (variable, unique_value_tag));
     }
     pub fn leave_scope(&self, _variable: (&String, &(Variable, u32))){
         //println!("Variable {}, has left scope.\nFlags:\t{}", variable.0, variable.1.0.unusual_flags_to_string());
     }
-    
-    pub fn swap_and_exit(&mut self, original_scope: Scope) {
-        for var in &self.upper_scope_variables {
-            let original_flags = if original_scope.upper_scope_variables.contains_key(var.0) {
-                &original_scope.upper_scope_variables[var.0].0.flags
-            }else{
-                &original_scope.current_scope_variables[var.0].0.flags
-            };
-            original_flags.set(original_flags.get() | var.1.0.flags.get());
+    pub fn enter_scope(&mut self) {
+        let current_loop_index = self.loop_index();
+        self.layers.push(ScopeLayer { variables: OrderedHashMap::new(), loop_index: current_loop_index });
+    }
+    pub fn exit_scope(&mut self) {
+        if self.layers.len() <= 1 {
+            panic!("Attempted to drop the global scope");
         }
 
-        for var in self.current_scope_variables.iter().rev() {
-            self.leave_scope(var)
+        let layer = self.layers.pop().unwrap();
+
+        for var in layer.variables.iter().rev() {
+            self.leave_scope(var);
         }
-        self.current_scope_variables = original_scope.current_scope_variables;
-        self.upper_scope_variables = original_scope.upper_scope_variables;
-        self.loop_index = original_scope.loop_index;
     }
-    pub fn clone_and_enter(&mut self) -> Scope{
-        let sc = self.clone();
-        
-        let mut new_scope = self.current_scope_variables.clone();
-        for x in &self.upper_scope_variables {
-            if !new_scope.contains_key(x.0) {
-                new_scope.insert(x.0.clone(), x.1.clone());
-            }
-        }
-        self.upper_scope_variables = new_scope;
-        self.current_scope_variables.clear();
-        sc
-    }
-    
     pub fn loop_index(&self) -> Option<u32> {
-        self.loop_index
+        self.layers.last().and_then(|l| l.loop_index)
     }
-    
+
     pub fn set_loop_index(&mut self, loop_index: Option<u32>) {
-        self.loop_index = loop_index;
+        if let Some(layer) = self.layers.last_mut() {
+            layer.loop_index = loop_index;
+        }
     }
 }
