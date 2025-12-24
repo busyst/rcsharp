@@ -18,6 +18,7 @@ pub enum PrimitiveKind {
     UnsignedInt,
     Decimal,
 }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PrimitiveInfo {
     pub name: &'static str,
     pub layout: Layout,

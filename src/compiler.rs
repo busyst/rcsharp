@@ -7,7 +7,7 @@ use rcsharp_lexer::lex_string_with_file_context;
 use rcsharp_parser::compiler_primitives::{PRIMITIVE_TYPES_INFO, find_primitive_type};
 use rcsharp_parser::expression_parser::Expr;
 use rcsharp_parser::parser::{Attribute, GeneralParser, ParsedEnum, ParsedFunction, ParsedStruct, ParserResultExt, ParserType, Span, Stmt, StmtData};
-use crate::compiler_essentials::{Enum, Function, FunctionFlags, FunctionView, Scope, Struct, StructView, Variable};
+use crate::compiler_essentials::{CompilerType, Enum, FlagManager, Function, FunctionView, Scope, Struct, StructView, Variable, function_flags};
 use crate::expression_compiler::{Expected, compile_expression, constant_integer_expression_compiler};
 
 pub const LAZY_FUNCTION_COMPILE : bool = true;
@@ -49,7 +49,6 @@ impl From<std::io::Error> for CompileError {
     }
 }
 pub type CompileResult<T> = Result<T, CompileError>;
-
 pub fn rcsharp_compile_to_file(stmts: &[StmtData], full_path: &str) -> Result<(), String> {
     match rcsharp_compile(stmts, full_path) {
         Ok(llvm_ir) => {
@@ -135,13 +134,12 @@ fn handle_generics(symbols: &mut SymbolTable, output: &mut LLVMOutputHandler) ->
                     )));
                 }
                 new = true;
-                let current_namespace = function.path();
                 let mut type_map = HashMap::new();
                 for (ind, prm) in function.generic_params.iter().enumerate() {
                     type_map.insert(prm.clone(), x[ind].clone());
                     symbols.alias_types.insert(prm.clone(), x[ind].clone());
                 }
-                let llvm_struct_name = format!("{}<{}>", full_path, x.iter().map(|x| get_llvm_type_str(x, symbols, current_namespace)).collect::<CompileResult<Vec<_>>>()?.join(", "));
+                let llvm_struct_name = SymbolTable::get_effective_generic_function_name(&full_path, x, symbols);
                 let mut q= function.clone();
                 for x in q.args.iter_mut() {
                     x.1 = substitute_generic_type(&x.1, &type_map);
@@ -193,7 +191,7 @@ fn collect(stmts: &[StmtData],
     structs : &mut Vec<ParsedStruct>,
     functions : &mut Vec<ParsedFunction>,
 ) -> CompileResult<()>{
-    let mut statements: VecDeque<StmtData> = stmts.to_vec().into();
+    let mut statements: VecDeque<StmtData> = stmts.iter().cloned().collect(); 
 
     let mut current_path = Vec::new();
     let mut included_files: HashSet<String> = HashSet::new();
@@ -324,21 +322,22 @@ fn handle_enums(enums : Vec<ParsedEnum>, symbols: &mut SymbolTable, _output: &mu
         let full_path = if current_path.is_empty() { enum_name.to_string() } else { format!("{}.{}", current_path, enum_name) };
         let mut compiler_enum_fields = vec![];
         let enum_type = qualify_type(&enum_type, &current_path, symbols);
-        if enum_type.as_integer().is_none() {
-            todo!("Not yet supported!")
-        }
-        for (field_name, field_expr) in fields {
-            if let Expr::Integer(int) = &field_expr {
-                compiler_enum_fields.push((field_name, int.parse::<i128>().unwrap()));
-                continue;
+        if let Some(x) = enum_type.as_integer() {
+            for (field_name, field_expr) in fields {
+                if let Expr::Integer(int) = &field_expr {
+                    compiler_enum_fields.push((field_name, int.parse::<i128>().unwrap()));
+                    continue;
+                }
+                if let Ok(int) = constant_integer_expression_compiler(&field_expr, symbols) {
+                    compiler_enum_fields.push((field_name, int));
+                    continue;
+                }
+                todo!("Expr {:?}", field_expr);
             }
-            if let Ok(int) = constant_integer_expression_compiler(&field_expr, symbols) {
-                compiler_enum_fields.push((field_name, int));
-                continue;
-            }
-            todo!("Expr {:?}", field_expr);
+            symbols.enums.insert(full_path, Enum::new(current_path, enum_name, CompilerType::Primitive(x), compiler_enum_fields.into_boxed_slice(), attrs));
+            continue;
         }
-        symbols.enums.insert(full_path, Enum::new(current_path, enum_name, enum_type, compiler_enum_fields.into_boxed_slice(), attrs));
+        todo!("Not yet supported!")
     }
     Ok(())
 }
@@ -358,24 +357,23 @@ fn handle_functions(functions : Vec<ParsedFunction>, symbols: &mut SymbolTable, 
         let return_type = qualify_type(&pf.return_type, &current_path, symbols);
         let args = pf.args.iter().map(|x| (x.0.clone(), qualify_type(&x.1, &current_path, symbols))).collect::<Box<[_]>>();
         let full_path = if current_path.is_empty() { function_name.to_string() } else { format!("{}.{}", current_path, function_name) };
-        
-        let mut flags = 0;
+        let function = Function::new(current_path, function_name, args, return_type, function_body, 0.into(), function_attrs, function_generics);
         if function_prefixes.iter().any(|x| x.as_str() == "public") {
-            flags |= FunctionFlags::Public as u8;
+            function.set_flag(function_flags::PUBLIC as u8);
         }
         if function_prefixes.iter().any(|x| x.as_str() == "inline") {
-            flags |= FunctionFlags::Inline as u8;
+            function.set_flag(function_flags::INLINE as u8);
         }
         if function_prefixes.iter().any(|x| x.as_str() == "constexpr") {
-            flags |= FunctionFlags::ConstExpression as u8;
+            function.set_flag(function_flags::CONST_EXPRESSION as u8);
         }
-        if function_attrs.iter().any(|x| x.name_equals("DllImport")) {
-            flags |= FunctionFlags::Imported as u8;
+        if function.attribs.iter().any(|x| x.name_equals("DllImport")) {
+            function.set_flag(function_flags::IMPORTED as u8);
         }
-        if !function_generics.is_empty() {
-            flags |= FunctionFlags::Generic as u8;
+        if !function.generic_params.is_empty() {
+            function.set_flag(function_flags::GENERIC as u8);
         }
-        let function = Function::new(current_path, function_name, args, return_type, function_body, flags.into(), function_attrs, function_generics);
+        
         symbols.functions.insert(full_path, function);
     }
     Ok(())
@@ -653,7 +651,7 @@ pub fn get_llvm_type_str(
                 return Ok(x.llvm_representation());
             }
             if let Some(enm) = symbols.enums.get(&abs).or(symbols.enums.get(&rel)) {
-                return get_llvm_type_str(&enm.base_type, symbols, current_namespace);
+                return enm.base_type.llvm_representation(symbols);
             }
             Err(CompileError::Generic(format!("GENERIC LLVM ERROR NAMED {:?}", ptype)))
         }
@@ -912,6 +910,25 @@ impl SymbolTable {
         }
         None
     }
+    pub fn get_bare_function_id(&self, fqn: &str, increment_use: bool) -> Option<usize> {
+        if let Some(pos) = self.functions.iter().position(|x| x.0 == fqn) {
+            if increment_use {
+                self.functions.values().nth(pos).unwrap().use_fn();
+            }
+            Some(pos)
+        } else {
+            None
+        }
+    }
+    pub fn get_bare_function_by_id<'a>(&'a self, id: usize, increment_use: bool) -> Option<FunctionView<'a>> {
+        if let Some(x) = self.functions.values().nth(id) {
+            if increment_use {
+                x.use_fn();
+            }
+            return Some(FunctionView::new_unspec(x));
+        }
+        None
+    }
     pub fn get_function<'a>(&'a self, fqn: &str, current_namespace: &str) -> Option<FunctionView<'a>> {
         if let Some(x) = self.get_bare_function(fqn, current_namespace, true) {
             if x.definition().is_generic() {
@@ -924,7 +941,12 @@ impl SymbolTable {
     pub fn get_generic_function<'a>(&'a self, fqn: &str, current_namespace: &str, aliases: &HashMap<String, ParserType>) -> Option<FunctionView<'a>> {
         self.get_bare_function(fqn, current_namespace, true).filter(|x| x.definition().is_generic()).map(|x| FunctionView::new_generic(x.definition(), aliases))
     }
-
+    pub fn get_generic_function_id<'a>(&'a self, fqn: &str, aliases: &HashMap<String, ParserType>) -> Option<usize> {
+        self.get_bare_function_id(fqn, true).map(|x| {FunctionView::new_generic(self.functions.values().nth(x).unwrap(), aliases); x})
+    }
+    pub fn get_generic_function_by_id<'a>(&'a self, id: usize, aliases: &HashMap<String, ParserType>) -> Option<FunctionView<'a>> {
+        self.get_bare_function_by_id(id, true).filter(|x| x.definition().is_generic()).map(|x| FunctionView::new_generic(x.definition(), aliases))
+    }  
     pub fn get_bare_type<'a>(&'a self, fqn: &str) -> Option<StructView<'a>> {
         self.types.get(fqn).map(StructView::new_unspec)
     }
@@ -943,35 +965,29 @@ impl SymbolTable {
     pub fn get_generic_type<'a>(&'a self, fqn: &str, aliases: &HashMap<String, ParserType>) -> Option<StructView<'a>> {
         self.get_bare_type(fqn).filter(|x| x.definition().is_generic()).map(|x| StructView::new_generic(x.definition(), aliases))
     }
-
-    pub fn get_abs_path(struct_type: &ParserType, current_namespace: &str) -> String {
-        debug_assert!(!struct_type.is_primitive_type());
-        debug_assert!(!struct_type.is_pointer());
-        if let ParserType::NamespaceLink(s, y) = struct_type {
-            return format!("{}.{}", s, y.type_name());
-        }
-        if let ParserType::Named(n) = struct_type{
-            if current_namespace.is_empty() {
-                return n.to_string();
-            }else {
-                return format!("{}.{}", current_namespace, n);
+    pub fn get_effective_generic_function_name(effective_internal_name: &str, type_map: &[ParserType], symbols: &SymbolTable) -> String {
+        return format!("{}<{}>", effective_internal_name, type_map.iter().map(|v| {
+            if let Ok(x) = get_llvm_type_str(v, symbols, "") {
+                x
+            } else {
+                panic!("Could not get llvm type str for generic function name generation: {:?}", v)
             }
-        };
-        if let ParserType::Generic(n, _) = struct_type{
-            if current_namespace.is_empty() {
-                return n.to_string();
-            }else {
-                return format!("{}.{}", current_namespace, n);
-            }
-        };
-        todo!()
-    }
-
-    pub fn get_effective_generic_function_name(effective_internal_name: &str, type_map: &HashMap<String, ParserType>, symbols: &SymbolTable) -> String {
-        return format!("{}<{}>", effective_internal_name, type_map.iter().map(|(_k,v)| {
-            get_llvm_type_str(v, symbols, "").unwrap()
+            
         }).collect::<Vec<String>>().join(", "));
     }
+    pub fn get_effective_generic_function_name_ct(effective_internal_name: &str, type_map: &[CompilerType], symbols: &SymbolTable) -> String {
+        return format!("{}<{}>", effective_internal_name, type_map.iter().map(|v| {
+            v.llvm_representation(symbols).unwrap()
+        }).collect::<Vec<String>>().join(", "));
+    }
+    
+    pub fn get_type_by_id<'a>(&'a self, idx: usize) -> Option<&'a Struct> {
+        self.types.values().nth(idx)
+    }
+    pub fn get_bare_type_id<'a>(&'a self, fqn: &str) -> Option<usize> {
+        self.types.iter().position(|x| x.0 == fqn)
+    }
+    
 }
 
 pub struct CodeGenContext<'a> {

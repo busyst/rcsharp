@@ -1,7 +1,7 @@
 use std::{collections::HashMap};
 
 use rcsharp_parser::{compiler_primitives::{DEFAULT_DECIMAL_TYPE, DEFAULT_INTEGER_TYPE, BOOL_TYPE, BYTE_TYPE, CHAR_TYPE, Layout}, expression_parser::{BinaryOp, Expr, UnaryOp}, parser::{ParserType, Stmt}};
-use crate::{compiler::{CodeGenContext, CompileError, CompileResult, INTERGER_EXPRESION_OPTIMISATION, LLVMOutputHandler, SymbolTable, get_llvm_type_str, substitute_generic_type}, compiler_essentials::{FunctionView, StructView, Variable}};
+use crate::{compiler::{CodeGenContext, CompileError, CompileResult, INTERGER_EXPRESION_OPTIMISATION, LLVMOutputHandler, SymbolTable, get_llvm_type_str, substitute_generic_type}, compiler_essentials::{CompilerType, FunctionView, StructView, Variable}};
 
 type CompilerFn = fn(&mut ExpressionCompiler, &[Expr], &Expected) -> CompileResult<CompiledValue>;
 type GenericCompilerFn = fn(&mut ExpressionCompiler, &[Expr], &[ParserType], &Expected) -> CompileResult<CompiledValue>;
@@ -49,6 +49,7 @@ impl std::fmt::Display for LLVMVal {
         }
     }
 }
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum CompiledValue {
     Value {
@@ -60,18 +61,17 @@ pub enum CompiledValue {
         ptype: ParserType,
     },
     Function {
-        effective_internal_name: String,
+        internal_id: usize,
     },
     GenericFunction {
-        effective_internal_name: String,
+        internal_id: usize,
     },
     GenericFunctionImplementation {
-        effective_internal_name: String,
-        types: Box<[ParserType]>,
+        internal_id: usize,
+        types: Box<[CompilerType]>,
     },
     NoReturn,
 }
-
 impl CompiledValue {
     pub fn get_type(&self) -> &ParserType {
         match self {
@@ -318,10 +318,10 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             return x;
         }
         let l: CompiledValue = self.compile_lvalue(callee, false, false)?;
-        if let CompiledValue::GenericFunction { effective_internal_name: effective_name} = &l {
+        if let CompiledValue::GenericFunction { internal_id} = &l {
             
-            let func = self.ctx.symbols.get_bare_function(effective_name, &self.ctx.current_function_path, false)
-                .ok_or(CompileError::Generic(format!("Function (effective path):({}) couldnt be found inside:({}.{})",effective_name,self.ctx.current_function_path, self.ctx.current_function_name)))?;
+            let func = self.ctx.symbols.get_bare_function_by_id(*internal_id, false)
+                .ok_or(CompileError::Generic(format!("Function (effective path):({}) couldnt be found inside:({}.{})",internal_id,self.ctx.current_function_path, self.ctx.current_function_name)))?;
             let required_arguments = func.args().iter().map(|x| x.1.clone()).collect::<Vec<_>>();
             if func.generic_params().len() != given_generic.len() {
                 return Err(CompileError::Generic(format!("Amount of generic params provided '{}' does not equal to amount requested by function '{}'", required_arguments.len(), given_args.len())));
@@ -330,21 +330,24 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             
             
             let mut type_map = HashMap::new();
+            let mut qualified_generics = vec![];
             for (ind, prm) in func.generic_params().iter().enumerate() {
                 if self.ctx.symbols.get_bare_type(given_generic[ind].type_name().as_str()).is_none() {
                     type_map.insert(prm.clone(), ParserType::NamespaceLink(self.ctx.current_function_path.to_string(), Box::new(given_generic[ind].clone())));
+                    qualified_generics.push(ParserType::NamespaceLink(self.ctx.current_function_path.to_string(), Box::new(given_generic[ind].clone())));
                 }else {
                     type_map.insert(prm.clone(), given_generic[ind].clone());
+                    qualified_generics.push(given_generic[ind].clone());
                 }
             }
 
-            let func = self.ctx.symbols.get_generic_function(effective_name, &self.ctx.current_function_path, &type_map)
-                .ok_or(CompileError::Generic(format!("Function (effective path):({}) couldnt be found inside:({}.{})",effective_name,self.ctx.current_function_path, self.ctx.current_function_name)))?;
+            let func: FunctionView<'_> = self.ctx.symbols.get_generic_function_by_id(*internal_id, &type_map)
+                .ok_or(CompileError::Generic(format!("Function (effective path):({}) couldnt be found inside:({}.{})",internal_id,self.ctx.current_function_path, self.ctx.current_function_name)))?;
             
             let symbols = self.ctx.symbols;
             let current_namespace = &self.ctx.current_function_path;
             
-            let llvm_struct_name = format!("{}<{}>", func.llvm_name(), given_generic.iter().map(|x| get_llvm_type_str(x, symbols, current_namespace)).collect::<CompileResult<Vec<_>>>()?.join(", "));
+            let llvm_struct_name = SymbolTable::get_effective_generic_function_name(&func.llvm_name(), &qualified_generics, symbols);
             
             
 
@@ -380,8 +383,8 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             return x;
         }
         let l: CompiledValue = self.compile_lvalue(callee, false, false)?;
-        if let CompiledValue::Function { effective_internal_name: effective_name} = &l {
-            let func = self.ctx.symbols.get_bare_function(effective_name, &self.ctx.current_function_path, false)
+        if let CompiledValue::Function { internal_id: effective_name} = &l {
+            let func = self.ctx.symbols.get_bare_function_by_id(*effective_name, false)
                 .ok_or(CompileError::Generic(format!("Function ({}) not found", effective_name)))?;
             let required_arguments = func.args().iter().map(|x| x.1.clone()).collect::<Vec<_>>();
             let return_type = func.return_type();
@@ -535,7 +538,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
         }
         
         if let Some(function) = self.ctx.symbols.get_function(name, &self.ctx.current_function_path) {
-            return Ok(function.get_compiled_value());
+            return Ok(function.get_compiled_value(self.ctx.symbols));
         }
 
         Err(CompileError::SymbolNotFound(format!("Symbol '{}' not found in '{}'", name, self.ctx.current_function_path)))
@@ -624,9 +627,9 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             }
             UnaryOp::Pointer => { // lvalue.get_llvm_repr()
                 let lvalue = self.compile_lvalue(operand_expr, false, false)?;
-                if let CompiledValue::Function { effective_internal_name} = &lvalue {
-                    let func = self.ctx.symbols.get_bare_function(effective_internal_name, &self.ctx.current_function_path, false).unwrap();
-                    return Ok(CompiledValue::Value { llvm_repr: LLVMVal::Global(effective_internal_name.clone()), ptype: func.get_type().self_reference_once() });
+                if let CompiledValue::Function { internal_id} = &lvalue {
+                    let func = self.ctx.symbols.get_bare_function_by_id(*internal_id, false).unwrap();
+                    return Ok(CompiledValue::Value { llvm_repr: LLVMVal::Global(func.full_path().to_string()), ptype: func.get_type().self_reference_once() });
                 }
                 let ptype = lvalue.get_type().clone().self_reference_once();
                 Ok(CompiledValue::Value { llvm_repr: lvalue.get_llvm_rep().clone(), ptype })
@@ -673,14 +676,14 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
         }
         
         if let Some(function) = self.ctx.symbols.get_function(&path, &self.ctx.current_function_path) {
-            return Ok(function.get_compiled_value());
+            return Ok(function.get_compiled_value(self.ctx.symbols));
         }
 
         if let Some((enum_path, member_name)) = path.rsplit_once('.') {
             let qualified_enum_path = format!("{}.{}", self.ctx.current_function_path, enum_path);
             if let Some(r#enum) = self.ctx.symbols.enums.get(&qualified_enum_path) {
                 if let Some((_, val)) = r#enum.fields.iter().find(|(name, _)| name == member_name) {
-                    return Ok(CompiledValue::Value { llvm_repr: LLVMVal::Constant(val.to_string()), ptype: r#enum.base_type.clone() });
+                    return Ok(CompiledValue::Value { llvm_repr: LLVMVal::Constant(val.to_string()), ptype: r#enum.base_type.get_parser_type(self.ctx.symbols) });
                 }
             }
         }
@@ -729,9 +732,9 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             let ptype = variable.get_type(write, modify_content).clone();
             if variable.is_constant() {
                 panic!("Constant variable '{}' should not be accessed as an lvalue", name);
-                let x = variable.value().borrow().clone().ok_or_else(|| CompileError::InvalidExpression(format!("Constant variable '{}' has no value assigned", name)))?;
-                // Allocate in not allocated yet
-                return Ok(CompiledValue::Pointer { llvm_repr: x, ptype });
+                //let x = variable.value().borrow().clone().ok_or_else(|| CompileError::InvalidExpression(format!("Constant variable '{}' has no value assigned", name)))?;
+                // Allocate if not allocated yet
+                //return Ok(CompiledValue::Pointer { llvm_repr: x, ptype });
             }
             let llvm_repr = if variable.is_argument() {
                 if variable.is_alias_value() { LLVMVal::Register(*id) } else { LLVMVal::VariableName(name.to_string()) }
@@ -741,19 +744,20 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             return Ok(CompiledValue::Pointer { llvm_repr, ptype });
         }
         if let Some(function) = self.ctx.symbols.get_bare_function(name, &self.ctx.current_function_path, true) {
-            return Ok(function.get_compiled_value());
+            return Ok(function.get_compiled_value(self.ctx.symbols));
         }
         Err(CompileError::SymbolNotFound(format!("Lvalue '{}' not found", name)))
     }
     fn compile_name_with_generics_lvalue(&mut self, name: &Expr, generics: &[ParserType], write: bool, modify_content: bool) -> CompileResult<CompiledValue> {
         let x = self.compile_lvalue(name, write, modify_content)?;
-        if let CompiledValue::GenericFunction { effective_internal_name } = x {
+        if let CompiledValue::GenericFunction { internal_id } = x {
             if generics.is_empty() {
-                return Err(CompileError::Generic(format!("Generic function '{}' requires generic parameters", effective_internal_name)));
+                return Err(CompileError::Generic(format!("Generic function '{}' requires generic parameters", internal_id)));
             }
-            let _func = self.ctx.symbols.get_bare_function(&effective_internal_name, &self.ctx.current_function_path, false)
-                .ok_or(CompileError::Generic(format!("Function (effective path):({}) couldnt be found inside:({}.{})",effective_internal_name,self.ctx.current_function_path, self.ctx.current_function_name)))?;
-            return Ok(CompiledValue::GenericFunctionImplementation { effective_internal_name, types: generics.to_vec().into_boxed_slice() });
+            let _func = self.ctx.symbols.get_bare_function_by_id(internal_id, false)
+                .ok_or(CompileError::Generic(format!("Function (effective path):({}) couldnt be found inside:({}.{})",internal_id,self.ctx.current_function_path, self.ctx.current_function_name)))?;
+            
+            return Ok(CompiledValue::GenericFunctionImplementation { internal_id, types: CompilerType::convert_to(generics, self.ctx.symbols).into() });
         }
         Err(CompileError::Generic(format!("Lvalue with generics '{:?}' is not a generic function", name)))
     }
@@ -764,7 +768,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             return Ok(CompiledValue::Pointer { llvm_repr: LLVMVal::VariableName(path.to_string()), ptype });
         }
         if let Some(function) = self.ctx.symbols.get_bare_function(&path, &self.ctx.current_function_path, true) {
-            return Ok(function.get_compiled_value());
+            return Ok(function.get_compiled_value(self.ctx.symbols));
         }
         Err(CompileError::SymbolNotFound(format!("Static symbol '{}' not found", path)))
     }
@@ -778,8 +782,9 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
         } else {
             (obj_lvalue.get_llvm_rep().clone(), obj_lvalue.get_type().clone())
         };
+        println!("Struct type: {:?} {:?}", base_ptr_repr, struct_type);
         let resolved_type = substitute_generic_type(&struct_type, &self.ctx.symbols.alias_types);
-        let abs_path = SymbolTable::get_abs_path(&resolved_type, &self.ctx.current_function_path);
+        let abs_path = resolved_type.type_name();
 
         let struct_symbol = self.ctx.symbols.get_bare_type(&abs_path)
             .ok_or_else(|| CompileError::SymbolNotFound(format!("Struct definition '{}' not found", abs_path)))?;
@@ -800,6 +805,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
         }else {
             StructView::new(struct_symbol.definition())
         };
+
         let fields = view.field_types();
         let (index, field_type) = fields.iter().enumerate()
             .find(|(_, (name, _))| name == member)
@@ -817,7 +823,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             base_ptr_repr,
             index,
         ));
-
+        println!("{:?}", field_type);
         Ok(CompiledValue::Pointer { llvm_repr: result_reg, ptype: field_type })
     }
     fn compile_deref_lvalue(&mut self, operand: &Expr, _write: bool, _modify_content: bool) -> CompileResult<CompiledValue> {
@@ -870,10 +876,8 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
                     }
                     type_map.insert(prm.clone(), given_generic[ind].clone());
                 }
-                let x = self.ctx.symbols.get_generic_function(x, &self.ctx.current_function_path, &type_map).unwrap();
-                let llvm_struct_name = format!("\"{}<{}>\"", func.llvm_name(), x.definition().generic_params.iter().map(|x| get_llvm_type_str(type_map.get(x).unwrap(), self.ctx.symbols, &self.ctx.current_function_path)).collect::<CompileResult<Vec<_>>>()?.join(", "));
-                
-                return Ok(CompiledValue::Function { effective_internal_name: llvm_struct_name });
+                let internal_id = self.ctx.symbols.get_generic_function_id(x, &type_map).unwrap();
+                return Ok(CompiledValue::Function { internal_id });
             }
 
         }
@@ -918,6 +922,7 @@ pub fn size_and_alignment_of_type(ptype: &ParserType, ctx: &mut CodeGenContext) 
         StructView::new(bare.definition()).calculate_size(ctx)
     }
 }
+
 pub fn constant_integer_expression_compiler_llvm_var(expression: &Expr, _symbols: &SymbolTable) -> CompileResult<LLVMVal> {
     constant_integer_expression_compiler(expression, _symbols).map(|x| LLVMVal::Constant(x.to_string()))
 }
@@ -1186,25 +1191,26 @@ fn ptr_of_impl(
                 ptype: ptype.self_reference_once()
             })
         },
-        CompiledValue::Function { effective_internal_name } => {
-            let func = compiler.ctx.symbols.get_bare_function(&effective_internal_name, &compiler.ctx.current_function_path, false)
-                .ok_or(CompileError::Generic(format!("Function not found: {}", effective_internal_name)))?;
+        CompiledValue::Function { internal_id } => {
+            let func = compiler.ctx.symbols.get_bare_function_by_id(internal_id, false)
+                .ok_or(CompileError::Generic(format!("Function not found: {}", internal_id)))?;
             
             Ok(CompiledValue::Value { 
-                llvm_repr: LLVMVal::Global(effective_internal_name), 
+                llvm_repr: LLVMVal::Global(func.full_path().to_string()), 
                 ptype: func.get_type().self_reference_once()
             })
         },
-        CompiledValue::GenericFunctionImplementation { effective_internal_name, types } =>{
-            let func = compiler.ctx.symbols.get_bare_function(&effective_internal_name, &compiler.ctx.current_function_path, false)
-                .ok_or(CompileError::Generic(format!("Function not found: {}", effective_internal_name)))?;
+        CompiledValue::GenericFunctionImplementation { internal_id, types } =>{
+            let func = compiler.ctx.symbols.get_bare_function_by_id(internal_id, false)
+                .ok_or(CompileError::Generic(format!("Function not found: {}", internal_id)))?;
             let mut type_map = HashMap::new();
             for (ind, prm) in func.generic_params().iter().enumerate() {
-                type_map.insert(prm.clone(), types[ind].clone());
+                type_map.insert(prm.clone(), types[ind].get_parser_type(compiler.ctx.symbols));
             }
             let generic_func = FunctionView::new_generic(func.definition(), &type_map);
             let ftype = generic_func.get_type();
-            let llvm_struct_name = format!("\"{}<{}>\"", func.llvm_name(), types.iter().map(|x| get_llvm_type_str(x, compiler.ctx.symbols, &compiler.ctx.current_function_path)).collect::<CompileResult<Vec<_>>>()?.join(", "));
+            let llvm_struct_name = SymbolTable::get_effective_generic_function_name_ct(&func.llvm_name(), &types, compiler.ctx.symbols);
+            let llvm_struct_name = format!("\"{}\"", llvm_struct_name);
             Ok(CompiledValue::Value { 
                 llvm_repr: LLVMVal::Global(llvm_struct_name), 
                 ptype: ftype.self_reference_once()

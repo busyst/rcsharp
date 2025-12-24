@@ -1,33 +1,160 @@
 use std::{cell::{Cell, RefCell}, collections::HashMap};
 use ordered_hash_map::OrderedHashMap;
-use rcsharp_parser::{compiler_primitives::Layout, parser::{Attribute, ParserType, StmtData}};
+use rcsharp_parser::{compiler_primitives::{Layout, PrimitiveInfo}, parser::{Attribute, ParserType, StmtData}};
 
 use crate::{compiler::{CodeGenContext, CompileResult, LLVMOutputHandler, SymbolTable, get_llvm_type_str, get_llvm_type_str_int, substitute_generic_type}, expression_compiler::{CompiledValue, LLVMVal, size_and_alignment_of_type}};
+// ------------------------------------------------------------------------------------
+pub trait FlagManager {
+    fn get_flags(&self) -> &Cell<u8>;
+
+    fn has_flag(&self, flag: u8) -> bool {
+        self.get_flags().get() & flag != 0
+    }
+
+    fn set_flag(&self, flag: u8) {
+        self.get_flags().set(self.get_flags().get() | flag);
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum CompilerType {
+    Primitive(&'static PrimitiveInfo),
+    Pointer(Box<CompilerType>),
+    StructType(usize), // index in symbol table
+    GenericSubst(Box<str>), // index in symbol table
+    GenericStructType(usize, usize), // index in symbol table, index in implementation table
+    
+    Function(Box<CompilerType>, Box<[CompilerType]>), // return type index in symbol table, arguments indexes in implementation table
+
+}
+#[allow(unused)]
+impl CompilerType {
+    pub fn get_parser_type(&self, symbols: &SymbolTable) -> ParserType {
+        match self {
+            CompilerType::GenericSubst(name) => ParserType::Named(symbols.alias_types.get(name.as_ref())
+            .expect("Invalid generic substitution ").type_name()),
+
+            CompilerType::Primitive(info) => ParserType::Named(info.name.to_string()),
+            CompilerType::Pointer(info) => ParserType::Pointer(Box::new(info.get_parser_type(symbols))),
+            CompilerType::StructType(idx) => {
+                let s = symbols.get_type_by_id(*idx).expect("Invalid struct ID");
+                let name_pt = ParserType::Named(s.name.to_string());
+                if s.path.is_empty() {
+                    name_pt
+                } else {
+                    ParserType::NamespaceLink(s.path.to_string(), Box::new(name_pt))
+                }
+            }
+            CompilerType::GenericStructType(idx, imp_idx) => {
+                let s = symbols.get_type_by_id(*idx).expect("Invalid struct ID");
+                let args = s.generic_implementations.borrow();
+                let specific_args = &args[*imp_idx];
+                ParserType::Named(format!("{}<{}>", s.name, specific_args.len())) 
+            }
+            CompilerType::Function(idx, imp_idx) => {
+                todo!("Get parser type for function with index")
+            }
+        }
+    }
+    pub fn llvm_representation(&self, symbols: &SymbolTable) -> CompileResult<String> {
+        match self {
+            CompilerType::Primitive(info) => Ok(info.llvm_name.to_string()),
+            CompilerType::StructType(idx) => Ok(symbols.get_type_by_id(*idx).unwrap().llvm_representation()),
+            CompilerType::Pointer(inner) => Ok(format!("{}*", inner.llvm_representation(symbols)?)),
+            CompilerType::Function(ret, args) => {
+                return Ok("func".into());
+            }
+            _ => todo!("Get llvm representation for non-primitive type {:?}", self),
+        }
+    }
+    pub fn into(x: &ParserType, symbols: &SymbolTable) -> CompilerType {
+        if let Some(pt) = x.as_primitive_type() {
+            return CompilerType::Primitive(pt);
+        }
+        if let Some(internal) = x.as_pointer() {
+            return CompilerType::Pointer(Box::new(CompilerType::into(internal, symbols)));
+        }
+        if let Some((ret, args)) = x.as_function() {
+            let ret = CompilerType::into(ret, symbols);
+            let args = args.iter().map(|a| CompilerType::into(a, symbols)).collect();
+            return CompilerType::Function(Box::new(ret), args);
+        }
+        let fqn = x.type_name();
+        if let Some(idx) = symbols.get_bare_type_id(&fqn) {
+            return CompilerType::StructType(idx);
+        }
+        if symbols.alias_types.contains_key(&fqn) {
+            return CompilerType::GenericSubst(fqn.into());
+        }
+        println!("{:?}", symbols.alias_types);
+        panic!("Could not convert parser type to compiler type: {:?} {}", x, fqn)
+    }
+    pub fn convert_to(x: &[ParserType], symbols: &SymbolTable) -> Vec<CompilerType> {
+        x.iter().map(|v| {
+            return CompilerType::into(v, symbols);
+            panic!("Could not convert parser type to compiler type")
+        }).collect()
+    }
+    pub fn convert_from(x: &[CompilerType], symbols: &SymbolTable) -> Vec<ParserType> {
+        x.iter().map(|v| {
+            if let CompilerType::Primitive(pt) = v {
+                return ParserType::Named(pt.name.to_string());
+            }
+            panic!("Could not convert parser type to compiler type")
+        }).collect()
+    }
+
+    pub fn substitute_generic_types(mut self, map: &HashMap<String, ParserType>) {
+        match self {
+            CompilerType::Primitive(_) | CompilerType::StructType(_) | CompilerType::GenericStructType(_, _) => {}
+            
+            CompilerType::GenericSubst(name) => {
+                if let Some(replacement) = map.get(name.as_ref()) {
+                    panic!("Substituted generic type {:?} with {:?}", name, replacement);
+                }
+                panic!()
+            }
+            CompilerType::Function(x, mut y) => {
+                x.substitute_generic_types(map);
+                for mut arg in y {
+                    arg.substitute_generic_types(map);
+                }
+            }
+            CompilerType::Pointer(x) => x.substitute_generic_types(map),
+        }
+    }
+}
+impl PartialEq<CompilerType> for CompilerType {
+    fn eq(&self, other: &CompilerType) -> bool {
+        match (self, other) {
+            (CompilerType::Primitive(a), CompilerType::Primitive(b)) => a.name == b.name,
+            (CompilerType::StructType(a), CompilerType::StructType(b)) => a == b,
+            (CompilerType::GenericStructType(a1, a2), CompilerType::GenericStructType(b1, b2)) => a1 == b1 && a2 == b2,
+            (CompilerType::Function(a1, a2), CompilerType::Function(b1, b2)) => a1 == b1 && a2 == b2,
+            _ => false,
+        }
+    }
+}
 
 // ------------------------------------------------------------------------------------
 #[derive(Debug, Clone)]
 pub struct Enum {
     pub path: Box<str>,
     pub name: Box<str>,
-    pub base_type: ParserType,
+    pub base_type: CompilerType,
     pub fields: Box<[(String, i128)]>,
-    
-    pub attribs: Box<[Attribute]>, 
-    pub flags: Cell<u8>
+    pub attribs: Box<[Attribute]>,
+    pub flags: Cell<u8>,
 }
-
 impl Enum {
-    pub fn new(path: Box<str>, name: Box<str>, base_type: ParserType, fields: Box<[(String, i128)]>, attribs: Box<[Attribute]>) -> Self {
+    pub fn new(path: Box<str>, name: Box<str>, base_type: CompilerType, fields: Box<[(String, i128)]>, attribs: Box<[Attribute]>) -> Self {
         Self { path, name, base_type, fields, attribs, flags: Cell::new(0) }
     }
 }
-
-
 // ------------------------------------------------------------------------------------
-
-pub enum StructFlags {
-    Generic = 64,
-    PrimitiveType = 128,
+pub mod struct_flags {
+    pub const GENERIC: u8 = 64;
+    pub const PRIMITIVE_TYPE: u8 = 128;
 }
 #[derive(Debug, Clone)]
 pub struct Struct {
@@ -36,26 +163,32 @@ pub struct Struct {
     pub fields: Box<[(String, ParserType)]>,
     pub generic_params: Box<[String]>,
     pub generic_implementations: RefCell<Vec<Box<[ParserType]>>>,
-
     pub attribs: Box<[Attribute]>,
     pub flags: Cell<u8>,
 }
+impl FlagManager for Struct {
+    fn get_flags(&self) -> &Cell<u8> { &self.flags }
+}
+
 impl Struct {
     pub fn new(path: Box<str>, name: Box<str>, fields: Box<[(String, ParserType)]>, attribs: Box<[Attribute]>, generic_params: Box<[String]>) -> Self {
-        let flags = if !generic_params.is_empty() {StructFlags::Generic as u8} else {0};
-        Self { path, name, fields, attribs, flags: Cell::new(flags), generic_params, generic_implementations: RefCell::new(vec![]) }
+        Self { path, name, fields, attribs, flags: Cell::new(if !generic_params.is_empty() {struct_flags::GENERIC} else {0}), generic_params, generic_implementations: RefCell::new(vec![]) }
+    }
+    pub fn new_placeholder(path: String, name: String) -> Struct {
+        Self { path: path.into(), name: name.into(), fields: Box::new([]), generic_params: Box::new([]), generic_implementations: RefCell::new(vec![]), attribs: Box::new([]), flags: Cell::new(0) }
     }
     pub fn new_primitive(name: &str) -> Self {
-        Self { path : "".into(), name: name.into(), fields : Box::new([]), attribs: Box::new([]), flags: Cell::new(StructFlags::PrimitiveType as u8), generic_params: Box::new([]), generic_implementations: RefCell::new(vec![]) }
+        Self { path : "".into(), name: name.into(), fields : Box::new([]), attribs: Box::new([]), flags: Cell::new(struct_flags::PRIMITIVE_TYPE), generic_params: Box::new([]), generic_implementations: RefCell::new(vec![]) }
     }
 
-    pub fn is_primitive(&self) -> bool { self.flags.get() & StructFlags::PrimitiveType as u8 != 0 }
-    pub fn is_generic(&self) -> bool { self.flags.get() & StructFlags::Generic as u8 != 0 }
-    pub fn set_as_generic(&self) { self.flags.set(self.flags.get() | StructFlags::Generic as u8);}
+    pub fn is_primitive(&self) -> bool { self.has_flag(struct_flags::PRIMITIVE_TYPE) }
+    pub fn is_generic(&self) -> bool { self.has_flag(struct_flags::GENERIC) }
+    pub fn set_as_generic(&self) { self.set_flag(struct_flags::GENERIC); }
     pub fn llvm_representation(&self) -> String {
         if self.is_primitive() {
-            self.name.to_string()
-        } else if self.path.is_empty() {
+            return self.name.to_string();
+        }
+        if self.path.is_empty() {
             format!("%struct.{}", self.name)
         } else {
             format!("%struct.{}.{}", self.path, self.name)
@@ -63,18 +196,21 @@ impl Struct {
     }
     pub fn llvm_representation_without_percent(&self) -> String {
         if self.is_primitive() {
-            self.name.to_string()
-        } else if self.path.is_empty() {
+            return self.name.to_string();
+        }
+        if self.path.is_empty() {
             format!("struct.{}", self.name)
         } else {
             format!("struct.{}.{}", self.path, self.name)
         }
     }
+
     pub fn full_path(&self) -> Box<str> {
         if self.path.is_empty() {
-            return self.name.to_string().into_boxed_str();
+            self.name.clone()
+        } else {
+            format!("{}.{}", self.path, self.name).into()
         }
-        format!("{}.{}", self.path, self.name).into()
     }
 }
 
@@ -135,7 +271,7 @@ impl<'a> StructView<'a> {
         let mut current_offset = 0;
         let mut max_alignment = 1;
         for (_name, field_type) in self.field_types() {
-            let layout_of_type = size_and_alignment_of_type(field_type, ctx);
+            let layout_of_type = size_and_alignment_of_type(&field_type, ctx);
             if layout_of_type.align == 0 { continue; }
             max_alignment = u32::max(max_alignment, layout_of_type.align);
             let padding = (layout_of_type.align - (current_offset % layout_of_type.align)) % layout_of_type.align;
@@ -186,49 +322,45 @@ impl<'a> StructView<'a> {
 }
 
 // ------------------------------------------------------------------------------------
-#[repr(u8)]
-pub enum FunctionFlags {
-    Imported = 128,
-    ConstExpression = 64,
-    Inline = 32,
-    Public = 16,
-    Generic = 8,
+pub mod function_flags {
+    pub const GENERIC: u8 = 8;
+    pub const PUBLIC: u8 = 16;
+    pub const INLINE: u8 = 32;
+    pub const CONST_EXPRESSION: u8 = 64;
+    pub const IMPORTED: u8 = 128;
 }
 #[derive(Debug, Clone)]
 pub struct Function {
     pub path: Box<str>,
     pub name: Box<str>,
-    pub args: Box<[(String, ParserType)]>, 
+    pub args: Box<[(String, ParserType)]>,
     pub return_type: ParserType,
     pub body: Box<[StmtData]>,
-    pub attribs: Box<[Attribute]>, 
+    pub attribs: Box<[Attribute]>,
     flags: Cell<u8>,
 
     pub generic_params: Box<[String]>,
     pub generic_implementations: RefCell<Vec<Box<[ParserType]>>>,
-    pub times_used : Cell<usize>
+    pub times_used: Cell<usize>,
 }
+impl FlagManager for Function {
+    fn get_flags(&self) -> &Cell<u8> { &self.flags }
+}
+
 impl Function {
     pub fn new(path: Box<str>, name: Box<str>, args: Box<[(String, ParserType)]>, return_type: ParserType, body: Box<[StmtData]>, flags: Cell<u8>, attribs: Box<[Attribute]>, generic_params: Box<[String]>) -> Self {
         Self { path, name, args, return_type, body, attribs, flags, generic_params, generic_implementations: RefCell::new(vec![]), times_used: Cell::new(0) }
     }
-    pub fn is_generic(&self) -> bool { self.flags.get() & FunctionFlags::Generic as u8 != 0 }
-    pub fn is_imported(&self) -> bool { self.flags.get() & FunctionFlags::Imported as u8 != 0 }
-    pub fn is_inline(&self) -> bool { self.flags.get() & FunctionFlags::Inline as u8 != 0 }
+    pub fn is_generic(&self) -> bool { self.has_flag(function_flags::GENERIC) }
+    pub fn is_imported(&self) -> bool { self.has_flag(function_flags::IMPORTED) }
+    pub fn is_inline(&self) -> bool { self.has_flag(function_flags::INLINE) }
+
     pub fn is_normal(&self) -> bool { !(self.is_generic() || self.is_inline() || self.is_imported()) }
-    pub fn set_as_imported(&self) { self.flags.set(self.flags.get() | FunctionFlags::Imported as u8);}
-    pub fn flags(&self) -> u8 { self.flags.get() }
+    pub fn set_as_imported(&self) { self.set_flag(function_flags::IMPORTED);}
     
-    pub fn path(&self) -> &str {
-        &self.path
-    }
-    
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-    pub fn use_fn(&self){
-        self.times_used.replace(self.times_used.get() + 1);
-    }
+    pub fn path(&self) -> &str { &self.path }
+    pub fn name(&self) -> &str { &self.name }
+    pub fn use_fn(&self) { self.times_used.replace(self.times_used.get() + 1); }
 }
 pub struct FunctionView<'a> {
     func: &'a Function,
@@ -345,76 +477,82 @@ impl<'a> FunctionView<'a> {
     pub fn get_type(&self) -> ParserType {
         ParserType::Function(Box::new(self.return_type.clone()), self.args.iter().map(|x| x.1.clone()).collect::<Vec<_>>().into_boxed_slice())
     }
-    pub fn get_compiled_value(&self) -> CompiledValue{
+    pub fn get_compiled_value(&self, symbol_table: &SymbolTable) -> CompiledValue{
         if self.func.is_generic(){
-            return CompiledValue::GenericFunction { effective_internal_name: self.full_path().to_string()};
+            return CompiledValue::GenericFunction { internal_id: symbol_table.get_bare_function_id(&self.full_path().as_ref(), false).expect("Function not found in symbol table") };
         }
-        CompiledValue::Function { effective_internal_name: self.full_path().to_string() }
+        CompiledValue::Function { internal_id: symbol_table.get_bare_function_id(&self.full_path().as_ref(), false).expect("Function not found in symbol table") }
     }
 }
 // ------------------------------------------------------------------------------------
-#[repr(u8)]
-pub enum VariableFlags {
-    HasRead = 1,
-    HasWrote = 2,
-    ModifiedContent = 4,
-    AliasValue = 32,
-    Constant = 64,
-    Argument = 128,
+pub mod variable_flags {
+    pub const HAS_READ: u8 = 1;
+    pub const HAS_WROTE: u8 = 2;
+    pub const MODIFIED_CONTENT: u8 = 4;
+    pub const ALIAS_VALUE: u8 = 32;
+    pub const CONSTANT: u8 = 64;
+    pub const ARGUMENT: u8 = 128;
 }
 #[derive(Debug, Clone)]
-pub struct Variable{
+pub struct Variable {
     compiler_type: ParserType,
     flags: Cell<u8>,
-    value: RefCell<Option<LLVMVal>>
+    value: RefCell<Option<LLVMVal>>,
 }
+impl FlagManager for Variable {
+    fn get_flags(&self) -> &Cell<u8> { &self.flags }
+}
+
 impl Variable {
     pub fn new(comp_type: ParserType, is_const: bool) -> Self {
-        let flags = if is_const { VariableFlags::Constant as u8 } else { 0 };
-        Self { compiler_type: comp_type, flags: Cell::new(flags), value: RefCell::new(None) }
+        let flags = if is_const { variable_flags::CONSTANT } else { 0 };
+        Self {
+            compiler_type: comp_type,
+            flags: Cell::new(flags),
+            value: RefCell::new(None),
+        }
     }
     pub fn new_argument(comp_type: ParserType) -> Self {
-        Self { compiler_type: comp_type, flags: Cell::new(VariableFlags::Argument as u8), value: RefCell::new(None) }
+        Self {
+            compiler_type: comp_type,
+            flags: Cell::new(variable_flags::ARGUMENT),
+            value: RefCell::new(None),
+        }
     }
     pub fn new_alias(comp_type: ParserType) -> Self {
-        Self { compiler_type: comp_type, flags: Cell::new(VariableFlags::Argument as u8 | VariableFlags::AliasValue as u8), value: RefCell::new(None) }
+        Self {
+            compiler_type: comp_type,
+            flags: Cell::new(variable_flags::ARGUMENT | variable_flags::ALIAS_VALUE),
+            value: RefCell::new(None),
+        }
     }
-    pub fn get_type(&self, write: bool, modify_content: bool) -> &ParserType{
-        if self.is_constant() && (write || modify_content){
+
+    pub fn get_type(&self, write: bool, modify_content: bool) -> &ParserType {
+        if self.is_constant() && (write || modify_content) {
             panic!("Tried to mark constant variable as read or written");
         }
+
+        let mut current = self.flags.get();
         if write {
-            self.flags.replace(self.flags.get() | VariableFlags::HasWrote as u8);
-        }else {
-            self.flags.replace(self.flags.get() | VariableFlags::HasRead as u8);
+            current |= variable_flags::HAS_WROTE;
+        } else {
+            current |= variable_flags::HAS_READ;
         }
         if modify_content {
-            self.flags.replace(self.flags.get() | VariableFlags::ModifiedContent as u8);
+            current |= variable_flags::MODIFIED_CONTENT;
         }
+        self.flags.set(current);
+
         &self.compiler_type
     }
-    pub fn is_argument(&self) -> bool {
-        self.flags.get() & VariableFlags::Argument as u8 != 0
-    }
-    // Used only in inlining
-    pub fn is_alias_value(&self) -> bool {
-        self.flags.get() & VariableFlags::AliasValue as u8 != 0
-    }
-
-    pub fn is_constant(&self) -> bool {
-        self.flags.get() & VariableFlags::Constant as u8 != 0
-    }
-
-    pub fn has_read(&self) -> bool{
-        self.flags.get() & VariableFlags::HasRead as u8 != 0
-    }
-    pub fn has_wrote(&self) -> bool{
-        self.flags.get() & VariableFlags::HasWrote as u8 != 0
-    }
-    pub fn modified(&self) -> bool{
-        self.flags.get() & VariableFlags::ModifiedContent as u8 != 0
-    }
-    pub fn unusual_flags_to_string(&self) -> String{
+    pub fn is_argument(&self) -> bool { self.has_flag(variable_flags::ARGUMENT) }
+    pub fn is_alias_value(&self) -> bool { self.has_flag(variable_flags::ALIAS_VALUE) }
+    pub fn is_constant(&self) -> bool { self.has_flag(variable_flags::CONSTANT) }
+    pub fn has_read(&self) -> bool { self.has_flag(variable_flags::HAS_READ) }
+    pub fn has_wrote(&self) -> bool { self.has_flag(variable_flags::HAS_WROTE) }
+    pub fn modified(&self) -> bool { self.has_flag(variable_flags::MODIFIED_CONTENT) }
+    
+    pub fn unusual_flags_to_string(&self) -> String {
         let mut output = String::new();
         if !self.has_read() {
             output.push_str("Unread\t");
@@ -427,17 +565,16 @@ impl Variable {
                 output.push_str("Argument\t");
             }
         }
-
         output
     }
     pub fn set_value(&self, value: Option<LLVMVal>) {
         self.value.replace(value);
     }
-    
+
     pub fn value(&self) -> &RefCell<Option<LLVMVal>> {
         &self.value
     }
-    
+
     pub fn compiler_type(&self) -> &ParserType {
         &self.compiler_type
     }
@@ -454,17 +591,20 @@ impl Variable {
             return Ok(llvm_repr);
         }
         let ptype = self.compiler_type.clone();
-        
         let type_str = get_llvm_type_str(&ptype, ctx.symbols, &ctx.current_function_path)?;
         let temp_id = ctx.aquire_unique_temp_value_counter();
-        output.push_str(&format!("    %tmp{} = load {}, {}* %v{}\n", temp_id, type_str, type_str, var_id));
+
+        output.push_str(&format!(
+            "    %tmp{} = load {}, {}* %v{}\n",
+            temp_id, type_str, type_str, var_id
+        ));
         Ok(LLVMVal::Register(temp_id))
     }
 }
 
 // ------------------------------------------------------------------------------------
 #[derive(Debug, Clone)]
-struct ScopeLayer{
+struct ScopeLayer {
     variables: OrderedHashMap<String, (Variable, u32)>,
     loop_index: Option<u32>,
 }
@@ -472,14 +612,28 @@ struct ScopeLayer{
 pub struct Scope {
     layers: Vec<ScopeLayer>,
 }
+impl Default for Scope {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl Scope {
     pub fn new() -> Self {
-        Self { layers: vec![ScopeLayer { variables: OrderedHashMap::new(), loop_index: None }] }
+        Self {
+            layers: vec![ScopeLayer {
+                variables: OrderedHashMap::new(),
+                loop_index: None,
+            }],
+        }
     }
+
     pub fn clear(&mut self) {
         self.layers.clear();
-        self.layers.push(ScopeLayer { variables: OrderedHashMap::new(), loop_index: None });
+        self.layers.push(ScopeLayer {
+            variables: OrderedHashMap::new(),
+            loop_index: None,
+        });
     }
     pub fn get_variable(&self, name: &str) -> Option<&(Variable, u32)> {
         for layer in self.layers.iter().rev() {

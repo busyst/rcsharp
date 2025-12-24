@@ -39,6 +39,9 @@ set run_error=%errorlevel%
 echo.
 echo Exit code: %run_error%
 
+if exist output.exe (
+    for %%I in (output.exe) do echo Executable size: %%~zI bytes
+)
 if %run_error% equ -1073741819 ( echo "ERROR: Access violation (0xC0000005)" )
 if %run_error% equ -1073740940 ( echo "ERROR: Heap corruption (0xC0000374)" )
 if %run_error% equ -1073741571 ( echo "ERROR: Stack overflow (0xC00000FD)" )
