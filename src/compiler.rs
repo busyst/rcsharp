@@ -759,12 +759,21 @@ pub fn get_llvm_type_str_int(
         _ => get_llvm_type_str(ptype, symbols, current_namespace),
     }
 }
-
+#[derive(Debug, PartialEq)]
+enum StringEntry {
+    Owned(String),
+    Suffix {
+        parent_index: usize,
+        byte_offset: usize,
+        length_with_null: usize,
+        content: String,
+    },
+}
 
 #[derive(Debug, Default)]
 pub struct LLVMOutputHandler{
     header: String,
-    strings_header: Vec<String>,
+    strings_header: Vec<StringEntry>,
     include_header: String,
     main: String,
     footer: String,
@@ -784,24 +793,99 @@ impl LLVMOutputHandler {
     }
     pub fn add_to_strings_header(&mut self, string: String) -> usize{
         if DONT_INSERT_REDUNDAND_STRINGS {
-            if let Some(id) = self.strings_header.iter().position(|x| x == string.as_str()) {
+            if let Some(id) = self.strings_header.iter().position(|entry| {
+                match entry {
+                    StringEntry::Owned(s) => s == &string,
+                    StringEntry::Suffix { content, .. } => content == &string,
+                }
+            }) {
                 return id;
             }
+            
+            let suffix_match = self.strings_header.iter().enumerate().find_map(|(idx, entry)| {
+                let (existing_str, actual_parent_idx, base_offset) = match entry {
+                    StringEntry::Owned(s) => (s, idx, 0),
+                    StringEntry::Suffix { parent_index, byte_offset, content, .. } => (content, *parent_index, *byte_offset),
+                };
+
+                if existing_str.ends_with(&string) && existing_str.len() > string.len() {
+                    let offset_diff = existing_str.len() - string.len();
+                    let absolute_offset = base_offset + offset_diff;
+                    Some((actual_parent_idx, absolute_offset))
+                } else {
+                    None
+                }
+            });
+
+            if let Some((parent_index, byte_offset)) = suffix_match {
+                let len_with_null = string.len() + 1;
+                self.strings_header.push(StringEntry::Suffix {
+                    parent_index,
+                    byte_offset,
+                    length_with_null: len_with_null,
+                    content: string,
+                });
+                return self.strings_header.len() - 1;
+            }
         }
-        self.strings_header.push(string);
-        self.strings_header.len() - 1
+        self.strings_header.push(StringEntry::Owned(string.clone()));
+        let new_index = self.strings_header.len() - 1;
+        if DONT_INSERT_REDUNDAND_STRINGS {
+            for i in 0..new_index {
+                if let StringEntry::Owned(old_content) = &self.strings_header[i] {
+                    if string.ends_with(old_content) && string.len() > old_content.len() {
+                        let offset = string.len() - old_content.len();
+                        let len_with_null = old_content.len() + 1;
+                        self.strings_header[i] = StringEntry::Suffix {
+                            parent_index: new_index,
+                            byte_offset: offset,
+                            length_with_null : len_with_null,
+                            content: old_content.clone(),
+                        };
+                    }
+                }
+            }
+        }
+        new_index
     }
     pub fn build(self) -> String {
-        let x = self.strings_header.iter().enumerate().map(|(index,x)|{
-            let escaped_val = x.replace("\"", "\\22")
-                .replace("\n", "\\0A")
-                .replace("\r", "\\0D")
-                .replace("\t", "\\09");
-            let str_len = x.len() + 1;
-            format!("@.str.{} = private unnamed_addr constant [{} x i8] c\"{}\\00\"", index, str_len, escaped_val)
+        let definitions = self.strings_header.iter().enumerate().map(|(index, entry)| {
+            match entry {
+                StringEntry::Owned(s) => {
+                    let escaped_val = s.replace("\"", "\\22")
+                        .replace("\n", "\\0A")
+                        .replace("\r", "\\0D")
+                        .replace("\t", "\\09");
+                    let str_len = s.len() + 1;
+                    format!("@.str.{} = private unnamed_addr constant [{} x i8] c\"{}\\00\"", index, str_len, escaped_val)
+                }
+                StringEntry::Suffix { parent_index, byte_offset, length_with_null, .. } => {
+                    let mut root_index = *parent_index;
+                    let mut total_offset = *byte_offset;
+                    let mut loops = 0; 
+                    while let StringEntry::Suffix { parent_index: next_p, byte_offset: next_off, .. } = &self.strings_header[root_index] {
+                        root_index = *next_p;
+                        total_offset += next_off;
+                        loops += 1;
+                        if loops > 100 { panic!("Circular string dependency detected at index {}", index); }
+                    }
+                    let root_len = match &self.strings_header[root_index] {
+                        StringEntry::Owned(s) => s.len() + 1,
+                        _ => panic!("String dependency chain did not end in Owned at index {}", root_index),
+                    };
+                    format!(
+                        "@.str.{} = private unnamed_addr alias [{} x i8], [{} x i8]* bitcast (i8* getelementptr inbounds ([{} x i8], [{} x i8]* @.str.{}, i64 0, i64 {}) to [{} x i8]*)",
+                        index, 
+                        length_with_null, 
+                        length_with_null,
+                        root_len, root_len, root_index, total_offset,
+                        length_with_null
+                    )
+                }
+            }
         }).collect::<Vec<String>>().join("\n");
 
-        format!("{}\n{}\n{}\n{}\n{}", self.header, self.include_header, x, self.main, self.footer)
+        format!("{}\n{}\n{}\n{}\n{}", self.header, self.include_header, definitions, self.main, self.footer)
     }
 }
 

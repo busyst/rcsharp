@@ -80,7 +80,7 @@ declare dllimport i8* @GetWindowLongPtrA(i8*,i32)
 @.str.16 = private unnamed_addr constant [20 x i8] c"string_utils_test: \00"
 @.str.17 = private unnamed_addr constant [5 x i8] c"test\00"
 @.str.18 = private unnamed_addr constant [36 x i8] c"string_utils_test: c_str_len failed\00"
-@.str.19 = private unnamed_addr constant [1 x i8] c"\00"
+@.str.19 = private unnamed_addr alias [1 x i8], [1 x i8]* bitcast (i8* getelementptr inbounds ([12 x i8], [12 x i8]* @.str.0, i64 0, i64 11) to [1 x i8]*)
 @.str.20 = private unnamed_addr constant [42 x i8] c"string_utils_test: c_str_len empty failed\00"
 @.str.21 = private unnamed_addr constant [39 x i8] c"string_utils_test: is_ascii_num failed\00"
 @.str.22 = private unnamed_addr constant [40 x i8] c"string_utils_test: is_ascii_char failed\00"
@@ -91,11 +91,11 @@ declare dllimport i8* @GetWindowLongPtrA(i8*,i32)
 @.str.27 = private unnamed_addr constant [33 x i8] c"string_utils_test: insert failed\00"
 @.str.28 = private unnamed_addr constant [14 x i8] c"string_test: \00"
 @.str.29 = private unnamed_addr constant [6 x i8] c"hello\00"
-@.str.30 = private unnamed_addr constant [6 x i8] c"world\00"
+@.str.30 = private unnamed_addr alias [6 x i8], [6 x i8]* bitcast (i8* getelementptr inbounds ([12 x i8], [12 x i8]* @.str.35, i64 0, i64 6) to [6 x i8]*)
 @.str.31 = private unnamed_addr constant [41 x i8] c"string_test: from_c_string length failed\00"
 @.str.32 = private unnamed_addr constant [40 x i8] c"string_test: equal positive case failed\00"
 @.str.33 = private unnamed_addr constant [40 x i8] c"string_test: equal negative case failed\00"
-@.str.34 = private unnamed_addr constant [7 x i8] c" world\00"
+@.str.34 = private unnamed_addr alias [7 x i8], [7 x i8]* bitcast (i8* getelementptr inbounds ([12 x i8], [12 x i8]* @.str.35, i64 0, i64 5) to [7 x i8]*)
 @.str.35 = private unnamed_addr constant [12 x i8] c"hello world\00"
 @.str.36 = private unnamed_addr constant [34 x i8] c"string_test: concat length failed\00"
 @.str.37 = private unnamed_addr constant [35 x i8] c"string_test: concat content failed\00"
