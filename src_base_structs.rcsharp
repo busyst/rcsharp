@@ -834,7 +834,7 @@ namespace tests{
     }
     // No.
     fn funny(){
-        let path: &i8 = "D:\\Projects\\rcsharp\\src_base_structs.rcsharp";
+        const path: &i8 = "D:\\Projects\\rcsharp\\src_base_structs.rcsharp";
         if fs::create_file(path) == 1 {
             fs::delete_file(path); 
             return;

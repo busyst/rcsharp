@@ -697,15 +697,15 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
         Ok(CompiledValue::Value { llvm_repr: LLVMVal::Register(temp_id), ptype })
     }
     fn compile_string_literal(&mut self, str_val: &str) -> CompileResult<CompiledValue> { // ---
-        let str_len = str_val.len() + 1;
+        //let str_len = str_val.len() + 1;
         let const_id = self.output.add_to_strings_header(str_val.to_string());
-        let ptr_id = self.ctx.aquire_unique_temp_value_counter();
-
-        self.output.push_str(&format!("    %tmp{} = getelementptr inbounds [{} x i8], [{} x i8]* @.str.{}, i64 0, i64 0\n", ptr_id, str_len, str_len, const_id));
+        //let ptr_id = self.ctx.aquire_unique_temp_value_counter();
+        return Ok(CompiledValue::Value { llvm_repr: LLVMVal::Global(format!(".str.{}", const_id)), ptype: ParserType::Pointer(Box::new(CHAR_TYPE.into())) });
+        /*self.output.push_str(&format!("    %tmp{} = getelementptr inbounds [{} x i8], [{} x i8]* @.str.{}, i64 0, i64 0\n", ptr_id, str_len, str_len, const_id));
         Ok(CompiledValue::Value {
             llvm_repr: LLVMVal::Register(ptr_id),
             ptype: ParserType::Pointer(Box::new(CHAR_TYPE.into())),
-        })
+        })*/
     }
     fn compiler_function_calls(&mut self, callee: &Expr, given_args: &[Expr], expected: &Expected) -> Option<CompileResult<CompiledValue>>{ // --
         if let Expr::Name(name) = callee {
