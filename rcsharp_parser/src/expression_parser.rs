@@ -29,14 +29,39 @@ pub enum Expr {
     Boolean(bool),
     NullPtr,
 }
-
+impl Expr {
+    pub fn debug_emit(&self) -> String{
+        self.debug_emit_int(0)
+    }
+    fn debug_emit_int(&self, d: u8) -> String{
+        let ob = match d % 3 {
+            0 => "(",
+            1 => "[",
+            2 => "{",
+            _ => unreachable!()
+        };
+        let cb = match d % 3 {
+            0 => ")",
+            1 => "]",
+            2 => "}",
+            _ => unreachable!()
+        };
+        match self {
+            Self::Name(n) => n.to_string(),
+            Self::Integer(n) => n.to_string(),
+            Self::MemberAccess(x, y) => format!("{}.{}", x.debug_emit_int(d), y),
+            Self::Index(x, y) => format!("{}[{}]", x.debug_emit_int(d), y.debug_emit_int(d)),
+            Self::BinaryOp(l, op, r) => format!("{ob}{} {:?} {}{cb}", l.debug_emit_int(d + 1), op, r.debug_emit_int(d + 1)),
+            _ => format!("{:?}", self)
+        }
+    }
+}
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum BinaryOp {
     Add, Subtract, Multiply, Divide, Modulo,
     Equals, NotEqual, Less, LessEqual, Greater, GreaterEqual,
     And, Or, BitAnd, BitOr, BitXor, ShiftLeft, ShiftRight,
 }
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum UnaryOp {
     Negate, Not, Deref, Pointer,
@@ -165,7 +190,7 @@ impl<'a> ExpressionParser<'a> {
         let token_data = self.advance();
         match &token_data.token {
             Token::Integer(val) => Ok(Expr::Integer(val.to_string())),
-            Token::Char(val) => Ok(Expr::Integer((val.parse::<char>().unwrap() as u64).to_string())),
+            Token::Char(val) => Ok(Expr::Integer((*val as u64).to_string())),
             Token::Decimal(val) => Ok(Expr::Decimal(val.to_string())),
             Token::String(val) => Ok(Expr::StringConst(val.to_string())),
             Token::Name(name) => Ok(Expr::Name(name.to_string())),

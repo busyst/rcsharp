@@ -26,6 +26,27 @@ pub struct PrimitiveInfo {
     pub kind: PrimitiveKind,
 }
 
+impl PrimitiveInfo {
+    pub fn is_integer(&self) -> bool {
+        matches!(self.kind, PrimitiveKind::SignedInt | PrimitiveKind::UnsignedInt)
+    }
+    
+    pub fn is_signed_integer(&self) -> bool {
+        matches!(self.kind, PrimitiveKind::SignedInt)
+    }
+
+    pub fn is_unsigned_integer(&self) -> bool {
+        matches!(self.kind, PrimitiveKind::UnsignedInt)
+    }
+    pub fn is_bool(&self) -> bool {
+        matches!(self.kind, PrimitiveKind::Bool)
+    }
+    
+    pub fn is_decimal(&self) -> bool {
+        matches!(self.kind, PrimitiveKind::Decimal)
+    }
+}
+
 pub const PRIMITIVE_TYPES_INFO: &[PrimitiveInfo] = &[
     PrimitiveInfo { name: "void", layout: Layout::new(0, 1), llvm_name: "void", kind: PrimitiveKind::Void },
     PrimitiveInfo { name: "bool", layout: Layout::new(1, 1), llvm_name: "i1", kind: PrimitiveKind::Bool },
@@ -47,6 +68,7 @@ pub const PRIMITIVE_TYPES_INFO: &[PrimitiveInfo] = &[
     PrimitiveInfo { name: "isize", layout: Layout::new(8, 8), llvm_name: "i64", kind: PrimitiveKind::SignedInt },
     PrimitiveInfo { name: "usize", layout: Layout::new(8, 8), llvm_name: "i64", kind: PrimitiveKind::UnsignedInt },
 ];
+
 impl Into<ParserType> for &'static PrimitiveInfo {
     fn into(self) -> ParserType {
         ParserType::Named(self.name.to_string())
@@ -61,6 +83,7 @@ pub const CHAR_TYPE: &PrimitiveInfo = &PRIMITIVE_TYPES_INFO[2];
 pub const DEFAULT_INTEGER_TYPE: &PrimitiveInfo = &PRIMITIVE_TYPES_INFO[5];
 pub const DEFAULT_DECIMAL_TYPE: &PrimitiveInfo = &PRIMITIVE_TYPES_INFO[12];
 
+pub const POINTER_SIZED_TYPE: &PrimitiveInfo = &PRIMITIVE_TYPES_INFO[14];
 pub fn find_primitive_type(name: &str) -> Option<&'static PrimitiveInfo> {
     PRIMITIVE_TYPES_INFO.iter().find(|x| x.name == name)
 }

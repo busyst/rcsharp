@@ -38,7 +38,7 @@ pub enum Token {
     #[regex(r"//[^\n]*")]
     LineComment,
 
-    #[regex(r"/\*([^*]|\*[^/])*\*/")]
+    #[regex(r"/\*[^*]*\*+([^/*][^*]*\*+)*/",)]
     BlockComment,
 
     #[token("(")] LParen,
@@ -111,8 +111,8 @@ pub enum Token {
     #[regex(r#""([^"\\]|\\.)*""#, unescape_string)]
     String(Box<str>),
     
-    #[regex(r"'([^'\\]|\\.)*'", unescape_char)]
-    Char(Box<str>),
+    #[regex(r"'([^'\\]|\\.)*'", |lex| unescape_char(lex).ok())]
+    Char(char),
 }
 
 pub struct Lexer<'source> {
@@ -179,19 +179,17 @@ fn unescape_string(lex: &mut logos::Lexer<Token>) -> Box<str> {
     let content = &slice[1..slice.len() - 1];
     unescape_content(content, true).into_boxed_str()
 }
-fn unescape_char(lex: &mut logos::Lexer<Token>) -> Box<str> {
+fn unescape_char(lex: &mut logos::Lexer<Token>) -> Result<char, ()> {
     let slice = lex.slice();
-    let content = &slice[1..slice.len() - 1];
+    let content = &slice[1..slice.len() - 1]; 
     let unescaped = unescape_content(content, false);
     
     let mut chars = unescaped.chars();
-    let first = chars.next().expect("Character literal cannot be empty");
-    
-    if chars.next().is_some() {
-        panic!("Character literal may only contain one character");
+    if let (Some(c), None) = (chars.next(), chars.next()) {
+        Ok(c)
+    } else {
+        Err(())
     }
-    
-    first.to_string().into_boxed_str()
 }
 fn unhex_num(lex: &mut logos::Lexer<Token>) -> Box<str> {
     let slice = lex.slice();

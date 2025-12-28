@@ -67,7 +67,7 @@ namespace mem{
 
     fn malloc(size: i64) : &void { 
         const ptr: &void = HeapAlloc(GetProcessHeap(), 0, size);
-        if ptr == bitcast::<&void>(0) {
+        if ptr == null {
             process::throw("Out of memory");
         }
         return ptr;
@@ -1379,7 +1379,7 @@ namespace window{
         MENUBAR = 30,
     }
     #[DllImport("user32.dll")]
-    fn RegisterClassA(lpWndClass: &WNDCLASSA): u16;
+    fn RegisterClassA(lpWndClass: &WNDCLASSEXA): u16;
 
     #[DllImport("user32.dll")]
     fn CreateWindowExA(

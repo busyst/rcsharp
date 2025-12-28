@@ -8,6 +8,9 @@ impl Span {
     pub fn new(start: usize, end: usize) -> Self {
         Self { start, end }
     }
+    pub fn empty() -> Self {
+        Self { start: 0, end: 0 }
+    }
 }
 #[derive(Debug, Clone, PartialEq)]
 pub enum ParserError {
@@ -223,19 +226,7 @@ impl ParserType {
     }
 
 
-    pub fn is_integer(&self) -> bool {
-        self.as_primitive_type().map_or(false, |x| {
-            matches!(x.kind, PrimitiveKind::SignedInt | PrimitiveKind::UnsignedInt)
-        })
-    }
-    
-    pub fn is_signed_integer(&self) -> bool {
-        self.as_primitive_type().map_or(false, |x| matches!(x.kind, PrimitiveKind::SignedInt))
-    }
 
-    pub fn is_unsigned_integer(&self) -> bool {
-        self.as_primitive_type().map_or(false, |x| matches!(x.kind, PrimitiveKind::UnsignedInt))
-    }
 
     pub fn is_decimal(&self) -> bool {
         self.as_primitive_type().map_or(false, |x| matches!(x.kind, PrimitiveKind::Decimal))
@@ -264,43 +255,7 @@ impl ParserType {
     pub fn is_primitive_type(&self) -> bool {
         self.as_primitive_type().is_some()
     }
-
-    pub fn as_both_integers(&self, other: &ParserType) -> Option<(&'static PrimitiveInfo, &'static PrimitiveInfo)> {
-        if let (Some(x),Some(y)) = (self.as_integer(), other.as_integer()) {
-            return Some((x,y));
-        }
-        None
-    }
-    pub fn as_both_decimals(&self, other: &ParserType) -> Option<(&'static PrimitiveInfo, &'static PrimitiveInfo)> {
-        if let (Some(x),Some(y)) = (self.as_decimal(), other.as_decimal()) {
-            return Some((x,y));
-        }
-        None
-    }
-
     
-    // Helper
-    pub fn self_reference_once(self) -> ParserType{
-        ParserType::Pointer(Box::new(self))
-    }
-    pub fn try_dereference_once(&self) -> &ParserType{
-        match self {
-            ParserType::Pointer(x) => x,
-            _ => self,
-        }
-    }
-    pub fn dereference_full(&self) -> &ParserType{
-        match self {
-            ParserType::Pointer(x) => x.dereference_full(),
-            _ => self,
-        }
-    }
-    pub fn full_delink(&self) -> &ParserType {
-        match self {
-            ParserType::NamespaceLink(_, c) => c.full_delink(),
-            _ => self,
-        }
-    }
     pub fn type_name(&self) -> String{
         match self {
             ParserType::Named(name) => name.to_string(),
@@ -312,32 +267,10 @@ impl ParserType {
     pub fn debug_type_name(&self) -> String{
         match self {
             ParserType::Named(name) => name.to_string(),
-            ParserType::Generic(name, _) => name.to_string(),
-            ParserType::NamespaceLink(link, core) => format!("{}.{}", link, core.type_name()),
+            ParserType::Generic(name, _) => format!("{}<>", name.to_string()),
+            ParserType::NamespaceLink(link, core) => format!("{}|{}", link, core.type_name()),
             ParserType::Function(ret, args) => format!("fn({}) :{}", args.iter().map(|x| x.debug_type_name()).collect::<Vec<_>>().join(", "), ret.debug_type_name() ),
-            ParserType::Pointer(core) => format!("*{}", core.debug_type_name()),
-        }
-    }
-    pub fn get_absolute_path_or(&self, current_path: &str) -> String{
-        match self {
-            ParserType::NamespaceLink(x, y) =>{
-                format!("{}.{}", x, y.type_name())
-            }
-            ParserType::Named(x) =>{
-                if current_path.is_empty() || self.is_primitive_type() {
-                    x.clone().to_string()
-                }else {
-                    format!("{}.{}", current_path, x.clone())
-                }
-            }
-            ParserType::Generic(x, _) =>{
-                if current_path.is_empty() || self.is_primitive_type() {
-                    x.clone().to_string()
-                }else {
-                    format!("{}.{}",current_path, x.clone())
-                }
-            }
-            _ => panic!("Cannot get abs type of {:?}", self),
+            ParserType::Pointer(core) => format!("*({})", core.debug_type_name()),
         }
     }
 }
