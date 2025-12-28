@@ -23,7 +23,6 @@ declare dllimport i32* @GetProcessHeap()
 declare dllimport i8* @HeapAlloc(i32*, i32, i64)
 declare dllimport i8* @HeapReAlloc(i32*, i32, i8*, i64)
 declare dllimport i32 @HeapFree(i32*, i32, i8*)
-declare dllimport i64 @HeapSize(i32*, i32, i8*)
 declare dllimport i32 @HeapWalk(i32*, %struct.mem.PROCESS_HEAP_ENTRY*)
 declare dllimport i32 @HeapLock(i32*)
 declare dllimport i32 @HeapUnlock(i32*)
@@ -38,7 +37,6 @@ declare dllimport i32 @GetFileSizeEx(i8*, i64*)
 declare dllimport i32 @CloseHandle(i8*)
 declare dllimport i32 @DeleteFileA(i8*)
 declare dllimport i32 @GetFileAttributesA(i8*)
-declare dllimport i16 @RegisterClassA(%struct.window.WNDCLASSEXA*)
 declare dllimport i8* @CreateWindowExA(i32, i8*, i8*, i32, i32, i32, i32, i32, i8*, i8*, i8*, i8*)
 declare dllimport i64 @DefWindowProcA(i8*, i32, i64, i64)
 declare dllimport i32 @GetMessageA(%struct.window.MSG*, i8*, i32, i32)
@@ -47,10 +45,6 @@ declare dllimport i64 @DispatchMessageA(%struct.window.MSG*)
 declare dllimport void @PostQuitMessage(i32)
 declare dllimport i8* @BeginPaint(i8*, %struct.window.PAINTSTRUCT*)
 declare dllimport i32 @EndPaint(i8*, %struct.window.PAINTSTRUCT*)
-declare dllimport i8* @GetDC(i8*)
-declare dllimport i32 @ReleaseDC(i8*, i8*)
-declare dllimport i8* @LoadCursorA(i8*, i8*)
-declare dllimport i8* @LoadIconA(i8*, i8*)
 declare dllimport i8* @LoadImageA(i8*, i8*, i32, i32, i32, i32)
 declare dllimport i32 @GetClientRect(i8*, %struct.window.RECT*)
 declare dllimport i32 @InvalidateRect(i8*, %struct.window.RECT*, i32)
@@ -61,7 +55,6 @@ declare dllimport i8* @CreateCompatibleDC(i8*)
 declare dllimport i8* @SelectObject(i8*, i8*)
 declare dllimport i32 @BitBlt(i8*, i32, i32, i32, i32, i8*, i32, i32, i32)
 declare dllimport i32 @DeleteDC(i8*)
-declare dllimport i32 @DeleteObject(i8*)
 declare dllimport i32 @GetObjectA(i8*, i32, %struct.window.BITMAP*)
 declare dllimport i32 @SetStretchBltMode(i8*, i32)
 declare dllimport i32 @StretchBlt(i8*, i32, i32, i32, i32, i8*, i32, i32, i32, i32, i32)
@@ -2581,24 +2574,22 @@ define i32 @main(){
     call void @console.println_f64(double 0x40DEADDD3B80D02E)
     %tmp5 = fptosi double 0x40DEADDD3B80D02E to i64
     call void @console.println_i64(i64 %tmp5)
-    %tmp6 = bitcast double 0x40DEADDD3B80D02E to i64
-    call void @console.println_i64(i64 %tmp6)
-    %tmp7 = bitcast double 0x40DEADDD3B80D02E to i64
-    %tmp8 = add i64 %tmp7, 123123123123
-    %tmp9 = bitcast i64 %tmp8 to double
-    call void @console.println_f64(double %tmp9)
+    call void @console.println_i64(i64 4674364628954828846)
+    %tmp6 = add i64 4674364628954828846, 123123123123
+    %tmp7 = bitcast i64 %tmp6 to double
+    call void @console.println_f64(double %tmp7)
     call i32 @AllocConsole()
     call void @tests.run()
     call void @window.start()
     call i32 @FreeConsole()
     br label %inline_exit0
 inline_exit0:
-    %tmp10 = call %"struct.test.QPair<i64, i64>" @xq()
-    %tmp11 = ptrtoint %"struct.Pair<i32, %struct.Pair<i8, %struct.string.String>>" ()** @"ax<i32>" to i64
-    %tmp12 = ptrtoint i32 ()** @main to i64
-    %tmp13 = sub i64 %tmp11, %tmp12
-    %tmp14 = trunc i64 %tmp13 to i32
-    ret i32 %tmp14
+    %tmp8 = call %"struct.test.QPair<i64, i64>" @xq()
+    %tmp9 = ptrtoint %"struct.Pair<i32, %struct.Pair<i8, %struct.string.String>>" ()** @"ax<i32>" to i64
+    %tmp10 = ptrtoint i32 ()** @main to i64
+    %tmp11 = sub i64 %tmp9, %tmp10
+    %tmp12 = trunc i64 %tmp11 to i32
+    ret i32 %tmp12
 }
 define %"struct.list.List<i32>" @"list.new<i32>"(){
     %v0 = alloca %"struct.list.List<i32>"; var: list
@@ -2920,130 +2911,130 @@ define void @"list.new_node<i32>"(%"struct.list.ListNode<i32>"* %list){
 
 ;fn __chkstk used times 0
 ;fn _fltused used times 0
-;fn process.ExitProcess used times 0
-;fn process.GetModuleFileNameA used times 0
-;fn process.get_executable_path used times 0
-;fn process.get_executable_env_path used times 0
-;fn process.throw used times 0
-;fn mem.GetProcessHeap used times 0
-;fn mem.HeapAlloc used times 0
-;fn mem.HeapReAlloc used times 0
-;fn mem.HeapFree used times 0
+;fn process.ExitProcess used times 4
+;fn process.GetModuleFileNameA used times 1
+;fn process.get_executable_path used times 2
+;fn process.get_executable_env_path used times 2
+;fn process.throw used times 51
+;fn mem.GetProcessHeap used times 4
+;fn mem.HeapAlloc used times 1
+;fn mem.HeapReAlloc used times 1
+;fn mem.HeapFree used times 1
 ;fn mem.HeapSize used times 0
-;fn mem.HeapWalk used times 0
-;fn mem.HeapLock used times 0
-;fn mem.HeapUnlock used times 0
-;fn mem.malloc used times 0
+;fn mem.HeapWalk used times 1
+;fn mem.HeapLock used times 1
+;fn mem.HeapUnlock used times 1
+;fn mem.malloc used times 8
 ;fn mem.realloc used times 0
-;fn mem.free used times 0
-;fn mem.copy used times 0
-;fn mem.compare used times 0
-;fn mem.fill used times 0
-;fn mem.zero_fill used times 0
+;fn mem.free used times 4
+;fn mem.copy used times 12
+;fn mem.compare used times 1
+;fn mem.fill used times 3
+;fn mem.zero_fill used times 2
 ;fn mem.default_fill used times 0
-;fn mem.get_total_allocated_memory_external used times 0
-;fn list.new used times 0
+;fn mem.get_total_allocated_memory_external used times 2
+;fn list.new used times 1
 ;fn list.new_node used times 0
-;fn list.extend used times 0
-;fn list.walk used times 0
-;fn list.free used times 0
-;fn vector.new used times 0
-;fn vector.push used times 0
-;fn vector.push_bulk used times 0
+;fn list.extend used times 3
+;fn list.walk used times 1
+;fn list.free used times 1
+;fn vector.new used times 3
+;fn vector.push used times 8
+;fn vector.push_bulk used times 1
 ;fn vector.remove_at used times 0
-;fn vector.free used times 0
-;fn console.AllocConsole used times 0
-;fn console.GetStdHandle used times 0
-;fn console.FreeConsole used times 0
-;fn console.WriteConsoleA used times 0
-;fn console.get_stdout used times 0
-;fn console.write used times 0
+;fn vector.free used times 2
+;fn console.AllocConsole used times 2
+;fn console.GetStdHandle used times 2
+;fn console.FreeConsole used times 1
+;fn console.WriteConsoleA used times 4
+;fn console.get_stdout used times 4
+;fn console.write used times 18
 ;fn console.write_string used times 0
-;fn console.writeln used times 0
-;fn console.print_char used times 0
-;fn console.println_i64 used times 0
-;fn console.println_u64 used times 0
-;fn console.println_f64 used times 0
-;fn string.from_c_string used times 0
-;fn string.empty used times 0
-;fn string.with_size used times 0
+;fn console.writeln used times 15
+;fn console.print_char used times 9
+;fn console.println_i64 used times 7
+;fn console.println_u64 used times 3
+;fn console.println_f64 used times 2
+;fn string.from_c_string used times 5
+;fn string.empty used times 1
+;fn string.with_size used times 5
 ;fn string.clone used times 0
-;fn string.concat_with_c_string used times 0
-;fn string.equal used times 0
-;fn string.free used times 0
-;fn string.as_c_string_stalloc used times 0
-;fn string_utils.insert used times 0
-;fn string_utils.c_str_len used times 0
-;fn string_utils.is_ascii_num used times 0
-;fn string_utils.is_ascii_char used times 0
-;fn string_utils.is_ascii_hex used times 0
-;fn fs.CreateFileA used times 0
-;fn fs.WriteFile used times 0
-;fn fs.ReadFile used times 0
-;fn fs.GetFileSizeEx used times 0
-;fn fs.CloseHandle used times 0
-;fn fs.DeleteFileA used times 0
-;fn fs.GetFileAttributesA used times 0
-;fn fs.write_to_file used times 0
-;fn fs.read_full_file_as_string used times 0
-;fn fs.create_file used times 0
-;fn fs.delete_file used times 0
-;fn fs.file_exists used times 0
-;fn tests.run used times 0
-;fn tests.mem_test used times 0
-;fn tests.string_utils_test used times 0
-;fn tests.string_test used times 0
-;fn tests.vector_test used times 0
-;fn tests.list_test used times 0
-;fn tests.process_test used times 0
-;fn tests.console_test used times 0
-;fn tests.fs_test used times 0
-;fn tests.consume_while used times 0
-;fn tests.not_new_line used times 0
-;fn tests.valid_name_token used times 0
-;fn tests.is_valid_number_token used times 0
-;fn tests.funny used times 0
+;fn string.concat_with_c_string used times 2
+;fn string.equal used times 4
+;fn string.free used times 14
+;fn string.as_c_string_stalloc used times 1
+;fn string_utils.insert used times 2
+;fn string_utils.c_str_len used times 7
+;fn string_utils.is_ascii_num used times 5
+;fn string_utils.is_ascii_char used times 4
+;fn string_utils.is_ascii_hex used times 3
+;fn fs.CreateFileA used times 3
+;fn fs.WriteFile used times 1
+;fn fs.ReadFile used times 1
+;fn fs.GetFileSizeEx used times 1
+;fn fs.CloseHandle used times 4
+;fn fs.DeleteFileA used times 1
+;fn fs.GetFileAttributesA used times 1
+;fn fs.write_to_file used times 1
+;fn fs.read_full_file_as_string used times 2
+;fn fs.create_file used times 3
+;fn fs.delete_file used times 3
+;fn fs.file_exists used times 1
+;fn tests.run used times 1
+;fn tests.mem_test used times 1
+;fn tests.string_utils_test used times 1
+;fn tests.string_test used times 1
+;fn tests.vector_test used times 1
+;fn tests.list_test used times 1
+;fn tests.process_test used times 1
+;fn tests.console_test used times 1
+;fn tests.fs_test used times 1
+;fn tests.consume_while used times 3
+;fn tests.not_new_line used times 1
+;fn tests.valid_name_token used times 1
+;fn tests.is_valid_number_token used times 1
+;fn tests.funny used times 1
 ;fn window.RegisterClassA used times 0
-;fn window.CreateWindowExA used times 0
-;fn window.DefWindowProcA used times 0
-;fn window.GetMessageA used times 0
-;fn window.TranslateMessage used times 0
-;fn window.DispatchMessageA used times 0
-;fn window.PostQuitMessage used times 0
-;fn window.BeginPaint used times 0
-;fn window.EndPaint used times 0
+;fn window.CreateWindowExA used times 2
+;fn window.DefWindowProcA used times 2
+;fn window.GetMessageA used times 2
+;fn window.TranslateMessage used times 2
+;fn window.DispatchMessageA used times 2
+;fn window.PostQuitMessage used times 4
+;fn window.BeginPaint used times 1
+;fn window.EndPaint used times 1
 ;fn window.GetDC used times 0
 ;fn window.ReleaseDC used times 0
 ;fn window.LoadCursorA used times 0
 ;fn window.LoadIconA used times 0
-;fn window.LoadImageA used times 0
-;fn window.GetClientRect used times 0
-;fn window.InvalidateRect used times 0
-;fn window.GetModuleHandleA used times 0
-;fn window.RegisterClassExA used times 0
-;fn window.ShowWindow used times 0
-;fn window.CreateCompatibleDC used times 0
-;fn window.SelectObject used times 0
-;fn window.BitBlt used times 0
-;fn window.DeleteDC used times 0
+;fn window.LoadImageA used times 1
+;fn window.GetClientRect used times 1
+;fn window.InvalidateRect used times 1
+;fn window.GetModuleHandleA used times 2
+;fn window.RegisterClassExA used times 2
+;fn window.ShowWindow used times 2
+;fn window.CreateCompatibleDC used times 2
+;fn window.SelectObject used times 4
+;fn window.BitBlt used times 1
+;fn window.DeleteDC used times 2
 ;fn window.DeleteObject used times 0
-;fn window.GetObjectA used times 0
-;fn window.SetStretchBltMode used times 0
-;fn window.StretchBlt used times 0
-;fn window.SetWindowLongPtrA used times 0
-;fn window.GetWindowLongPtrA used times 0
-;fn window.WindowProc used times 0
-;fn window.load_bitmap_from_file used times 0
-;fn window.get_bitmap_dimensions used times 0
-;fn window.draw_bitmap used times 0
+;fn window.GetObjectA used times 3
+;fn window.SetStretchBltMode used times 1
+;fn window.StretchBlt used times 1
+;fn window.SetWindowLongPtrA used times 1
+;fn window.GetWindowLongPtrA used times 1
+;fn window.WindowProc used times 2
+;fn window.load_bitmap_from_file used times 1
+;fn window.get_bitmap_dimensions used times 1
+;fn window.draw_bitmap used times 1
 ;fn window.draw_bitmap_stretched used times 0
-;fn window.is_null used times 0
-;fn window.start used times 0
+;fn window.is_null used times 4
+;fn window.start used times 1
 ;fn window.start_image_window used times 0
-;fn basic_functions used times 0
-;fn ax used times 0
+;fn basic_functions used times 1
+;fn ax used times 2
 ;fn ay used times 0
-;fn of_fn used times 0
-;fn test.geg used times 0
-;fn xq used times 0
-;fn main used times 0
+;fn of_fn used times 1
+;fn test.geg used times 1
+;fn xq used times 1
+;fn main used times 1

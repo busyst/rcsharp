@@ -339,10 +339,9 @@ impl CompilerType {
                 if struct_type.layout.get().is_valid() {
                     return struct_type.layout.get();
                 }
-                let fields = struct_type.fields.iter().map(|x| x.1.size_and_layout(symbols)).collect::<Vec<_>>();
                 let mut current_offset = 0;
                 let mut max_alignment = 1;
-                for field in fields {
+                for field in struct_type.fields.iter().map(|x| x.1.size_and_layout(symbols)) {
                     let layout_of_type = field;
                     if layout_of_type.align == 0 { continue; }
                     max_alignment = u32::max(max_alignment, layout_of_type.align);

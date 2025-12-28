@@ -6,7 +6,7 @@ use rcsharp_parser::{compiler_primitives::{BOOL_TYPE}, expression_parser::Expr, 
 
 use crate::{compiler_essentials::{CodeGenContext, CompilerType, Enum, FlagManager, Function, LLVMVal, Struct, Variable, function_flags, struct_flags}, expression_compiler::{Expected, compile_expression, constant_expression_compiler}};
 
-pub const LAZY_FUNCTION_COMPILE : bool = false; // For now false
+pub const LAZY_FUNCTION_COMPILE : bool = true;
 pub const APPEND_DEBUG_FUNCTION_INFO : bool = true;
 pub const DONT_INSERT_REDUNDAND_STRINGS : bool = true;
 pub const INTERGER_EXPRESION_OPTIMISATION : bool = true;
@@ -312,8 +312,7 @@ fn compile_function_body(function_id: usize, full_function_name: &str, symbols: 
     Ok(())
 }
 pub fn compile_statement(stmt: &StmtData, ctx: &mut CodeGenContext, output: &mut LLVMOutputHandler) -> CompileResult<()>{
-    let curent_function = ctx.symbols.get_function_by_id(ctx.current_function);
-    let current_function_path = &curent_function.path;
+    let current_function_path = ctx.current_function_path();
     match &stmt.stmt {
         Stmt::ConstLet(name, var_type, expr) => {
             let var_type = CompilerType::into_path(var_type, ctx.symbols, current_function_path)?;
@@ -486,7 +485,7 @@ fn handle_generics(symbols: &mut SymbolTable, output: &mut LLVMOutputHandler) ->
                             type_map.insert(prm.clone(), gi[impl_ind][ind].clone());
                         }
                         drop(gi);
-                        let internals: String = sym_type.fields.iter().map(|x| {let mut c = x.1.clone(); c.substitute_generic_types(&type_map, symbols).and_then(|()| c.llvm_representation(symbols))}).collect::<CompileResult<Vec<_>>>()?.join(", ");
+                        let internals: String = sym_type.fields.iter().map(|x| x.1.with_substituted_generic_types(&type_map, symbols).map(|x| x.llvm_representation(symbols)).flatten()).collect::<CompileResult<Vec<_>>>()?.join(", ");
                         output.push_str_header(&format!("{} = type {{ {} }}\n", x, internals));
 
                     }
@@ -650,11 +649,19 @@ impl SymbolTable {
     pub fn get_type_by_id(&self, type_id: usize) -> &Struct {
         self.types.values().filter(|x| x.0 == type_id).nth(0).map(|x| &x.1).expect("Unexpected")
     }
-    
     pub fn get_function_by_id(&self, function_id: usize) -> &Function {
-        self.functions.values().filter(|x| x.0 == function_id).nth(0).map(|x| &x.1).expect("Unexpected")
+        if let Some(func) = self.functions.values().filter(|x| x.0 == function_id).nth(0) {
+            return &func.1;
+        }
+        unreachable!()
     }
-    
+    pub fn get_function_by_id_inc(&self, function_id: usize) -> &Function {
+        if let Some(func) = self.functions.values().filter(|x| x.0 == function_id).nth(0) {
+            func.1.use_fn();
+            return &func.1;
+        }
+        unreachable!()
+    }
     pub fn get_type_id(&self, fqn: &str) -> Option<usize> {
         self.types.iter().position(|x| x.0 == fqn)
     }

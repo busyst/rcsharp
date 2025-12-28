@@ -116,7 +116,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
         
         if let Some(function) = self.ctx.symbols.get_function_id(&format!("{}.{}", name, self.ctx.current_function_path())).or(self.ctx.symbols.get_function_id(name)) {
             return Ok(
-                if self.ctx.symbols.get_function_by_id(function).is_generic() {
+                if self.ctx.symbols.get_function_by_id_inc(function).is_generic() {
                     CompiledValue::GenericFunction { internal_id: function }
                 } else {
                     CompiledValue::Function { internal_id: function }
@@ -654,7 +654,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
         }
         if let Some(function) = self.ctx.symbols.get_function_id(&format!("{}.{}", self.ctx.current_function_path(), name)).or(self.ctx.symbols.get_function_id(name)) {
             return Ok(
-                if self.ctx.symbols.get_function_by_id(function).is_generic() {
+                if self.ctx.symbols.get_function_by_id_inc(function).is_generic() {
                     CompiledValue::GenericFunction { internal_id: function }
                 } else {
                     CompiledValue::Function { internal_id: function }
@@ -671,7 +671,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             if generics.is_empty() {
                 return Err((Span::empty(), CompilerError::Generic(format!("Generic function '{}' requires generic parameters", internal_id))));
             }
-            let _func = self.ctx.symbols.get_function_by_id(internal_id);
+            let _func = self.ctx.symbols.get_function_by_id_inc(internal_id);
             
             return Ok(CompiledValue::GenericFunctionImplementation { internal_id, types: generics.iter().map(|x| CompilerType::into(x, self.ctx)).collect::<CompileResult<Box<_>>>()? });
         }
@@ -1120,22 +1120,23 @@ fn bitcast_generic_impl(
         ))));
     }
     let source_val = compiler.compile_rvalue(&given_args[0], Expected::Anything)?;
+    let source_type = source_val.get_type();
     let target_type = CompilerType::into_path(&given_generic[0], compiler.ctx.symbols, compiler.ctx.current_function_path())?;
     
-    let src_layout = source_val.get_type().size_and_layout(compiler.ctx.symbols);
+    let src_layout = source_type.size_and_layout(compiler.ctx.symbols);
     let dst_layout = target_type.size_and_layout(compiler.ctx.symbols);
-    if src_layout.size != dst_layout.size && !source_val.get_type().is_pointer() && !target_type.is_pointer() {
+    if src_layout.size != dst_layout.size && !source_type.is_pointer() && !target_type.is_pointer() {
         return Err((Span::empty(), CompilerError::Generic(format!(
             "bitcast size mismatch: cannot cast from {:?} ({} bytes) to {:?} ({} bytes)",
-            source_val.get_type(), src_layout.size,
+            source_type, src_layout.size,
             target_type, dst_layout.size
         ))));
     }
-    if source_val.get_type().is_pointer() ^ target_type.is_pointer() {
-        let (from_t, from_v) = (source_val.get_type().llvm_representation(compiler.ctx.symbols)?, source_val.get_llvm_rep().to_string());
+    if source_type.is_pointer() ^ target_type.is_pointer() {
+        let (from_t, from_v) = (source_type.llvm_representation(compiler.ctx.symbols)?, source_val.get_llvm_rep().to_string());
         let to_str = target_type.llvm_representation(compiler.ctx.symbols)?;
         let utvc = compiler.ctx.aquire_unique_temp_value_counter();
-        if source_val.get_type().is_pointer() {
+        if source_type.is_pointer() {
             compiler.output.push_str(&format!(
                 "    %tmp{} = ptrtoint {} {} to {}\n",
                 utvc,
@@ -1161,7 +1162,18 @@ fn bitcast_generic_impl(
             });
         }
     }
-    let src_llvm_type = source_val.get_type().llvm_representation(compiler.ctx.symbols)?;
+    if source_type.is_integer() ^ target_type.is_integer() && source_type.is_decimal() ^ target_type.is_decimal() {
+        if source_type.is_decimal() { // decimal to int
+            if let CompiledValue::Value { llvm_repr: LLVMVal::ConstantDecimal(x), ptype:_ } = source_val {
+                return Ok(CompiledValue::Value { llvm_repr: LLVMVal::ConstantInteger(f64::to_bits(x.parse::<f64>().unwrap()).cast_signed().to_string()), ptype: target_type });
+            }
+        }else { // int to decimal
+            if let CompiledValue::Value { llvm_repr: LLVMVal::ConstantInteger(x), ptype:_ } = source_val {
+                return Ok(CompiledValue::Value { llvm_repr: LLVMVal::ConstantDecimal(f64::from_bits(i64::cast_unsigned(x.parse::<i64>().unwrap())).to_string()), ptype: target_type });
+            }
+        }
+    }
+    let src_llvm_type = source_type.llvm_representation(compiler.ctx.symbols)?;
     let dst_llvm_type = target_type.llvm_representation(compiler.ctx.symbols)?;
     let utvc = compiler.ctx.aquire_unique_temp_value_counter();
 
