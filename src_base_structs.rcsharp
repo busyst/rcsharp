@@ -1,4 +1,6 @@
+#[no_lazy]
 fn __chkstk() : void { /*Needed*/}
+#[no_lazy]
 fn _fltused() : i32 { return 0; /*Needed*/}
 
 namespace process{

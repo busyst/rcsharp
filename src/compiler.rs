@@ -1,6 +1,6 @@
 use std::{collections::{HashMap, HashSet, VecDeque}, io::Read};
 
-use ordered_hash_map::OrderedHashMap;
+use ordered_hash_map::{OrderedHashMap};
 use rcsharp_lexer::lex_string_with_file_context;
 use rcsharp_parser::{compiler_primitives::{BOOL_TYPE}, expression_parser::Expr, parser::{Attribute, GeneralParser, ParsedEnum, ParsedFunction, ParsedStruct, ParserResultExt, ParserType, Span, Stmt, StmtData}};
 
@@ -48,8 +48,12 @@ pub fn rcsharp_compile(stmts: &[StmtData], absolute_file_path: &str) -> CompileR
     handle_types(structs, &mut symbols, &mut output)?;
     handle_enums(enums, &mut symbols, &mut output)?;
     handle_functions(functions, &mut symbols, &mut output)?;
-    compile(&mut symbols, &mut output)?;
-    handle_generics(&mut symbols, &mut output)?;
+    if LAZY_FUNCTION_COMPILE {
+        lazy_compile(&mut symbols, &mut output)?;
+    }else {
+        compile(&mut symbols, &mut output)?;
+        handle_generics(&mut symbols, &mut output)?;
+    }
     Ok(output)
 }
 fn collect(stmts: &[StmtData], 
@@ -222,10 +226,56 @@ fn handle_functions(functions : Vec<ParsedFunction>, symbols: &mut SymbolTable, 
         if function.attribs.iter().any(|x| x.name_equals("DllImport")) {
             function.set_flag(function_flags::IMPORTED as u8);
         }
+        if function.attribs.iter().any(|x| x.name_equals("no_lazy")) {
+            function.use_fn();
+        }
         if !function.generic_params.is_empty() {
             function.set_flag(function_flags::GENERIC as u8);
         }
         symbols.insert_function(&full_path, function);
+    }
+    Ok(())
+}
+fn lazy_compile(symbols: &mut SymbolTable, output: &mut LLVMOutputHandler) -> CompileResult<()>{
+    let mut implemented_funcs = HashSet::new();
+    let mut implement_funcs = Vec::new();
+    let main_id = symbols.get_function_id("main").expect("Expected function main");
+    implement_funcs.push(main_id);
+    while let Some(id) = implement_funcs.pop() {
+        implemented_funcs.insert(id);
+        let func = symbols.get_function_by_id(id);
+        compile_function_body(id, &func.full_path(), symbols, output)?;
+        for x in symbols.functions.iter().filter(|x| x.1.1.is_normal() && x.1.1.times_used.get() > 0) {
+            if !implemented_funcs.contains(&x.1.0) && !implement_funcs.contains(&x.1.0) {
+                implement_funcs.push(x.1.0);
+            }
+        }
+    }
+    handle_generics(symbols, output)?;
+    for x in symbols.functions.iter().filter(|x| x.1.1.is_normal() && x.1.1.times_used.get() > 0) {
+        if !implemented_funcs.contains(&x.1.0) && !implement_funcs.contains(&x.1.0) {
+            implement_funcs.push(x.1.0);
+        }
+    }
+    while let Some(id) = implement_funcs.pop() {
+        implemented_funcs.insert(id);
+        let func = symbols.get_function_by_id(id);
+        compile_function_body(id, &func.full_path(), symbols, output)?;
+        for x in symbols.functions.iter().filter(|x| x.1.1.is_normal() && x.1.1.times_used.get() > 0) {
+            if !implemented_funcs.contains(&x.1.0) && !implement_funcs.contains(&x.1.0) {
+                implement_funcs.push(x.1.0);
+            }
+        }
+    }
+
+    for (_, (_id, function)) in symbols.functions.iter().filter(|x| x.1.1.is_imported()) {
+        if function.times_used.get() == 0 {
+            continue;
+        }
+        // declare dllimport i32 @GetModuleFileNameA(i8*,i8*,i32)
+        let rt = function.return_type.llvm_representation(symbols)?;
+        let args = function.args.iter().map(|x| x.1.llvm_representation(symbols)).collect::<CompileResult<Vec<_>>>()?.join(", ");
+        output.push_str_include_header(&format!("declare dllimport {} @{}({})\n", rt, function.name() , args));
     }
     Ok(())
 }
@@ -239,9 +289,6 @@ fn compile(symbols: &mut SymbolTable, output: &mut LLVMOutputHandler) -> Compile
         }
     }
     for (_, (_id, function)) in symbols.functions.iter().filter(|x| x.1.1.is_imported()) {
-        if LAZY_FUNCTION_COMPILE && function.times_used.get() == 0 {
-            continue;
-        }
         // declare dllimport i32 @GetModuleFileNameA(i8*,i8*,i32)
         let rt = function.return_type.llvm_representation(symbols)?;
         let args = function.args.iter().map(|x| x.1.llvm_representation(symbols)).collect::<CompileResult<Vec<_>>>()?.join(", ");
