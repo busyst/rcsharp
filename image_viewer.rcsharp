@@ -1,5 +1,4 @@
-#[include("./src_base_structs.rcsharp")]
-#[include("./src.rcsharp")]
+#include("./src_base_structs.rcsharp")
 fn main() : i32{
     let s1 : string::String = process::get_executable_env_path();
     let s4 : string::String = string::concat_with_c_string(&s1, "example.bmp");

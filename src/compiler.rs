@@ -1,59 +1,51 @@
-use std::{collections::{HashMap, HashSet, VecDeque}, io::Read};
+use std::{collections::{HashMap, HashSet, VecDeque}, io::Read, time::{Duration, Instant}};
 
 use ordered_hash_map::{OrderedHashMap};
 use rcsharp_lexer::lex_string_with_file_context;
-use rcsharp_parser::{compiler_primitives::{BOOL_TYPE}, expression_parser::Expr, parser::{Attribute, GeneralParser, ParsedEnum, ParsedFunction, ParsedStruct, ParserResultExt, ParserType, Span, Stmt, StmtData}};
+use rcsharp_parser::{compiler_primitives::{BOOL_TYPE}, expression_parser::Expr, parser::{Attribute, GeneralParser, ParsedEnum, ParsedFunction, ParsedStruct, ParserType, Span, Stmt, StmtData}};
 
-use crate::{compiler_essentials::{CodeGenContext, CompilerType, Enum, FlagManager, Function, LLVMVal, Struct, Variable, function_flags, struct_flags}, expression_compiler::{Expected, compile_expression, constant_expression_compiler}};
+use crate::{compiler_essentials::{CodeGenContext, CompileResult, CompilerError, CompilerType, Enum, FlagManager, Function, LLVMVal, Struct, Variable, function_flags, struct_flags}, expression_compiler::{Expected, compile_expression, constant_expression_compiler}};
 
 pub const LAZY_FUNCTION_COMPILE : bool = true;
 pub const APPEND_DEBUG_FUNCTION_INFO : bool = true;
 pub const DONT_INSERT_REDUNDAND_STRINGS : bool = true;
 pub const INTERGER_EXPRESION_OPTIMISATION : bool = true;
-pub type CompileResult<T> = Result<T, (Span, CompilerError)>;
-#[derive(Debug)]
-pub enum CompilerError {
-    Generic(String),
-    Io(std::io::Error),
-    InvalidExpression(String),
-    SymbolNotFound(String),
-    TypeMismatch { expected: CompilerType, found: CompilerType },
-    InvalidStatementInContext(String),
-}
-impl From<std::io::Error> for CompilerError {
-    fn from(err: std::io::Error) -> Self {
-        CompilerError::Io(err)
-    }
-}
+pub const DONT_COMPILE_AFTER_RETURN : bool = true;
 
-pub fn rcsharp_compile_to_file(stmts: &[StmtData], full_path: &str) -> Result<(), String> {
+pub fn rcsharp_compile_to_file(stmts: &[StmtData], full_path: &str, output_path: &str) -> Result<(), String> {
     match rcsharp_compile(stmts, full_path) {
         Ok(llvm_ir) => {
-            std::fs::write("output.ll", llvm_ir.build())
+            std::fs::write(output_path, llvm_ir.build())
                 .map_err(|e| e.to_string())
         }
         Err(e) => Err(format!("{:?}\n---------\nSTATEMENTS:\n{:?}", e.1, e.0.start..e.0.end)),
     }
 }
 pub fn rcsharp_compile(stmts: &[StmtData], absolute_file_path: &str) -> CompileResult<LLVMOutputHandler>  {
-    let mut symbols = SymbolTable::new();
+    let time_point = Instant::now();
+    let mut symbols = SymbolTable::default();
     let mut output = LLVMOutputHandler::default();
     output.push_str_header("target triple = \"x86_64-pc-windows-msvc\"\n");
     output.push_str_header(&format!(";{}\n", absolute_file_path));
     let mut enums = vec![];
     let mut structs = vec![];
     let mut functions = vec![];
-
     collect(stmts, &mut enums, &mut structs, &mut functions)?;
+    let collecting = time_point.elapsed();
+    let time_point = Instant::now();
     handle_types(structs, &mut symbols, &mut output)?;
     handle_enums(enums, &mut symbols, &mut output)?;
     handle_functions(functions, &mut symbols, &mut output)?;
+
     if LAZY_FUNCTION_COMPILE {
         lazy_compile(&mut symbols, &mut output)?;
     }else {
         compile(&mut symbols, &mut output)?;
         handle_generics(&mut symbols, &mut output)?;
     }
+    let compiling = time_point.elapsed();
+    println!("Collecting {:?}", collecting);
+    println!("Compiling {:?}", compiling);
     Ok(output)
 }
 fn collect(stmts: &[StmtData], 
@@ -62,67 +54,98 @@ fn collect(stmts: &[StmtData],
     functions : &mut Vec<ParsedFunction>,
 ) -> CompileResult<()>{
     let mut statements: VecDeque<StmtData> = stmts.iter().cloned().collect(); 
+    let initial_count = statements.len();
+    let mut deep_statements_collected: u64 = statements.iter().map(|x| x.stmt.recursive_statement_count()).sum();
+    let mut total_processed_nodes = 0;
+    let mut file_reading_time = Duration::new(0, 0);
+    let mut lexing_time = Duration::new(0, 0);
+    let mut parsing_time = Duration::new(0, 0);
 
-    let mut current_path = Vec::new();
+
+    let mut current_path_segments: Vec<String> = Vec::new();
+    let mut path_buffer = String::new();
     let mut included_files: HashSet<String> = HashSet::new();
 
-    while !statements.is_empty() {
-        while let Some(x) = statements.pop_front() {
-            if let Stmt::CompilerHint(attr) = &x.stmt {
+    while let Some(stmt_data) = statements.pop_front() {
+        total_processed_nodes += 1;
+        match stmt_data.stmt {
+            Stmt::CompilerHint(attr) => {
                 if attr.name_equals("include") {
-                    if let Some(x) = attr.one_argument() {
-                        if let Expr::StringConst(include_path) = x {
-                            if included_files.contains(include_path) {
-                                continue;
-                            }
-                            included_files.insert(include_path.clone());
-
-                            let mut file = std::fs::File::open(include_path).unwrap();
-                            let mut buf = String::new();
-                            file.read_to_string(&mut buf).unwrap();
-                            let lex = lex_string_with_file_context(&buf,include_path).unwrap();
-                            let par = GeneralParser::new(&lex).parse_all().unwrap_error_extended(&lex, include_path).map_err(|x| {println!("{}", x); String::new()}).unwrap();
-                            for stmt in par.into_iter().rev() {
-                                statements.push_front(stmt);
-                            }
+                    let include_path_expr = attr.one_argument();
+                    if let Some(Expr::StringConst(include_path)) = include_path_expr {
+                        if included_files.contains(include_path) {
                             continue;
                         }
+                        included_files.insert(include_path.clone());
+                        
+                        let q = Instant::now();
+                        let mut file = std::fs::File::open(&include_path).map_err(|e| {
+                            (stmt_data.span.clone(), CompilerError::Generic(format!("Failed to open file '{}': {}", include_path, e)))
+                        })?;
+                        
+                        let mut buf = String::new();
+                        file.read_to_string(&mut buf).map_err(|e| {
+                            (stmt_data.span.clone(), CompilerError::Generic(format!("Failed to read file '{}': {}", include_path, e)))
+                        })?;
+                        file_reading_time += q.elapsed();
+                        let q = Instant::now();
+                        let lex = lex_string_with_file_context(&buf, &include_path)
+                                .map_err(|_| (stmt_data.span.clone(), CompilerError::Generic(format!("Lexer error in '{}'", include_path))))?;
+                        lexing_time += q.elapsed();
+                        let q = Instant::now();
+                        let parsed_stmts = GeneralParser::new(&lex).parse_all()
+                            .map_err(|e| (stmt_data.span.clone(), CompilerError::Generic(format!("Parser error in '{}': {:?}", include_path, e))))?;
+                        parsing_time += q.elapsed();
+                        for stmt in parsed_stmts.into_iter().rev() {
+                            statements.push_front(stmt);
+                        }
+                    }else {
+                        return Err((stmt_data.span, CompilerError::InvalidStatementInContext("Include requires a string argument".into())));
                     }
+                }else if attr.name_equals("-pop") {
+                    current_path_segments.pop();
+                    path_buffer = current_path_segments.join(".");
+                } else {
+                    return Err((stmt_data.span, CompilerError::InvalidStatementInContext(format!("Unknown global attribute: {:?}", attr))));
                 }
-                if attr.name_equals("-pop") {
-                    current_path.pop();
-                    continue;
-                }
-                
-                panic!("Invalid compiler hint in global context: {:?}", attr);
             }
-            if let Stmt::Namespace(namespace, body) = x.stmt {
-                current_path.push(namespace);
-                statements.push_front(Stmt::CompilerHint(Attribute { name: "-pop".into(), arguments: Box::new([]), span: Span { start: 0, end: 0 } }).dummy_data());
+            Stmt::Namespace(namespace, body) => {
+                current_path_segments.push(namespace);
+                path_buffer = current_path_segments.join(".");
+                let pop_hint = Stmt::CompilerHint(Attribute { 
+                        name: "-pop".into(), 
+                        arguments: Box::new([]), 
+                        span: Span { start: 0, end: 0 } // Dummy span
+                    }).dummy_data();
+                statements.push_front(pop_hint);
+                deep_statements_collected += body.iter().map(|x| x.stmt.recursive_statement_count()).sum::<u64>();
                 for stmt in body.iter().rev() {
                     statements.push_front(stmt.clone());
                 }
-                continue;
             }
-            if let Stmt::Struct(mut parsed_struct) = x.stmt {
-                parsed_struct.path = current_path.join(".").into();
+            Stmt::Struct(mut parsed_struct) => {
+                parsed_struct.path = path_buffer.clone().into();
                 structs.push(parsed_struct);
-                continue;
-            }
-            if let Stmt::Function(mut x) = x.stmt {
-                x.path = current_path.join(".").into();
-                functions.push(x);
-                continue;
-            }
-            if let Stmt::Enum(mut parsed_enum) = x.stmt {
-                parsed_enum.path = current_path.join(", ").into();
+            },
+            Stmt::Function(mut parsed_func) => {
+                parsed_func.path = path_buffer.clone().into();
+                functions.push(parsed_func);
+            },
+            Stmt::Enum(mut parsed_enum) => {
+                parsed_enum.path = path_buffer.clone().into();
                 enums.push(parsed_enum);
-                continue;
+            },
+            _ => {
+                return Err((stmt_data.span, CompilerError::InvalidStatementInContext(format!("{:?}", stmt_data.stmt))));
             }
-            
-            return Err((x.span.clone(), CompilerError::InvalidStatementInContext(format!("{:?}", x))));
         }
     }
+    println!("Initial top level statements: {}", initial_count);
+    println!("Total nodes processed: {}", total_processed_nodes);
+    println!("Deep recursive statement count: {}", deep_statements_collected);
+    println!("Additional File Reading Time: {:?}", file_reading_time);
+    println!("Additional Lexing Time: {:?}", lexing_time);
+    println!("Additional Parsing Time: {:?}", parsing_time);
     Ok(())
 }
 fn handle_types(structs : Vec<ParsedStruct>, symbols: &mut SymbolTable, output: &mut LLVMOutputHandler) -> CompileResult<()>{
@@ -189,7 +212,7 @@ fn handle_enums(enums : Vec<ParsedEnum>, symbols: &mut SymbolTable, _output: &mu
                 }
                 compiler_enum_fields.push((field_name, constant_expression_compiler(&field_expr)?));
             }
-            symbols.enums.insert(full_path, Enum::new(current_path, enum_name, CompilerType::Primitive(x), compiler_enum_fields.into_boxed_slice(), attrs));
+            symbols.insert_enum(&full_path, Enum::new(current_path, enum_name, CompilerType::Primitive(x), compiler_enum_fields.into_boxed_slice(), attrs));
             continue;
         }
         todo!("Not yet supported!")
@@ -310,6 +333,11 @@ fn compile_function_body(function_id: usize, full_function_name: &str, symbols: 
                 Stmt::Loop(body) => {
                     collect_local_variables(body, vars);
                 }
+                Stmt::Return(..) =>{
+                    if DONT_COMPILE_AFTER_RETURN {
+                        break;
+                    }
+                }
                 _ => {}
             }
         }
@@ -329,7 +357,7 @@ fn compile_function_body(function_id: usize, full_function_name: &str, symbols: 
     .collect::<CompileResult<Vec<_>>>()?
     .join(", ");
 
-    output.push_str(&format!("define {} @{}({}){{\n", rt, full_function_name , args_str)); 
+    output.push_str(&format!("define {} @{}({}){{\n", rt, full_function_name , args_str));
     let mut statically_declared_vars = vec![];
     collect_local_variables(&function.body, &mut statically_declared_vars);
     
@@ -347,6 +375,9 @@ fn compile_function_body(function_id: usize, full_function_name: &str, symbols: 
 
     for stmt in function.body.iter(){
         compile_statement(&stmt, &mut ctx, output)?;
+        if DONT_COMPILE_AFTER_RETURN && matches!(stmt.stmt, Stmt::Return(..)) {
+            break;
+        };
     }
     if !matches!(function.body.last().map(|x| &x.stmt), Some(Stmt::Return(_))) {
         if function.return_type.is_void() {
@@ -397,6 +428,9 @@ pub fn compile_statement(stmt: &StmtData, ctx: &mut CodeGenContext, output: &mut
             ctx.scope.set_loop_index(Some(lc));
             for x in statement {
                 compile_statement(&x, ctx, output)?;
+                if DONT_COMPILE_AFTER_RETURN && matches!(x.stmt, Stmt::Return(..)) {
+                    break;
+                };
             }
             ctx.scope.exit_scope();
             output.push_str(&format!("    br label %loop_body{}\n", lc));
@@ -456,6 +490,9 @@ pub fn compile_statement(stmt: &StmtData, ctx: &mut CodeGenContext, output: &mut
             ctx.scope.enter_scope();
             for then_stmt in then_body {
                 compile_statement(&then_stmt, ctx, output)?;
+                if DONT_COMPILE_AFTER_RETURN && matches!(then_stmt.stmt, Stmt::Return(..)) {
+                    break;
+                };
             }
             ctx.scope.exit_scope();
             output.push_str(&format!("    br label %{}\n", end_label));
@@ -465,6 +502,9 @@ pub fn compile_statement(stmt: &StmtData, ctx: &mut CodeGenContext, output: &mut
                 ctx.scope.enter_scope();
                 for else_stmt in else_body {
                     compile_statement(&else_stmt, ctx, output)?;
+                    if DONT_COMPILE_AFTER_RETURN && matches!(else_stmt.stmt, Stmt::Return(..)) {
+                        break;
+                    };
                 }
                 ctx.scope.exit_scope();
                 output.push_str(&format!("    br label %{}\n", end_label));
@@ -550,7 +590,7 @@ fn handle_generics(symbols: &mut SymbolTable, output: &mut LLVMOutputHandler) ->
     Ok(())
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(PartialEq)]
 enum StringEntry {
     Owned(String),
     Suffix {
@@ -561,7 +601,7 @@ enum StringEntry {
     },
 }
 
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct LLVMOutputHandler{
     header: String,
     strings_header: Vec<StringEntry>,
@@ -681,18 +721,14 @@ impl LLVMOutputHandler {
 }
 
 
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct SymbolTable {
-    pub functions: OrderedHashMap<String, (usize, Function)>,
-    pub types: OrderedHashMap<String, (usize, Struct)>,
-    pub alias_types: HashMap<String, CompilerType>,
-    pub enums: OrderedHashMap<String, Enum>,
+    functions: OrderedHashMap<String, (usize, Function)>,
+    types: OrderedHashMap<String, (usize, Struct)>,
+    alias_types: HashMap<String, CompilerType>,
+    enums: OrderedHashMap<String, (usize, Enum)>,
 }
 impl SymbolTable {
-    pub fn new() -> Self {
-        Self::default()
-    }
-    
     pub fn get_type_by_id(&self, type_id: usize) -> &Struct {
         self.types.values().filter(|x| x.0 == type_id).nth(0).map(|x| &x.1).expect("Unexpected")
     }
@@ -702,22 +738,37 @@ impl SymbolTable {
         }
         unreachable!()
     }
-    pub fn get_function_by_id_inc(&self, function_id: usize) -> &Function {
+    pub fn get_function_by_id_use(&self, function_id: usize) -> &Function {
         if let Some(func) = self.functions.values().filter(|x| x.0 == function_id).nth(0) {
             func.1.use_fn();
             return &func.1;
         }
         unreachable!()
     }
+    pub fn get_enum_by_id(&self, enum_id: usize) -> &Enum {
+        self.enums.values().filter(|x| x.0 == enum_id).nth(0).map(|x| &x.1).expect("Unexpected")
+    }
+
     pub fn get_type_id(&self, fqn: &str) -> Option<usize> {
         self.types.iter().position(|x| x.0 == fqn)
-    }
-    pub fn get_enum_type(&self, fqn: &str) -> Option<&CompilerType> {
-        self.enums.iter().filter(|x| x.0 == fqn).nth(0).map(|x| &x.1.base_type)
     }
     pub fn get_function_id(&self, fqn: &str) -> Option<usize> {
         self.functions.iter().position(|x| x.0 == fqn)
     }
+    pub fn get_enum_id(&self, fqn: &str) -> Option<usize> {
+        self.enums.iter().position(|x| x.0 == fqn)
+    }
+    
+    pub fn get_type(&self, fqn: &str) -> Option<&Struct> {
+        self.get_type_id(fqn).map(|x| self.get_type_by_id(x))
+    }
+    pub fn get_function(&self, fqn: &str) -> Option<&Function> {
+        self.get_function_id(fqn).map(|x| self.get_function_by_id(x))
+    }
+    pub fn get_enum(&self, fqn: &str) -> Option<&Enum> {
+        self.get_enum_id(fqn).map(|x| self.get_enum_by_id(x))
+    }
+
     pub fn insert_type(&mut self, full_path: &str, structure: Struct) {
         if let Some(x) = self.types.get_mut(full_path) {
             x.1 = structure;
@@ -731,5 +782,15 @@ impl SymbolTable {
             return;
         }
         self.functions.insert(full_path.to_string(), (self.functions.len(), function));
+    }
+    pub fn insert_enum(&mut self, full_path: &str, enum_type: Enum) {
+        if let Some(x) = self.enums.get_mut(full_path) {
+            x.1 = enum_type;
+            return;
+        }
+        self.enums.insert(full_path.to_string(), (self.enums.len(), enum_type));
+    }
+    pub fn alias_types(&self) -> &HashMap<String, CompilerType> {
+        &self.alias_types
     }
 }

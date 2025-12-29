@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use rcsharp_parser::{compiler_primitives::{BOOL_TYPE, BYTE_TYPE, CHAR_TYPE, DEFAULT_DECIMAL_TYPE, DEFAULT_INTEGER_TYPE}, expression_parser::{BinaryOp, Expr, UnaryOp}, parser::{ParserType, Span, Stmt, StmtData}};
-use crate::{compiler::{CompileResult, CompilerError, INTERGER_EXPRESION_OPTIMISATION, LLVMOutputHandler}, compiler_essentials::{CodeGenContext, CompilerType, LLVMVal, Variable}};
+use crate::{compiler::{DONT_COMPILE_AFTER_RETURN, INTERGER_EXPRESION_OPTIMISATION, LLVMOutputHandler}, compiler_essentials::{CodeGenContext, CompileResult, CompilerError, CompilerType, LLVMVal, Variable}};
 
 type CompilerFn = fn(&mut ExpressionCompiler, &[Expr], &Expected) -> CompileResult<CompiledValue>;
 type GenericCompilerFn = fn(&mut ExpressionCompiler, &[Expr], &[ParserType], &Expected) -> CompileResult<CompiledValue>;
@@ -11,6 +11,7 @@ const COMPILER_FUNCTIONS: &[(&'static str, Option<CompilerFn>, Option<GenericCom
     ("alignof", Some(alignof_impl), Some(alignof_generic_impl)),
     ("ptr_of", Some(ptr_of_impl), None),
     ("bitcast", None, Some(bitcast_generic_impl)),
+    ("asm", Some(asm_impl), None),
 ];
 
 #[derive(Debug, Clone, PartialEq)]
@@ -103,20 +104,21 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             Expr::Boolean(value) => self.compile_boolean(*value),
             Expr::NullPtr => self.compile_null(expected),
             Expr::Type(..) => unreachable!(),
+            Expr::Array(..) => unreachable!(),
         }
     }
     // RVAL
     fn compile_name_rvalue(&mut self, name: &str, _expected: Expected) -> CompileResult<CompiledValue> {
         if let Some((variable, id)) = self.ctx.scope.get_variable(name) {
             let mut vtype = variable.get_type(false, false).clone();
-            vtype.substitute_generic_types(&self.ctx.symbols.alias_types, &self.ctx.symbols)?;
+            vtype.substitute_generic_types_global_aliases(self.ctx.symbols)?;
             let llvm_repr = variable.get_llvm_value(*id, name, self.ctx, self.output)?;
             return Ok(CompiledValue::Value { llvm_repr, ptype: vtype });
         }
         
         if let Some(function) = self.ctx.symbols.get_function_id(&format!("{}.{}", name, self.ctx.current_function_path())).or(self.ctx.symbols.get_function_id(name)) {
             return Ok(
-                if self.ctx.symbols.get_function_by_id_inc(function).is_generic() {
+                if self.ctx.symbols.get_function_by_id_use(function).is_generic() {
                     CompiledValue::GenericFunction { internal_id: function }
                 } else {
                     CompiledValue::Function { internal_id: function }
@@ -432,6 +434,9 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
                         break;
                     }
                     self.output.push_str(&format!("    br label %inline_exit{}\n",inline_exit));
+                    if DONT_COMPILE_AFTER_RETURN && matches!(x.stmt, Stmt::Return(..)) {
+                        break;
+                    };
                 }
                 _ => crate::compiler::compile_statement(&x, self.ctx, self.output)?,
             }
@@ -458,7 +463,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             let mut type_map = HashMap::new();
             for (ind, prm) in function.generic_params.iter().enumerate() {
                 let mut x = CompilerType::into(&given_generic[ind], self.ctx)?;
-                x.substitute_generic_types(&self.ctx.symbols.alias_types, self.ctx.symbols)?;
+                x.substitute_generic_types_global_aliases(self.ctx.symbols)?;
                 type_map.insert(prm.clone(), x);
             }
             if function.is_inline() {
@@ -572,7 +577,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
         }else {
             format!("{}.{}", core, path.iter().skip(1).rev().map(|x| x.to_string()).collect::<Vec<_>>().join("."))
         };
-        if let Some(x) = self.ctx.symbols.enums.get(&format!("{}.{}", self.ctx.current_function_path(), enum_path)).or(self.ctx.symbols.enums.get(&enum_path)) {
+        if let Some(x) = self.ctx.symbols.get_enum(&format!("{}.{}", self.ctx.current_function_path(), enum_path)).or(self.ctx.symbols.get_enum(&enum_path)) {
             let e = x.fields.iter().filter(|x| x.0 == member).nth(0).expect("msg");
             return Ok(CompiledValue::Value { llvm_repr: e.1.clone(), ptype: x.base_type.clone() });
         }
@@ -584,8 +589,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
     fn compile_member_access_rvalue(&mut self, expr: &Expr) -> CompileResult<CompiledValue> {
         let member_ptr = self.compile_lvalue(expr, false, false)?;
         let temp_id = self.ctx.aquire_unique_temp_value_counter();
-        let mut ptype = member_ptr.get_type().clone();
-        ptype.substitute_generic_types(&self.ctx.symbols.alias_types, self.ctx.symbols)?;
+        let ptype = member_ptr.get_type().with_substituted_generic_types(self.ctx.symbols.alias_types(), self.ctx.symbols)?;
         let type_str = ptype.llvm_representation(self.ctx.symbols)?;
         self.output.push_str(&format!("    %tmp{} = load {}, {}* {}\n", temp_id, type_str, type_str, member_ptr.get_llvm_rep()));
         Ok(CompiledValue::Value { llvm_repr: LLVMVal::Register(temp_id), ptype })
@@ -600,7 +604,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
     }
     fn compile_cast(&mut self, expr: &Expr, target_type: &ParserType, expected: Expected) -> CompileResult<CompiledValue> {
         let mut target_type = CompilerType::into_path(target_type, self.ctx.symbols, self.ctx.current_function_path())?;
-        target_type.substitute_generic_types(&self.ctx.symbols.alias_types, self.ctx.symbols)?;
+        target_type.substitute_generic_types_global_aliases(self.ctx.symbols)?;
         let value = self.compile_rvalue(expr, expected)?;
 
         if value.get_type() == &target_type {
@@ -654,14 +658,13 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
         }
         if let Some(function) = self.ctx.symbols.get_function_id(&format!("{}.{}", self.ctx.current_function_path(), name)).or(self.ctx.symbols.get_function_id(name)) {
             return Ok(
-                if self.ctx.symbols.get_function_by_id_inc(function).is_generic() {
+                if self.ctx.symbols.get_function_by_id_use(function).is_generic() {
                     CompiledValue::GenericFunction { internal_id: function }
                 } else {
                     CompiledValue::Function { internal_id: function }
                 }
             );
         }
-        println!("{:?}", self.ctx.symbols.functions.iter().map(|x| x.0).cloned().collect::<Vec<_>>());
         println!("{:?}", self.ctx.current_function_path());
         Err((Span::empty(), CompilerError::SymbolNotFound(format!("Lvalue '{}' not found", name))))
     }
@@ -671,7 +674,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             if generics.is_empty() {
                 return Err((Span::empty(), CompilerError::Generic(format!("Generic function '{}' requires generic parameters", internal_id))));
             }
-            let _func = self.ctx.symbols.get_function_by_id_inc(internal_id);
+            let _func = self.ctx.symbols.get_function_by_id_use(internal_id);
             
             return Ok(CompiledValue::GenericFunctionImplementation { internal_id, types: generics.iter().map(|x| CompilerType::into(x, self.ctx)).collect::<CompileResult<Box<_>>>()? });
         }
@@ -687,7 +690,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
         } else {
             (obj_lvalue.get_llvm_rep().clone(), obj_lvalue.get_type().clone())
         };
-        struct_type.substitute_generic_types(&self.ctx.symbols.alias_types, self.ctx.symbols)?;
+        struct_type.substitute_generic_types_global_aliases(self.ctx.symbols)?;
         match struct_type {
             CompilerType::StructType(id) => {
                 let given_struct = self.ctx.symbols.get_type_by_id(id);
@@ -982,7 +985,7 @@ fn sizeof_generic_impl(
         ))));
     }
     let mut target_type = CompilerType::into_path(&given_generic[0], compiler.ctx.symbols, compiler.ctx.current_function_path())?;
-    target_type.substitute_generic_types(&compiler.ctx.symbols.alias_types, compiler.ctx.symbols)?;
+    target_type.substitute_generic_types_global_aliases(compiler.ctx.symbols)?;
     let size = target_type.size_and_layout(compiler.ctx.symbols).size;
     let return_ptype = if let Expected::Type(pt) = expected {
         if pt.is_integer() {
@@ -1149,6 +1152,9 @@ fn bitcast_generic_impl(
                 ptype: target_type,
             });
         }else {
+            if from_v.parse::<i128>().map(|x| x == 0).unwrap_or(false) {
+                return Ok(CompiledValue::Value { llvm_repr: LLVMVal::Null, ptype: target_type.clone() });
+            }
             compiler.output.push_str(&format!(
                 "    %tmp{} = inttoptr {} {} to {}\n",
                 utvc,
@@ -1189,4 +1195,102 @@ fn bitcast_generic_impl(
         llvm_repr: LLVMVal::Register(utvc),
         ptype: target_type,
     })
+}
+// Usage: asm("add rax, rbx", [["rax", foo]], [["rax", foo], ["rbx", bar]], ["flags"]);
+// Instruction: "add rax, rbx" RAX = RAX + RBX
+// Output: [["rax", foo]]
+// Input: [["rax", foo], ["rbx", bar]]
+// Clobbers: ["flags"]
+fn asm_impl(    
+    compiler: &mut ExpressionCompiler, 
+    given_args: &[Expr], 
+    _expected: &Expected
+) -> CompileResult<CompiledValue> {
+    if given_args.len() != 4 {
+        return Err((Span::empty(), CompilerError::Generic(format!(
+            "asm_impl(variable) expects exactly 4 arguments, but got {}", 
+            given_args.len()
+        ))));
+    }
+    if *_expected != Expected::NoReturn {
+        return Err((Span::empty(), CompilerError::Generic("asm() blocks currently do not support returning values directly. Use output operands.".into())));
+    }
+    let asm_template_str = match &given_args[0] {
+        Expr::StringConst(s) => s.clone(),
+        _ => return Err((
+            Span::empty(),
+            CompilerError::Generic("asm() arg 1 (code) must be a string literal.".to_string()),
+        )),
+    };
+    let mut parse_operands = |arg_index: usize, is_output: bool| -> CompileResult<Vec<(String, String, String)>> {
+        let arg_expr = &given_args[arg_index];
+        match arg_expr {
+            Expr::Array(arr) => {
+                let mut results: Vec<(String, String, String)> = Vec::new();
+                for (i, expr) in arr.iter().enumerate() {
+                    if let Expr::Array(inner) = expr {
+                        if inner.len() != 2 {
+                            return Err((Span::empty(), CompilerError::Generic(format!("asm() arg {} index {} must be a pair ['constraint', variable]", arg_index + 1, i))));
+                        }
+
+                        let constraint = match &inner[0] {
+                            Expr::StringConst(s) => s.clone(),
+                            _ => return Err((Span::empty(), CompilerError::Generic("Operand constraint must be a string".into()))),
+                        };
+
+                        let (llvm_value, llvm_type) = if let Expr::Name(name) = &inner[1] {
+                            if is_output {
+
+                                let lvalue = compiler.compile_name_lvalue(name, true, true)?;
+                                (lvalue.get_llvm_rep().to_string(), lvalue.get_type().llvm_representation(compiler.ctx.symbols)?)
+                            } else {
+                                let rvalue = compiler.compile_name_rvalue(name, Expected::Anything)?;
+                                (rvalue.get_llvm_rep().to_string(), rvalue.get_type().llvm_representation(compiler.ctx.symbols)?)
+                            }
+                        } else {
+                            return Err((Span::empty(), CompilerError::Generic("Operand variable must be a name".into())));
+                        };
+
+                        results.push((constraint, llvm_value, llvm_type));
+                    } else {
+                        return Err((Span::empty(), CompilerError::Generic(format!("asm() arg {} must be an array of arrays", arg_index + 1))));
+                    }
+                }
+                Ok(results)
+            }
+            _ => Err((Span::empty(), CompilerError::Generic(format!("asm() arg {} must be an array", arg_index + 1)))),
+        }
+    };
+    let outputs = parse_operands(1, true)?;
+    let inputs = parse_operands(2, false)?;
+    let inp = inputs.iter().map(|x| format!("{{{}}}", x.0)).collect::<Vec<_>>().join(",");
+    let flags = match &given_args[3] {
+        Expr::Array(args) => args.iter().map(|arg| 
+            match arg {
+                Expr::StringConst(s) => Ok(format!("~{{{}}}", s.to_string())),
+                _ => return Err((
+                    Span::empty(),
+                    CompilerError::Generic("asm() arg 1 (code) must be a string literal.".to_string()),
+                )),
+            }
+        ).collect::<CompileResult<Vec<String>>>()?,
+        _ => todo!()
+    }.join(",");
+    if let Some((register, var_pointer, var_type)) = outputs.get(0){
+        assert!(outputs.len() == 1);
+        println!("{:?}", var_pointer);
+        let utvc =compiler.ctx.aquire_unique_temp_value_counter();
+        compiler.output.push_str(&format!(
+            "    %asm{utvc} = call {} asm sideeffect inteldialect \"{}\", \"{}\"({})\n",
+            var_type, asm_template_str, format!("={{{register}}},{}", if !inp.is_empty(){format!("{},{}", inp, flags)} else {flags}), inputs.iter().map(|x| format!("{} {}", x.2, x.1)).collect::<Vec<_>>().join(", ")
+        ));
+        compiler.output.push_str(&format!("    store {} {}, {}* {}\n", var_type, format!("%asm{utvc}"), var_type, var_pointer));
+       
+    }else {
+        compiler.output.push_str(&format!(
+            "    call {} asm sideeffect inteldialect \"{}\", \"{}\"({})\n",
+            "void", asm_template_str, if !inp.is_empty(){format!("{},{}", inp, flags)} else {flags}, inputs.iter().map(|x| format!("{} {}", x.2, x.1)).collect::<Vec<_>>().join(", ")
+        ));
+    }
+    Ok(CompiledValue::NoReturn)
 }

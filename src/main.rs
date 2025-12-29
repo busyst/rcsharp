@@ -9,6 +9,7 @@ pub mod compiler_essentials;
 pub mod tests;
 fn main() -> Result<(), String> {
 	let full_path = std::env::args().nth(1).unwrap_or("./src.rcsharp".to_string());
+	let output_full_path = std::env::args().nth(2).unwrap_or("./output.ll".to_string());
 	let program_start = Instant::now();
 	let base_structs_and_functions = {let mut buf = String::new(); std::fs::File::open(full_path.as_str()).map_err(|e| e.to_string())?.read_to_string(&mut buf).map_err(|e| e.to_string())?; buf};
 	let file1_read = Instant::now();
@@ -18,7 +19,7 @@ fn main() -> Result<(), String> {
 	let y = GeneralParser::new(&all_tokens).parse_all().unwrap_error_extended(&all_tokens, &full_path).map_err(|x| {println!("{}", x); String::new()})?;
 	let tokens_parsed = Instant::now();
 	
-	rcsharp_compile_to_file(&y, full_path.as_str()).map_err(|x| {println!("{}", x); "".to_string()})?;
+	rcsharp_compile_to_file(&y, full_path.as_str(), &output_full_path).map_err(|x| {println!("{}", x); "".to_string()})?;
 	let compiled_and_wrote = Instant::now();
 	println!("\t\tBase Source");
 	println!("read \t{:?}", file1_read - program_start);

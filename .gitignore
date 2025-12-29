@@ -3,3 +3,4 @@
 .code_snippets/readyLibs
 output.obj
 /src/lib.rs
+.code_snippets/*

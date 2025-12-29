@@ -187,79 +187,70 @@ define %"struct.test.QPair<i64, i64>" @test.geg(){
 define void @window.start(){
     %v0 = alloca %struct.window.WNDCLASSEXA; var: wc
     %v1 = alloca %struct.window.MSG; var: msg
-    %tmp0 = inttoptr i64 0 to i8*
-    %tmp1 = call i8* @GetModuleHandleA(i8* %tmp0)
-    %iv2 = alloca i1
-    %tmp3 = icmp eq ptr %tmp1, null
-    store i1 %tmp3, i1* %iv2
+    %tmp0 = call i8* @GetModuleHandleA(i8* null)
+    %iv1 = alloca i1
+    %tmp2 = icmp eq ptr %tmp0, null
+    store i1 %tmp2, i1* %iv1
     br label %inline_exit0
 inline_exit0:
-    %tmp4 = load i1, i1* %iv2
-    br i1 %tmp4, label %then1, label %endif1
+    %tmp3 = load i1, i1* %iv1
+    br i1 %tmp3, label %then1, label %endif1
 then1:
     call void @process.throw(i8* @.str.0)
     br label %endif1
 endif1:
-    %tmp5 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v0, i32 0, i32 0
-    store i32 80, i32* %tmp5
-    %tmp6 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v0, i32 0, i32 1
-    %tmp7 = or i32 2, 1
-    store i32 %tmp7, i32* %tmp6
-    %tmp8 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v0, i32 0, i32 2
-    store i64 (i8*, i32, i64, i64)** @window.WindowProc, i64 (i8*, i32, i64, i64)*** %tmp8
-    %tmp9 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v0, i32 0, i32 3
+    %tmp4 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v0, i32 0, i32 0
+    store i32 80, i32* %tmp4
+    %tmp5 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v0, i32 0, i32 1
+    %tmp6 = or i32 2, 1
+    store i32 %tmp6, i32* %tmp5
+    %tmp7 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v0, i32 0, i32 2
+    store i64 (i8*, i32, i64, i64)** @window.WindowProc, i64 (i8*, i32, i64, i64)*** %tmp7
+    %tmp8 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v0, i32 0, i32 3
+    store i32 0, i32* %tmp8
+    %tmp9 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v0, i32 0, i32 4
     store i32 0, i32* %tmp9
-    %tmp10 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v0, i32 0, i32 4
-    store i32 0, i32* %tmp10
-    %tmp11 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v0, i32 0, i32 5
-    store i8* %tmp1, i8** %tmp11
-    %tmp12 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v0, i32 0, i32 6
-    %tmp13 = inttoptr i64 0 to i8*
-    store i8* %tmp13, i8** %tmp12
-    %tmp14 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v0, i32 0, i32 7
-    %tmp15 = inttoptr i64 0 to i8*
-    store i8* %tmp15, i8** %tmp14
-    %tmp16 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v0, i32 0, i32 8
-    %tmp17 = add i32 5, 1
-    %tmp18 = inttoptr i32 %tmp17 to i8*
-    store i8* %tmp18, i8** %tmp16
-    %tmp19 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v0, i32 0, i32 9
-    %tmp20 = inttoptr i64 0 to i8*
-    store i8* %tmp20, i8** %tmp19
-    %tmp21 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v0, i32 0, i32 10
-    store i8* @.str.1, i8** %tmp21
-    %tmp22 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v0, i32 0, i32 11
-    %tmp23 = inttoptr i64 0 to i8*
-    store i8* %tmp23, i8** %tmp22
-    %tmp24 = call i16 @RegisterClassExA(%struct.window.WNDCLASSEXA* %v0)
-    %tmp25 = icmp eq i16 %tmp24, 0
-    br i1 %tmp25, label %then2, label %endif2
+    %tmp10 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v0, i32 0, i32 5
+    store i8* %tmp0, i8** %tmp10
+    %tmp11 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v0, i32 0, i32 6
+    store i8* null, i8** %tmp11
+    %tmp12 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v0, i32 0, i32 7
+    store i8* null, i8** %tmp12
+    %tmp13 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v0, i32 0, i32 8
+    %tmp14 = add i32 5, 1
+    %tmp15 = inttoptr i32 %tmp14 to i8*
+    store i8* %tmp15, i8** %tmp13
+    %tmp16 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v0, i32 0, i32 9
+    store i8* null, i8** %tmp16
+    %tmp17 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v0, i32 0, i32 10
+    store i8* @.str.1, i8** %tmp17
+    %tmp18 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v0, i32 0, i32 11
+    store i8* null, i8** %tmp18
+    %tmp19 = call i16 @RegisterClassExA(%struct.window.WNDCLASSEXA* %v0)
+    %tmp20 = icmp eq i16 %tmp19, 0
+    br i1 %tmp20, label %then2, label %endif2
 then2:
     call void @process.throw(i8* @.str.2)
     br label %endif2
 endif2:
-    %tmp26 = inttoptr i64 0 to i8*
-    %tmp27 = inttoptr i64 0 to i8*
-    %tmp28 = inttoptr i64 0 to i8*
-    %tmp29 = call i8* @CreateWindowExA(i32 0, i8* @.str.1, i8* @.str.3, i32 13565952, i32 2147483648, i32 2147483648, i32 800, i32 600, i8* %tmp26, i8* %tmp27, i8* %tmp1, i8* %tmp28)
-    %iv30 = alloca i1
-    %tmp31 = icmp eq ptr %tmp29, null
-    store i1 %tmp31, i1* %iv30
+    %tmp21 = call i8* @CreateWindowExA(i32 0, i8* @.str.1, i8* @.str.3, i32 13565952, i32 2147483648, i32 2147483648, i32 800, i32 600, i8* null, i8* null, i8* %tmp0, i8* null)
+    %iv22 = alloca i1
+    %tmp23 = icmp eq ptr %tmp21, null
+    store i1 %tmp23, i1* %iv22
     br label %inline_exit3
 inline_exit3:
-    %tmp32 = load i1, i1* %iv30
-    br i1 %tmp32, label %then4, label %endif4
+    %tmp24 = load i1, i1* %iv22
+    br i1 %tmp24, label %then4, label %endif4
 then4:
     call void @process.throw(i8* @.str.4)
     br label %endif4
 endif4:
-    call i32 @ShowWindow(i8* %tmp29, i32 5)
+    call i32 @ShowWindow(i8* %tmp21, i32 5)
     br label %loop_body5
 loop_body5:
-    %tmp33 = inttoptr i64 0 to i8*
-    %tmp34 = call i32 @GetMessageA(%struct.window.MSG* %v1, i8* %tmp33, i32 0, i32 0)
-    %tmp35 = icmp sle i32 %tmp34, 0
-    br i1 %tmp35, label %then6, label %endif6
+    %tmp25 = call i32 @GetMessageA(%struct.window.MSG* %v1, i8* null, i32 0, i32 0)
+    %tmp26 = icmp sle i32 %tmp25, 0
+    br i1 %tmp26, label %then6, label %endif6
 then6:
     br label %loop_body5_exit
     br label %endif6
@@ -1235,12 +1226,11 @@ define void @string.free(%struct.string.String* %str){
     ret void
 }
 define void @mem.free(i8* %ptr){
-    %tmp0 = inttoptr i64 0 to i8*
-    %tmp1 = icmp ne ptr %ptr, %tmp0
-    br i1 %tmp1, label %then0, label %endif0
+    %tmp0 = icmp ne ptr %ptr, null
+    br i1 %tmp0, label %then0, label %endif0
 then0:
-    %tmp2 = call i32* @GetProcessHeap()
-    call i32 @HeapFree(i32* %tmp2, i32 0, i8* %ptr)
+    %tmp1 = call i32* @GetProcessHeap()
+    call i32 @HeapFree(i32* %tmp1, i32 0, i8* %ptr)
     br label %endif0
 endif0:
     ret void
@@ -2061,8 +2051,8 @@ define void @tests.mem_test(){
     %v1 = alloca i64; var: i
     call void @console.write(i8* @.str.73, i32 10)
     %tmp0 = call i8* @mem.malloc(i64 16)
-    %tmp1 = icmp eq ptr %tmp0, null
-    br i1 %tmp1, label %then0, label %endif0
+    %tmp2 = icmp eq ptr %tmp0, null
+    br i1 %tmp2, label %then0, label %endif0
 then0:
     call void @process.throw(i8* @.str.74)
     br label %endif0
@@ -2071,87 +2061,87 @@ endif0:
     store i64 0, i64* %v0
     br label %loop_body1
 loop_body1:
-    %tmp2 = load i64, i64* %v0
-    %tmp3 = icmp sge i64 %tmp2, 16
-    br i1 %tmp3, label %then2, label %endif2
+    %tmp3 = load i64, i64* %v0
+    %tmp4 = icmp sge i64 %tmp3, 16
+    br i1 %tmp4, label %then2, label %endif2
 then2:
     br label %loop_body1_exit
     br label %endif2
 endif2:
-    %tmp4 = load i64, i64* %v0
-    %tmp5 = getelementptr inbounds i8, i8* %tmp0, i64 %tmp4
-    %tmp6 = load i8, i8* %tmp5
-    %tmp7 = icmp ne i8 %tmp6, 88
-    br i1 %tmp7, label %then3, label %endif3
+    %tmp5 = load i64, i64* %v0
+    %tmp6 = getelementptr inbounds i8, i8* %tmp0, i64 %tmp5
+    %tmp7 = load i8, i8* %tmp6
+    %tmp8 = icmp ne i8 %tmp7, 88
+    br i1 %tmp8, label %then3, label %endif3
 then3:
     call void @process.throw(i8* @.str.75)
     br label %endif3
 endif3:
-    %tmp8 = load i64, i64* %v0
-    %tmp9 = add i64 %tmp8, 1
-    store i64 %tmp9, i64* %v0
+    %tmp9 = load i64, i64* %v0
+    %tmp10 = add i64 %tmp9, 1
+    store i64 %tmp10, i64* %v0
     br label %loop_body1
 loop_body1_exit:
     call void @mem.zero_fill(i8* %tmp0, i64 16)
     store i64 0, i64* %v1
     br label %loop_body4
 loop_body4:
-    %tmp10 = load i64, i64* %v1
-    %tmp11 = icmp sge i64 %tmp10, 16
-    br i1 %tmp11, label %then5, label %endif5
+    %tmp11 = load i64, i64* %v1
+    %tmp12 = icmp sge i64 %tmp11, 16
+    br i1 %tmp12, label %then5, label %endif5
 then5:
     br label %loop_body4_exit
     br label %endif5
 endif5:
-    %tmp12 = load i64, i64* %v1
-    %tmp13 = getelementptr inbounds i8, i8* %tmp0, i64 %tmp12
-    %tmp14 = load i8, i8* %tmp13
-    %tmp15 = icmp ne i8 %tmp14, 0
-    br i1 %tmp15, label %then6, label %endif6
+    %tmp13 = load i64, i64* %v1
+    %tmp14 = getelementptr inbounds i8, i8* %tmp0, i64 %tmp13
+    %tmp15 = load i8, i8* %tmp14
+    %tmp16 = icmp ne i8 %tmp15, 0
+    br i1 %tmp16, label %then6, label %endif6
 then6:
     call void @process.throw(i8* @.str.76)
     br label %endif6
 endif6:
-    %tmp16 = load i64, i64* %v1
-    %tmp17 = add i64 %tmp16, 1
-    store i64 %tmp17, i64* %v1
+    %tmp17 = load i64, i64* %v1
+    %tmp18 = add i64 %tmp17, 1
+    store i64 %tmp18, i64* %v1
     br label %loop_body4
 loop_body4_exit:
-    %tmp18 = call i8* @mem.malloc(i64 16)
-    %tmp19 = icmp eq ptr %tmp18, null
-    br i1 %tmp19, label %then7, label %endif7
+    %tmp19 = call i8* @mem.malloc(i64 16)
+    %tmp20 = icmp eq ptr %tmp19, null
+    br i1 %tmp20, label %then7, label %endif7
 then7:
     call void @process.throw(i8* @.str.77)
     br label %endif7
 endif7:
-    call void @mem.fill(i8 89, i8* %tmp18, i64 16)
-    call void @mem.copy(i8* %tmp18, i8* %tmp0, i64 16)
+    call void @mem.fill(i8 89, i8* %tmp19, i64 16)
+    call void @mem.copy(i8* %tmp19, i8* %tmp0, i64 16)
     store i64 0, i64* %v1
     br label %loop_body8
 loop_body8:
-    %tmp20 = load i64, i64* %v1
-    %tmp21 = icmp sge i64 %tmp20, 16
-    br i1 %tmp21, label %then9, label %endif9
+    %tmp21 = load i64, i64* %v1
+    %tmp22 = icmp sge i64 %tmp21, 16
+    br i1 %tmp22, label %then9, label %endif9
 then9:
     br label %loop_body8_exit
     br label %endif9
 endif9:
-    %tmp22 = load i64, i64* %v1
-    %tmp23 = getelementptr inbounds i8, i8* %tmp0, i64 %tmp22
-    %tmp24 = load i8, i8* %tmp23
-    %tmp25 = icmp ne i8 %tmp24, 89
-    br i1 %tmp25, label %then10, label %endif10
+    %tmp23 = load i64, i64* %v1
+    %tmp24 = getelementptr inbounds i8, i8* %tmp0, i64 %tmp23
+    %tmp25 = load i8, i8* %tmp24
+    %tmp26 = icmp ne i8 %tmp25, 89
+    br i1 %tmp26, label %then10, label %endif10
 then10:
     call void @process.throw(i8* @.str.78)
     br label %endif10
 endif10:
-    %tmp26 = load i64, i64* %v1
-    %tmp27 = add i64 %tmp26, 1
-    store i64 %tmp27, i64* %v1
+    %tmp27 = load i64, i64* %v1
+    %tmp28 = add i64 %tmp27, 1
+    store i64 %tmp28, i64* %v1
     br label %loop_body8
 loop_body8_exit:
     call void @mem.free(i8* %tmp0)
-    call void @mem.free(i8* %tmp18)
+    call void @mem.free(i8* %tmp19)
     call void @console.writeln(i8* @.str.16, i32 2)
     ret void
 }
@@ -2350,6 +2340,23 @@ define i32 @_fltused(){
     ret i32 0
 }
 define void @__chkstk(){
+    call void asm sideeffect inteldialect "push rcx
+         push rax
+         cmp rax, 4096
+         jb .end
+         
+         lea r10, [rsp + 24]
+         
+         .probe_loop:
+         sub r10, 4096
+         test [r10], r10
+         sub rax, 4096
+         cmp rax, 4096
+         ja .probe_loop
+         
+         .end:
+         pop rax
+         pop rcx", "~{flags}"()
     ret void
 }
 define %"struct.list.List<i32>" @"list.new<i32>"(){
@@ -2670,23 +2677,21 @@ define void @"list.new_node<i32>"(%"struct.list.ListNode<i32>"* %list){
     ret void
 }
 define i8* @mem.realloc(i8* %ptr, i64 %size){
-    %tmp0 = inttoptr i64 0 to i8*
-    %tmp1 = icmp eq ptr %ptr, %tmp0
-    br i1 %tmp1, label %then0, label %endif0
+    %tmp0 = icmp eq ptr %ptr, null
+    br i1 %tmp0, label %then0, label %endif0
 then0:
-    %tmp2 = call i8* @mem.malloc(i64 %size)
-    ret i8* %tmp2
+    %tmp1 = call i8* @mem.malloc(i64 %size)
+    ret i8* %tmp1
     br label %endif0
 endif0:
-    %tmp3 = call i32* @GetProcessHeap()
-    %tmp4 = call i8* @HeapReAlloc(i32* %tmp3, i32 0, i8* %ptr, i64 %size)
-    %tmp5 = inttoptr i64 0 to i8*
-    %tmp6 = icmp eq ptr %tmp4, %tmp5
-    br i1 %tmp6, label %then1, label %endif1
+    %tmp2 = call i32* @GetProcessHeap()
+    %tmp3 = call i8* @HeapReAlloc(i32* %tmp2, i32 0, i8* %ptr, i64 %size)
+    %tmp4 = icmp eq ptr %tmp3, null
+    br i1 %tmp4, label %then1, label %endif1
 then1:
     call void @process.throw(i8* @.str.80)
     br label %endif1
 endif1:
-    ret i8* %tmp4
+    ret i8* %tmp3
 }
 

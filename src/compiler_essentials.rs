@@ -2,7 +2,7 @@ use std::{cell::{Cell, RefCell}, collections::HashMap};
 use ordered_hash_map::OrderedHashMap;
 use rcsharp_parser::{compiler_primitives::{Layout, POINTER_SIZED_TYPE, PrimitiveInfo, PrimitiveKind, VOID_TYPE}, parser::{Attribute, ParserType, Span, StmtData}};
 
-use crate::{compiler::{CompileResult, CompilerError, LLVMOutputHandler, SymbolTable}};
+use crate::{compiler::{LLVMOutputHandler, SymbolTable}};
 pub trait FlagManager {
     fn get_flags(&self) -> &Cell<u8>;
 
@@ -16,7 +16,7 @@ pub trait FlagManager {
 }
 #[derive(Debug, Clone, PartialEq)]
 pub enum LLVMVal {
-    Register(u32),    // %tmp1                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   
+    Register(u32),    // %tmp1
     Variable(u32),    // %v1
     VariableName(String),    // %smt
     Global(String),   // @func_name
@@ -49,6 +49,7 @@ impl std::fmt::Display for LLVMVal {
 pub enum CompilerType {
     Primitive(&'static PrimitiveInfo),
     Pointer(Box<CompilerType>),
+    ConstantArray(usize, Box<CompilerType>),
     StructType(usize), // index in symbol table
     GenericSubst(Box<str>), // index in symbol table
     GenericStructType(usize, usize), // index in symbol table, index in implementation table
@@ -63,6 +64,7 @@ impl std::fmt::Debug for CompilerType {
         match self {
             Self::Primitive(arg0) => f.write_str(&format!("@{}", arg0.name)),
             Self::Pointer(arg0) => f.debug_tuple("Pointer").field(arg0).finish(),
+            CompilerType::ConstantArray(arg0, arg1) => f.debug_tuple("ConstantArray").field(arg0).field(arg1).finish(),
             Self::StructType(arg0) => f.debug_tuple("StructType").field(arg0).finish(),
             Self::GenericSubst(arg0) => f.debug_tuple("GenericSubst").field(arg0).finish(),
             Self::GenericStructType(arg0, arg1) => f.debug_tuple("GenericStructType").field(arg0).field(arg1).finish(),
@@ -129,8 +131,8 @@ impl CompilerType {
         if let ParserType::Named(name) = given_type {
             if let Some(x) = symbols.get_type_id(format!("{}.{}", current_path, name).as_str()).or(symbols.get_type_id(name)) {
                 return Ok(CompilerType::StructType(x));
-            } else if let Some(x) = symbols.get_enum_type(format!("{}.{}", current_path, name).as_str()).or(symbols.get_enum_type(name)) {
-                return Ok(x.clone());
+            } else if let Some(x) = symbols.get_enum(format!("{}.{}", current_path, name).as_str()).or(symbols.get_enum(name)) {
+                return Ok(x.base_type.clone());
             }
             else {
                 return Ok(CompilerType::GenericSubst(name.clone().into_boxed_str()));
@@ -215,6 +217,7 @@ impl CompilerType {
             if let Some(x) = symbols.get_type_id(format!("{}.{}", type_path, name).as_str()) {
                 return Ok(CompilerType::StructType(x));
             }
+            panic!("{:?} Was not found in current context", format!("{}.{}", type_path, name).as_str())
         }
         panic!("{:?} {} {}", given_type, type_path, current_path);
     }
@@ -222,6 +225,9 @@ impl CompilerType {
         let mut s = self.clone();
         s.substitute_generic_types(map, symbols);
         Ok(s)
+    }
+    pub fn substitute_generic_types_global_aliases(&mut self, symbols: &SymbolTable) -> CompileResult<()> {
+        self.substitute_generic_types(symbols.alias_types(), symbols)
     }
     pub fn substitute_generic_types(&mut self, map: &HashMap<String, CompilerType>, symbols: &SymbolTable) -> CompileResult<()> {
         match self {
@@ -232,7 +238,7 @@ impl CompilerType {
                     *self = replacement.clone();
                     return Ok(());
                 }else {
-                    Err((Span::empty(), CompilerError::Generic(format!("Key {name} was not found in given hashmap {map:?}"))))
+                    panic!("Key {name} was not found in given hashmap {map:?} and thats your fault")
                 }
             }
             CompilerType::GenericStructTypeTemplate(template, args) => {
@@ -255,6 +261,10 @@ impl CompilerType {
                 for arg in args.iter_mut() {
                     arg.substitute_generic_types(map, symbols);
                 }
+                Ok(())
+            }
+            CompilerType::ConstantArray(_, array_type) => {
+                array_type.substitute_generic_types(map, symbols);
                 Ok(())
             }
             CompilerType::Pointer(inner) => inner.substitute_generic_types(map, symbols),
@@ -659,7 +669,7 @@ impl Variable {
             };
             return Ok(llvm_repr);
         }
-        let type_str = {let mut x = self.compiler_type.clone(); x.substitute_generic_types(&ctx.symbols.alias_types, ctx.symbols)?; x}.llvm_representation(ctx.symbols)?;
+        let type_str = {let mut x = self.compiler_type.clone(); x.substitute_generic_types_global_aliases(ctx.symbols)?; x}.llvm_representation(ctx.symbols)?;
         let temp_id = ctx.aquire_unique_temp_value_counter();
 
         output.push_str(&format!(
@@ -781,5 +791,22 @@ impl<'a> CodeGenContext<'a> {
     }
     pub fn aquire_unique_logic_counter(&self) -> u32{
         self.logic_counter.replace(self.logic_counter.get() + 1)
+    }
+}
+
+
+pub type CompileResult<T> = Result<T, (Span, CompilerError)>;
+#[derive(Debug)]
+pub enum CompilerError {
+    Generic(String),
+    Io(std::io::Error),
+    InvalidExpression(String),
+    SymbolNotFound(String),
+    TypeMismatch { expected: CompilerType, found: CompilerType },
+    InvalidStatementInContext(String),
+}
+impl From<std::io::Error> for CompilerError {
+    fn from(err: std::io::Error) -> Self {
+        CompilerError::Io(err)
     }
 }
