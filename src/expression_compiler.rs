@@ -43,11 +43,11 @@ pub enum CompiledValue {
     NoReturn,
 }
 impl CompiledValue {
-    pub fn is_literally_number(&self) -> bool {
-        if let CompiledValue::Value { llvm_repr: LLVMVal::ConstantInteger(_), ..} = self {
-            return true;
+    pub fn as_literal_number(&self) -> Option<&String> {
+        if let CompiledValue::Value { llvm_repr: LLVMVal::ConstantInteger(val), ..} = self {
+            return Some(val);
         }
-        false
+        None
     }
 }
 pub struct ExpressionCompiler<'a, 'b> {
@@ -156,7 +156,12 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
                 if let Some(ptype) = expected.get_type().cloned() {
                     return Ok(CompiledValue::Value { llvm_repr, ptype });
                 }
-                return Ok(CompiledValue::Value { llvm_repr, ptype: CompilerType::Primitive(DEFAULT_INTEGER_TYPE) });
+                let ptype = match op {
+                    BinaryOp::Equals | BinaryOp::NotEqual | BinaryOp::Less | 
+                    BinaryOp::LessEqual | BinaryOp::Greater | BinaryOp::GreaterEqual => CompilerType::Primitive(BOOL_TYPE),
+                    _ => CompilerType::Primitive(DEFAULT_INTEGER_TYPE)
+                };
+                return Ok(CompiledValue::Value { llvm_repr, ptype });
             } 
               
         }
@@ -167,10 +172,47 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
 
         // Swap them
         // 10 + x == x + 10
-        if left.is_literally_number() && !right.is_literally_number() 
-            && (matches!(op, BinaryOp::Add | BinaryOp::Multiply | BinaryOp::BitAnd | BinaryOp::BitOr | BinaryOp::BitXor | BinaryOp::And | BinaryOp::Or | BinaryOp::Equals)) 
-            {
+        if left.as_literal_number().is_some() && right.as_literal_number().is_none() 
+            && (matches!(op, BinaryOp::Add | BinaryOp::Multiply | BinaryOp::BitAnd | BinaryOp::BitOr | BinaryOp::BitXor | BinaryOp::And | BinaryOp::Or | BinaryOp::Equals | BinaryOp::NotEqual)) 
+        {
             (right, left) = (left, right);
+        }
+        if left.get_llvm_rep() == right.get_llvm_rep() {
+             match op {
+                BinaryOp::Subtract | BinaryOp::Modulo | BinaryOp::BitXor => return Ok(CompiledValue::Value { llvm_repr: LLVMVal::ConstantInteger("0".to_string()), ptype: left.get_type().clone() }),
+                BinaryOp::Divide => return Ok(CompiledValue::Value { llvm_repr: LLVMVal::ConstantInteger("1".to_string()), ptype: left.get_type().clone() }),
+                BinaryOp::BitOr | BinaryOp::BitAnd => return Ok(left),
+                BinaryOp::Equals | BinaryOp::GreaterEqual | BinaryOp::LessEqual => return self.compile_boolean(true),
+                BinaryOp::NotEqual | BinaryOp::Less | BinaryOp::Greater => return self.compile_boolean(false),
+                _ => {}
+            }
+        }
+        if let Some(v) = right.as_literal_number() {
+            let is_zero = v == "0";
+            let is_one = v == "1";
+            match op {
+                BinaryOp::Add => if is_zero { return Ok(left); }, // x + 0 = x
+                BinaryOp::Subtract => if is_zero { return Ok(left); }, // x - 0 = x
+                BinaryOp::Multiply => {
+                    if is_zero { return Ok(right); } // x * 0 = 0
+                    if is_one { return Ok(left); }   // x * 1 = x
+                },
+                BinaryOp::Divide => if is_one { return Ok(left); }, // x / 1 = x
+                BinaryOp::Modulo => if is_one { return Ok(CompiledValue::Value { llvm_repr: LLVMVal::ConstantInteger("0".to_string()), ptype: left.get_type().clone() }); }, // x % 1 = 0
+                BinaryOp::BitAnd => {
+                    if is_zero { return Ok(right); } // x & 0 = 0
+                },
+                BinaryOp::BitOr => {
+                    if is_zero { return Ok(left); }  // x | 0 = x
+                },
+                BinaryOp::BitXor => {
+                    if is_zero { return Ok(left); }  // x ^ 0 = x
+                },
+                BinaryOp::ShiftLeft | BinaryOp::ShiftRight => {
+                    if is_zero { return Ok(left); }  // x << 0 = x
+                },
+                _ => {}
+            }
         }
         // Pointer math
         if left.get_type().is_pointer() && right.get_type().is_integer() {  // *(array_pointer + iterator)
@@ -183,9 +225,13 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             return Ok(CompiledValue::Value{llvm_repr: LLVMVal::Register(utvc), ptype: left.get_type().clone()});
         }
         if left.get_type() != right.get_type() {
-            println!("{:?}", left);
-            println!("{:?}", right);
-            return Err((Span::empty(), CompilerError::Generic(format!("Binary operator '{:?}' cannot be applied to mismatched types '{:?}' and '{:?}'", op, left.get_type(), right.get_type()))));
+            if left.get_type().is_pointer() && right.as_literal_number().map(|x| x == "0").unwrap_or(false) {
+            } else if right.get_type().is_pointer() && left.as_literal_number().map(|x| x == "0").unwrap_or(false) {
+            } else {
+                println!("{:?}", left);
+                println!("{:?}", right);
+                return Err((Span::empty(), CompilerError::Generic(format!("Binary operator '{:?}' cannot be applied to mismatched types '{:?}' and '{:?}'", op, left.get_type(), right.get_type()))));
+            }
         }
         
         let ltype = left.get_type();
@@ -194,7 +240,12 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             let llvm_op = match op {
                 BinaryOp::And => "and",
                 BinaryOp::Or => "or",
-                _ => todo!("{:?}", op)
+                BinaryOp::BitAnd => "and",
+                BinaryOp::BitOr => "or",
+                BinaryOp::BitXor => "xor",
+                BinaryOp::Equals => "icmp eq",
+                BinaryOp::NotEqual => "icmp ne",
+                _ => todo!("{:?} on booleans", op)
             };
             let utvc = self.ctx.aquire_unique_temp_value_counter();
             self.output.push_str(&format!("    %tmp{} = {} {} {}, {}\n", utvc, llvm_op, BOOL_TYPE.llvm_name, left.get_llvm_rep(), right.get_llvm_rep()));
@@ -229,7 +280,6 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
                 BinaryOp::And => "and",
                 BinaryOp::Or => "or",
             };
-
             let both_types_llvm_repr = ltype.llvm_representation(self.ctx.symbols)?;
             let utvc = self.ctx.aquire_unique_temp_value_counter();
             self.output.push_str(&format!("    %tmp{} = {} {} {}, {}\n",utvc, llvm_op, both_types_llvm_repr, left.get_llvm_rep(), right.get_llvm_rep()));
@@ -534,12 +584,9 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
                 if !value.get_type().is_integer() && !value.get_type().is_decimal() {
                     return Err((Span::empty(), CompilerError::Generic("Cannot negate non-integer type".to_string())));
                 }
-                if value.is_literally_number() {
-                    if let LLVMVal::ConstantInteger(cnst) = value.get_llvm_rep() {
-                        let num = -cnst.parse::<i128>().unwrap();
-                        return Ok(CompiledValue::Value { llvm_repr: LLVMVal::ConstantInteger(num.to_string()), ptype: value.get_type().clone() });
-                    }
-                    todo!()
+                if let Some(cnst) = value.as_literal_number() {
+                    let num = -cnst.parse::<i128>().unwrap();
+                    return Ok(CompiledValue::Value { llvm_repr: LLVMVal::ConstantInteger(num.to_string()), ptype: value.get_type().clone() });
                 }
                 let type_str = value.get_type().llvm_representation(self.ctx.symbols)?;
                 let temp_id = self.ctx.aquire_unique_temp_value_counter();
@@ -858,6 +905,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
 pub fn constant_expression_compiler(expr: &Expr) -> CompileResult<LLVMVal>{
     match expr {
         Expr::Integer(x) => Ok(LLVMVal::ConstantInteger(x.clone())),
+        Expr::Boolean(b) => Ok(LLVMVal::ConstantInteger(if *b { "1".to_string() } else { "0".to_string() })),
         Expr::Decimal(x) => Ok(LLVMVal::ConstantDecimal(x.clone())),
         Expr::BinaryOp(x, op,y) =>{
             let l = constant_expression_compiler(x)?;
@@ -866,11 +914,11 @@ pub fn constant_expression_compiler(expr: &Expr) -> CompileResult<LLVMVal>{
                 let l = l.parse::<i128>().unwrap();
                 let r = r.parse::<i128>().unwrap();
                 let v = match op {
-                    BinaryOp::Add => l + r,
-                    BinaryOp::Subtract => l - r,
-                    BinaryOp::Multiply => l * r,
-                    BinaryOp::Divide => l / r,
-                    BinaryOp::Modulo => l % r,
+                    BinaryOp::Add => l.wrapping_add(r),
+                    BinaryOp::Subtract => l.wrapping_sub(r),
+                    BinaryOp::Multiply => l.wrapping_mul(r),
+                    BinaryOp::Divide => l.checked_div(r).unwrap_or(0), // Avoid compiler crash on div by 0 in constant fold
+                    BinaryOp::Modulo => l.checked_rem(r).unwrap_or(0),
                     BinaryOp::Equals => (l == r) as i128,
                     BinaryOp::NotEqual => (l != r) as i128,
                     BinaryOp::Less => (l < r) as i128,
@@ -882,12 +930,13 @@ pub fn constant_expression_compiler(expr: &Expr) -> CompileResult<LLVMVal>{
                     BinaryOp::BitAnd => l & r,
                     BinaryOp::BitOr => l | r,
                     BinaryOp::BitXor => l ^ r,
-                    BinaryOp::ShiftLeft => l << r,
-                    BinaryOp::ShiftRight => l >> r,
+                    BinaryOp::ShiftLeft => l.wrapping_shl(r as u32),
+                    BinaryOp::ShiftRight => l.wrapping_shr(r as u32),
                 };
                 return Ok(LLVMVal::ConstantInteger(v.to_string()));
             }
-            todo!()
+            
+            Err((Span::empty(), CompilerError::Generic(format!("Unsupported constant fold operands"))))
         }
         _ => Err((Span::empty(), CompilerError::Generic(format!("Unsuported in constant {:?}", expr)))),
     }

@@ -40,8 +40,10 @@ pub fn rcsharp_compile(stmts: &[StmtData], absolute_file_path: &str) -> CompileR
     if LAZY_FUNCTION_COMPILE {
         lazy_compile(&mut symbols, &mut output)?;
     }else {
+        let mut gen_implemented_funcs =  HashMap::new();
+        let mut gen_implemented_types = HashMap::new();
         compile(&mut symbols, &mut output)?;
-        handle_generics(&mut symbols, &mut output)?;
+        handle_generics(&mut gen_implemented_funcs, &mut gen_implemented_types, &mut symbols, &mut output)?;
     }
     let compiling = time_point.elapsed();
     println!("Collecting {:?}", collecting);
@@ -262,6 +264,10 @@ fn handle_functions(functions : Vec<ParsedFunction>, symbols: &mut SymbolTable, 
 fn lazy_compile(symbols: &mut SymbolTable, output: &mut LLVMOutputHandler) -> CompileResult<()>{
     let mut implemented_funcs = HashSet::new();
     let mut implement_funcs = Vec::new();
+
+    let mut gen_implemented_funcs =  HashMap::new();
+    let mut gen_implemented_types = HashMap::new();
+    
     let main_id = symbols.get_function_id("main").expect("Expected function main");
     implement_funcs.push(main_id);
     while let Some(id) = implement_funcs.pop() {
@@ -273,22 +279,7 @@ fn lazy_compile(symbols: &mut SymbolTable, output: &mut LLVMOutputHandler) -> Co
                 implement_funcs.push(x.1.0);
             }
         }
-    }
-    handle_generics(symbols, output)?;
-    for x in symbols.functions.iter().filter(|x| x.1.1.is_normal() && x.1.1.times_used.get() > 0) {
-        if !implemented_funcs.contains(&x.1.0) && !implement_funcs.contains(&x.1.0) {
-            implement_funcs.push(x.1.0);
-        }
-    }
-    while let Some(id) = implement_funcs.pop() {
-        implemented_funcs.insert(id);
-        let func = symbols.get_function_by_id(id);
-        compile_function_body(id, &func.full_path(), symbols, output)?;
-        for x in symbols.functions.iter().filter(|x| x.1.1.is_normal() && x.1.1.times_used.get() > 0) {
-            if !implemented_funcs.contains(&x.1.0) && !implement_funcs.contains(&x.1.0) {
-                implement_funcs.push(x.1.0);
-            }
-        }
+        handle_generics(&mut gen_implemented_funcs, &mut gen_implemented_types, symbols, output)?;
     }
 
     for (_, (_id, function)) in symbols.functions.iter().filter(|x| x.1.1.is_imported()) {
@@ -299,6 +290,11 @@ fn lazy_compile(symbols: &mut SymbolTable, output: &mut LLVMOutputHandler) -> Co
         let rt = function.return_type.llvm_representation(symbols)?;
         let args = function.args.iter().map(|x| x.1.llvm_representation(symbols)).collect::<CompileResult<Vec<_>>>()?.join(", ");
         output.push_str_include_header(&format!("declare dllimport {} @{}({})\n", rt, function.name() , args));
+    }
+    if APPEND_DEBUG_FUNCTION_INFO {
+        for (full_path, (_id, function)) in symbols.functions.iter() {
+            output.push_str_footer(&format!(";fn {} used times {}\n", full_path, function.times_used.get()));
+        }
     }
     Ok(())
 }
@@ -518,76 +514,88 @@ pub fn compile_statement(stmt: &StmtData, ctx: &mut CodeGenContext, output: &mut
     }
     Ok(())
 }
-fn handle_generics(symbols: &mut SymbolTable, output: &mut LLVMOutputHandler) -> CompileResult<()> {
-    let mut implemented_funcs = HashMap::new();
-    let mut implemented_types = HashMap::new();
-    for (_, (id, _)) in symbols.functions.iter().filter(|x| x.1.1.is_generic()) {
-        implemented_funcs.insert(*id, 0usize);
-    }
-    for (_, (id, _)) in symbols.types.iter().filter(|x| x.1.1.is_generic()) {
-        implemented_types.insert(*id, 0usize);
-    }
+fn handle_generics(implemented_funcs: &mut HashMap<usize, usize>, implemented_types: &mut HashMap<usize, usize>, symbols: &mut SymbolTable, output: &mut LLVMOutputHandler) -> CompileResult<bool> {
+    let mut any_new = false;
     loop {
         let mut new= false;
-        for (id, func) in symbols.functions.values().filter(|x| x.1.is_generic()) {
-            let gi = func.generic_implementations.borrow();
-            let len = gi.len();
-            drop(gi);
-            if let Some(x) = implemented_funcs.get_mut(id) {
-                if *x != len{
-                    new = true;
-                    let cursor = *x;
-                    for impl_ind in cursor..len {
-                        let x= func.call_path_impl_index(impl_ind, symbols);
-                        let gi = func.generic_implementations.borrow();
-                        let mut type_map = HashMap::new();
-                        for (ind, prm) in func.generic_params.iter().enumerate() {
-                            type_map.insert(prm.clone(), gi[impl_ind][ind].clone());
-                        }
-                        drop(gi);
-                        symbols.alias_types = type_map;
-                        compile_function_body(*id, &x, symbols, output)?;
-                    }
-
-                    *x = len;
-
+        let mut func_impl_queue =Vec::new();
+        let mut type_impl_queue =Vec::new();
+        for (id, func) in symbols.functions.values() {
+            if !func.is_generic() { continue; }
+            let impls = func.generic_implementations.borrow();
+            let total_impls = impls.len();
+            let processed_count = *implemented_funcs.get(id).unwrap_or(&0);
+            if total_impls > processed_count {
+                for i in processed_count..total_impls {
+                    func_impl_queue.push((*id, i, impls[i].clone()));
                 }
-            }else {
-                unreachable!()
+                implemented_funcs.insert(*id, total_impls);
+                new = true;
             }
         }
-        for (id, sym_type) in symbols.types.values().filter(|x| x.1.is_generic()) {
-            let gi = sym_type.generic_implementations.borrow();
-            let len = gi.len();
-            drop(gi);
-            if let Some(x) = implemented_types.get_mut(id) {
-                if *x != len{
-                    new = true;
-                    let cursor = *x;
-                    for impl_ind in cursor..len {
-                        let x= sym_type.llvm_repr_index(impl_ind, symbols);
-                        let gi = sym_type.generic_implementations.borrow();
-                        let mut type_map = HashMap::new();
-                        for (ind, prm) in sym_type.generic_params.iter().enumerate() {
-                            type_map.insert(prm.clone(), gi[impl_ind][ind].clone());
-                        }
-                        drop(gi);
-                        let internals: String = sym_type.fields.iter().map(|x| x.1.with_substituted_generic_types(&type_map, symbols).map(|x| x.llvm_representation(symbols)).flatten()).collect::<CompileResult<Vec<_>>>()?.join(", ");
-                        output.push_str_header(&format!("{} = type {{ {} }}\n", x, internals));
+        for (id, strct) in symbols.types.values() {
+            if !strct.is_generic() { continue; }
+            
+            let impls = strct.generic_implementations.borrow();
+            let total_impls = impls.len();
+            
+            let processed_count = *implemented_types.get(id).unwrap_or(&0);
 
-                    }
-                    *x = len;
+            if total_impls > processed_count {
+                for i in processed_count..total_impls {
+                    type_impl_queue.push((*id, i, impls[i].clone()));
                 }
-            }else {
-                unreachable!()
+                implemented_types.insert(*id, total_impls);
+                new = true;
             }
         }
-        
         if !new {
             break;
         }
+        any_new = true;
+        for (id, impl_index, concrete_types) in func_impl_queue {
+            let (specialized_name, generic_params) = {
+                let func = symbols.get_function_by_id(id);
+                (
+                    func.call_path_impl_index(impl_index, symbols),
+                    func.generic_params.clone()
+                )
+            };
+            let mut type_map = HashMap::new();
+            for (idx, prm) in generic_params.iter().enumerate() {
+                if let Some(concrete_type) = concrete_types.get(idx) {
+                    type_map.insert(prm.clone(), concrete_type.clone());
+                }
+            }
+            symbols.alias_types = type_map;
+            compile_function_body(id, &specialized_name, symbols, output)?;
+        }
+        symbols.alias_types.clear();
+        for (id, impl_index, concrete_types) in type_impl_queue {
+            let (specialized_name, generic_params, fields) = {
+                let strct = symbols.get_type_by_id(id);
+                (
+                    strct.llvm_repr_index(impl_index, symbols),
+                    strct.generic_params.clone(),
+                    strct.fields.clone()
+                )
+            };
+            let mut type_map = HashMap::new();
+            for (idx, prm) in generic_params.iter().enumerate() {
+                if let Some(concrete_type) = concrete_types.get(idx) {
+                    type_map.insert(prm.clone(), concrete_type.clone());
+                }
+            }
+            let mut field_strings = Vec::new();
+            for (_, field_type) in fields.iter() {
+                let substituted_type = field_type.with_substituted_generic_types(&type_map, symbols)?;
+                field_strings.push(substituted_type.llvm_representation(symbols)?);
+            }
+            let body = field_strings.join(", ");
+            output.push_str_header(&format!("{} = type {{ {} }}\n", specialized_name, body));
+        }
     }
-    Ok(())
+    Ok(any_new)
 }
 
 #[derive(PartialEq)]
