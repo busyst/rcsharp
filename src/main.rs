@@ -1,4 +1,4 @@
-use std::{io::Read, time::Instant};
+use std::{io::Read, process, time::Instant};
 use crate::{compiler::rcsharp_compile_to_file};
 use rcsharp_lexer::{lex_file_with_context};
 use rcsharp_parser::parser::{GeneralParser, ParserResultExt};
@@ -19,7 +19,17 @@ fn main() -> Result<(), String> {
 	let y = GeneralParser::new(&all_tokens).parse_all().unwrap_error_extended(&all_tokens, &full_path).map_err(|x| {println!("{}", x); String::new()})?;
 	let tokens_parsed = Instant::now();
 	
-	rcsharp_compile_to_file(&y, full_path.as_str(), &output_full_path).map_err(|x| {println!("{}", x); "".to_string()})?;
+	rcsharp_compile_to_file(&y, full_path.as_str(), &output_full_path).map_err(|mut err_str| {
+		println!("SPAN:{:?}", err_str.span);
+		if let Some(span) = err_str.span.clone() {
+			let (start_row, start_column) = (all_tokens[span.start].row, all_tokens[span.start].col);
+			err_str.extend(&format!("Location {}:{}:{}", full_path.as_str(), start_row, start_column));
+			println!("{}", err_str.error);
+		}else {
+			println!("{}", err_str.error);
+		}
+		process::exit(-1)
+	}).unwrap();
 	let compiled_and_wrote = Instant::now();
 	println!("\t\tBase Source");
 	println!("read \t{:?}", file1_read - program_start);

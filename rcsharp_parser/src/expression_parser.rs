@@ -41,7 +41,9 @@ impl Expr {
         match self {
             Self::Name(n) => n.to_string(),
             Self::Integer(n) => n.to_string(),
+            Self::Call(x, y) => format!("CALL|[{}]({})|", x.debug_emit_int(d), y.iter().map(|x| x.debug_emit_int(1)).collect::<Vec<_>>().join(", ")),
             Self::MemberAccess(x, y) => format!("{}.{}", x.debug_emit_int(d), y),
+            Self::StaticAccess(x, y) => format!("{}::{}", x.debug_emit_int(d), y),
             Self::Index(x, y) => format!("{}[{}]", x.debug_emit_int(d), y.debug_emit_int(d)),
             Self::BinaryOp(l, op, r) => format!("{ob}{} {:?} {}{cb}", l.debug_emit_int(d + 1), op, r.debug_emit_int(d + 1)),
             _ => format!("{:?}", self)

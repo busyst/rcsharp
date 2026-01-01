@@ -4,7 +4,7 @@ use ordered_hash_map::{OrderedHashMap};
 use rcsharp_lexer::lex_string_with_file_context;
 use rcsharp_parser::{compiler_primitives::{BOOL_TYPE}, expression_parser::Expr, parser::{Attribute, GeneralParser, ParsedEnum, ParsedFunction, ParsedStruct, ParserType, Span, Stmt, StmtData}};
 
-use crate::{compiler_essentials::{CodeGenContext, CompileResult, CompilerError, CompilerType, Enum, FlagManager, Function, LLVMVal, Struct, Variable, function_flags, struct_flags}, expression_compiler::{Expected, compile_expression, constant_expression_compiler}};
+use crate::{compiler_essentials::{CodeGenContext, CompileResult, CompileResultExt, CompilerError, CompilerType, Enum, FlagManager, Function, LLVMVal, Struct, Variable, function_flags, struct_flags}, expression_compiler::{Expected, compile_expression, constant_expression_compiler}};
 
 pub const LAZY_FUNCTION_COMPILE : bool = true;
 pub const APPEND_DEBUG_FUNCTION_INFO : bool = true;
@@ -12,13 +12,13 @@ pub const DONT_INSERT_REDUNDAND_STRINGS : bool = true;
 pub const INTERGER_EXPRESION_OPTIMISATION : bool = true;
 pub const DONT_COMPILE_AFTER_RETURN : bool = true;
 
-pub fn rcsharp_compile_to_file(stmts: &[StmtData], full_path: &str, output_path: &str) -> Result<(), String> {
+pub fn rcsharp_compile_to_file(stmts: &[StmtData], full_path: &str, output_path: &str) -> CompileResult<()> {
     match rcsharp_compile(stmts, full_path) {
         Ok(llvm_ir) => {
             std::fs::write(output_path, llvm_ir.build())
-                .map_err(|e| e.to_string())
+                .map_err(|e| (Span::empty(), e.into()).into())
         }
-        Err(e) => Err(format!("{:?}\n---------\nSTATEMENTS:\n{:?}", e.1, e.0.start..e.0.end)),
+        Err(mut e) => Err({e.extend(&format!("while compiling file {}", full_path)); e}),
     }
 }
 pub fn rcsharp_compile(stmts: &[StmtData], absolute_file_path: &str) -> CompileResult<LLVMOutputHandler>  {
@@ -30,12 +30,12 @@ pub fn rcsharp_compile(stmts: &[StmtData], absolute_file_path: &str) -> CompileR
     let mut enums = vec![];
     let mut structs = vec![];
     let mut functions = vec![];
-    collect(stmts, &mut enums, &mut structs, &mut functions)?;
+    collect(stmts, &mut enums, &mut structs, &mut functions).extend("while collecting compiler statements")?;
     let collecting = time_point.elapsed();
     let time_point = Instant::now();
-    handle_types(structs, &mut symbols, &mut output)?;
-    handle_enums(enums, &mut symbols, &mut output)?;
-    handle_functions(functions, &mut symbols, &mut output)?;
+    handle_types(structs, &mut symbols, &mut output).extend("while compiling types definitions")?;
+    handle_enums(enums, &mut symbols, &mut output).extend("while compiling enums definitions")?;
+    handle_functions(functions, &mut symbols, &mut output).extend("while compiling function definitions")?;
 
     if LAZY_FUNCTION_COMPILE {
         lazy_compile(&mut symbols, &mut output)?;
@@ -43,7 +43,7 @@ pub fn rcsharp_compile(stmts: &[StmtData], absolute_file_path: &str) -> CompileR
         let mut gen_implemented_funcs =  HashMap::new();
         let mut gen_implemented_types = HashMap::new();
         compile(&mut symbols, &mut output)?;
-        handle_generics(&mut gen_implemented_funcs, &mut gen_implemented_types, &mut symbols, &mut output)?;
+        while handle_generics(&mut gen_implemented_funcs, &mut gen_implemented_types, &mut symbols, &mut output).unwrap_or(false) {}
     }
     let compiling = time_point.elapsed();
     println!("Collecting {:?}", collecting);
@@ -81,34 +81,34 @@ fn collect(stmts: &[StmtData],
                         included_files.insert(include_path.clone());
                         
                         let q = Instant::now();
-                        let mut file = std::fs::File::open(&include_path).map_err(|e| {
-                            (stmt_data.span.clone(), CompilerError::Generic(format!("Failed to open file '{}': {}", include_path, e)))
+                        let mut file = std::fs::File::open(include_path).map_err(|e| {
+                            (stmt_data.span, CompilerError::Generic(format!("Failed to open file '{}': {}", include_path, e)))
                         })?;
                         
                         let mut buf = String::new();
                         file.read_to_string(&mut buf).map_err(|e| {
-                            (stmt_data.span.clone(), CompilerError::Generic(format!("Failed to read file '{}': {}", include_path, e)))
+                            (stmt_data.span, CompilerError::Generic(format!("Failed to read file '{}': {}", include_path, e)))
                         })?;
                         file_reading_time += q.elapsed();
                         let q = Instant::now();
-                        let lex = lex_string_with_file_context(&buf, &include_path)
-                                .map_err(|_| (stmt_data.span.clone(), CompilerError::Generic(format!("Lexer error in '{}'", include_path))))?;
+                        let lex = lex_string_with_file_context(&buf, include_path)
+                                .map_err(|_| (stmt_data.span, CompilerError::Generic(format!("Lexer error in '{}'", include_path))))?;
                         lexing_time += q.elapsed();
                         let q = Instant::now();
                         let parsed_stmts = GeneralParser::new(&lex).parse_all()
-                            .map_err(|e| (stmt_data.span.clone(), CompilerError::Generic(format!("Parser error in '{}': {:?}", include_path, e))))?;
+                            .map_err(|e| (stmt_data.span, CompilerError::Generic(format!("Parser error in '{}': {:?}", include_path, e))))?;
                         parsing_time += q.elapsed();
                         for stmt in parsed_stmts.into_iter().rev() {
                             statements.push_front(stmt);
                         }
                     }else {
-                        return Err((stmt_data.span, CompilerError::InvalidStatementInContext("Include requires a string argument".into())));
+                        return Err((stmt_data.span, CompilerError::InvalidStatementInContext("Include requires a string argument".into())).into());
                     }
                 }else if attr.name_equals("-pop") {
                     current_path_segments.pop();
                     path_buffer = current_path_segments.join(".");
                 } else {
-                    return Err((stmt_data.span, CompilerError::InvalidStatementInContext(format!("Unknown global attribute: {:?}", attr))));
+                    return Err((stmt_data.span, CompilerError::InvalidStatementInContext(format!("Unknown global attribute: {:?}", attr))).into());
                 }
             }
             Stmt::Namespace(namespace, body) => {
@@ -138,7 +138,7 @@ fn collect(stmts: &[StmtData],
                 enums.push(parsed_enum);
             },
             _ => {
-                return Err((stmt_data.span, CompilerError::InvalidStatementInContext(format!("{:?}", stmt_data.stmt))));
+                return Err((stmt_data.span, CompilerError::InvalidStatementInContext(format!("{:?}", stmt_data.stmt))).into());
             }
         }
     }
@@ -240,22 +240,22 @@ fn handle_functions(functions : Vec<ParsedFunction>, symbols: &mut SymbolTable, 
         let full_path = if current_path.is_empty() { function_name.to_string() } else { format!("{}.{}", current_path, function_name) };
         let function = Function::new(current_path, function_name, args, return_type, function_body, 0.into(), function_attrs, function_generics);
         if function_prefixes.iter().any(|x| x.as_str() == "public") {
-            function.set_flag(function_flags::PUBLIC as u8);
+            function.set_flag(function_flags::PUBLIC);
         }
         if function_prefixes.iter().any(|x| x.as_str() == "inline") {
-            function.set_flag(function_flags::INLINE as u8);
+            function.set_flag(function_flags::INLINE);
         }
         if function_prefixes.iter().any(|x| x.as_str() == "constexpr") {
-            function.set_flag(function_flags::CONST_EXPRESSION as u8);
+            function.set_flag(function_flags::CONST_EXPRESSION);
         }
         if function.attribs.iter().any(|x| x.name_equals("DllImport")) {
-            function.set_flag(function_flags::IMPORTED as u8);
+            function.set_flag(function_flags::EXTERNAL);
         }
         if function.attribs.iter().any(|x| x.name_equals("no_lazy")) {
             function.use_fn();
         }
         if !function.generic_params.is_empty() {
-            function.set_flag(function_flags::GENERIC as u8);
+            function.set_flag(function_flags::GENERIC);
         }
         symbols.insert_function(&full_path, function);
     }
@@ -271,6 +271,7 @@ fn lazy_compile(symbols: &mut SymbolTable, output: &mut LLVMOutputHandler) -> Co
     let main_id = symbols.get_function_id("main").expect("Expected function main");
     implement_funcs.push(main_id);
     while let Some(id) = implement_funcs.pop() {
+        handle_generics(&mut gen_implemented_funcs, &mut gen_implemented_types, symbols, output)?;
         implemented_funcs.insert(id);
         let func = symbols.get_function_by_id(id);
         compile_function_body(id, &func.full_path(), symbols, output)?;
@@ -279,10 +280,9 @@ fn lazy_compile(symbols: &mut SymbolTable, output: &mut LLVMOutputHandler) -> Co
                 implement_funcs.push(x.1.0);
             }
         }
-        handle_generics(&mut gen_implemented_funcs, &mut gen_implemented_types, symbols, output)?;
     }
-
-    for (_, (_id, function)) in symbols.functions.iter().filter(|x| x.1.1.is_imported()) {
+    while handle_generics(&mut gen_implemented_funcs, &mut gen_implemented_types, symbols, output).unwrap_or(false) {}
+    for (_, (_id, function)) in symbols.functions.iter().filter(|x| x.1.1.is_external()) {
         if function.times_used.get() == 0 {
             continue;
         }
@@ -307,7 +307,7 @@ fn compile(symbols: &mut SymbolTable, output: &mut LLVMOutputHandler) -> Compile
             output.push_str_footer(&format!(";fn {} used times {}\n", full_path, function.times_used.get()));
         }
     }
-    for (_, (_id, function)) in symbols.functions.iter().filter(|x| x.1.1.is_imported()) {
+    for (_, (_id, function)) in symbols.functions.iter().filter(|x| x.1.1.is_external()) {
         // declare dllimport i32 @GetModuleFileNameA(i8*,i8*,i32)
         let rt = function.return_type.llvm_representation(symbols)?;
         let args = function.args.iter().map(|x| x.1.llvm_representation(symbols)).collect::<CompileResult<Vec<_>>>()?.join(", ");
@@ -368,9 +368,10 @@ fn compile_function_body(function_id: usize, full_function_name: &str, symbols: 
         let llvm_type = llvm_type.llvm_representation(symbols)?;
         output.push_str(&format!("    %v{} = alloca {}; var: {}\n", index, llvm_type, name));
     }
+    ctx.set_preallocated_variables_count(statically_declared_vars.len() as u32);
 
     for stmt in function.body.iter(){
-        compile_statement(&stmt, &mut ctx, output)?;
+        compile_statement(stmt, &mut ctx, output).extend(&format!("while compiling function '{}'", full_function_name))?;
         if DONT_COMPILE_AFTER_RETURN && matches!(stmt.stmt, Stmt::Return(..)) {
             break;
         };
@@ -389,32 +390,39 @@ pub fn compile_statement(stmt: &StmtData, ctx: &mut CodeGenContext, output: &mut
     let current_function_path = ctx.current_function_path();
     match &stmt.stmt {
         Stmt::ConstLet(name, var_type, expr) => {
-            let var_type = CompilerType::into_path(var_type, ctx.symbols, current_function_path)?;
+            let mut var_type = CompilerType::into_path(var_type, ctx.symbols, current_function_path)?;
+            var_type.substitute_generic_types(&ctx.symbols.alias_types, ctx.symbols)?;
             let var = Variable::new(var_type.clone(), true);
-            var.set_value(Some(compile_expression(expr, Expected::Type(&var_type), ctx, output)?.get_llvm_rep().clone()));
+
+            let result = compile_expression(expr, Expected::Type(&var_type), stmt.span, ctx, output)?;
+            if *result.get_type() != var_type {
+                return Err((stmt.span, CompilerError::InvalidExpression(format!("Type mismatch in assignment: {:?} and {:?}", var_type, result))).into());
+            }
+            var.set_value(Some(result.get_llvm_rep().clone()));
             ctx.scope.add_variable(name.clone(), var, 0);
         }
         Stmt::Let(name, var_type, expr) => {
-            let x = ctx.aquire_unique_variable_index();
             let mut var_type = CompilerType::into_path(var_type, ctx.symbols, current_function_path)?;
             var_type.substitute_generic_types(&ctx.symbols.alias_types, ctx.symbols)?;
             let var = Variable::new(var_type.clone(), false);
-            if let Some(init_expr) = expr {
-                let result = compile_expression(init_expr, Expected::Type(&var_type), ctx, output)?;
-                if &var_type != result.get_type() {
-                    return Err((stmt.span, CompilerError::InvalidExpression(format!("Type mismatch in assignment: {:?} and {:?}", var_type, result))));
+            let x = ctx.aquire_unique_variable_index();
+            match expr {
+                Some(init_expr) => {
+                    let result = compile_expression(init_expr, Expected::Type(&var_type), stmt.span, ctx, output)?;
+                    if &var_type != result.get_type() {
+                        return Err((stmt.span, CompilerError::InvalidExpression(format!("Type mismatch in assignment: {:?} and {:?}", var_type, result))).into());
+                    }
+                    ctx.scope.add_variable(name.clone(), var, x);
+                    let t = var_type.llvm_representation(ctx.symbols)?;
+                    output.push_str(&format!("    store {} {}, {}* {}\n", t, result.get_llvm_rep(), t, LLVMVal::Variable(x)));
                 }
-                ctx.scope.add_variable(name.clone(), var, x);
-                let t = var_type.llvm_representation(ctx.symbols)?;
-                output.push_str(&format!("    store {} {}, {}* {}\n", t, result.get_llvm_rep(), t, LLVMVal::Variable(x)));
-            }else {
-                ctx.scope.add_variable(name.clone(), var, x);
+                None => {
+                    ctx.scope.add_variable(name.clone(), var, x);
+                }
             }
 
         }
-        Stmt::Expr(expression) => {
-            compile_expression(expression, Expected::NoReturn, ctx, output).map_err(|x| (stmt.span, x.1))?;
-        }
+        Stmt::Expr(expression) => {compile_expression(expression, Expected::NoReturn, stmt.span, ctx, output)?;},
         Stmt::Loop(statement) =>{
             let lc = ctx.aquire_unique_logic_counter();
             
@@ -423,7 +431,7 @@ pub fn compile_statement(stmt: &StmtData, ctx: &mut CodeGenContext, output: &mut
             ctx.scope.enter_scope();
             ctx.scope.set_loop_index(Some(lc));
             for x in statement {
-                compile_statement(&x, ctx, output)?;
+                compile_statement(x, ctx, output)?;
                 if DONT_COMPILE_AFTER_RETURN && matches!(x.stmt, Stmt::Return(..)) {
                     break;
                 };
@@ -433,45 +441,49 @@ pub fn compile_statement(stmt: &StmtData, ctx: &mut CodeGenContext, output: &mut
             output.push_str(&format!("loop_body{}_exit:\n", lc));
         }
         Stmt::Continue => {
-            if let Some(li) = ctx.scope.loop_index() {
-                output.push_str(&format!("    br label %loop_body{}\n", li));
-                return Ok(());
+            match ctx.scope.loop_index() {
+                Some(li) => {
+                    output.push_str(&format!("    br label %loop_body{}\n", li));
+                    return Ok(());
+                }
+                None => return Err((stmt.span, CompilerError::InvalidStatementInContext("Tried to continue without loop".to_string())).into()),
             }
-            return Err((stmt.span, CompilerError::InvalidStatementInContext("Tried to continue without loop".to_string())));
         }
         Stmt::Break => {
-            if let Some(li) = ctx.scope.loop_index() {
-                output.push_str(&format!("    br label %loop_body{}_exit\n", li));
-                return Ok(());
+            match ctx.scope.loop_index() {
+                Some(li) => {
+                    output.push_str(&format!("    br label %loop_body{}_exit\n", li));
+                    return Ok(());
+                }
+                None => return Err((stmt.span, CompilerError::InvalidStatementInContext("Tried to break without loop".to_string())).into()),
             }
-            return Err((stmt.span, CompilerError::InvalidStatementInContext("Tried to break without loop".to_string())));
         }
         Stmt::Return(opt_expr) =>{
-            let func = ctx.symbols.get_function_by_id(ctx.current_function);
-            let return_type = {let mut a = func.return_type.clone(); a.substitute_generic_types(&ctx.symbols.alias_types, ctx.symbols)?; a};
+            let function = ctx.current_function();
+            let return_type = {function.return_type.with_substituted_generic_types(&ctx.symbols.alias_types, ctx.symbols)?};
             if opt_expr.is_some() && return_type.is_void() {
-                return Err((stmt.span, CompilerError::Generic(format!("Function {} does not return anything", format!("{}.{}", func.path() , func.name())))));
+                return Err((stmt.span, CompilerError::Generic(format!("Function {} does not return anything", function.full_path()))).into());
             }
             if let Some(expr) = opt_expr {
-                let value = compile_expression(expr, Expected::Type(&return_type), ctx, output)?;
+                let value = compile_expression(expr, Expected::Type(&return_type), stmt.span, ctx, output)?;
                 if value.get_type() != &return_type {
-                    return Err((stmt.span, CompilerError::TypeMismatch { expected: return_type.clone(), found: value.get_type().clone() }));
+                    return Err((stmt.span, CompilerError::TypeMismatch { expected: return_type.clone(), found: value.get_type().clone() }).into());
                 }
                 let llvm_type_str = return_type.llvm_representation(ctx.symbols)?;
                 output.push_str(&format!("    ret {} {}\n", llvm_type_str, value.get_llvm_rep()));
             } else {
                 if !return_type.is_void() {
-                    return Err((stmt.span, CompilerError::Generic("Cannot return without a value from a non-void function.".to_string())));
+                    return Err((stmt.span, CompilerError::Generic("Cannot return without a value from a non-void function.".to_string())).into());
                 }
                 output.push_str("    ret void\n");
             }
         }
         Stmt::If(condition, then_body, else_body) => {
             let bool_type = CompilerType::Primitive(BOOL_TYPE);
-            let cond_val = compile_expression(condition, Expected::Type(&bool_type), ctx, output)?;
+            let cond_val = compile_expression(condition, Expected::Type(&bool_type), stmt.span, ctx, output)?;
 
             if cond_val.get_type() != &bool_type {
-                return Err((stmt.span, CompilerError::InvalidExpression(format!("'{:?}' must result in bool, instead resulted in {:?}", condition, cond_val.get_type()))));
+                return Err((stmt.span, CompilerError::InvalidExpression(format!("'{:?}' must result in bool, instead resulted in {:?}", condition, cond_val.get_type()))).into());
             }
 
             let logic_id = ctx.aquire_unique_logic_counter();
@@ -485,7 +497,7 @@ pub fn compile_statement(stmt: &StmtData, ctx: &mut CodeGenContext, output: &mut
             output.push_str(&format!("{}:\n", then_label));
             ctx.scope.enter_scope();
             for then_stmt in then_body {
-                compile_statement(&then_stmt, ctx, output)?;
+                compile_statement(then_stmt, ctx, output)?;
                 if DONT_COMPILE_AFTER_RETURN && matches!(then_stmt.stmt, Stmt::Return(..)) {
                     break;
                 };
@@ -497,7 +509,7 @@ pub fn compile_statement(stmt: &StmtData, ctx: &mut CodeGenContext, output: &mut
                 output.push_str(&format!("{}:\n", else_label));
                 ctx.scope.enter_scope();
                 for else_stmt in else_body {
-                    compile_statement(&else_stmt, ctx, output)?;
+                    compile_statement(else_stmt, ctx, output)?;
                     if DONT_COMPILE_AFTER_RETURN && matches!(else_stmt.stmt, Stmt::Return(..)) {
                         break;
                     };
@@ -509,7 +521,7 @@ pub fn compile_statement(stmt: &StmtData, ctx: &mut CodeGenContext, output: &mut
             output.push_str(&format!("{}:\n", end_label));
         }
         Stmt::Function(..) | Stmt::Struct(..) | Stmt::Enum(..) | Stmt::Namespace(..) | Stmt::CompilerHint(..) => {
-            return Err((stmt.span, CompilerError::InvalidStatementInContext(format!("{:?}", stmt))));
+            return Err((stmt.span, CompilerError::InvalidStatementInContext(format!("{:?}", stmt))).into());
         }
     }
     Ok(())

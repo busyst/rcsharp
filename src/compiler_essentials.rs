@@ -1,6 +1,6 @@
 use std::{cell::{Cell, RefCell}, collections::HashMap};
 use ordered_hash_map::OrderedHashMap;
-use rcsharp_parser::{compiler_primitives::{Layout, POINTER_SIZED_TYPE, PrimitiveInfo, PrimitiveKind, VOID_TYPE}, parser::{Attribute, ParserType, Span, StmtData}};
+use rcsharp_parser::{compiler_primitives::{Layout, POINTER_SIZED_TYPE, PrimitiveInfo, PrimitiveKind, VOID_TYPE}, expression_parser::BinaryOp, parser::{Attribute, ParserType, Span, StmtData}};
 
 use crate::{compiler::{LLVMOutputHandler, SymbolTable}};
 pub trait FlagManager {
@@ -82,7 +82,7 @@ impl CompilerType {
             CompilerType::Pointer(inner) => Ok({
                 if let Some(x) = inner.as_primitive() {
                     if x == VOID_TYPE {
-                        return Ok(format!("i8*"));
+                        return Ok("i8*".to_string());
                     }
                 }
                 format!("{}*", inner.llvm_representation(symbols)?)
@@ -97,7 +97,7 @@ impl CompilerType {
             }
             CompilerType::GenericStructType(x, y) => {
                 let base_type = symbols.get_type_by_id(*x);
-                let x = base_type.generic_implementations.borrow().iter().nth(*y).unwrap().clone();
+                let x = base_type.generic_implementations.borrow().get(*y).unwrap().clone();
                 Ok(format!("%\"{}<{}>\"", base_type.llvm_representation_without_percent(), x.iter().map(|x| x.llvm_representation_in_generic(symbols).unwrap()).collect::<Vec<_>>().join(", ")))
             }
             _ => todo!("Get llvm representation for non-primitive type {:?}", self),
@@ -107,7 +107,7 @@ impl CompilerType {
         match self {
             CompilerType::GenericStructType(x, y) => {
                 let base_type = symbols.get_type_by_id(*x);
-                let x = base_type.generic_implementations.borrow().iter().nth(*y).unwrap().clone();
+                let x = base_type.generic_implementations.borrow().get(*y).unwrap().clone();
                 Ok(format!("%{}<{}>", base_type.llvm_representation_without_percent(), x.iter().map(|x| x.llvm_representation_in_generic(symbols).unwrap()).collect::<Vec<_>>().join(", ")))
             }
             _ => self.llvm_representation(symbols)
@@ -178,25 +178,24 @@ impl CompilerType {
         }
         println!("{:?}", given_type);
         println!("{:?}", current_path);
-
-        return Err((Span::new(0, 1), CompilerError::Generic("".to_string())));
+        panic!()
     }
     fn into_path_internal(given_type: &ParserType, symbols: &SymbolTable, type_path: &str, current_path: &str) -> CompileResult<CompilerType> {
         if let Some((name, gen_args)) = given_type.as_generic() {
             let id = if let Some(x) = symbols.get_type_id(format!("{}.{}", type_path, name).as_str()) {
                 x    
             }else {
-                panic!()
+                panic!("{}.{}", type_path, name);
             };
             let mut vec_impl = vec![];
             let mut is_full_implementation = true;
             for gen_arg in gen_args {
                 let x = CompilerType::into_path(gen_arg, symbols, current_path)?;
                 if let CompilerType::GenericSubst(..) = &x {
-                    is_full_implementation == false;
+                    !is_full_implementation;
                 }
                 if let CompilerType::GenericStructTypeTemplate(..) = &x {
-                    is_full_implementation == false;
+                    !is_full_implementation;
                 }
                 vec_impl.push(x);
             }
@@ -236,7 +235,7 @@ impl CompilerType {
             CompilerType::GenericSubst(name) => {
                 if let Some(replacement) = map.get(name.as_ref()) {
                     *self = replacement.clone();
-                    return Ok(());
+                    Ok(())
                 }else {
                     panic!("Key {name} was not found in given hashmap {map:?} and thats your fault")
                 }
@@ -250,7 +249,7 @@ impl CompilerType {
                     let structure = symbols.get_type_by_id(*template);
                     let impl_id = structure.get_implementation_index(args).expect("msg");
                     *self = CompilerType::GenericStructType(*template, impl_id);
-                    return Ok(());
+                    Ok(())
                 }else {
                     println!("{:?}", args);
                     unreachable!()
@@ -293,19 +292,19 @@ impl CompilerType {
     }
     pub fn as_pointer(&self) -> Option<&CompilerType> {
         match self {
-            CompilerType::Pointer(x) => return Some(x),
+            CompilerType::Pointer(x) => Some(x),
             _ => None
         }
     }
     pub fn as_primitive(&self) -> Option<&'static PrimitiveInfo>{
         match self {
-            CompilerType::Primitive(x) => return Some(x),
+            CompilerType::Primitive(x) => Some(x),
             _ => None
         }
     }
     pub fn dereference(&self) -> Option<&CompilerType>{
         match self {
-            CompilerType::Pointer(x) => Some(&x),
+            CompilerType::Pointer(x) => Some(x),
             _ => None
         }
     }
@@ -467,11 +466,10 @@ impl Struct {
             panic!("{} {} ALERT", self.path, self.name);
         }
         let generic_impl = self.generic_implementations.borrow();
-        if !generic_impl.is_empty() {
-            if generic_impl[0].len() != given_generics.len() {
+        if !generic_impl.is_empty()
+            && generic_impl[0].len() != given_generics.len() {
                 return None;
             }
-        }
         if let Some(pos) = generic_impl.iter().position(|x| given_generics.eq(&**x)) {
             Some(pos)
         }else {
@@ -487,7 +485,7 @@ pub mod function_flags {
     pub const PUBLIC: u8 = 16;
     pub const INLINE: u8 = 32;
     pub const CONST_EXPRESSION: u8 = 64;
-    pub const IMPORTED: u8 = 128;
+    pub const EXTERNAL: u8 = 128;
 }
 #[derive(Debug, Clone)]
 pub struct Function {
@@ -512,11 +510,10 @@ impl Function {
         Self { path, name, args, return_type, body, attribs, flags, generic_params, generic_implementations: RefCell::new(vec![]), times_used: Cell::new(0) }
     }
     pub fn is_generic(&self) -> bool { self.has_flag(function_flags::GENERIC) }
-    pub fn is_imported(&self) -> bool { self.has_flag(function_flags::IMPORTED) }
+    pub fn is_external(&self) -> bool { self.has_flag(function_flags::EXTERNAL) }
     pub fn is_inline(&self) -> bool { self.has_flag(function_flags::INLINE) }
 
-    pub fn is_normal(&self) -> bool { !(self.is_generic() || self.is_inline() || self.is_imported()) }
-    pub fn set_as_imported(&self) { self.set_flag(function_flags::IMPORTED);}
+    pub fn is_normal(&self) -> bool { !(self.is_generic() || self.is_inline() || self.is_external()) }
     
     pub fn path(&self) -> &str { &self.path }
     pub fn name(&self) -> &str { &self.name }
@@ -536,11 +533,10 @@ impl Function {
             panic!("{} {} ALERT", self.path, self.name);
         }
         let generic_impl = self.generic_implementations.borrow();
-        if !generic_impl.is_empty() {
-            if generic_impl[0].len() != given_generics.len() {
+        if !generic_impl.is_empty()
+            && generic_impl[0].len() != given_generics.len() {
                 return None;
             }
-        }
         if let Some(pos) = generic_impl.iter().position(|x| given_generics.eq(&**x)) {
             Some(pos)
         }else {
@@ -568,6 +564,7 @@ pub mod variable_flags {
     pub const HAS_READ: u8 = 1;
     pub const HAS_WROTE: u8 = 2;
     pub const MODIFIED_CONTENT: u8 = 4;
+    pub const INLINE: u8 = 16;
     pub const ALIAS_VALUE: u8 = 32;
     pub const CONSTANT: u8 = 64;
     pub const ARGUMENT: u8 = 128;
@@ -598,11 +595,11 @@ impl Variable {
             value: RefCell::new(None),
         }
     }
-    pub fn new_alias(comp_type: CompilerType, value: Option<LLVMVal>) -> Self {
+    pub fn new_inline(comp_type: CompilerType) -> Self {
         Self {
             compiler_type: comp_type,
-            flags: Cell::new(variable_flags::ARGUMENT | variable_flags::ALIAS_VALUE),
-            value: RefCell::new(value),
+            flags: Cell::new(variable_flags::INLINE),
+            value: RefCell::new(None),
         }
     }
 
@@ -625,7 +622,7 @@ impl Variable {
         &self.compiler_type
     }
     pub fn is_argument(&self) -> bool { self.has_flag(variable_flags::ARGUMENT) }
-    pub fn is_alias_value(&self) -> bool { self.has_flag(variable_flags::ALIAS_VALUE) }
+    pub fn is_inline(&self) -> bool { self.has_flag(variable_flags::INLINE) }
     pub fn is_constant(&self) -> bool { self.has_flag(variable_flags::CONSTANT) }
     pub fn has_read(&self) -> bool { self.has_flag(variable_flags::HAS_READ) }
     pub fn has_wrote(&self) -> bool { self.has_flag(variable_flags::HAS_WROTE) }
@@ -662,12 +659,7 @@ impl Variable {
             return Ok(val.clone());
         }
         if self.is_argument() {
-            let llvm_repr = if self.is_alias_value() {
-                LLVMVal::Register(var_id)
-            } else {
-                LLVMVal::VariableName(var_name.to_string())
-            };
-            return Ok(llvm_repr);
+            return Ok( LLVMVal::VariableName(var_name.to_string()));
         }
         let type_str = {let mut x = self.compiler_type.clone(); x.substitute_generic_types_global_aliases(ctx.symbols)?; x}.llvm_representation(ctx.symbols)?;
         let temp_id = ctx.aquire_unique_temp_value_counter();
@@ -767,7 +759,9 @@ pub struct CodeGenContext<'a> {
 
     temp_value_counter: Cell<u32>,
     variable_counter: Cell<u32>,
+    inline_variable_counter: Cell<u32>,
     logic_counter: Cell<u32>,
+    preallocated_variables_count: Cell<u32>,
 }
 impl<'a> CodeGenContext<'a> {
     pub fn new(symbols: &'a SymbolTable, function: usize) -> Self {
@@ -777,8 +771,13 @@ impl<'a> CodeGenContext<'a> {
             scope: Scope::new(),
             temp_value_counter: Cell::new(0),
             variable_counter: Cell::new(0),
+            inline_variable_counter: Cell::new(0),
             logic_counter: Cell::new(0),
+            preallocated_variables_count: Cell::new(0)
         }
+    }
+    pub fn current_function(&self) -> &Function{
+        &self.symbols.get_function_by_id(self.current_function)
     }
     pub fn current_function_path(&self) -> &str{
         &self.symbols.get_function_by_id(self.current_function).path
@@ -789,21 +788,100 @@ impl<'a> CodeGenContext<'a> {
     pub fn aquire_unique_variable_index(&self) -> u32{
         self.variable_counter.replace(self.variable_counter.get() + 1)
     }
+    pub fn aquire_unique_inline_variable_index(&self) -> u32{
+        self.inline_variable_counter.replace(self.inline_variable_counter.get() + 1)
+    }
     pub fn aquire_unique_logic_counter(&self) -> u32{
         self.logic_counter.replace(self.logic_counter.get() + 1)
+    }
+    
+    pub fn preallocated_variables_count(&self) -> u32 {
+        self.preallocated_variables_count.get()
+    }
+    
+    pub fn set_preallocated_variables_count(&mut self, preallocated_variables_count: u32) {
+        self.preallocated_variables_count.set(preallocated_variables_count);
     }
 }
 
 
-pub type CompileResult<T> = Result<T, (Span, CompilerError)>;
+pub type CompileResult<T> = Result<T, CompilerErrorStruct>;
+#[derive(Debug)]
+pub struct CompilerErrorStruct {
+    pub error: CompilerError,
+    pub span: Option<Span>,
+}
+
+impl CompilerErrorStruct {
+    pub fn extend(&mut self, str: &str) {
+        self.error = CompilerError::Generic(format!("{}\n{}", self.error, str))
+    }
+    pub fn extend_first_span(&mut self, str: &str, span: Span) {
+        self.error = CompilerError::Generic(format!("{}\n{}", self.error, str));
+        if self.span.is_none() {
+            self.span = Some(span);
+        }
+    }
+}
+
+impl From<CompilerError> for CompilerErrorStruct {
+    fn from(error: CompilerError) -> Self {
+        Self {
+            error,
+            span: None,
+        }
+    }
+}
+impl From<(Span,CompilerError)> for CompilerErrorStruct {
+    fn from(value: (Span,CompilerError)) -> Self {
+        Self { error: value.1, span: Some(value.0) }
+    }
+}
+pub trait CompileResultExt<T> {
+    fn extend(self, str: &str) -> CompileResult<T>;
+}
+impl<T> CompileResultExt<T> for CompileResult<T> {
+    fn extend(self, str: &str) -> CompileResult<T>{
+        match self {
+            Ok(_) => self,
+            Err(mut x) => {
+                x.extend(str);
+                Err(x)
+            }
+        }
+    }
+}
 #[derive(Debug)]
 pub enum CompilerError {
     Generic(String),
     Io(std::io::Error),
     InvalidExpression(String),
     SymbolNotFound(String),
+    ArgumentCountMissmatch(String),
     TypeMismatch { expected: CompilerType, found: CompilerType },
     InvalidStatementInContext(String),
+    BinaryOpMissmatchedTypes(BinaryOp, String, String),
+    
+    CompilerFunctionArgumentCountMissmatch(&'static str, u32, usize),
+    CompilerFunctionGenericCountMissmatch(&'static str, u32, usize),
+}
+impl CompilerError {
+    pub fn extend(&self, extention_message: &str) -> CompilerError {
+        Self::Generic(format!("{}\n{}", self, extention_message))
+    }
+}
+impl std::fmt::Display for CompilerError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Generic(x) => f.write_str(x),
+            Self::BinaryOpMissmatchedTypes(op, left, right) => f.write_str(&format!("Binary operator '{:?}' cannot be applied to mismatched types '{}' and '{}'", op, left, right)),
+            Self::CompilerFunctionArgumentCountMissmatch(x, expected, got) => f.write_str(&format!("{x} expects exactly {expected} argument, but got {got}")),
+            Self::CompilerFunctionGenericCountMissmatch(x, expected, got) => f.write_str(&format!("{x} expects exactly {expected} generic target type, but got {got}")),
+            Self::InvalidExpression(x) => f.write_str(x),
+            Self::SymbolNotFound(x) => f.write_str(x),
+            _ => todo!("{:?}", self)
+        }
+    }
 }
 impl From<std::io::Error> for CompilerError {
     fn from(err: std::io::Error) -> Self {
