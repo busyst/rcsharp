@@ -221,7 +221,7 @@ fn handle_enums(enums : Vec<ParsedEnum>, symbols: &mut SymbolTable, _output: &mu
     }
     Ok(())
 }
-fn handle_functions(functions : Vec<ParsedFunction>, symbols: &mut SymbolTable, _: &mut LLVMOutputHandler) -> CompileResult<()>{
+fn handle_functions(functions : Vec<ParsedFunction>, symbols: &mut SymbolTable, output: &mut LLVMOutputHandler) -> CompileResult<()>{
     let mut registered_funcs = vec![];
     for s in &functions {
         let full_path = if s.path.is_empty() { s.name.to_string() } else { format!("{}.{}", s.path, s.name) };
@@ -237,8 +237,8 @@ fn handle_functions(functions : Vec<ParsedFunction>, symbols: &mut SymbolTable, 
         let return_type = CompilerType::into_path(&pf.return_type, symbols, &current_path)?;
 
         let args = pf.args.iter().map(|x| (x.0.clone(), CompilerType::into_path(&x.1, symbols, &current_path).unwrap() )).collect::<Box<[_]>>();
-        let full_path = if current_path.is_empty() { function_name.to_string() } else { format!("{}.{}", current_path, function_name) };
         let function = Function::new(current_path, function_name, args, return_type, function_body, 0.into(), function_attrs, function_generics);
+
         if function_prefixes.iter().any(|x| x.as_str() == "public") {
             function.set_flag(function_flags::PUBLIC);
         }
@@ -248,16 +248,13 @@ fn handle_functions(functions : Vec<ParsedFunction>, symbols: &mut SymbolTable, 
         if function_prefixes.iter().any(|x| x.as_str() == "constexpr") {
             function.set_flag(function_flags::CONST_EXPRESSION);
         }
-        if function.attribs.iter().any(|x| x.name_equals("DllImport")) {
-            function.set_flag(function_flags::EXTERNAL);
-        }
-        if function.attribs.iter().any(|x| x.name_equals("no_lazy")) {
-            function.use_fn();
-        }
         if !function.generic_params.is_empty() {
             function.set_flag(function_flags::GENERIC);
         }
-        symbols.insert_function(&full_path, function);
+        symbols.insert_function(&function.full_path().to_string(), function);
+    }
+    for x in &symbols.functions {
+        fn_attribs_handler(&x.1.1, x.1.0, symbols, output)?;
     }
     Ok(())
 }
@@ -339,7 +336,7 @@ fn compile_function_body(function_id: usize, full_function_name: &str, symbols: 
         }
     }
     let function = symbols.get_function_by_id(function_id);
-    let current_namespace = &function.path;
+    let current_namespace = function.path();
     let mut rt = function.return_type.clone();
     rt.substitute_generic_types(&symbols.alias_types, symbols)?;
     let rt = rt.llvm_representation(symbols)?;
@@ -609,7 +606,37 @@ fn handle_generics(implemented_funcs: &mut HashMap<usize, usize>, implemented_ty
     }
     Ok(any_new)
 }
-
+#[allow(unused)]
+fn fn_attribs_handler(function: &Function, function_id: usize, symbols: &SymbolTable, output: &mut LLVMOutputHandler) -> CompileResult<()>{
+    for x in function.attribs() {
+        match &*x.name {
+            "DllImport" =>{
+                function.set_flag(function_flags::EXTERNAL);
+            }
+            "no_lazy" =>{
+                if function.times_used.get() == 0 {
+                    function.use_fn();
+                }
+            }
+            "ExtentionOf" => {
+                let expr = x.one_argument().expect("Expected ony one argument");
+                if let Some(arg) = function.args.get(0).map(|x| &x.1) {
+                    if let Expr::Name(name) = expr {
+                        let x = symbols.get_type_id(&format!("{}.{}", function.path(), name)).or(symbols.get_type_id(name)).expect("Type not found");
+                        if arg.is_base_equal_to(x) {
+                            continue;
+                        }
+                        panic!("{} {:?} {}", function.full_path(), arg, x);
+                    }
+                    panic!("{}:{:?}", function.full_path(), expr);
+                }
+                panic!("{}:{:?}", function.full_path(), function.args);
+            }
+            _ => panic!("{:?}", x)
+        }
+    }
+    Ok(())
+}
 #[derive(PartialEq)]
 enum StringEntry {
     Owned(String),

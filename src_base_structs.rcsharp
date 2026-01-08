@@ -244,7 +244,6 @@ namespace vector{
         length: u32,
         capacity: u32,
     }
-    #[ExtentionOf(Vec)]
     fn new<T>() : Vec<T>{
         let vec : Vec<T>;
         vec.array = null;
@@ -466,6 +465,7 @@ namespace string{
         mem::zero_fill(x.data, (size + 1) as i64);
         return x;
     }
+    #[ExtentionOf(String)]
     fn clone(src: &String) : String {
         let x: String;
         x.len = src.len;
@@ -474,6 +474,7 @@ namespace string{
         x.data[x.len] = 0;
         return x;
     }
+    #[ExtentionOf(String)]
     fn concat_with_c_string(src_string: &String, c_string: &i8) : String {
         const c_string_len : i32 = string_utils::c_str_len(c_string);
         const new_len: i32 = c_string_len + src_string.len;
@@ -489,16 +490,18 @@ namespace string{
         str.len = new_len;
         return str;
     }
+    #[ExtentionOf(String)]
     fn equal(first: &String, second: &String) : bool{
         if first.len != second.len { return false; }
         return mem::compare(first.data, second.data, first.len as i64) == 0;
     }
-
+    #[ExtentionOf(String)]
     fn free(str: &String){
         mem::free(str.data as &void);
         str.len = 0;
     }
     // Use data only inside function where it was called, because stack will be "freed" upon leaving function and data will be corrupted
+    #[ExtentionOf(String)]
     inline fn as_c_string_stalloc(string: &String, stallocd_buffer: &i8){
         mem::copy(string.data, stallocd_buffer, string.len as i64);
         stallocd_buffer[string.len] = 0;

@@ -269,6 +269,17 @@ impl CompilerType {
             CompilerType::Pointer(inner) => inner.substitute_generic_types(map, symbols),
         }
     }
+    
+    
+    pub fn is_base_equal_to(&self, given_type_id: usize) -> bool {
+        match self {
+            CompilerType::Pointer(internal_type) => internal_type.is_base_equal_to(given_type_id),
+            CompilerType::StructType(id) => *id == given_type_id,
+            CompilerType::GenericStructType(base_id, _) => *base_id == given_type_id,
+            CompilerType::GenericStructTypeTemplate(base_id, _) => *base_id == given_type_id,
+            _ => false
+        }
+    }
     pub fn is_bool(&self) -> bool {
         self.as_primitive().map(|x| x.is_bool()).unwrap_or(false)
     }
@@ -345,8 +356,8 @@ impl CompilerType {
             }
             CompilerType::StructType(x) =>{
                 let struct_type = symbols.get_type_by_id(*x);
-                if struct_type.layout.get().is_valid() {
-                    return struct_type.layout.get();
+                if let Some(layout) = struct_type.get_layout() {
+                    return layout;
                 }
                 let mut current_offset = 0;
                 let mut max_alignment = 1;
@@ -361,7 +372,7 @@ impl CompilerType {
                 }
                 let final_padding = (max_alignment - (current_offset % max_alignment)) % max_alignment;
                 let total_size = current_offset + final_padding;
-                struct_type.layout.set(Layout::new(total_size, max_alignment));
+                struct_type.set_layout(Layout::new(total_size, max_alignment));
                 Layout::new(total_size, max_alignment)
             }
             _ => todo!("{:?}", self)
@@ -398,16 +409,18 @@ pub mod struct_flags {
     pub const GENERIC: u8 = 64;
     pub const PRIMITIVE_TYPE: u8 = 128;
 }
+#[allow(unused)]
 #[derive(Debug, Clone)]
 pub struct Struct {
-    pub path: Box<str>,
-    pub name: Box<str>,
+    path: Box<str>,
+    name: Box<str>,
+    full_path: Box<str>,
     pub fields: Box<[(String, CompilerType)]>,
     pub generic_params: Box<[String]>,
     pub generic_implementations: RefCell<Vec<Box<[CompilerType]>>>,
-    pub attribs: Box<[Attribute]>,
-    pub flags: Cell<u8>,
-    pub layout: Cell<Layout>
+    attribs: Box<[Attribute]>,
+    flags: Cell<u8>,
+    compiled_info: RefCell<(Option<Layout>, )>,
 }
 impl FlagManager for Struct {
     fn get_flags(&self) -> &Cell<u8> { &self.flags }
@@ -415,69 +428,77 @@ impl FlagManager for Struct {
 
 impl Struct {
     pub fn new(path: Box<str>, name: Box<str>, fields: Box<[(String, CompilerType)]>, attribs: Box<[Attribute]>, generic_params: Box<[String]>) -> Self {
-        Self { path, name, fields, attribs, flags: Cell::new(if !generic_params.is_empty() {struct_flags::GENERIC} else {0}), generic_params, generic_implementations: RefCell::new(vec![]), layout: Cell::new(Layout::new_not_valid()) }
+        let full_path = if path.is_empty() {name.clone()} else { format!("{}.{}", path, name).into()}; 
+        Self { path, name, full_path, fields, attribs, flags: Cell::new(if !generic_params.is_empty() {struct_flags::GENERIC} else {0}), generic_params, generic_implementations: RefCell::new(vec![]), compiled_info: RefCell::new((None, )) }
     }
     pub fn new_placeholder(path: String, name: String, flags: u8) -> Struct {
-        Self { path: path.into(), name: name.into(), fields: Box::new([]), generic_params: Box::new([]), generic_implementations: RefCell::new(vec![]), attribs: Box::new([]), flags: Cell::new(flags), layout: Cell::new(Layout::new_not_valid()) }
+        let full_path = if path.is_empty() {name.clone()} else { format!("{}.{}", path, name).into()}.into();
+        Self { path: path.into(), name: name.into(), full_path, fields: Box::new([]), generic_params: Box::new([]), generic_implementations: RefCell::new(vec![]), attribs: Box::new([]), flags: Cell::new(flags), compiled_info: RefCell::new((None, )) }
     }
 
     pub fn is_primitive(&self) -> bool { self.has_flag(struct_flags::PRIMITIVE_TYPE) }
     pub fn is_generic(&self) -> bool { self.has_flag(struct_flags::GENERIC) }
     pub fn set_as_generic(&self) { self.set_flag(struct_flags::GENERIC); }
     pub fn llvm_representation(&self) -> String {
+        assert!(!self.is_generic());
         if self.is_primitive() {
             return self.name.to_string();
         }
-        if self.path.is_empty() {
-            format!("%struct.{}", self.name)
-        } else {
-            format!("%struct.{}.{}", self.path, self.name)
-        }
+        format!("%{}", self.llvm_representation_without_percent())
     }
     pub fn llvm_representation_without_percent(&self) -> String {
         if self.is_primitive() {
             return self.name.to_string();
         }
-        if self.path.is_empty() {
-            format!("struct.{}", self.name)
-        } else {
-            format!("struct.{}.{}", self.path, self.name)
-        }
+        format!("struct.{}", self.full_path)
     }
     pub fn llvm_repr_index(&self, impl_index: usize, symbols: &SymbolTable) -> Box<str> {
-        assert!(!self.is_primitive());
-        let x= if self.path.is_empty() {
-            format!("struct.{}", self.name)
-        } else {
-            format!("struct.{}.{}", self.path, self.name)
-        };
-        let a = &self.generic_implementations.borrow()[impl_index];
-        format!("%\"{}<{}>\"", x, a.iter().map(|x| x.llvm_representation_in_generic(symbols).unwrap()).collect::<Vec<_>>().join(", ")).into_boxed_str()
+        assert!(self.is_generic());
+        debug_assert!(impl_index < self.generic_implementations.borrow().len());
+        let base_name = format!("struct.{}", self.full_path);
+
+        let implementations = self.generic_implementations.borrow();
+        let generic_args = implementations.get(impl_index).unwrap();
+
+        let type_names = generic_args.iter()
+            .map(|t| t.llvm_representation_in_generic(symbols).expect("Failed to get generic type representation"))
+            .collect::<Vec<_>>()
+            .join(", ");
+            
+        format!("%\"{}<{}>\"", base_name, type_names).into_boxed_str()
     }
-    pub fn full_path(&self) -> Box<str> {
-        if self.path.is_empty() {
-            self.name.clone()
-        } else {
-            format!("{}.{}", self.path, self.name).into()
-        }
-    }
+    
     pub fn get_implementation_index(&self, given_generics: &[CompilerType]) -> Option<usize> {
         if !self.is_generic() {
-            panic!("{} {} ALERT", self.path, self.name);
+            panic!("get_implementation_index called on non-generic struct: {}", self.full_path());
         }
-        let generic_impl = self.generic_implementations.borrow();
-        if !generic_impl.is_empty()
-            && generic_impl[0].len() != given_generics.len() {
-                return None;
+        if self.generic_params.len() != given_generics.len() {
+            return None;
+        }
+        {
+            let generic_impl = self.generic_implementations.borrow();
+            if let Some(pos) = generic_impl.iter().position(|x| given_generics.eq(&**x)) {
+                return Some(pos);
             }
-        if let Some(pos) = generic_impl.iter().position(|x| given_generics.eq(&**x)) {
-            Some(pos)
-        }else {
-            drop(generic_impl);
-            let mut generic_impl = self.generic_implementations.borrow_mut();
-            generic_impl.push(given_generics.to_vec().into());
-            Some(generic_impl.len() - 1)
         }
+        let mut generic_impl = self.generic_implementations.borrow_mut();
+        generic_impl.push(given_generics.to_vec().into());
+        Some(generic_impl.len() - 1)
+    }
+    pub fn get_layout(&self) -> Option<Layout> {
+        self.compiled_info.borrow().0.clone()
+    }
+    pub fn set_layout(&self, layout: Layout) {
+        assert!(!self.is_generic(), "Layout should not be set on a generic struct definition.");
+        let mut info = self.compiled_info.borrow_mut();
+        if info.0.is_none() {
+            info.0 = Some(layout);
+        } else {
+            unreachable!("Layout for struct '{}' is already set", self.full_path());
+        }
+    }
+    pub fn full_path(&self) -> &Box<str> {
+        &self.full_path
     }
 }
 pub mod function_flags {
@@ -489,12 +510,13 @@ pub mod function_flags {
 }
 #[derive(Debug, Clone)]
 pub struct Function {
-    pub path: Box<str>,
-    pub name: Box<str>,
+    path: Box<str>,
+    name: Box<str>,
+    full_path: Box<str>,
     pub args: Box<[(String, CompilerType)]>,
     pub return_type: CompilerType,
     pub body: Box<[StmtData]>,
-    pub attribs: Box<[Attribute]>,
+    attribs: Box<[Attribute]>,
     flags: Cell<u8>,
 
     pub generic_params: Box<[String]>,
@@ -507,7 +529,8 @@ impl FlagManager for Function {
 
 impl Function {
     pub fn new(path: Box<str>, name: Box<str>, args: Box<[(String, CompilerType)]>, return_type: CompilerType, body: Box<[StmtData]>, flags: Cell<u8>, attribs: Box<[Attribute]>, generic_params: Box<[String]>) -> Self {
-        Self { path, name, args, return_type, body, attribs, flags, generic_params, generic_implementations: RefCell::new(vec![]), times_used: Cell::new(0) }
+        let full_path = if path.is_empty() {name.clone()} else { format!("{}.{}", path, name).into()}; 
+        Self { path, name, full_path, args, return_type, body, attribs, flags, generic_params, generic_implementations: RefCell::new(vec![]), times_used: Cell::new(0) }
     }
     pub fn is_generic(&self) -> bool { self.has_flag(function_flags::GENERIC) }
     pub fn is_external(&self) -> bool { self.has_flag(function_flags::EXTERNAL) }
@@ -518,45 +541,53 @@ impl Function {
     pub fn path(&self) -> &str { &self.path }
     pub fn name(&self) -> &str { &self.name }
     pub fn use_fn(&self) { self.times_used.replace(self.times_used.get() + 1); }
-    pub fn full_path(&self) -> Box<str> {
-        if self.path.is_empty() {
-            self.name.clone()
-        } else {
-            format!("{}.{}", self.path, self.name).into()
-        }
+    pub fn full_path(&self) -> &Box<str> {
+        &self.full_path
     }
     pub fn get_implementation_index(&self, given_generics: &[CompilerType]) -> Option<usize> {
         if !self.is_generic() {
-            panic!("{} {} ALERT", self.path, self.name);
+            panic!("get_implementation_index called on non-generic function: {}", self.full_path());
         }
         if given_generics.iter().any(|x| matches!(x, CompilerType::GenericSubst(..))) {
-            panic!("{} {} ALERT", self.path, self.name);
+            panic!("Attempted to create a generic implementation with placeholder types for function: {}", self.full_path());
         }
-        let generic_impl = self.generic_implementations.borrow();
-        if !generic_impl.is_empty()
-            && generic_impl[0].len() != given_generics.len() {
-                return None;
+        if self.generic_params.len() != given_generics.len() {
+            return None;
+        }
+        {
+            let generic_impls = self.generic_implementations.borrow();
+            if let Some(pos) = generic_impls.iter().position(|x| given_generics.eq(&**x)) {
+                return Some(pos);
             }
-        if let Some(pos) = generic_impl.iter().position(|x| given_generics.eq(&**x)) {
-            Some(pos)
-        }else {
-            drop(generic_impl);
-            let mut generic_impl = self.generic_implementations.borrow_mut();
-            generic_impl.push(given_generics.to_vec().into());
-            Some(generic_impl.len() - 1)
         }
+
+        let mut generic_impls = self.generic_implementations.borrow_mut();
+        generic_impls.push(given_generics.to_vec().into());
+        Some(generic_impls.len() - 1)
     }
     pub fn call_path_impl_index(&self, impl_index: usize, symbols: &SymbolTable) -> Box<str> {
-        let x= if self.path.is_empty() {
-            self.name.clone()
-        } else {
-            format!("{}.{}", self.path, self.name).into()
-        };
-        let a = &self.generic_implementations.borrow()[impl_index];
-        format!("\"{}<{}>\"", x, a.iter().map(|x| x.llvm_representation_in_generic(symbols).unwrap()).collect::<Vec<_>>().join(", ")).into_boxed_str()
+        debug_assert!(impl_index < self.generic_implementations.borrow().len());
+
+        let base_name = self.full_path();
+        
+        let implementations = self.generic_implementations.borrow();
+        let generic_args = implementations.get(impl_index).unwrap();
+
+        let type_names = generic_args.iter()
+            .map(|t| t.llvm_representation_in_generic(symbols).expect("Failed to get generic type representation"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!("\"{}<{}>\"", base_name, type_names).into_boxed_str()
     }
     pub fn get_type(&self) -> CompilerType {
-        CompilerType::Function(Box::new(self.return_type.clone()), self.args.iter().map(|x| x.1.clone()).collect::<Box<_>>())
+        CompilerType::Function(
+            Box::new(self.return_type.clone()),
+            self.args.iter().map(|(_, ty)| ty.clone()).collect::<Box<_>>()
+        )
+    }
+    
+    pub fn attribs(&self) -> &[Attribute] {
+        &self.attribs
     }
 
 }
@@ -680,12 +711,6 @@ struct ScopeLayer {
 pub struct Scope {
     layers: Vec<ScopeLayer>,
 }
-impl Default for Scope {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl Scope {
     pub fn new() -> Self {
         Self {
