@@ -1,4 +1,4 @@
-use logos::{Logos, Lexer as LogosLexer, Span};
+use logos::{Lexer as LogosLexer, Logos, Span};
 use std::fmt;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -18,11 +18,7 @@ pub struct LexingError {
 
 impl fmt::Display for LexingError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "Invalid token at row {}, col {}",
-            self.row, self.col
-        )
+        write!(f, "Invalid token at row {}, col {}", self.row, self.col)
     }
 }
 impl std::error::Error for LexingError {}
@@ -38,69 +34,124 @@ pub enum Token {
     #[regex(r"//[^\n]*")]
     LineComment,
 
-    #[regex(r"/\*[^*]*\*+([^/*][^*]*\*+)*/",)]
+    #[regex(r"/\*[^*]*\*+([^/*][^*]*\*+)*/")]
     BlockComment,
 
-    #[token("(")] LParen,
-    #[token(")")] RParen,
-    #[token("{")] LBrace,
-    #[token("}")] RBrace,
-    #[token("[")] LSquareBrace,
-    #[token("]")] RSquareBrace,
-    #[token(":")] Colon,
-    #[token("::")] DoubleColon,
-    #[token(";")] SemiColon,
-    #[token(",")] Comma,
-    #[token(".")] Dot,
-    #[token("#")] Hint,
+    #[token("(")]
+    LParen,
+    #[token(")")]
+    RParen,
+    #[token("{")]
+    LBrace,
+    #[token("}")]
+    RBrace,
+    #[token("[")]
+    LSquareBrace,
+    #[token("]")]
+    RSquareBrace,
+    #[token(":")]
+    Colon,
+    #[token("::")]
+    DoubleColon,
+    #[token(";")]
+    SemiColon,
+    #[token(",")]
+    Comma,
+    #[token(".")]
+    Dot,
+    #[token("#")]
+    Hint,
 
-    #[token("=")] Equal,
-    #[token("+")] Plus,
-    #[token("-")] Minus,
-    #[token("*")] Multiply,
-    #[token("/")] Divide,
-    #[token("%")] Modulo,
+    #[token("=")]
+    Equal,
+    #[token("+")]
+    Plus,
+    #[token("-")]
+    Minus,
+    #[token("*")]
+    Multiply,
+    #[token("/")]
+    Divide,
+    #[token("%")]
+    Modulo,
 
-    #[token("!")] LogicNot,
-    #[token("==")] LogicEqual,
-    #[token("!=")] LogicNotEqual,
-    #[token("||")] LogicOr,
-    #[token("&&")] LogicAnd,
-    #[token(">")] LogicGreater,
-    #[token(">=")] LogicGreaterEqual,
-    #[token("<")] LogicLess,
-    #[token("<=")] LogicLessEqual,
+    #[token("!")]
+    LogicNot,
+    #[token("==")]
+    LogicEqual,
+    #[token("!=")]
+    LogicNotEqual,
+    #[token("||")]
+    LogicOr,
+    #[token("&&")]
+    LogicAnd,
+    #[token(">")]
+    LogicGreater,
+    #[token(">=")]
+    LogicGreaterEqual,
+    #[token("<")]
+    LogicLess,
+    #[token("<=")]
+    LogicLessEqual,
 
-    #[token("~")] BinaryNot,
-    #[token("|")] BinaryOr,
-    #[token("&")] BinaryAnd,
-    #[token("^")] BinaryXor,
-    #[token("<<")] BinaryShiftL,
-    #[token(">>")] BinaryShiftR,
+    #[token("~")]
+    BinaryNot,
+    #[token("|")]
+    BinaryOr,
+    #[token("&")]
+    BinaryAnd,
+    #[token("^")]
+    BinaryXor,
+    #[token("<<")]
+    BinaryShiftL,
+    #[token(">>")]
+    BinaryShiftR,
 
-    #[token("pub")] KeywordPub,
-    #[token("inline")] KeywordInline,
-    #[token("const")] KeywordConst,
-    #[token("constexpr")] KeywordConstExpr,
-    #[token("match")] KeywordMatch,
-    
-    #[token("fn")] KeywordFunction,
-    #[token("let")] KeywordVariableDeclaration,
-    #[token("as")] KeywordAs,
-    #[token("if")] KeywordIf,
-    #[token("else")] KeywordElse,
-    #[token("struct")] KeywordStruct,
-    #[token("enum")] KeywordEnum,
-    #[token("loop")] KeywordLoop,
-    #[token("break")] KeywordBreak,
-    #[token("continue")] KeywordContinue,
-    #[token("return")] KeywordReturn,
-    #[token("this")] KeywordThis,
-    #[token("operator")] KeywordOperator,
-    #[token("namespace")] KeywordNamespace,
-    #[token("true")] KeywordTrue,
-    #[token("false")] KeywordFalse,
-    #[token("null")] KeywordNull,
+    #[token("pub")]
+    KeywordPub,
+    #[token("inline")]
+    KeywordInline,
+    #[token("const")]
+    KeywordConst,
+    #[token("constexpr")]
+    KeywordConstExpr,
+    #[token("match")]
+    KeywordMatch,
+
+    #[token("fn")]
+    KeywordFunction,
+    #[token("let")]
+    KeywordVariableDeclaration,
+    #[token("as")]
+    KeywordAs,
+    #[token("if")]
+    KeywordIf,
+    #[token("else")]
+    KeywordElse,
+    #[token("struct")]
+    KeywordStruct,
+    #[token("enum")]
+    KeywordEnum,
+    #[token("loop")]
+    KeywordLoop,
+    #[token("break")]
+    KeywordBreak,
+    #[token("continue")]
+    KeywordContinue,
+    #[token("return")]
+    KeywordReturn,
+    #[token("this")]
+    KeywordThis,
+    #[token("operator")]
+    KeywordOperator,
+    #[token("namespace")]
+    KeywordNamespace,
+    #[token("true")]
+    KeywordTrue,
+    #[token("false")]
+    KeywordFalse,
+    #[token("null")]
+    KeywordNull,
     DummyToken,
     #[regex(r"[a-zA-Z_]\w*", |lex| lex.slice().to_string().into_boxed_str())]
     Name(Box<str>),
@@ -110,7 +161,7 @@ pub enum Token {
     Decimal(Box<str>),
     #[regex(r#""([^"\\]|\\.)*""#, unescape_string)]
     String(Box<str>),
-    
+
     #[regex(r"'([^'\\]|\\.)*'", |lex| unescape_char(lex).ok())]
     Char(char),
 }
@@ -118,14 +169,14 @@ pub enum Token {
 pub struct Lexer<'source> {
     logos: LogosLexer<'source, Token>,
     pub row: u32,
-    pub col: u32
+    pub col: u32,
 }
 impl<'source> Lexer<'source> {
     pub fn new(source: &'source str) -> Self {
         Self {
             logos: Token::lexer(source),
             col: 1,
-            row: 1
+            row: 1,
         }
     }
     fn advance_loc(&mut self, slice: &str) {
@@ -155,10 +206,17 @@ impl<'source> Iterator for Lexer<'source> {
 
             match token_result {
                 Err(_) => {
-                    let err = LexingError { span, col: start_loc_c, row: start_loc_r };
+                    let err = LexingError {
+                        span,
+                        col: start_loc_c,
+                        row: start_loc_r,
+                    };
                     return Some(Err(err));
                 }
-                Ok(Token::Whitespace) | Ok(Token::Newline) | Ok(Token::LineComment) | Ok(Token::BlockComment) => {
+                Ok(Token::Whitespace)
+                | Ok(Token::Newline)
+                | Ok(Token::LineComment)
+                | Ok(Token::BlockComment) => {
                     continue;
                 }
                 Ok(token) => {
@@ -166,7 +224,7 @@ impl<'source> Iterator for Lexer<'source> {
                         token,
                         span,
                         col: start_loc_c,
-                        row: start_loc_r
+                        row: start_loc_r,
                     }));
                 }
             }
@@ -181,9 +239,9 @@ fn unescape_string(lex: &mut logos::Lexer<Token>) -> Box<str> {
 }
 fn unescape_char(lex: &mut logos::Lexer<Token>) -> Result<char, ()> {
     let slice = lex.slice();
-    let content = &slice[1..slice.len() - 1]; 
+    let content = &slice[1..slice.len() - 1];
     let unescaped = unescape_content(content, false);
-    
+
     let mut chars = unescaped.chars();
     if let (Some(c), None) = (chars.next(), chars.next()) {
         Ok(c)
@@ -196,10 +254,10 @@ fn unhex_num(lex: &mut logos::Lexer<Token>) -> Box<str> {
     if slice.len() < 2 {
         return slice.to_string().into_boxed_str();
     }
-    
+
     let mut chars = slice.chars();
     let second_char = chars.nth(1).unwrap();
-    
+
     if second_char == 'x' {
         let b = i128::from_str_radix(&slice[2..], 16).unwrap();
         return b.to_string().into_boxed_str();
@@ -208,7 +266,7 @@ fn unhex_num(lex: &mut logos::Lexer<Token>) -> Box<str> {
         let b = i128::from_str_radix(&slice[2..], 2).unwrap();
         return b.to_string().into_boxed_str();
     }
-    
+
     slice.to_string().into_boxed_str()
 }
 fn undecimal_num(lex: &mut logos::Lexer<Token>) -> Box<str> {
@@ -276,7 +334,9 @@ fn handle_hex_escape(chars: &mut std::iter::Peekable<std::str::Chars>, unescaped
         }
     }
 
-    if hex.len() == 2 && let Ok(byte) = u8::from_str_radix(&hex, 16) {
+    if hex.len() == 2
+        && let Ok(byte) = u8::from_str_radix(&hex, 16)
+    {
         unescaped.push(byte as char);
         return;
     }
@@ -331,7 +391,9 @@ fn handle_unicode_escape(chars: &mut std::iter::Peekable<std::str::Chars>, unesc
         }
     }
 
-    if let Ok(code) = u32::from_str_radix(&hex, 16) && let Some(c) = std::char::from_u32(code) {
+    if let Ok(code) = u32::from_str_radix(&hex, 16)
+        && let Some(c) = std::char::from_u32(code)
+    {
         unescaped.push(c);
         return;
     }
@@ -341,34 +403,43 @@ fn handle_unicode_escape(chars: &mut std::iter::Peekable<std::str::Chars>, unesc
 }
 
 pub fn lex_file_with_context(source_path: &str, filename: &str) -> Result<Vec<TokenData>, String> {
-	Lexer::new(source_path)
-		.collect::<Result<Vec<_>, LexingError>>()
-		.map_err(|err| {
-			let full_slice = &source_path[err.span.clone()];
-			let (display_slice, remainder_info) = if full_slice.len() > 60 {
-				(&full_slice[..60], format!("\n... and {} more symbols", full_slice.len() - 60))
-			} else {
-				(full_slice, String::new())
-			};
-			format!(
-				"Lexing error in {}:{}:{} | Span: {:?}\nProblem:\n'{}'{}",
-				filename, err.row, err.col, err.span, display_slice, remainder_info
-			)
-		})
+    Lexer::new(source_path)
+        .collect::<Result<Vec<_>, LexingError>>()
+        .map_err(|err| {
+            let full_slice = &source_path[err.span.clone()];
+            let (display_slice, remainder_info) = if full_slice.len() > 60 {
+                (
+                    &full_slice[..60],
+                    format!("\n... and {} more symbols", full_slice.len() - 60),
+                )
+            } else {
+                (full_slice, String::new())
+            };
+            format!(
+                "Lexing error in {}:{}:{} | Span: {:?}\nProblem:\n'{}'{}",
+                filename, err.row, err.col, err.span, display_slice, remainder_info
+            )
+        })
 }
-pub fn lex_string_with_file_context(source: &str, filename: &str) -> Result<Vec<TokenData>, String> {
-	Lexer::new(source)
-		.collect::<Result<Vec<_>, LexingError>>()
-		.map_err(|err| {
-			let full_slice = &source[err.span.clone()];
-			let (display_slice, remainder_info) = if full_slice.len() > 60 {
-				(&full_slice[..60], format!("\n... and {} more symbols", full_slice.len() - 60))
-			} else {
-				(full_slice, String::new())
-			};
-			format!(
-				"Lexing error in {}:{}:{} | Span: {:?}\nProblem:\n'{}'{}",
-				filename, err.row, err.col, err.span, display_slice, remainder_info
-			)
-		})
+pub fn lex_string_with_file_context(
+    source: &str,
+    filename: &str,
+) -> Result<Vec<TokenData>, String> {
+    Lexer::new(source)
+        .collect::<Result<Vec<_>, LexingError>>()
+        .map_err(|err| {
+            let full_slice = &source[err.span.clone()];
+            let (display_slice, remainder_info) = if full_slice.len() > 60 {
+                (
+                    &full_slice[..60],
+                    format!("\n... and {} more symbols", full_slice.len() - 60),
+                )
+            } else {
+                (full_slice, String::new())
+            };
+            format!(
+                "Lexing error in {}:{}:{} | Span: {:?}\nProblem:\n'{}'{}",
+                filename, err.row, err.col, err.span, display_slice, remainder_info
+            )
+        })
 }

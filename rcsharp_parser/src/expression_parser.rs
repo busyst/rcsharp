@@ -4,7 +4,7 @@ use std::fmt::Write;
 use rcsharp_lexer::{Token, TokenData};
 
 use crate::parser::{ParserError, ParserResult, ParserType, Span};
-#[derive(Debug, Clone, PartialEq)] 
+#[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     Decimal(String),
     Integer(String),
@@ -15,13 +15,13 @@ pub enum Expr {
     BinaryOp(Box<Expr>, BinaryOp, Box<Expr>),
     UnaryOp(UnaryOp, Box<Expr>),
     Assign(Box<Expr>, Box<Expr>),
-    
+
     Cast(Box<Expr>, ParserType),
-    MemberAccess(Box<Expr>, String), 
+    MemberAccess(Box<Expr>, String),
     StaticAccess(Box<Expr>, String),
-    
+
     NameWithGenerics(Box<Expr>, Box<[ParserType]>),
-    
+
     Call(Box<Expr>, Box<[Expr]>),
     CallGeneric(Box<Expr>, Box<[Expr]>, Box<[ParserType]>),
     Index(Box<Expr>, Box<Expr>),
@@ -36,30 +36,70 @@ impl Expr {
         self.debug_emit_int(0)
     }
     fn debug_emit_int(&self, d: u8) -> String {
-        let ob = match d % 3 { 0 => "(", 1 => "[", 2 => "{", _ => unreachable!() };
-        let cb = match d % 3 { 0 => ")", 1 => "]", 2 => "}", _ => unreachable!() };
+        let ob = match d % 3 {
+            0 => "(",
+            1 => "[",
+            2 => "{",
+            _ => unreachable!(),
+        };
+        let cb = match d % 3 {
+            0 => ")",
+            1 => "]",
+            2 => "}",
+            _ => unreachable!(),
+        };
         match self {
             Self::Name(n) => n.to_string(),
             Self::Integer(n) => n.to_string(),
-            Self::Call(x, y) => format!("CALL|[{}]({})|", x.debug_emit_int(d), y.iter().map(|x| x.debug_emit_int(1)).collect::<Vec<_>>().join(", ")),
+            Self::Call(x, y) => format!(
+                "CALL|[{}]({})|",
+                x.debug_emit_int(d),
+                y.iter()
+                    .map(|x| x.debug_emit_int(1))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
             Self::MemberAccess(x, y) => format!("{}.{}", x.debug_emit_int(d), y),
             Self::StaticAccess(x, y) => format!("{}::{}", x.debug_emit_int(d), y),
             Self::Index(x, y) => format!("{}[{}]", x.debug_emit_int(d), y.debug_emit_int(d)),
-            Self::BinaryOp(l, op, r) => format!("{ob}{} {:?} {}{cb}", l.debug_emit_int(d + 1), op, r.debug_emit_int(d + 1)),
-            _ => format!("{:?}", self)
+            Self::BinaryOp(l, op, r) => format!(
+                "{ob}{} {:?} {}{cb}",
+                l.debug_emit_int(d + 1),
+                op,
+                r.debug_emit_int(d + 1)
+            ),
+            _ => format!("{:?}", self),
         }
     }
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum BinaryOp {
-    Add, Subtract, Multiply, Divide, Modulo,
-    Equals, NotEqual, Less, LessEqual, Greater, GreaterEqual,
-    And, Or, BitAnd, BitOr, BitXor, ShiftLeft, ShiftRight,
+    Add,
+    Subtract,
+    Multiply,
+    Divide,
+    Modulo,
+    Equals,
+    NotEqual,
+    Less,
+    LessEqual,
+    Greater,
+    GreaterEqual,
+    And,
+    Or,
+    BitAnd,
+    BitOr,
+    BitXor,
+    ShiftLeft,
+    ShiftRight,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum UnaryOp {
-    Negate, Not, Deref, Pointer,
+    Negate,
+    Not,
+    Deref,
+    Pointer,
 }
 #[inline(always)]
 fn get_precedence(token: &Token) -> u8 {
@@ -71,7 +111,10 @@ fn get_precedence(token: &Token) -> u8 {
         Token::BinaryXor => 5,
         Token::BinaryAnd => 6,
         Token::LogicEqual | Token::LogicNotEqual => 7,
-        Token::LogicLess | Token::LogicLessEqual | Token::LogicGreater | Token::LogicGreaterEqual => 8,
+        Token::LogicLess
+        | Token::LogicLessEqual
+        | Token::LogicGreater
+        | Token::LogicGreaterEqual => 8,
         Token::BinaryShiftL | Token::BinaryShiftR => 9,
         Token::Plus | Token::Minus => 10,
         Token::Multiply | Token::Divide | Token::Modulo => 11,
@@ -90,13 +133,18 @@ pub struct ExpressionParser<'a> {
 }
 impl<'a> ExpressionParser<'a> {
     pub fn new(tokens: &'a [TokenData]) -> Self {
-        Self { tokens, cursor: 0, len: tokens.len(), pending_gt: false  }
+        Self {
+            tokens,
+            cursor: 0,
+            len: tokens.len(),
+            pending_gt: false,
+        }
     }
     #[inline(always)]
     pub fn is_at_end(&self) -> bool {
         self.cursor >= self.len
     }
-    
+
     #[inline(always)]
     pub fn cursor(&self) -> usize {
         self.cursor
@@ -106,8 +154,11 @@ impl<'a> ExpressionParser<'a> {
         if self.cursor < self.len {
             unsafe { self.tokens.get_unchecked(self.cursor) }
         } else {
-            static DUMMY_EOF: TokenData = TokenData { 
-                token: Token::DummyToken, span: 0..0, row: 0, col: 0
+            static DUMMY_EOF: TokenData = TokenData {
+                token: Token::DummyToken,
+                span: 0..0,
+                row: 0,
+                col: 0,
             };
             &DUMMY_EOF
         }
@@ -144,8 +195,8 @@ impl<'a> ExpressionParser<'a> {
                 (token_data.row as usize, token_data.col as usize),
                 ParserError::UnexpectedToken {
                     expected: format!("{:?}", expected),
-                    found: format!("{:?}", token_data.token)
-                }
+                    found: format!("{:?}", token_data.token),
+                },
             ))
         }
     }
@@ -157,13 +208,13 @@ impl<'a> ExpressionParser<'a> {
                 let s = name.to_string();
                 self.cursor += 1;
                 Ok(s)
-            },
+            }
             _ => {
                 let found = format!("{:?}", token_data.token);
                 Err((
                     self.peek_span(),
                     (token_data.row as usize, token_data.col as usize),
-                    ParserError::ExpectedIdentifier { found }
+                    ParserError::ExpectedIdentifier { found },
                 ))
             }
         }
@@ -186,7 +237,7 @@ impl<'a> ExpressionParser<'a> {
 
         Ok(left)
     }
-    
+
     fn parse_prefix(&mut self) -> ParserResult<Expr> {
         let token_data = self.advance();
         match &token_data.token {
@@ -195,7 +246,7 @@ impl<'a> ExpressionParser<'a> {
             Token::Decimal(val) => Ok(Expr::Decimal(val.to_string())),
             Token::String(val) => Ok(Expr::StringConst(val.to_string())),
             Token::Name(name) => Ok(Expr::Name(name.to_string())),
-            
+
             Token::KeywordTrue => Ok(Expr::Boolean(true)),
             Token::KeywordFalse => Ok(Expr::Boolean(false)),
             Token::KeywordNull => Ok(Expr::NullPtr),
@@ -212,9 +263,12 @@ impl<'a> ExpressionParser<'a> {
             Token::BinaryAnd => self.parse_unary(UnaryOp::Pointer),
             Token::LogicAnd => {
                 let inner = self.parse_prefix()?;
-                Ok(Expr::UnaryOp(UnaryOp::Pointer, Box::new(Expr::UnaryOp(UnaryOp::Pointer, Box::new(inner)))))
-            },
-            Token::LSquareBrace =>{
+                Ok(Expr::UnaryOp(
+                    UnaryOp::Pointer,
+                    Box::new(Expr::UnaryOp(UnaryOp::Pointer, Box::new(inner))),
+                ))
+            }
+            Token::LSquareBrace => {
                 // tmt = [...]
                 let mut args = Vec::new();
                 if self.peek().token != Token::RSquareBrace {
@@ -232,11 +286,15 @@ impl<'a> ExpressionParser<'a> {
             }
             _ => {
                 let t = token_data.clone();
-                Err((Span::new(t.span.start, t.span.end), (t.row as usize, t.col as usize), ParserError::UnexpectedToken {
-                    expected: "expression".to_string(),
-                    found: format!("{:?}", t.token)
-                }))
-            },
+                Err((
+                    Span::new(t.span.start, t.span.end),
+                    (t.row as usize, t.col as usize),
+                    ParserError::UnexpectedToken {
+                        expected: "expression".to_string(),
+                        found: format!("{:?}", t.token),
+                    },
+                ))
+            }
         }
     }
     fn parse_unary(&mut self, op: UnaryOp) -> ParserResult<Expr> {
@@ -247,26 +305,44 @@ impl<'a> ExpressionParser<'a> {
     fn parse_infix(&mut self, left: Expr) -> ParserResult<Expr> {
         let token_kind = &self.peek().token;
         match token_kind {
-            Token::Plus | Token::Minus | Token::Multiply | Token::Divide | Token::Modulo |
-            Token::LogicEqual | Token::LogicNotEqual | Token::LogicLess | Token::LogicLessEqual |
-            Token::LogicGreater | Token::LogicGreaterEqual | Token::LogicAnd | Token::LogicOr |
-            Token::BinaryAnd | Token::BinaryOr | Token::BinaryXor | Token::BinaryShiftL | Token::BinaryShiftR |
-            Token::Equal => self.parse_binary(left),
-            
+            Token::Plus
+            | Token::Minus
+            | Token::Multiply
+            | Token::Divide
+            | Token::Modulo
+            | Token::LogicEqual
+            | Token::LogicNotEqual
+            | Token::LogicLess
+            | Token::LogicLessEqual
+            | Token::LogicGreater
+            | Token::LogicGreaterEqual
+            | Token::LogicAnd
+            | Token::LogicOr
+            | Token::BinaryAnd
+            | Token::BinaryOr
+            | Token::BinaryXor
+            | Token::BinaryShiftL
+            | Token::BinaryShiftR
+            | Token::Equal => self.parse_binary(left),
+
             Token::LParen => self.parse_call(left),
 
             Token::LSquareBrace => self.parse_index(left),
-            
+
             Token::Dot => self.parse_member_access(left),
             Token::DoubleColon => self.parse_static_access_or_generic_call(left),
 
             Token::KeywordAs => self.parse_cast(left),
             _ => {
                 let t = self.peek();
-                Err((self.peek_span(), (t.row as usize, t.col as usize), ParserError::UnexpectedToken {
-                    expected: "infix operator".to_string(),
-                    found: format!("{:?}", t.token)
-                }))
+                Err((
+                    self.peek_span(),
+                    (t.row as usize, t.col as usize),
+                    ParserError::UnexpectedToken {
+                        expected: "infix operator".to_string(),
+                        found: format!("{:?}", t.token),
+                    },
+                ))
             }
         }
     }
@@ -300,7 +376,7 @@ impl<'a> ExpressionParser<'a> {
             }
             _ => unreachable!("Filtered in parse_infix"),
         };
-        
+
         let right = self.parse_expression_with_precedence(precedence)?;
         Ok(Expr::BinaryOp(Box::new(left), op, Box::new(right)))
     }
@@ -333,7 +409,7 @@ impl<'a> ExpressionParser<'a> {
     fn parse_generic_args_for_call(&mut self, callee: Expr) -> ParserResult<Expr> {
         self.consume(&Token::LogicLess)?;
         let mut generic_types = Vec::with_capacity(2);
-        
+
         loop {
             if self.peek().token == Token::BinaryShiftR {
                 if self.pending_gt {
@@ -352,8 +428,10 @@ impl<'a> ExpressionParser<'a> {
             generic_types.push(self.parse_type()?);
 
             match self.peek().token {
-                Token::Comma => { self.advance(); },
-                Token::LogicGreater | Token::BinaryShiftR => {},
+                Token::Comma => {
+                    self.advance();
+                }
+                Token::LogicGreater | Token::BinaryShiftR => {}
                 _ => break, // unexpected, loop will likely terminate or fail in next check
             }
         }
@@ -362,7 +440,10 @@ impl<'a> ExpressionParser<'a> {
 
         if next_token == &Token::SemiColon {
             let path_str = expr_to_type_path(&callee);
-            return Ok(Expr::Type(ParserType::Generic(path_str, generic_types.into_boxed_slice())));
+            return Ok(Expr::Type(ParserType::Generic(
+                path_str,
+                generic_types.into_boxed_slice(),
+            )));
         }
 
         if next_token == &Token::LParen {
@@ -379,10 +460,17 @@ impl<'a> ExpressionParser<'a> {
                 }
             }
             self.consume(&Token::RParen)?;
-            return Ok(Expr::CallGeneric(Box::new(callee), args.into_boxed_slice(), generic_types.into_boxed_slice()));
+            return Ok(Expr::CallGeneric(
+                Box::new(callee),
+                args.into_boxed_slice(),
+                generic_types.into_boxed_slice(),
+            ));
         }
 
-        Ok(Expr::NameWithGenerics(Box::new(callee), generic_types.into_boxed_slice()))
+        Ok(Expr::NameWithGenerics(
+            Box::new(callee),
+            generic_types.into_boxed_slice(),
+        ))
     }
     fn parse_index(&mut self, left: Expr) -> ParserResult<Expr> {
         self.consume(&Token::LSquareBrace)?;
@@ -407,11 +495,11 @@ impl<'a> ExpressionParser<'a> {
                 Token::BinaryAnd => {
                     pointer_depth += 1;
                     self.advance();
-                },
+                }
                 Token::LogicAnd => {
                     pointer_depth += 2;
                     self.advance();
-                },
+                }
                 _ => break,
             }
         }
@@ -437,7 +525,7 @@ impl<'a> ExpressionParser<'a> {
         } else {
             let link_or_name = self.consume_name()?;
             let next = &self.peek().token;
-            
+
             if next == &Token::DoubleColon {
                 self.advance();
                 ParserType::NamespaceLink(link_or_name, Box::new(self.parse_type()?))
@@ -458,9 +546,9 @@ impl<'a> ExpressionParser<'a> {
                         self.advance();
                         break;
                     }
-                    
+
                     generic_types.push(self.parse_type()?);
-                    
+
                     if self.peek().token == Token::Comma {
                         self.advance();
                     }
@@ -474,7 +562,7 @@ impl<'a> ExpressionParser<'a> {
         for _ in 0..pointer_depth {
             t = ParserType::Pointer(Box::new(t));
         }
-        
+
         Ok(t)
     }
 }

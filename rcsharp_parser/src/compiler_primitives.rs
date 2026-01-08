@@ -6,9 +6,18 @@ pub struct Layout {
     pub align: u32,
 }
 impl Layout {
-    pub const fn is_valid(&self) -> bool { !(self.align == u32::MAX || self.size == u32::MAX) }
-    pub const fn new(size: u32, align: u32) -> Self { Self { size, align } }
-    pub const fn new_not_valid() -> Self { Self { size: u32::MAX, align: u32::MAX } }
+    pub const fn is_valid(&self) -> bool {
+        !(self.align == u32::MAX || self.size == u32::MAX)
+    }
+    pub const fn new(size: u32, align: u32) -> Self {
+        Self { size, align }
+    }
+    pub const fn new_not_valid() -> Self {
+        Self {
+            size: u32::MAX,
+            align: u32::MAX,
+        }
+    }
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PrimitiveKind {
@@ -28,9 +37,12 @@ pub struct PrimitiveInfo {
 
 impl PrimitiveInfo {
     pub fn is_integer(&self) -> bool {
-        matches!(self.kind, PrimitiveKind::SignedInt | PrimitiveKind::UnsignedInt)
+        matches!(
+            self.kind,
+            PrimitiveKind::SignedInt | PrimitiveKind::UnsignedInt
+        )
     }
-    
+
     pub fn is_signed_integer(&self) -> bool {
         matches!(self.kind, PrimitiveKind::SignedInt)
     }
@@ -41,32 +53,106 @@ impl PrimitiveInfo {
     pub fn is_bool(&self) -> bool {
         matches!(self.kind, PrimitiveKind::Bool)
     }
-    
+
     pub fn is_decimal(&self) -> bool {
         matches!(self.kind, PrimitiveKind::Decimal)
     }
 }
 
 pub const PRIMITIVE_TYPES_INFO: &[PrimitiveInfo] = &[
-    PrimitiveInfo { name: "void", layout: Layout::new(0, 1), llvm_name: "void", kind: PrimitiveKind::Void },
-    PrimitiveInfo { name: "bool", layout: Layout::new(1, 1), llvm_name: "i1", kind: PrimitiveKind::Bool },
+    PrimitiveInfo {
+        name: "void",
+        layout: Layout::new(0, 1),
+        llvm_name: "void",
+        kind: PrimitiveKind::Void,
+    },
+    PrimitiveInfo {
+        name: "bool",
+        layout: Layout::new(1, 1),
+        llvm_name: "i1",
+        kind: PrimitiveKind::Bool,
+    },
     // SInts
-    PrimitiveInfo { name: "i8", layout: Layout::new(1, 1), llvm_name: "i8", kind: PrimitiveKind::SignedInt },
-    PrimitiveInfo { name: "i16", layout: Layout::new(2, 2), llvm_name: "i16", kind: PrimitiveKind::SignedInt },
-    PrimitiveInfo { name: "i32", layout: Layout::new(4, 4), llvm_name: "i32", kind: PrimitiveKind::SignedInt },
-    PrimitiveInfo { name: "i64", layout: Layout::new(8, 8), llvm_name: "i64", kind: PrimitiveKind::SignedInt },
+    PrimitiveInfo {
+        name: "i8",
+        layout: Layout::new(1, 1),
+        llvm_name: "i8",
+        kind: PrimitiveKind::SignedInt,
+    },
+    PrimitiveInfo {
+        name: "i16",
+        layout: Layout::new(2, 2),
+        llvm_name: "i16",
+        kind: PrimitiveKind::SignedInt,
+    },
+    PrimitiveInfo {
+        name: "i32",
+        layout: Layout::new(4, 4),
+        llvm_name: "i32",
+        kind: PrimitiveKind::SignedInt,
+    },
+    PrimitiveInfo {
+        name: "i64",
+        layout: Layout::new(8, 8),
+        llvm_name: "i64",
+        kind: PrimitiveKind::SignedInt,
+    },
     // UInts
-    PrimitiveInfo { name: "u8", layout: Layout::new(1, 1), llvm_name: "i8", kind: PrimitiveKind::UnsignedInt },
-    PrimitiveInfo { name: "u16", layout: Layout::new(2, 2), llvm_name: "i16", kind: PrimitiveKind::UnsignedInt },
-    PrimitiveInfo { name: "u32", layout: Layout::new(4, 4), llvm_name: "i32", kind: PrimitiveKind::UnsignedInt },
-    PrimitiveInfo { name: "u64", layout: Layout::new(8, 8), llvm_name: "i64", kind: PrimitiveKind::UnsignedInt },
+    PrimitiveInfo {
+        name: "u8",
+        layout: Layout::new(1, 1),
+        llvm_name: "i8",
+        kind: PrimitiveKind::UnsignedInt,
+    },
+    PrimitiveInfo {
+        name: "u16",
+        layout: Layout::new(2, 2),
+        llvm_name: "i16",
+        kind: PrimitiveKind::UnsignedInt,
+    },
+    PrimitiveInfo {
+        name: "u32",
+        layout: Layout::new(4, 4),
+        llvm_name: "i32",
+        kind: PrimitiveKind::UnsignedInt,
+    },
+    PrimitiveInfo {
+        name: "u64",
+        layout: Layout::new(8, 8),
+        llvm_name: "i64",
+        kind: PrimitiveKind::UnsignedInt,
+    },
     // Decimal
-    PrimitiveInfo { name: "f16", layout: Layout::new(2, 2), llvm_name: "half", kind: PrimitiveKind::Decimal },
-    PrimitiveInfo { name: "f32", layout: Layout::new(4, 4), llvm_name: "float", kind: PrimitiveKind::Decimal },
-    PrimitiveInfo { name: "f64", layout: Layout::new(8, 8), llvm_name: "double", kind: PrimitiveKind::Decimal },
-
-    PrimitiveInfo { name: "isize", layout: Layout::new(8, 8), llvm_name: "i64", kind: PrimitiveKind::SignedInt },
-    PrimitiveInfo { name: "usize", layout: Layout::new(8, 8), llvm_name: "i64", kind: PrimitiveKind::UnsignedInt },
+    PrimitiveInfo {
+        name: "f16",
+        layout: Layout::new(2, 2),
+        llvm_name: "half",
+        kind: PrimitiveKind::Decimal,
+    },
+    PrimitiveInfo {
+        name: "f32",
+        layout: Layout::new(4, 4),
+        llvm_name: "float",
+        kind: PrimitiveKind::Decimal,
+    },
+    PrimitiveInfo {
+        name: "f64",
+        layout: Layout::new(8, 8),
+        llvm_name: "double",
+        kind: PrimitiveKind::Decimal,
+    },
+    PrimitiveInfo {
+        name: "isize",
+        layout: Layout::new(8, 8),
+        llvm_name: "i64",
+        kind: PrimitiveKind::SignedInt,
+    },
+    PrimitiveInfo {
+        name: "usize",
+        layout: Layout::new(8, 8),
+        llvm_name: "i64",
+        kind: PrimitiveKind::UnsignedInt,
+    },
 ];
 
 impl Into<ParserType> for &'static PrimitiveInfo {
