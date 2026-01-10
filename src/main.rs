@@ -38,14 +38,16 @@ fn main() -> Result<(), String> {
         .map_err(|mut err_str| {
             println!("SPAN:{:?}", err_str.span);
             if let Some(span) = err_str.span.clone() {
-                let (start_row, start_column) =
-                    (all_tokens[span.start].row, all_tokens[span.start].col);
-                err_str.extend(&format!(
-                    "Location {}:{}:{}",
-                    full_path.as_str(),
-                    start_row,
-                    start_column
-                ));
+                if false {
+                    let (start_row, start_column) =
+                        (all_tokens[span.start].row, all_tokens[span.start].col);
+                    err_str.extend(&format!(
+                        "Location {}:{}:{}",
+                        full_path.as_str(),
+                        start_row,
+                        start_column
+                    ));
+                }
                 println!("{}", err_str.error);
             } else {
                 println!("{}", err_str.error);

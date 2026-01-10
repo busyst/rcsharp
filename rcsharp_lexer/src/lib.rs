@@ -122,6 +122,8 @@ pub enum Token {
     KeywordFunction,
     #[token("let")]
     KeywordVariableDeclaration,
+    #[token("static")]
+    KeywordStatic,
     #[token("as")]
     KeywordAs,
     #[token("if")]

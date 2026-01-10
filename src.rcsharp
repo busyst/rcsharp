@@ -33,7 +33,10 @@ fn xq() : test::QPair<i64, i64>{
     const y : &fn() : test::QPair<i64, i64> = ptr_of(test::geg);
     return (*y)();
 }
+static yt : [i32; 43];
 fn main(): i32 {
+    yt[42] = 9999000;
+    
     const f : f64 = 31415.45675678567895636231454568;
     const tp : &fn() : i32 = ptr_of(main);
     const tx : &fn() : Pair<i32, Pair<i8, string::String>> = ptr_of(ax::<i32>);
@@ -45,5 +48,5 @@ fn main(): i32 {
     console::println_f64(bitcast::<f64>(bitcast::<i64>(f) + 123123123123));
     basic_functions();
     const temp : test::QPair<i64, i64> = xq();
-    return (bitcast::<i64>(tx) - bitcast::<i64>(tp)) as i32;
+    return (bitcast::<i64>(tx) - bitcast::<i64>(tp)) as i32 + yt[42];
 }

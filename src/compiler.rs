@@ -55,15 +55,22 @@ pub fn rcsharp_compile(
     let mut enums = vec![];
     let mut structs = vec![];
     let mut functions = vec![];
-    collect(stmts, &mut enums, &mut structs, &mut functions)
-        .extend("while collecting compiler statements")?;
+    let mut staticly_declared_variables = vec![];
+    collect(
+        stmts,
+        &mut enums,
+        &mut structs,
+        &mut functions,
+        &mut staticly_declared_variables,
+    )
+    .extend("while collecting compiler statements")?;
     let collecting = time_point.elapsed();
     let time_point = Instant::now();
     handle_types(structs, &mut symbols, &mut output).extend("while compiling types definitions")?;
     handle_enums(enums, &mut symbols, &mut output).extend("while compiling enums definitions")?;
     handle_functions(functions, &mut symbols, &mut output)
         .extend("while compiling function definitions")?;
-
+    handle_staticly_declared_variables(staticly_declared_variables, &mut symbols, &mut output)?;
     if LAZY_FUNCTION_COMPILE {
         lazy_compile(&mut symbols, &mut output)?;
     } else {
@@ -84,11 +91,37 @@ pub fn rcsharp_compile(
     println!("Compiling {:?}", compiling);
     Ok(output)
 }
+
+fn handle_staticly_declared_variables(
+    staticly_declared_variables: Vec<(String, String, ParserType, Option<Expr>)>,
+    symbols: &mut SymbolTable,
+    output: &mut LLVMOutputHandler,
+) -> CompileResult<()> {
+    for x in &staticly_declared_variables {
+        let fp = if x.0.is_empty() {
+            x.1.clone()
+        } else {
+            format!("{}.{}", x.0, x.1)
+        };
+        let t = CompilerType::into_path(&x.2, symbols, &x.0)?;
+        output.push_str_global(&format!(
+            "@{} = internal global {} zeroinitializer",
+            fp,
+            t.llvm_representation(symbols)?
+        ));
+        println!("ST:{}", fp);
+        symbols
+            .static_variables
+            .insert(fp, Variable::new_static(t, false));
+    }
+    Ok(())
+}
 fn collect(
     stmts: &[StmtData],
     enums: &mut Vec<ParsedEnum>,
     structs: &mut Vec<ParsedStruct>,
     functions: &mut Vec<ParsedFunction>,
+    staticly_declared_variables: &mut Vec<(String, String, ParserType, Option<Expr>)>,
 ) -> CompileResult<()> {
     let mut statements: VecDeque<StmtData> = stmts.iter().cloned().collect();
     let initial_count = statements.len();
@@ -153,13 +186,16 @@ fn collect(
                         lexing_time += q.elapsed();
                         let q = Instant::now();
                         let parsed_stmts = GeneralParser::new(&lex).parse_all().map_err(|e| {
-                            (
-                                stmt_data.span,
-                                CompilerError::Generic(format!(
-                                    "Parser error in '{}': {:?}",
-                                    include_path, e
-                                )),
-                            )
+                            println!("{:?}", e);
+                            {
+                                (
+                                    stmt_data.span,
+                                    CompilerError::Generic(format!(
+                                        "Parser error inside included file on location {}:{}:{}",
+                                        include_path, e.1 .0, e.1 .1
+                                    )),
+                                )
+                            }
                         })?;
                         parsing_time += q.elapsed();
                         for stmt in parsed_stmts.into_iter().rev() {
@@ -217,6 +253,9 @@ fn collect(
             Stmt::Enum(mut parsed_enum) => {
                 parsed_enum.path = path_buffer.clone().into();
                 enums.push(parsed_enum);
+            }
+            Stmt::Static(x, y, z) => {
+                staticly_declared_variables.push((path_buffer.clone().into(), x, y, z));
             }
             _ => {
                 return Err((
@@ -538,33 +577,7 @@ fn compile_function_body(
     symbols: &SymbolTable,
     output: &mut LLVMOutputHandler,
 ) -> CompileResult<()> {
-    fn collect_local_variables<'a>(
-        stmts: &'a [StmtData],
-        vars: &mut Vec<(&'a String, &'a ParserType)>,
-    ) {
-        for stmt in stmts {
-            match &stmt.stmt {
-                Stmt::Let(name, var_type, _) => {
-                    vars.push((name, var_type));
-                }
-                Stmt::If(_, then_body, else_body) => {
-                    collect_local_variables(then_body, vars);
-                    collect_local_variables(else_body, vars);
-                }
-                Stmt::Loop(body) => {
-                    collect_local_variables(body, vars);
-                }
-                Stmt::Return(..) => {
-                    if DONT_COMPILE_AFTER_RETURN {
-                        break;
-                    }
-                }
-                _ => {}
-            }
-        }
-    }
     let function = symbols.get_function_by_id(function_id);
-    let current_namespace = function.path();
     let mut rt = function.return_type.clone();
     rt.substitute_generic_types(&symbols.alias_types, symbols)?;
     let rt = rt.llvm_representation(symbols)?;
@@ -585,12 +598,10 @@ fn compile_function_body(
         .collect::<CompileResult<Vec<_>>>()?
         .join(", ");
 
-    output.push_str(&format!(
+    output.push_main(&format!(
         "define {} @{}({}){{\n",
         rt, full_function_name, args_str
     ));
-    let mut statically_declared_vars = vec![];
-    collect_local_variables(&function.body, &mut statically_declared_vars);
 
     for (arg_name, arg_type) in function.args.iter() {
         let mut arg_type = arg_type.clone();
@@ -598,16 +609,6 @@ fn compile_function_body(
         ctx.scope
             .add_variable(arg_name.clone(), Variable::new_argument(arg_type), 0);
     }
-    for (index, (name, ptype)) in statically_declared_vars.iter().enumerate() {
-        let mut llvm_type = CompilerType::into_path(ptype, symbols, current_namespace)?;
-        llvm_type.substitute_generic_types(&symbols.alias_types, symbols)?;
-        let llvm_type = llvm_type.llvm_representation(symbols)?;
-        output.push_str(&format!(
-            "    %v{} = alloca {}; var: {}\n",
-            index, llvm_type, name
-        ));
-    }
-    ctx.set_preallocated_variables_count(statically_declared_vars.len() as u32);
 
     for stmt in function.body.iter() {
         compile_statement(stmt, &mut ctx, output).extend(&format!(
@@ -625,7 +626,11 @@ fn compile_function_body(
             output.push_str("\n    unreachable\n");
         }
     }
-    output.push_str("}\n");
+    output.push_main(&output.function_intro.clone());
+    output.push_main(&output.function_body.clone());
+    output.push_main("}\n");
+    output.function_intro.clear();
+    output.function_body.clear();
     Ok(())
 }
 pub fn compile_statement(
@@ -662,6 +667,12 @@ pub fn compile_statement(
             var_type.substitute_generic_types(&ctx.symbols.alias_types, ctx.symbols)?;
             let var = Variable::new(var_type.clone(), false);
             let x = ctx.aquire_unique_variable_index();
+            output.push_function_intro(&format!(
+                "    %v{} = alloca {}; var: {}\n",
+                x,
+                var_type.llvm_representation(ctx.symbols)?,
+                name
+            ));
             match expr {
                 Some(init_expr) => {
                     let result = compile_expression(
@@ -696,6 +707,14 @@ pub fn compile_statement(
                 }
             }
         }
+        Stmt::Static(name, var_type, expr) => {
+            let mut var_type =
+                CompilerType::into_path(var_type, ctx.symbols, current_function_path)?;
+            var_type.substitute_generic_types(&ctx.symbols.alias_types, ctx.symbols)?;
+            let var = Variable::new(var_type.clone(), false);
+            todo!()
+        }
+
         Stmt::Expr(expression) => {
             compile_expression(expression, Expected::NoReturn, stmt.span, ctx, output)?;
         }
@@ -1006,6 +1025,7 @@ fn fn_attribs_handler(
     }
     Ok(())
 }
+
 #[derive(PartialEq)]
 enum StringEntry {
     Owned(String),
@@ -1020,20 +1040,33 @@ enum StringEntry {
 #[derive(Default)]
 pub struct LLVMOutputHandler {
     header: String,
+    global_variables: String,
     strings_header: Vec<StringEntry>,
     include_header: String,
     main: String,
     footer: String,
+
+    function_intro: String,
+    function_body: String,
 }
 impl LLVMOutputHandler {
     pub fn push_str(&mut self, s: &str) {
+        self.function_body.push_str(s);
+    }
+    pub fn push_main(&mut self, s: &str) {
         self.main.push_str(s);
+    }
+    pub fn push_function_intro(&mut self, s: &str) {
+        self.function_intro.push_str(s);
     }
     pub fn push_str_include_header(&mut self, s: &str) {
         self.include_header.push_str(s);
     }
     pub fn push_str_header(&mut self, s: &str) {
         self.header.push_str(s);
+    }
+    pub fn push_str_global(&mut self, s: &str) {
+        self.global_variables.push_str(s);
     }
     pub fn push_str_footer(&mut self, s: &str) {
         self.footer.push_str(s);
@@ -1140,8 +1173,13 @@ impl LLVMOutputHandler {
         }).collect::<Vec<String>>().join("\n");
 
         format!(
-            "{}\n{}\n{}\n{}\n{}",
-            self.header, self.include_header, definitions, self.main, self.footer
+            "{}\n{}\n{}\n{}\n{}\n{}",
+            self.header,
+            self.include_header,
+            definitions,
+            self.global_variables,
+            self.main,
+            self.footer
         )
     }
 }
@@ -1152,6 +1190,7 @@ pub struct SymbolTable {
     types: OrderedHashMap<String, (usize, Struct)>,
     alias_types: HashMap<String, CompilerType>,
     enums: OrderedHashMap<String, (usize, Enum)>,
+    static_variables: OrderedHashMap<String, Variable>,
 }
 impl SymbolTable {
     pub fn get_type_by_id(&self, type_id: usize) -> &Struct {
@@ -1214,7 +1253,9 @@ impl SymbolTable {
     pub fn get_enum(&self, fqn: &str) -> Option<&Enum> {
         self.get_enum_id(fqn).map(|x| self.get_enum_by_id(x))
     }
-
+    pub fn get_static_var(&self, fqn: &str) -> Option<&Variable> {
+        self.static_variables.get(fqn)
+    }
     pub fn insert_type(&mut self, full_path: &str, structure: Struct) {
         if let Some(x) = self.types.get_mut(full_path) {
             x.1 = structure;

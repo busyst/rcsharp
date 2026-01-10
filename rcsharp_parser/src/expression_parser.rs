@@ -522,6 +522,21 @@ impl<'a> ExpressionParser<'a> {
             self.consume(&Token::Colon)?;
             let return_type = Box::new(self.parse_type()?);
             ParserType::Function(return_type, arguments.into_boxed_slice())
+        } else if self.peek().token == Token::LSquareBrace {
+            self.advance();
+            let t = self.parse_type()?;
+            self.consume(&Token::SemiColon)?;
+            let n = if let TokenData {
+                token: Token::Integer(x),
+                ..
+            } = self.advance()
+            {
+                x.clone()
+            } else {
+                todo!()
+            };
+            self.consume(&Token::RSquareBrace)?;
+            ParserType::ConstantSizeArray(Box::new(t), n)
         } else {
             let link_or_name = self.consume_name()?;
             let next = &self.peek().token;

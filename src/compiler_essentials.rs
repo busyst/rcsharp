@@ -9,7 +9,10 @@ use std::{
     collections::HashMap,
 };
 
-use crate::compiler::{LLVMOutputHandler, SymbolTable};
+use crate::{
+    compiler::{LLVMOutputHandler, SymbolTable},
+    expression_compiler::CompiledValue,
+};
 pub trait FlagManager {
     fn get_flags(&self) -> &Cell<u8>;
 
@@ -114,7 +117,7 @@ impl CompilerType {
                     .iter()
                     .map(|param_type| param_type.llvm_representation(symbols))
                     .collect::<CompileResult<Vec<String>>>()?;
-                Ok(format!("{} ({})*", ret_llvm, params_llvm.join(", ")))
+                Ok(format!("{} ({})", ret_llvm, params_llvm.join(", ")))
             }
             CompilerType::GenericStructType(x, y) => {
                 let base_type = symbols.get_type_by_id(*x);
@@ -132,6 +135,10 @@ impl CompilerType {
                         .collect::<Vec<_>>()
                         .join(", ")
                 ))
+            }
+            CompilerType::ConstantArray(size, ctype) => {
+                let x = ctype.llvm_representation(symbols)?;
+                Ok(format!("[{} x {}]", size, x))
             }
             _ => todo!("Get llvm representation for non-primitive type {:?}", self),
         }
@@ -242,6 +249,12 @@ impl CompilerType {
             }
             let c = Self::into_path_internal(inner_cursor, symbols, &path, current_path)?;
             return Ok(c);
+        }
+        if let ParserType::ConstantSizeArray(ptype, times) = given_type {
+            return Ok(CompilerType::ConstantArray(
+                times.parse::<usize>().unwrap(),
+                Box::new(Self::into_path(ptype, symbols, current_path)?),
+            ));
         }
         println!("{:?}", given_type);
         println!("{:?}", current_path);
@@ -413,6 +426,12 @@ impl CompilerType {
     pub fn as_primitive(&self) -> Option<&'static PrimitiveInfo> {
         match self {
             CompilerType::Primitive(x) => Some(x),
+            _ => None,
+        }
+    }
+    pub fn as_constant_array(&self) -> Option<(usize, &CompilerType)> {
+        match self {
+            CompilerType::ConstantArray(x, y) => Some((*x, &**y)),
             _ => None,
         }
     }
@@ -841,6 +860,7 @@ pub mod variable_flags {
     pub const HAS_READ: u8 = 1;
     pub const HAS_WROTE: u8 = 2;
     pub const MODIFIED_CONTENT: u8 = 4;
+    pub const STATIC: u8 = 8;
     pub const INLINE: u8 = 16;
     pub const ALIAS_VALUE: u8 = 32;
     pub const CONSTANT: u8 = 64;
@@ -871,6 +891,18 @@ impl Variable {
             value: RefCell::new(None),
         }
     }
+    pub fn new_static(comp_type: CompilerType, is_const: bool) -> Self {
+        let flags = if is_const {
+            variable_flags::CONSTANT | variable_flags::STATIC
+        } else {
+            variable_flags::STATIC
+        };
+        Self {
+            compiler_type: comp_type,
+            flags: Cell::new(flags),
+            value: RefCell::new(None),
+        }
+    }
     pub fn new_argument(comp_type: CompilerType) -> Self {
         Self {
             compiler_type: comp_type,
@@ -887,7 +919,7 @@ impl Variable {
     }
 
     pub fn get_type(&self, write: bool, modify_content: bool) -> &CompilerType {
-        if self.is_constant() && (write || modify_content) {
+        if self.is_constant() && write {
             panic!("Tried to mark constant variable as read or written");
         }
 
@@ -912,6 +944,9 @@ impl Variable {
     }
     pub fn is_constant(&self) -> bool {
         self.has_flag(variable_flags::CONSTANT)
+    }
+    fn is_static(&self) -> bool {
+        self.has_flag(variable_flags::STATIC)
     }
     pub fn has_read(&self) -> bool {
         self.has_flag(variable_flags::HAS_READ)
@@ -955,12 +990,18 @@ impl Variable {
         var_name: &str,
         ctx: &CodeGenContext,
         output: &mut LLVMOutputHandler,
-    ) -> CompileResult<LLVMVal> {
+    ) -> CompileResult<CompiledValue> {
         if let Some(val) = self.value.borrow().as_ref() {
-            return Ok(val.clone());
+            return Ok(CompiledValue::Value {
+                llvm_repr: val.clone(),
+                ptype: self.compiler_type.clone(),
+            });
         }
         if self.is_argument() {
-            return Ok(LLVMVal::VariableName(var_name.to_string()));
+            return Ok(CompiledValue::Value {
+                llvm_repr: LLVMVal::VariableName(var_name.to_string()),
+                ptype: self.compiler_type.clone(),
+            });
         }
         let type_str = {
             let mut x = self.compiler_type.clone();
@@ -969,12 +1010,25 @@ impl Variable {
         }
         .llvm_representation(ctx.symbols)?;
         let temp_id = ctx.aquire_unique_temp_value_counter();
-
+        if self.is_static() {
+            println!("{} is STATIC", var_name);
+            output.push_str(&format!(
+                "    %tmp{} = load {}, {}* @{}\n",
+                temp_id, type_str, type_str, var_name
+            ));
+            return Ok(CompiledValue::Value {
+                llvm_repr: LLVMVal::Register(temp_id),
+                ptype: self.compiler_type.clone(),
+            });
+        }
         output.push_str(&format!(
             "    %tmp{} = load {}, {}* %v{}\n",
             temp_id, type_str, type_str, var_id
         ));
-        Ok(LLVMVal::Register(temp_id))
+        return Ok(CompiledValue::Value {
+            llvm_repr: LLVMVal::Register(temp_id),
+            ptype: self.compiler_type.clone(),
+        });
     }
 }
 #[derive(Debug, Clone)]
@@ -1063,9 +1117,7 @@ pub struct CodeGenContext<'a> {
 
     temp_value_counter: Cell<u32>,
     variable_counter: Cell<u32>,
-    inline_variable_counter: Cell<u32>,
     logic_counter: Cell<u32>,
-    preallocated_variables_count: Cell<u32>,
 }
 impl<'a> CodeGenContext<'a> {
     pub fn new(symbols: &'a SymbolTable, function: usize) -> Self {
@@ -1075,9 +1127,7 @@ impl<'a> CodeGenContext<'a> {
             scope: Scope::new(),
             temp_value_counter: Cell::new(0),
             variable_counter: Cell::new(0),
-            inline_variable_counter: Cell::new(0),
             logic_counter: Cell::new(0),
-            preallocated_variables_count: Cell::new(0),
         }
     }
     pub fn current_function(&self) -> &Function {
@@ -1094,21 +1144,8 @@ impl<'a> CodeGenContext<'a> {
         self.variable_counter
             .replace(self.variable_counter.get() + 1)
     }
-    pub fn aquire_unique_inline_variable_index(&self) -> u32 {
-        self.inline_variable_counter
-            .replace(self.inline_variable_counter.get() + 1)
-    }
     pub fn aquire_unique_logic_counter(&self) -> u32 {
         self.logic_counter.replace(self.logic_counter.get() + 1)
-    }
-
-    pub fn preallocated_variables_count(&self) -> u32 {
-        self.preallocated_variables_count.get()
-    }
-
-    pub fn set_preallocated_variables_count(&mut self, preallocated_variables_count: u32) {
-        self.preallocated_variables_count
-            .set(preallocated_variables_count);
     }
 }
 
@@ -1200,8 +1237,10 @@ impl std::fmt::Display for CompilerError {
         }
     }
 }
+
 impl From<std::io::Error> for CompilerError {
     fn from(err: std::io::Error) -> Self {
         CompilerError::Io(err)
     }
 }
+impl std::error::Error for CompilerError {}

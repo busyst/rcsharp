@@ -164,6 +164,7 @@ pub enum Stmt {
     CompilerHint(Attribute),                    // #...
     Let(String, ParserType, Option<Expr>),      // let x : ...
     ConstLet(String, ParserType, Expr),         // const x : ...
+    Static(String, ParserType, Option<Expr>),   // const x : ...
     Expr(Expr),                                 // a = 1 + b
     If(Expr, Box<[StmtData]>, Box<[StmtData]>), // if 1 == 1 {} `else `if` {}`
     Loop(Box<[StmtData]>),                      // loop { ... }
@@ -227,6 +228,7 @@ pub enum ParserType {
     Function(Box<ParserType>, Box<[ParserType]>),
     NamespaceLink(String, Box<ParserType>),
     Generic(String, Box<[ParserType]>),
+    ConstantSizeArray(Box<ParserType>, Box<str>),
 }
 impl PartialEq for ParserType {
     fn eq(&self, other: &Self) -> bool {
@@ -432,7 +434,7 @@ impl<'a> GeneralParser<'a> {
             Token::KeywordInline => self.parse_with_modifier("inline", attributes),
             Token::KeywordConstExpr => self.parse_with_modifier("constexpr", attributes),
             Token::KeywordPub => self.parse_with_modifier("public", attributes),
-
+            Token::KeywordStatic => self.parse_static_let_statement(start_span.start),
             _ => {
                 if !attributes.is_empty() {
                     return Err((
@@ -775,6 +777,7 @@ impl<'a> GeneralParser<'a> {
         match self.peek().token {
             Token::KeywordConst => self.parse_const_let_statement(start),
             Token::KeywordVariableDeclaration => self.parse_let_statement(start),
+            Token::KeywordStatic => self.parse_static_let_statement(start),
             Token::KeywordIf => self.parse_if_statement(start),
             Token::KeywordLoop => {
                 self.advance();
@@ -844,6 +847,25 @@ impl<'a> GeneralParser<'a> {
         self.consume(&Token::SemiColon)?;
         Ok(StmtData {
             stmt: Stmt::ConstLet(name, var_type, initializer),
+            span: Span::new(start, self.cursor),
+        })
+    }
+    fn parse_static_let_statement(&mut self, start: usize) -> ParserResult<StmtData> {
+        self.advance(); // static
+        let name = self.consume_name()?;
+        self.consume(&Token::Colon)?;
+        let var_type = self.parse_type()?;
+
+        let initializer = if self.peek().token == Token::Equal {
+            self.advance();
+            Some(self.parse_expression()?)
+        } else {
+            None
+        };
+
+        self.consume(&Token::SemiColon)?;
+        Ok(StmtData {
+            stmt: Stmt::Static(name, var_type, initializer),
             span: Span::new(start, self.cursor),
         })
     }
