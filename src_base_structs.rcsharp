@@ -1661,7 +1661,7 @@ namespace window{
         wc.hInstance = hInstance;
         wc.hIcon = null;
         wc.hCursor = null;
-        wc.hbrBackground = bitcast::<&void>(SYS_COLOR::WINDOW + 1);
+        wc.hbrBackground = bitcast::<&void>((SYS_COLOR::WINDOW + 1) as usize);
         wc.lpszMenuName = null;
         wc.lpszClassName = className;
         wc.hIconSm = null;
@@ -1719,7 +1719,7 @@ namespace window{
         wc.hInstance = hInstance;
         wc.hIcon = null;
         wc.hCursor = null;
-        wc.hbrBackground = bitcast::<&void>(SYS_COLOR::WINDOW + 1);
+        wc.hbrBackground = bitcast::<&void>((SYS_COLOR::WINDOW + 1) as usize);
         wc.lpszMenuName = null;
         wc.lpszClassName = className;
         wc.hIconSm = null;

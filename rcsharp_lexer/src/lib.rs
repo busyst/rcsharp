@@ -1,7 +1,7 @@
 use logos::{Lexer as LogosLexer, Logos, Span};
 use std::fmt;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TokenData {
     pub token: Token,
     pub span: Span,
@@ -23,7 +23,7 @@ impl fmt::Display for LexingError {
 }
 impl std::error::Error for LexingError {}
 
-#[derive(Logos, Debug, Clone, PartialEq, Eq)]
+#[derive(Logos, Debug, Clone, PartialEq)]
 pub enum Token {
     #[regex(r"[ \t\f\r]+")]
     Whitespace,
@@ -158,9 +158,9 @@ pub enum Token {
     #[regex(r"[a-zA-Z_]\w*", |lex| lex.slice().to_string().into_boxed_str())]
     Name(Box<str>),
     #[regex(r"0x[0-9a-fA-F]+|0b[01]+|\d+", unhex_num)]
-    Integer(Box<str>),
+    Integer(i128),
     #[regex(r"[0-9]+\.[0-9]+", undecimal_num)]
-    Decimal(Box<str>),
+    Decimal(f64),
     #[regex(r#""([^"\\]|\\.)*""#, unescape_string)]
     String(Box<str>),
 
@@ -251,30 +251,28 @@ fn unescape_char(lex: &mut logos::Lexer<Token>) -> Result<char, ()> {
         Err(())
     }
 }
-fn unhex_num(lex: &mut logos::Lexer<Token>) -> Box<str> {
+fn unhex_num(lex: &mut logos::Lexer<Token>) -> i128 {
     let slice = lex.slice();
     if slice.len() < 2 {
-        return slice.to_string().into_boxed_str();
+        return slice.parse::<i128>().unwrap();
     }
 
     let mut chars = slice.chars();
     let second_char = chars.nth(1).unwrap();
 
     if second_char == 'x' {
-        let b = i128::from_str_radix(&slice[2..], 16).unwrap();
-        return b.to_string().into_boxed_str();
+        return i128::from_str_radix(&slice[2..], 16).unwrap();
     }
     if second_char == 'b' {
-        let b = i128::from_str_radix(&slice[2..], 2).unwrap();
-        return b.to_string().into_boxed_str();
+        return i128::from_str_radix(&slice[2..], 2).unwrap();
     }
 
-    slice.to_string().into_boxed_str()
+    slice.parse::<i128>().unwrap()
 }
-fn undecimal_num(lex: &mut logos::Lexer<Token>) -> Box<str> {
+fn undecimal_num(lex: &mut logos::Lexer<Token>) -> f64 {
     let slice = lex.slice();
     if let Ok(x) = slice.parse::<f64>() {
-        return format!("{:.32}", x).to_string().into_boxed_str();
+        return x;
     }
     panic!("Unparsable decimal! {}", slice);
 }

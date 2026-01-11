@@ -6,8 +6,8 @@ use rcsharp_lexer::{Token, TokenData};
 use crate::parser::{ParserError, ParserResult, ParserType, Span};
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
-    Decimal(String),
-    Integer(String),
+    Decimal(f64),
+    Integer(i128),
     Name(String),
     StringConst(String),
     Type(ParserType),
@@ -241,9 +241,9 @@ impl<'a> ExpressionParser<'a> {
     fn parse_prefix(&mut self) -> ParserResult<Expr> {
         let token_data = self.advance();
         match &token_data.token {
-            Token::Integer(val) => Ok(Expr::Integer(val.to_string())),
-            Token::Char(val) => Ok(Expr::Integer((*val as u64).to_string())),
-            Token::Decimal(val) => Ok(Expr::Decimal(val.to_string())),
+            Token::Integer(val) => Ok(Expr::Integer(*val)),
+            Token::Char(val) => Ok(Expr::Integer(*val as i128)),
+            Token::Decimal(val) => Ok(Expr::Decimal(*val)),
             Token::String(val) => Ok(Expr::StringConst(val.to_string())),
             Token::Name(name) => Ok(Expr::Name(name.to_string())),
 

@@ -384,10 +384,7 @@ fn handle_enums(
         if let Some(x) = enum_type.as_integer() {
             for (field_name, field_expr) in fields {
                 if let Expr::Integer(int) = &field_expr {
-                    compiler_enum_fields.push((
-                        field_name,
-                        LLVMVal::Constant(int.parse::<i128>().unwrap().to_string()),
-                    ));
+                    compiler_enum_fields.push((field_name, LLVMVal::ConstantInteger(*int)));
                     continue;
                 }
                 compiler_enum_fields.push((field_name, constant_expression_compiler(&field_expr)?));
@@ -707,11 +704,11 @@ pub fn compile_statement(
                 }
             }
         }
-        Stmt::Static(name, var_type, expr) => {
+        Stmt::Static(_name, var_type, _expr) => {
             let mut var_type =
                 CompilerType::into_path(var_type, ctx.symbols, current_function_path)?;
             var_type.substitute_generic_types(&ctx.symbols.alias_types, ctx.symbols)?;
-            let var = Variable::new(var_type.clone(), false);
+            let _var = Variable::new_static(var_type.clone(), false);
             todo!()
         }
 

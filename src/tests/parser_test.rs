@@ -121,9 +121,9 @@ mod parser_tests {
             "y".to_string(),
             ParserType::Pointer(Box::new(ParserType::Named("i8".to_string()))),
             Some(Expr::BinaryOp(
-                Box::new(Expr::Integer("1".to_string())),
+                Box::new(Expr::Integer(1)),
                 BinaryOp::Add,
-                Box::new(Expr::Integer("2".to_string())),
+                Box::new(Expr::Integer(2)),
             )),
         );
         if let Stmt::Function(func) = &ast2[0] {
@@ -149,7 +149,7 @@ mod parser_tests {
             Expr::BinaryOp(
                 Box::new(Expr::Name("a".to_string())),
                 BinaryOp::Equals,
-                Box::new(Expr::Integer("1".to_string())),
+                Box::new(Expr::Integer(1)),
             ),
             Box::new([StmtData {
                 stmt: Stmt::Return(None),
@@ -168,7 +168,7 @@ mod parser_tests {
             Box::new([]),
             Box::new([Stmt::Expr(Expr::Assign(
                 Box::new(Expr::Name("a".to_string())),
-                Box::new(Expr::Integer("1".to_string())),
+                Box::new(Expr::Integer(1)),
             ))
             .dummy_data()]),
         );
@@ -233,9 +233,9 @@ mod parser_tests {
         }
 
         let expected_return2 = Stmt::Return(Some(Expr::BinaryOp(
-            Box::new(Expr::Integer("1".to_string())),
+            Box::new(Expr::Integer(1)),
             BinaryOp::Add,
-            Box::new(Expr::Integer("1".to_string())),
+            Box::new(Expr::Integer(1)),
         )));
         if let Stmt::Function(func) = &ast2[0] {
             assert_eq!(func.body[0].stmt, expected_return2);
@@ -265,7 +265,7 @@ mod parser_tests {
 
         let expected_expr2 = Stmt::Expr(Expr::Call(
             Box::new(Expr::Name("my_func".to_string())),
-            Box::new([Expr::Name("a".to_string()), Expr::Integer("1".to_string())]),
+            Box::new([Expr::Name("a".to_string()), Expr::Integer(1)]),
         ));
         if let Stmt::Function(func) = &ast2[0] {
             assert_eq!(func.body[0].stmt, expected_expr2);

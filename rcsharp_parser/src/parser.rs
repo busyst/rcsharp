@@ -228,7 +228,7 @@ pub enum ParserType {
     Function(Box<ParserType>, Box<[ParserType]>),
     NamespaceLink(String, Box<ParserType>),
     Generic(String, Box<[ParserType]>),
-    ConstantSizeArray(Box<ParserType>, Box<str>),
+    ConstantSizeArray(Box<ParserType>, i128),
 }
 impl PartialEq for ParserType {
     fn eq(&self, other: &Self) -> bool {
@@ -746,7 +746,7 @@ impl<'a> GeneralParser<'a> {
                 self.advance();
                 self.parse_expression()?
             } else {
-                Expr::Integer(counter.to_string())
+                Expr::Integer(counter)
             };
 
             values.push((name, expr));

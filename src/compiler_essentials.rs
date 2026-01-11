@@ -26,15 +26,15 @@ pub trait FlagManager {
 }
 #[derive(Debug, Clone, PartialEq)]
 pub enum LLVMVal {
-    Register(u32),           // %tmp1
-    Variable(u32),           // %v1
-    VariableName(String),    // %smt
-    Global(String),          // @func_name
-    ConstantInteger(String), // 42, 0.5
-    ConstantDecimal(String), // 42, 0.5
-    Constant(String),        // 42, 0.5
-    Null,                    // null
-    Void,                    // void
+    Register(u32),         // %tmp1
+    Variable(u32),         // %v1
+    VariableName(String),  // %smt
+    Global(String),        // @func_name
+    ConstantInteger(i128), // 42
+    ConstantDecimal(f64),  // 42.0, 0.5
+    Constant(String),      // anything, realy
+    Null,                  // null
+    Void,                  // void
 }
 impl std::fmt::Display for LLVMVal {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -45,10 +45,7 @@ impl std::fmt::Display for LLVMVal {
             LLVMVal::Global(name) => write!(f, "@{}", name),
             LLVMVal::Constant(constant) => write!(f, "{}", constant),
             LLVMVal::ConstantInteger(constant) => write!(f, "{}", constant),
-            LLVMVal::ConstantDecimal(constant) => {
-                let fx = constant.parse::<f64>().unwrap();
-                write!(f, "0x{:X}", fx.to_bits())
-            }
+            LLVMVal::ConstantDecimal(constant) => write!(f, "0x{:X}", constant.to_bits()),
             LLVMVal::Void => write!(f, "void"),
             LLVMVal::Null => write!(f, "null"),
         }
@@ -252,7 +249,7 @@ impl CompilerType {
         }
         if let ParserType::ConstantSizeArray(ptype, times) = given_type {
             return Ok(CompilerType::ConstantArray(
-                times.parse::<usize>().unwrap(),
+                *times as usize,
                 Box::new(Self::into_path(ptype, symbols, current_path)?),
             ));
         }
@@ -515,6 +512,14 @@ impl CompilerType {
             }
             _ => todo!("{:?}", self),
         }
+    }
+    pub fn is_bitcast_compatible(&self, other: &CompilerType, symbols: &SymbolTable) -> bool {
+        if self.is_pointer() && other.is_pointer() {
+            return true;
+        }
+        let l1 = self.size_and_layout(symbols);
+        let l2 = other.size_and_layout(symbols);
+        l1.size == l2.size
     }
 }
 impl PartialEq<CompilerType> for CompilerType {
