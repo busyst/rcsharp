@@ -32,6 +32,7 @@ pub enum LLVMVal {
     Global(String),        // @func_name
     ConstantInteger(i128), // 42
     ConstantDecimal(f64),  // 42.0, 0.5
+    ConstantBoolean(bool), // true/false
     Constant(String),      // anything, realy
     Null,                  // null
     Void,                  // void
@@ -46,6 +47,7 @@ impl std::fmt::Display for LLVMVal {
             LLVMVal::Constant(constant) => write!(f, "{}", constant),
             LLVMVal::ConstantInteger(constant) => write!(f, "{}", constant),
             LLVMVal::ConstantDecimal(constant) => write!(f, "0x{:X}", constant.to_bits()),
+            LLVMVal::ConstantBoolean(constant) => write!(f, "{}", constant),
             LLVMVal::Void => write!(f, "void"),
             LLVMVal::Null => write!(f, "null"),
         }
@@ -137,7 +139,13 @@ impl CompilerType {
                 let x = ctype.llvm_representation(symbols)?;
                 Ok(format!("[{} x {}]", size, x))
             }
-            _ => todo!("Get llvm representation for non-primitive type {:?}", self),
+            _ => {
+                return Err(CompilerError::Generic(format!(
+                    "Cannot get llvm representation for {:?}",
+                    self
+                ))
+                .into())
+            }
         }
     }
     pub fn llvm_representation_in_generic(&self, symbols: &SymbolTable) -> CompileResult<String> {
@@ -200,6 +208,9 @@ impl CompilerType {
             {
                 return Ok(x.base_type.clone());
             } else {
+                if let Some(alias) = symbols.alias_types().get(name) {
+                    return Ok(alias.clone());
+                }
                 return Ok(CompilerType::GenericSubst(name.clone().into_boxed_str()));
             };
         }
@@ -510,7 +521,7 @@ impl CompilerType {
                 struct_type.set_layout(Layout::new(total_size, max_alignment));
                 Layout::new(total_size, max_alignment)
             }
-            _ => todo!("{:?}", self),
+            _ => panic!("Wrong type {:?}", self),
         }
     }
     pub fn is_bitcast_compatible(&self, other: &CompilerType, symbols: &SymbolTable) -> bool {
@@ -520,6 +531,19 @@ impl CompilerType {
         let l1 = self.size_and_layout(symbols);
         let l2 = other.size_and_layout(symbols);
         l1.size == l2.size
+    }
+
+    pub fn is_generic(&self) -> bool {
+        match self {
+            CompilerType::StructType(..)
+            | CompilerType::Primitive(..)
+            | CompilerType::GenericStructType(..) => false,
+            CompilerType::GenericSubst(..) | CompilerType::GenericStructTypeTemplate(..) => true,
+
+            CompilerType::Pointer(x) => x.is_generic(),
+            CompilerType::ConstantArray(.., x) => x.is_generic(),
+            CompilerType::Function(x, y) => x.is_generic() || y.iter().any(|x| x.is_generic()),
+        }
     }
 }
 impl PartialEq<CompilerType> for CompilerType {
@@ -829,7 +853,7 @@ impl Function {
         generic_impls.push(given_generics.to_vec().into());
         Some(generic_impls.len() - 1)
     }
-    pub fn call_path_impl_index(&self, impl_index: usize, symbols: &SymbolTable) -> Box<str> {
+    pub fn get_implementation_name(&self, impl_index: usize, symbols: &SymbolTable) -> Box<str> {
         debug_assert!(impl_index < self.generic_implementations.borrow().len());
 
         let base_name = self.full_path();
@@ -856,7 +880,40 @@ impl Function {
                 .collect::<Box<_>>(),
         )
     }
-
+    pub fn get_compiler_type_by_implementation_index(
+        &self,
+        impl_index: usize,
+        symbols: &SymbolTable,
+    ) -> CompileResult<CompilerType> {
+        assert!(self.is_generic());
+        let x = self.get_def_by_implementation_index(impl_index, symbols)?;
+        Ok(CompilerType::Function(x.0, x.1))
+    }
+    pub fn get_def_by_implementation_index(
+        &self,
+        impl_index: usize,
+        symbols: &SymbolTable,
+    ) -> CompileResult<(Box<CompilerType>, Box<[CompilerType]>)> {
+        assert!(self.is_generic());
+        let mut map = HashMap::new();
+        {
+            let b = self.generic_implementations.borrow();
+            let implementation = b.get(impl_index).unwrap();
+            for (idx, name) in self.generic_params.iter().enumerate() {
+                map.insert(name.clone(), implementation[idx].clone());
+            }
+        }
+        Ok((
+            Box::new(
+                self.return_type
+                    .with_substituted_generic_types(&map, symbols)?,
+            ),
+            self.args
+                .iter()
+                .map(|(_, ty)| ty.with_substituted_generic_types(&map, symbols))
+                .collect::<CompileResult<Box<_>>>()?,
+        ))
+    }
     pub fn attribs(&self) -> &[Attribute] {
         &self.attribs
     }
@@ -1238,7 +1295,13 @@ impl std::fmt::Display for CompilerError {
             )),
             Self::InvalidExpression(x) => f.write_str(x),
             Self::SymbolNotFound(x) => f.write_str(x),
-            _ => todo!("{:?}", self),
+            Self::ArgumentCountMissmatch(x) => f.write_str(x),
+            Self::TypeMismatch { expected, found } => f.write_str(&format!(
+                "Type mismatch: expected '{:?}', found '{:?}'",
+                expected, found
+            )),
+            Self::InvalidStatementInContext(x) => f.write_str(x),
+            Self::Io(x) => f.write_str(&format!("IO Error: {}", x)),
         }
     }
 }
@@ -1249,3 +1312,51 @@ impl From<std::io::Error> for CompilerError {
     }
 }
 impl std::error::Error for CompilerError {}
+
+#[derive(Debug)]
+pub struct CompiledLValue {
+    pub ptr_val: LLVMVal,
+    pub inner_type: CompilerType,
+    pub is_mutable: bool,
+    pub id: Option<usize>,
+}
+impl CompiledLValue {
+    pub fn new(ptr_val: LLVMVal, inner_type: CompilerType, is_mutable: bool) -> Self {
+        Self {
+            ptr_val,
+            inner_type,
+            is_mutable,
+            id: None,
+        }
+    }
+    pub fn new_fn(function_id: usize, symbol_table: &SymbolTable) -> CompileResult<Self> {
+        let func = symbol_table.get_function_by_id(function_id);
+        if !func.is_generic() {
+            return Ok(Self {
+                ptr_val: LLVMVal::Global(if func.is_external() {
+                    func.name().to_string()
+                } else {
+                    func.full_path().to_string()
+                }),
+                inner_type: func.get_type(),
+                is_mutable: false,
+                id: Some(function_id),
+            });
+        }
+
+        return Ok(Self {
+            ptr_val: LLVMVal::ConstantInteger(function_id as i128),
+            inner_type: func.get_type(),
+            is_mutable: false,
+            id: Some(function_id),
+        });
+    }
+
+    pub fn get_type(&self) -> &CompilerType {
+        &self.inner_type
+    }
+
+    pub fn get_llvm_rep(&self) -> &LLVMVal {
+        &self.ptr_val
+    }
+}

@@ -197,7 +197,7 @@ namespace list{
         list.data = 0 as i32;
     }
     fn extend<T>(list: &List<T>, data: T){
-        let node_to_add: &ListNode<T> = mem::malloc(sizeof::<ListNode<T>>()) as &ListNode<T>;
+        let node_to_add: &ListNode<T> = mem::malloc(size_of::<ListNode<T>>()) as &ListNode<T>;
         new_node::<T>(node_to_add);
         node_to_add.data = data;
 
@@ -258,7 +258,7 @@ namespace vector{
             if vec.capacity != 0 as u32 {
                 new_capacity = vec.capacity * 2 as u32;
             }
-            const new_size_bytes: i64 = sizeof::<T>() * new_capacity as i64;
+            const new_size_bytes: i64 = size_of::<T>() * new_capacity as i64;
             vec.array = mem::realloc(vec.array as &void, new_size_bytes) as &T;
             vec.capacity = new_capacity;
         }
@@ -447,7 +447,7 @@ namespace string{
     fn from_c_string(c_string: &i8) : String{
         let x: String;
         x.len = string_utils::c_str_len(c_string);
-        x.data = mem::malloc(sizeof::<i8>() * (x.len + 1) as i64) as &i8; 
+        x.data = mem::malloc(size_of::<i8>() * (x.len + 1) as i64) as &i8; 
         mem::copy(c_string, x.data, x.len as i64);
         x.data[x.len] = 0;
         return x;
@@ -461,7 +461,7 @@ namespace string{
     fn with_size(size: i32) : String {
         let x: String;
         x.len = size;
-        x.data = mem::malloc(sizeof::<i8>() * (size + 1) as i64) as &i8;
+        x.data = mem::malloc(size_of::<i8>() * (size + 1) as i64) as &i8;
         mem::zero_fill(x.data, (size + 1) as i64);
         return x;
     }
@@ -469,7 +469,7 @@ namespace string{
     fn clone(src: &String) : String {
         let x: String;
         x.len = src.len;
-        x.data = mem::malloc(sizeof::<i8>() * (x.len + 1) as i64) as &i8;
+        x.data = mem::malloc(size_of::<i8>() * (x.len + 1) as i64) as &i8;
         mem::copy(src.data, x.data, x.len as i64);
         x.data[x.len] = 0;
         return x;
@@ -479,7 +479,7 @@ namespace string{
         const c_string_len : i32 = string_utils::c_str_len(c_string);
         const new_len: i32 = c_string_len + src_string.len;
         
-        const combined : &i8 = mem::malloc(sizeof::<i8>() * (new_len + 1) as i64) as &i8;
+        const combined : &i8 = mem::malloc(size_of::<i8>() * (new_len + 1) as i64) as &i8;
         
         mem::copy(src_string.data, combined, src_string.len as i64);
         mem::copy(c_string, (combined + src_string.len as i64), c_string_len as i64);
@@ -1608,7 +1608,7 @@ namespace window{
     }
     fn get_bitmap_dimensions(hBitmap: &void, width: &i32, height: &i32) {
         let bm: BITMAP;
-        GetObjectA(hBitmap, sizeof::<BITMAP>() as i32, &bm);
+        GetObjectA(hBitmap, size_of::<BITMAP>() as i32, &bm);
         *width = bm.bmWidth;
         *height = bm.bmHeight;
     }
@@ -1619,7 +1619,7 @@ namespace window{
         const hOldBitmap: &void = SelectObject(hMemDC, hBitmap);
 
         let bm: BITMAP;
-        GetObjectA(hBitmap, sizeof::<BITMAP>() as i32, &bm);
+        GetObjectA(hBitmap, size_of::<BITMAP>() as i32, &bm);
 
         BitBlt(hdc, x, y, bm.bmWidth, bm.bmHeight, hMemDC, 0, 0, 13369376);
 
@@ -1633,7 +1633,7 @@ namespace window{
         const hOldBitmap: &void = SelectObject(hMemDC, hBitmap);
 
         let bm: BITMAP;
-        GetObjectA(hBitmap, sizeof::<BITMAP>() as i32, &bm);
+        GetObjectA(hBitmap, size_of::<BITMAP>() as i32, &bm);
         
         SetStretchBltMode(hdc, 3); 
         
@@ -1653,7 +1653,7 @@ namespace window{
 
         const className: &i8 = "MyWindowClass";
         let wc: WNDCLASSEXA;
-        wc.cbSize = sizeof::<WNDCLASSEXA>();
+        wc.cbSize = size_of::<WNDCLASSEXA>();
         wc.style = CS::HREDRAW | CS::VREDRAW;
         wc.lpfnWndProc = ptr_of(WindowProc);
         wc.cbClsExtra = 0;
@@ -1711,7 +1711,7 @@ namespace window{
 
         const className: &i8 = "BorderlessImageClass";
         let wc: WNDCLASSEXA;
-        wc.cbSize = sizeof::<WNDCLASSEXA>();
+        wc.cbSize = size_of::<WNDCLASSEXA>();
         wc.style = CS::HREDRAW | CS::VREDRAW;
         wc.lpfnWndProc = ptr_of(WindowProc);
         wc.cbClsExtra = 0;

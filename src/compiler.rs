@@ -401,7 +401,7 @@ fn handle_enums(
             );
             continue;
         }
-        todo!("Not yet supported!")
+        unimplemented!("Not yet supported!")
     }
     Ok(())
 }
@@ -645,7 +645,7 @@ pub fn compile_statement(
 
             let result =
                 compile_expression(expr, Expected::Type(&var_type), stmt.span, ctx, output)?;
-            if *result.get_type() != var_type {
+            if *result.try_get_type()? != var_type {
                 return Err((
                     stmt.span,
                     CompilerError::InvalidExpression(format!(
@@ -679,7 +679,7 @@ pub fn compile_statement(
                         ctx,
                         output,
                     )?;
-                    if &var_type != result.get_type() {
+                    if &var_type != result.try_get_type()? {
                         return Err((
                             stmt.span,
                             CompilerError::InvalidExpression(format!(
@@ -709,7 +709,7 @@ pub fn compile_statement(
                 CompilerType::into_path(var_type, ctx.symbols, current_function_path)?;
             var_type.substitute_generic_types(&ctx.symbols.alias_types, ctx.symbols)?;
             let _var = Variable::new_static(var_type.clone(), false);
-            todo!()
+            unimplemented!("Not yet supported!")
         }
 
         Stmt::Expr(expression) => {
@@ -782,12 +782,12 @@ pub fn compile_statement(
             if let Some(expr) = opt_expr {
                 let value =
                     compile_expression(expr, Expected::Type(&return_type), stmt.span, ctx, output)?;
-                if value.get_type() != &return_type {
+                if value.try_get_type()? != &return_type {
                     return Err((
                         stmt.span,
                         CompilerError::TypeMismatch {
                             expected: return_type.clone(),
-                            found: value.get_type().clone(),
+                            found: value.try_get_type()?.clone(),
                         },
                     )
                         .into());
@@ -821,13 +821,13 @@ pub fn compile_statement(
                 output,
             )?;
 
-            if cond_val.get_type() != &bool_type {
+            if cond_val.try_get_type()? != &bool_type {
                 return Err((
                     stmt.span,
                     CompilerError::InvalidExpression(format!(
                         "'{:?}' must result in bool, instead resulted in {:?}",
                         condition,
-                        cond_val.get_type()
+                        cond_val.try_get_type()?
                     )),
                 )
                     .into());
@@ -942,7 +942,7 @@ fn handle_generics(
             let (specialized_name, generic_params) = {
                 let func = symbols.get_function_by_id(id);
                 (
-                    func.call_path_impl_index(impl_index, symbols),
+                    func.get_implementation_name(impl_index, symbols),
                     func.generic_params.clone(),
                 )
             };
