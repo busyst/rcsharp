@@ -2,7 +2,7 @@ use ordered_hash_map::OrderedHashMap;
 use rcsharp_parser::{
     compiler_primitives::{Layout, PrimitiveInfo, PrimitiveKind, POINTER_SIZED_TYPE, VOID_TYPE},
     expression_parser::BinaryOp,
-    parser::{Attribute, ParserType, Span, StmtData},
+    parser::{Attribute, ParserType, Span, Stmt, StmtData},
 };
 use std::{
     cell::{Cell, RefCell},
@@ -13,17 +13,6 @@ use crate::{
     compiler::{LLVMOutputHandler, SymbolTable},
     expression_compiler::CompiledValue,
 };
-pub trait FlagManager {
-    fn get_flags(&self) -> &Cell<u8>;
-
-    fn has_flag(&self, flag: u8) -> bool {
-        self.get_flags().get() & flag != 0
-    }
-
-    fn set_flag(&self, flag: u8) {
-        self.get_flags().set(self.get_flags().get() | flag);
-    }
-}
 #[derive(Debug, Clone, PartialEq)]
 pub enum LLVMVal {
     Register(u32),         // %tmp1
@@ -44,10 +33,10 @@ impl std::fmt::Display for LLVMVal {
             LLVMVal::Variable(id) => write!(f, "%v{}", id),
             LLVMVal::VariableName(name) => write!(f, "%{}", name),
             LLVMVal::Global(name) => write!(f, "@{}", name),
-            LLVMVal::Constant(constant) => write!(f, "{}", constant),
-            LLVMVal::ConstantInteger(constant) => write!(f, "{}", constant),
-            LLVMVal::ConstantDecimal(constant) => write!(f, "0x{:X}", constant.to_bits()),
-            LLVMVal::ConstantBoolean(constant) => write!(f, "{}", constant),
+            LLVMVal::Constant(val) => write!(f, "{}", val),
+            LLVMVal::ConstantInteger(val) => write!(f, "{}", val),
+            LLVMVal::ConstantDecimal(val) => write!(f, "0x{:X}", val.to_bits()),
+            LLVMVal::ConstantBoolean(val) => write!(f, "{}", val),
             LLVMVal::Void => write!(f, "void"),
             LLVMVal::Null => write!(f, "null"),
         }
@@ -59,40 +48,54 @@ pub enum CompilerType {
     Primitive(&'static PrimitiveInfo),
     Pointer(Box<CompilerType>),
     ConstantArray(usize, Box<CompilerType>),
-    StructType(usize),               // index in symbol table
-    GenericSubst(Box<str>),          // index in symbol table
-    GenericStructType(usize, usize), // index in symbol table, index in implementation table
-
-    GenericStructTypeTemplate(usize, Box<[CompilerType]>), // index in symbol table, implementation template
-
+    Struct(usize), // index in symbol table
+    GenericPlaceholder(Box<str>),
+    GenericStructInstance(usize, usize), // index in symbol table, index in implementation table
+    GenericStructTemplate(usize, Box<[CompilerType]>), // index in symbol table, implementation template
     Function(Box<CompilerType>, Box<[CompilerType]>), // return type index in symbol table, arguments indexes in implementation table
 }
-
 impl std::fmt::Debug for CompilerType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Primitive(arg0) => f.write_str(&format!("@{}", arg0.name)),
-            Self::Pointer(arg0) => f.debug_tuple("Pointer").field(arg0).finish(),
-            CompilerType::ConstantArray(arg0, arg1) => f
+            Self::Primitive(info) => write!(f, "@{}", info.name),
+            Self::Pointer(inner) => f.debug_tuple("Pointer").field(inner).finish(),
+            Self::ConstantArray(size, inner) => f
                 .debug_tuple("ConstantArray")
-                .field(arg0)
-                .field(arg1)
+                .field(size)
+                .field(inner)
                 .finish(),
-            Self::StructType(arg0) => f.debug_tuple("StructType").field(arg0).finish(),
-            Self::GenericSubst(arg0) => f.debug_tuple("GenericSubst").field(arg0).finish(),
-            Self::GenericStructType(arg0, arg1) => f
-                .debug_tuple("GenericStructType")
-                .field(arg0)
-                .field(arg1)
-                .finish(),
-            Self::GenericStructTypeTemplate(arg0, arg1) => f
-                .debug_tuple("GenericStructTypeTemplate")
-                .field(arg0)
-                .field(arg1)
-                .finish(),
-            Self::Function(arg0, arg1) => {
-                f.debug_tuple("Function").field(arg0).field(arg1).finish()
+            Self::Struct(id) => f.debug_tuple("Struct").field(id).finish(),
+            Self::GenericPlaceholder(name) => {
+                f.debug_tuple("GenericPlaceholder").field(name).finish()
             }
+            Self::GenericStructInstance(id, impl_idx) => f
+                .debug_tuple("GenericStructInstance")
+                .field(id)
+                .field(impl_idx)
+                .finish(),
+            Self::GenericStructTemplate(id, args) => f
+                .debug_tuple("GenericStructTemplate")
+                .field(id)
+                .field(args)
+                .finish(),
+            Self::Function(ret, args) => f.debug_tuple("Function").field(ret).field(args).finish(),
+        }
+    }
+}
+impl PartialEq for CompilerType {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Primitive(a), Self::Primitive(b)) => a.name == b.name,
+            (Self::Struct(a), Self::Struct(b)) => a == b,
+            (
+                Self::GenericStructInstance(id_a, impl_a),
+                Self::GenericStructInstance(id_b, impl_b),
+            ) => id_a == id_b && impl_a == impl_b,
+            (Self::Function(ret_a, args_a), Self::Function(ret_b, args_b)) => {
+                ret_a == ret_b && args_a == args_b
+            }
+            (Self::Pointer(a), Self::Pointer(b)) => a == b,
+            _ => false,
         }
     }
 }
@@ -100,299 +103,301 @@ impl std::fmt::Debug for CompilerType {
 impl CompilerType {
     pub fn llvm_representation(&self, symbols: &SymbolTable) -> CompileResult<String> {
         match self {
-            CompilerType::Primitive(info) => Ok(info.llvm_name.to_string()),
-            CompilerType::StructType(idx) => Ok(symbols.get_type_by_id(*idx).llvm_representation()),
-            CompilerType::Pointer(inner) => Ok({
-                if let Some(x) = inner.as_primitive() {
-                    if x == VOID_TYPE {
+            Self::Primitive(info) => Ok(info.llvm_name.to_string()),
+            Self::Struct(idx) => Ok(symbols.get_type_by_id(*idx).llvm_representation()),
+            Self::Pointer(inner) => {
+                if let Some(prim) = inner.as_primitive() {
+                    if prim == VOID_TYPE {
                         return Ok("i8*".to_string());
                     }
                 }
-                format!("{}*", inner.llvm_representation(symbols)?)
-            }),
-            CompilerType::Function(ret, args) => {
+                Ok(format!("{}*", inner.llvm_representation(symbols)?))
+            }
+            Self::Function(ret, args) => {
                 let ret_llvm = ret.llvm_representation(symbols)?;
-                let params_llvm: Vec<String> = args
+                let params_llvm = args
                     .iter()
-                    .map(|param_type| param_type.llvm_representation(symbols))
-                    .collect::<CompileResult<Vec<String>>>()?;
+                    .map(|param| param.llvm_representation(symbols))
+                    .collect::<CompileResult<Vec<_>>>()?;
                 Ok(format!("{} ({})", ret_llvm, params_llvm.join(", ")))
             }
-            CompilerType::GenericStructType(x, y) => {
-                let base_type = symbols.get_type_by_id(*x);
-                let x = base_type
+            Self::GenericStructInstance(base_id, impl_idx) => {
+                let base_type = symbols.get_type_by_id(*base_id);
+                let impl_args = base_type
                     .generic_implementations
                     .borrow()
-                    .get(*y)
+                    .get(*impl_idx)
                     .unwrap()
                     .clone();
+
+                let arg_reprs = impl_args
+                    .iter()
+                    .map(|arg| arg.llvm_representation_in_generic(symbols))
+                    .collect::<CompileResult<Vec<_>>>()?;
+
                 Ok(format!(
                     "%\"{}<{}>\"",
                     base_type.llvm_representation_without_percent(),
-                    x.iter()
-                        .map(|x| x.llvm_representation_in_generic(symbols).unwrap())
-                        .collect::<Vec<_>>()
-                        .join(", ")
+                    arg_reprs.join(", ")
                 ))
             }
-            CompilerType::ConstantArray(size, ctype) => {
-                let x = ctype.llvm_representation(symbols)?;
-                Ok(format!("[{} x {}]", size, x))
-            }
-            _ => {
-                return Err(CompilerError::Generic(format!(
-                    "Cannot get llvm representation for {:?}",
-                    self
+            Self::GenericStructInstance(base_id, impl_idx) => {
+                let base_type = symbols.get_type_by_id(*base_id);
+                let impl_args = base_type
+                    .generic_implementations
+                    .borrow()
+                    .get(*impl_idx)
+                    .unwrap()
+                    .clone();
+
+                let arg_reprs = impl_args
+                    .iter()
+                    .map(|arg| arg.llvm_representation_in_generic(symbols))
+                    .collect::<CompileResult<Vec<_>>>()?;
+
+                Ok(format!(
+                    "%\"{}<{}>\"",
+                    base_type.llvm_representation_without_percent(),
+                    arg_reprs.join(", ")
                 ))
-                .into())
             }
+            Self::ConstantArray(size, inner) => Ok(format!(
+                "[{} x {}]",
+                size,
+                inner.llvm_representation(symbols)?
+            )),
+            _ => Err(CompilerError::Generic(format!("Cannot get LLVM repr for {:?}", self)).into()),
         }
     }
     pub fn llvm_representation_in_generic(&self, symbols: &SymbolTable) -> CompileResult<String> {
         match self {
-            CompilerType::GenericStructType(x, y) => {
-                let base_type = symbols.get_type_by_id(*x);
-                let x = base_type
+            Self::GenericStructInstance(base_id, impl_idx) => {
+                let base_type = symbols.get_type_by_id(*base_id);
+                let impl_args = base_type
                     .generic_implementations
                     .borrow()
-                    .get(*y)
+                    .get(*impl_idx)
                     .unwrap()
                     .clone();
+
+                let arg_reprs = impl_args
+                    .iter()
+                    .map(|arg| arg.llvm_representation_in_generic(symbols))
+                    .collect::<CompileResult<Vec<_>>>()?;
+
                 Ok(format!(
                     "%{}<{}>",
                     base_type.llvm_representation_without_percent(),
-                    x.iter()
-                        .map(|x| x.llvm_representation_in_generic(symbols).unwrap())
-                        .collect::<Vec<_>>()
-                        .join(", ")
+                    arg_reprs.join(", ")
                 ))
             }
             _ => self.llvm_representation(symbols),
         }
     }
-    pub fn into(given_type: &ParserType, ctx: &CodeGenContext) -> CompileResult<CompilerType> {
-        Self::into_path(given_type, ctx.symbols, ctx.current_function_path())
-    }
-    pub fn into_path(
+    pub fn from_parser_type(
         given_type: &ParserType,
         symbols: &SymbolTable,
         current_path: &str,
     ) -> CompileResult<CompilerType> {
         if let Some(pt) = given_type.as_primitive_type() {
-            return Ok(CompilerType::Primitive(pt));
+            return Ok(Self::Primitive(pt));
         }
-        if let Some(internal) = given_type.as_pointer() {
-            return Ok(CompilerType::Pointer(Box::new(CompilerType::into_path(
-                internal,
-                symbols,
-                current_path,
-            )?)));
+        if let Some(inner) = given_type.as_pointer() {
+            let inner_type = Self::from_parser_type(inner, symbols, current_path)?;
+            return Ok(Self::Pointer(Box::new(inner_type)));
         }
         if let Some((ret, args)) = given_type.as_function() {
-            let ret = CompilerType::into_path(ret, symbols, current_path)?;
-            let args = args
+            let ret_type = Self::from_parser_type(ret, symbols, current_path)?;
+            let arg_types = args
                 .iter()
-                .map(|a| CompilerType::into_path(a, symbols, current_path))
+                .map(|a| Self::from_parser_type(a, symbols, current_path))
                 .collect::<CompileResult<Box<_>>>()?;
-            return Ok(CompilerType::Function(Box::new(ret), args));
+            return Ok(Self::Function(Box::new(ret_type), arg_types));
         }
         if let ParserType::Named(name) = given_type {
-            if let Some(x) = symbols
-                .get_type_id(format!("{}.{}", current_path, name).as_str())
-                .or(symbols.get_type_id(name))
-            {
-                return Ok(CompilerType::StructType(x));
-            } else if let Some(x) = symbols
-                .get_enum(format!("{}.{}", current_path, name).as_str())
-                .or(symbols.get_enum(name))
-            {
-                return Ok(x.base_type.clone());
-            } else {
-                if let Some(alias) = symbols.alias_types().get(name) {
-                    return Ok(alias.clone());
-                }
-                return Ok(CompilerType::GenericSubst(name.clone().into_boxed_str()));
-            };
-        }
-        if let ParserType::Generic(name, gen_args) = given_type {
-            let id = if let Some(x) = symbols
-                .get_type_id(format!("{}.{}", current_path, name).as_str())
-                .or(symbols.get_type_id(name))
-            {
-                x
-            } else {
-                panic!()
-            };
-            let mut vec_impl = vec![];
-            let mut is_full_implementation = true;
-            for gen_arg in gen_args {
-                let x = CompilerType::into_path(gen_arg, symbols, current_path)?;
-                if let CompilerType::GenericSubst(..) = &x {
-                    is_full_implementation = false;
-                }
-                if let CompilerType::GenericStructTypeTemplate(..) = &x {
-                    is_full_implementation = false;
-                }
-                vec_impl.push(x);
-            }
-            let structure = symbols.get_type_by_id(id);
+            let local_path = format!("{}.{}", current_path, name);
 
-            if is_full_implementation {
-                let impl_index = structure.get_implementation_index(&vec_impl).expect("msg");
-                return Ok(CompilerType::GenericStructType(id, impl_index));
+            if let Some(id) = symbols
+                .get_type_id(&local_path)
+                .or_else(|| symbols.get_type_id(name))
+            {
+                return Ok(Self::Struct(id));
+            }
+
+            if let Some(enum_def) = symbols
+                .get_enum(&local_path)
+                .or_else(|| symbols.get_enum(name))
+            {
+                return Ok(enum_def.base_type.clone());
+            }
+
+            if let Some(alias) = symbols.alias_types().get(name) {
+                return Ok(alias.clone());
+            }
+
+            return Ok(Self::GenericPlaceholder(name.clone().into_boxed_str()));
+        }
+        if let ParserType::Generic(name, args) = given_type {
+            let local_path = format!("{}.{}", current_path, name);
+            let id = symbols
+                .get_type_id(&local_path)
+                .or_else(|| symbols.get_type_id(name))
+                .expect("Generic type not found");
+
+            let mut compiled_args = Vec::new();
+            let mut is_concrete = true;
+
+            for arg in args {
+                let compiled_arg = Self::from_parser_type(arg, symbols, current_path)?;
+                if matches!(
+                    compiled_arg,
+                    Self::GenericPlaceholder(_) | Self::GenericStructTemplate(..)
+                ) {
+                    is_concrete = false;
+                }
+                compiled_args.push(compiled_arg);
+            }
+
+            if is_concrete {
+                let structure = symbols.get_type_by_id(id);
+                let impl_index = structure
+                    .get_implementation_index(&compiled_args)
+                    .expect("Failed to get implementation index");
+                return Ok(Self::GenericStructInstance(id, impl_index));
             } else {
-                return Ok(CompilerType::GenericStructTypeTemplate(
+                return Ok(Self::GenericStructTemplate(
                     id,
-                    vec_impl.into_boxed_slice(),
+                    compiled_args.into_boxed_slice(),
                 ));
             }
         }
         if let ParserType::NamespaceLink(link, inner) = given_type {
-            let mut path = link.to_string();
-            let mut inner_cursor = &**inner;
-            while let ParserType::NamespaceLink(x, inner) = inner_cursor {
-                inner_cursor = &**inner;
-                path.push('.');
-                path.push_str(x);
+            let mut path_builder = link.to_string();
+            let mut current = &**inner;
+            while let ParserType::NamespaceLink(next_segment, next_inner) = current {
+                path_builder.push('.');
+                path_builder.push_str(next_segment);
+                current = &**next_inner;
             }
-            let c = Self::into_path_internal(inner_cursor, symbols, &path, current_path)?;
-            return Ok(c);
+            return Self::resolve_namespaced_type(current, symbols, &path_builder, current_path);
         }
-        if let ParserType::ConstantSizeArray(ptype, times) = given_type {
-            return Ok(CompilerType::ConstantArray(
-                *times as usize,
-                Box::new(Self::into_path(ptype, symbols, current_path)?),
-            ));
+        if let ParserType::ConstantSizeArray(inner, size) = given_type {
+            let inner_type = Self::from_parser_type(inner, symbols, current_path)?;
+            return Ok(Self::ConstantArray(*size as usize, Box::new(inner_type)));
         }
-        println!("{:?}", given_type);
-        println!("{:?}", current_path);
-        panic!()
+        panic!("Unknown type format: {:?}", given_type);
     }
-    fn into_path_internal(
+    fn resolve_namespaced_type(
         given_type: &ParserType,
         symbols: &SymbolTable,
-        type_path: &str,
-        current_path: &str,
-    ) -> CompileResult<CompilerType> {
-        if let Some((name, gen_args)) = given_type.as_generic() {
-            let id =
-                if let Some(x) = symbols.get_type_id(format!("{}.{}", type_path, name).as_str()) {
-                    x
-                } else {
-                    panic!("{}.{}", type_path, name);
-                };
-            let mut vec_impl = vec![];
-            let mut is_full_implementation = true;
-            for gen_arg in gen_args {
-                let x = CompilerType::into_path(gen_arg, symbols, current_path)?;
-                if let CompilerType::GenericSubst(..) = &x {
-                    !is_full_implementation;
+        namespace_path: &str,
+        context_path: &str,
+    ) -> CompileResult<Self> {
+        if let Some((name, args)) = given_type.as_generic() {
+            let full_name = format!("{}.{}", namespace_path, name);
+            let id = symbols
+                .get_type_id(&full_name)
+                .expect(&format!("Type {} not found", full_name));
+
+            let mut compiled_args = Vec::new();
+            let mut is_concrete = true;
+
+            for arg in args {
+                let compiled_arg = Self::from_parser_type(arg, symbols, context_path)?;
+                if matches!(
+                    compiled_arg,
+                    Self::GenericPlaceholder(_) | Self::GenericStructTemplate(..)
+                ) {
+                    is_concrete = false;
                 }
-                if let CompilerType::GenericStructTypeTemplate(..) = &x {
-                    !is_full_implementation;
-                }
-                vec_impl.push(x);
+                compiled_args.push(compiled_arg);
             }
-            let structure = symbols.get_type_by_id(id);
-            if is_full_implementation {
-                if let Some(impl_index) = structure
-                    .generic_implementations
-                    .borrow()
-                    .iter()
-                    .position(|x| x.iter().eq(vec_impl.iter()))
-                {
-                    return Ok(CompilerType::GenericStructType(id, impl_index));
-                }
-                {
-                    let mut x = structure.generic_implementations.borrow_mut();
-                    x.push(vec_impl.into_boxed_slice());
-                    return Ok(CompilerType::GenericStructType(id, x.len() - 1));
-                }
+
+            if is_concrete {
+                let structure = symbols.get_type_by_id(id);
+                let impl_idx = structure.ensure_generic_implementation(&compiled_args);
+                return Ok(Self::GenericStructInstance(id, impl_idx));
             }
-            panic!()
+            panic!("Cannot handle non-concrete generic namespace resolution yet");
         }
+
         if let ParserType::Named(name) = given_type {
-            if let Some(x) = symbols.get_type_id(format!("{}.{}", type_path, name).as_str()) {
-                return Ok(CompilerType::StructType(x));
+            let full_name = format!("{}.{}", namespace_path, name);
+            if let Some(id) = symbols.get_type_id(&full_name) {
+                return Ok(Self::Struct(id));
             }
-            panic!(
-                "{:?} Was not found in current context",
-                format!("{}.{}", type_path, name).as_str()
-            )
+            panic!("Type {} not found", full_name);
         }
-        panic!("{:?} {} {}", given_type, type_path, current_path);
+
+        panic!(
+            "Invalid namespaced type: {:?} in {}",
+            given_type, namespace_path
+        );
     }
-    pub fn with_substituted_generic_types(
+
+    pub fn with_substituted_generics(
         &self,
         map: &HashMap<String, CompilerType>,
         symbols: &SymbolTable,
     ) -> CompileResult<Self> {
-        let mut s = self.clone();
-        s.substitute_generic_types(map, symbols);
-        Ok(s)
+        let mut cloned = self.clone();
+        cloned.substitute_generics(map, symbols)?;
+        Ok(cloned)
     }
-    pub fn substitute_generic_types_global_aliases(
-        &mut self,
-        symbols: &SymbolTable,
-    ) -> CompileResult<()> {
-        self.substitute_generic_types(symbols.alias_types(), symbols)
+    pub fn substitute_global_aliases(&mut self, symbols: &SymbolTable) -> CompileResult<()> {
+        self.substitute_generics(symbols.alias_types(), symbols)
     }
-    pub fn substitute_generic_types(
+    pub fn substitute_generics(
         &mut self,
         map: &HashMap<String, CompilerType>,
         symbols: &SymbolTable,
     ) -> CompileResult<()> {
         match self {
-            CompilerType::Primitive(_)
-            | CompilerType::StructType(_)
-            | CompilerType::GenericStructType(_, _) => Ok(()),
-
-            CompilerType::GenericSubst(name) => {
+            Self::Primitive(_) | Self::Struct(_) | Self::GenericStructInstance(_, _) => Ok(()),
+            Self::GenericPlaceholder(name) => {
                 if let Some(replacement) = map.get(name.as_ref()) {
                     *self = replacement.clone();
                     Ok(())
                 } else {
-                    panic!("Key {name} was not found in given hashmap {map:?} and thats your fault")
+                    panic!("Generic placeholder {} not found in substitution map", name);
                 }
             }
-            CompilerType::GenericStructTypeTemplate(template, args) => {
+            Self::GenericStructTemplate(template_id, args) => {
                 for arg in args.iter_mut() {
-                    arg.substitute_generic_types(map, symbols);
+                    arg.substitute_generics(map, symbols)?;
                 }
-                let all_defined = !args
+
+                let is_fully_defined = !args
                     .iter()
-                    .any(|x| matches!(x, CompilerType::GenericSubst(..)));
-                if all_defined {
-                    let structure = symbols.get_type_by_id(*template);
-                    let impl_id = structure.get_implementation_index(args).expect("msg");
-                    *self = CompilerType::GenericStructType(*template, impl_id);
-                    Ok(())
-                } else {
-                    println!("{:?}", args);
-                    unreachable!()
+                    .any(|x| matches!(x, Self::GenericPlaceholder(_)));
+
+                if is_fully_defined {
+                    let structure = symbols.get_type_by_id(*template_id);
+                    let impl_idx = structure
+                        .get_implementation_index(args)
+                        .expect("Failed to get implementation");
+                    *self = Self::GenericStructInstance(*template_id, impl_idx);
                 }
+                Ok(())
             }
-            CompilerType::Function(ret_type, args) => {
-                ret_type.substitute_generic_types(map, symbols);
+            Self::Function(ret, args) => {
+                ret.substitute_generics(map, symbols)?;
                 for arg in args.iter_mut() {
-                    arg.substitute_generic_types(map, symbols);
+                    arg.substitute_generics(map, symbols)?;
                 }
                 Ok(())
             }
-            CompilerType::ConstantArray(_, array_type) => {
-                array_type.substitute_generic_types(map, symbols);
-                Ok(())
-            }
-            CompilerType::Pointer(inner) => inner.substitute_generic_types(map, symbols),
+            Self::ConstantArray(_, inner) => inner.substitute_generics(map, symbols),
+            Self::Pointer(inner) => inner.substitute_generics(map, symbols),
         }
     }
 
-    pub fn is_base_equal_to(&self, given_type_id: usize) -> bool {
+    pub fn is_same_base_type(&self, type_id: usize) -> bool {
         match self {
-            CompilerType::Pointer(internal_type) => internal_type.is_base_equal_to(given_type_id),
-            CompilerType::StructType(id) => *id == given_type_id,
-            CompilerType::GenericStructType(base_id, _) => *base_id == given_type_id,
-            CompilerType::GenericStructTypeTemplate(base_id, _) => *base_id == given_type_id,
+            Self::Pointer(inner) => inner.is_same_base_type(type_id),
+            Self::Struct(id) => *id == type_id,
+            Self::GenericStructInstance(id, _) => *id == type_id,
+            Self::GenericStructTemplate(id, _) => *id == type_id,
             _ => false,
         }
     }
@@ -427,137 +432,103 @@ impl CompilerType {
     }
     pub fn as_pointer(&self) -> Option<&CompilerType> {
         match self {
-            CompilerType::Pointer(x) => Some(x),
+            Self::Pointer(x) => Some(x),
             _ => None,
         }
     }
     pub fn as_primitive(&self) -> Option<&'static PrimitiveInfo> {
         match self {
-            CompilerType::Primitive(x) => Some(x),
+            Self::Primitive(x) => Some(x),
             _ => None,
         }
     }
     pub fn as_constant_array(&self) -> Option<(usize, &CompilerType)> {
         match self {
-            CompilerType::ConstantArray(x, y) => Some((*x, &**y)),
+            Self::ConstantArray(x, y) => Some((*x, &**y)),
             _ => None,
         }
     }
     pub fn dereference(&self) -> Option<&CompilerType> {
         match self {
-            CompilerType::Pointer(x) => Some(x),
+            Self::Pointer(x) => Some(x),
             _ => None,
         }
     }
     pub fn reference(self) -> CompilerType {
-        CompilerType::Pointer(Box::new(self))
+        Self::Pointer(Box::new(self))
     }
-    pub fn size_and_layout(&self, symbols: &SymbolTable) -> Layout {
+    pub fn calculate_layout(&self, symbols: &SymbolTable) -> Layout {
         match self {
-            CompilerType::Primitive(x) => x.layout,
-            CompilerType::Pointer(x) => POINTER_SIZED_TYPE.layout,
-            CompilerType::GenericStructType(x, y) => {
-                let struct_type = symbols.get_type_by_id(*x);
-                let gen_impl = struct_type.generic_implementations.borrow();
-                let mut map = HashMap::new();
-                for (idx, name) in struct_type.generic_params.iter().enumerate() {
-                    map.insert(name.clone(), gen_impl[*y][idx].clone());
-                }
-                drop(gen_impl);
-                let fields = struct_type
-                    .fields
-                    .iter()
-                    .map(|x| {
-                        x.1.with_substituted_generic_types(&map, symbols)
-                            .map(|x| x.size_and_layout(symbols))
-                    })
-                    .collect::<CompileResult<Vec<_>>>()
-                    .unwrap();
-                let mut current_offset = 0;
-                let mut max_alignment = 1;
-                for field in fields {
-                    let layout_of_type = field;
-                    if layout_of_type.align == 0 {
-                        continue;
-                    }
-                    max_alignment = u32::max(max_alignment, layout_of_type.align);
-                    let padding = (layout_of_type.align - (current_offset % layout_of_type.align))
-                        % layout_of_type.align;
-
-                    current_offset += padding;
-                    current_offset += layout_of_type.size;
-                }
-                let final_padding =
-                    (max_alignment - (current_offset % max_alignment)) % max_alignment;
-                let total_size = current_offset + final_padding;
-                Layout::new(total_size, max_alignment)
-            }
-            CompilerType::StructType(x) => {
-                let struct_type = symbols.get_type_by_id(*x);
-                if let Some(layout) = struct_type.get_layout() {
+            Self::Primitive(info) => info.layout,
+            Self::Pointer(_) => POINTER_SIZED_TYPE.layout,
+            Self::Struct(id) => {
+                let structure = symbols.get_type_by_id(*id);
+                if let Some(layout) = structure.get_cached_layout() {
                     return layout;
                 }
-                let mut current_offset = 0;
-                let mut max_alignment = 1;
-                for field in struct_type
+                let layout = Self::compute_struct_layout(
+                    structure.fields.iter().map(|f| f.1.clone()),
+                    symbols,
+                );
+                structure.set_cached_layout(layout);
+                layout
+            }
+            Self::GenericStructInstance(id, impl_idx) => {
+                let structure = symbols.get_type_by_id(*id);
+                let impl_args = &structure.generic_implementations.borrow()[*impl_idx];
+
+                let mut sub_map = HashMap::new();
+                for (i, param_name) in structure.generic_params.iter().enumerate() {
+                    sub_map.insert(param_name.clone(), impl_args[i].clone());
+                }
+
+                let concretized_fields = structure
                     .fields
                     .iter()
-                    .map(|x| x.1.size_and_layout(symbols))
-                {
-                    let layout_of_type = field;
-                    if layout_of_type.align == 0 {
-                        continue;
-                    }
-                    max_alignment = u32::max(max_alignment, layout_of_type.align);
-                    let padding = (layout_of_type.align - (current_offset % layout_of_type.align))
-                        % layout_of_type.align;
+                    .map(|(_, ty)| ty.with_substituted_generics(&sub_map, symbols).unwrap());
 
-                    current_offset += padding;
-                    current_offset += layout_of_type.size;
-                }
-                let final_padding =
-                    (max_alignment - (current_offset % max_alignment)) % max_alignment;
-                let total_size = current_offset + final_padding;
-                struct_type.set_layout(Layout::new(total_size, max_alignment));
-                Layout::new(total_size, max_alignment)
+                Self::compute_struct_layout(concretized_fields, symbols)
             }
-            _ => panic!("Wrong type {:?}", self),
+            _ => panic!("Cannot calculate layout for {:?}", self),
         }
+    }
+    fn compute_struct_layout(
+        fields: impl Iterator<Item = CompilerType>,
+        symbols: &SymbolTable,
+    ) -> Layout {
+        let mut current_offset = 0;
+        let mut max_align = 1;
+
+        for field_type in fields {
+            let layout = field_type.calculate_layout(symbols);
+            if layout.align == 0 {
+                continue;
+            }
+
+            max_align = u32::max(max_align, layout.align);
+            let padding = (layout.align - (current_offset % layout.align)) % layout.align;
+
+            current_offset += padding + layout.size;
+        }
+
+        let final_padding = (max_align - (current_offset % max_align)) % max_align;
+        Layout::new(current_offset + final_padding, max_align)
     }
     pub fn is_bitcast_compatible(&self, other: &CompilerType, symbols: &SymbolTable) -> bool {
         if self.is_pointer() && other.is_pointer() {
             return true;
         }
-        let l1 = self.size_and_layout(symbols);
-        let l2 = other.size_and_layout(symbols);
-        l1.size == l2.size
+        self.calculate_layout(symbols).size == other.calculate_layout(symbols).size
     }
 
-    pub fn is_generic(&self) -> bool {
+    pub fn is_generic_dependent(&self) -> bool {
         match self {
-            CompilerType::StructType(..)
-            | CompilerType::Primitive(..)
-            | CompilerType::GenericStructType(..) => false,
-            CompilerType::GenericSubst(..) | CompilerType::GenericStructTypeTemplate(..) => true,
-
-            CompilerType::Pointer(x) => x.is_generic(),
-            CompilerType::ConstantArray(.., x) => x.is_generic(),
-            CompilerType::Function(x, y) => x.is_generic() || y.iter().any(|x| x.is_generic()),
-        }
-    }
-}
-impl PartialEq<CompilerType> for CompilerType {
-    fn eq(&self, other: &CompilerType) -> bool {
-        match (self, other) {
-            (CompilerType::Primitive(a), CompilerType::Primitive(b)) => a.name == b.name,
-            (CompilerType::StructType(a), CompilerType::StructType(b)) => a == b,
-            (CompilerType::GenericStructType(a1, a2), CompilerType::GenericStructType(b1, b2)) => {
-                a1 == b1 && a2 == b2
+            Self::GenericPlaceholder(_) | Self::GenericStructTemplate(..) => true,
+            Self::Pointer(inner) => inner.is_generic_dependent(),
+            Self::ConstantArray(_, inner) => inner.is_generic_dependent(),
+            Self::Function(ret, args) => {
+                ret.is_generic_dependent() || args.iter().any(|a| a.is_generic_dependent())
             }
-            (CompilerType::Function(a1, a2), CompilerType::Function(b1, b2)) => {
-                a1 == b1 && a2 == b2
-            }
-            (CompilerType::Pointer(lct), CompilerType::Pointer(rct)) => lct == rct,
             _ => false,
         }
     }
@@ -568,8 +539,8 @@ pub struct Enum {
     pub name: Box<str>,
     pub base_type: CompilerType,
     pub fields: Box<[(String, LLVMVal)]>,
-    pub attribs: Box<[Attribute]>,
     pub flags: Cell<u8>,
+    pub attributes: Box<[Attribute]>,
 }
 impl Enum {
     pub fn new(
@@ -584,14 +555,35 @@ impl Enum {
             name,
             base_type,
             fields,
-            attribs,
+            attributes: attribs,
             flags: Cell::new(0),
         }
     }
 }
-pub mod struct_flags {
-    pub const GENERIC: u8 = 64;
-    pub const PRIMITIVE_TYPE: u8 = 128;
+#[derive(Debug, Clone, Copy, Default)]
+pub struct StructFlags {
+    pub is_generic: bool,
+    pub is_primitive: bool,
+}
+
+impl StructFlags {
+    fn to_byte(&self) -> u8 {
+        let mut b = 0;
+        if self.is_generic {
+            b |= 64;
+        }
+        if self.is_primitive {
+            b |= 128;
+        }
+        b
+    }
+
+    fn from_byte(b: u8) -> Self {
+        Self {
+            is_generic: (b & 64) != 0,
+            is_primitive: (b & 128) != 0,
+        }
+    }
 }
 #[allow(unused)]
 #[derive(Debug, Clone)]
@@ -602,14 +594,9 @@ pub struct Struct {
     pub fields: Box<[(String, CompilerType)]>,
     pub generic_params: Box<[String]>,
     pub generic_implementations: RefCell<Vec<Box<[CompilerType]>>>,
-    attribs: Box<[Attribute]>,
+    attributes: Box<[Attribute]>,
     flags: Cell<u8>,
-    compiled_info: RefCell<(Option<Layout>,)>,
-}
-impl FlagManager for Struct {
-    fn get_flags(&self) -> &Cell<u8> {
-        &self.flags
-    }
+    cached_layout: RefCell<Option<Layout>>,
 }
 
 impl Struct {
@@ -617,7 +604,7 @@ impl Struct {
         path: Box<str>,
         name: Box<str>,
         fields: Box<[(String, CompilerType)]>,
-        attribs: Box<[Attribute]>,
+        attributes: Box<[Attribute]>,
         generic_params: Box<[String]>,
     ) -> Self {
         let full_path = if path.is_empty() {
@@ -625,63 +612,74 @@ impl Struct {
         } else {
             format!("{}.{}", path, name).into()
         };
+        let flags = StructFlags {
+            is_generic: !generic_params.is_empty(),
+            is_primitive: false,
+        };
+
         Self {
             path,
             name,
             full_path,
             fields,
-            attribs,
-            flags: Cell::new(if !generic_params.is_empty() {
-                struct_flags::GENERIC
-            } else {
-                0
-            }),
+            attributes,
             generic_params,
             generic_implementations: RefCell::new(vec![]),
-            compiled_info: RefCell::new((None,)),
+            flags: Cell::new(flags.to_byte()),
+            cached_layout: RefCell::new(None),
         }
     }
-    pub fn new_placeholder(path: String, name: String, flags: u8) -> Struct {
+    pub fn new_placeholder(path: String, name: String, is_primitive: bool) -> Self {
         let full_path = if path.is_empty() {
             name.clone()
         } else {
-            format!("{}.{}", path, name).into()
+            format!("{}.{}", path, name)
         }
-        .into();
+        .into_boxed_str();
+        let flags = StructFlags {
+            is_generic: false,
+            is_primitive,
+        };
+
         Self {
-            path: path.into(),
-            name: name.into(),
+            path: path.into_boxed_str(),
+            name: name.into_boxed_str(),
             full_path,
             fields: Box::new([]),
             generic_params: Box::new([]),
             generic_implementations: RefCell::new(vec![]),
-            attribs: Box::new([]),
-            flags: Cell::new(flags),
-            compiled_info: RefCell::new((None,)),
+            attributes: Box::new([]),
+            flags: Cell::new(flags.to_byte()),
+            cached_layout: RefCell::new(None),
         }
     }
 
+    fn get_flags(&self) -> StructFlags {
+        StructFlags::from_byte(self.flags.get())
+    }
+
     pub fn is_primitive(&self) -> bool {
-        self.has_flag(struct_flags::PRIMITIVE_TYPE)
+        self.get_flags().is_primitive
     }
+
     pub fn is_generic(&self) -> bool {
-        self.has_flag(struct_flags::GENERIC)
-    }
-    pub fn set_as_generic(&self) {
-        self.set_flag(struct_flags::GENERIC);
+        self.get_flags().is_generic
     }
     pub fn llvm_representation(&self) -> String {
         assert!(!self.is_generic());
         if self.is_primitive() {
-            return self.name.to_string();
+            self.name.to_string()
+        } else {
+            format!("%{}", self.llvm_representation_without_percent())
         }
-        format!("%{}", self.llvm_representation_without_percent())
     }
+
     pub fn llvm_representation_without_percent(&self) -> String {
         if self.is_primitive() {
-            return self.name.to_string();
+            self.name.to_string()
+        } else {
+            format!("struct.{}", self.full_path)
         }
-        format!("struct.{}", self.full_path)
     }
     pub fn llvm_repr_index(&self, impl_index: usize, symbols: &SymbolTable) -> Box<str> {
         assert!(self.is_generic());
@@ -703,52 +701,78 @@ impl Struct {
         format!("%\"{}<{}>\"", base_name, type_names).into_boxed_str()
     }
 
-    pub fn get_implementation_index(&self, given_generics: &[CompilerType]) -> Option<usize> {
-        if !self.is_generic() {
-            panic!(
-                "get_implementation_index called on non-generic struct: {}",
-                self.full_path()
-            );
-        }
-        if self.generic_params.len() != given_generics.len() {
+    pub fn get_implementation_index(&self, generics: &[CompilerType]) -> Option<usize> {
+        assert!(self.is_generic());
+        if self.generic_params.len() != generics.len() {
             return None;
         }
-        {
-            let generic_impl = self.generic_implementations.borrow();
-            if let Some(pos) = generic_impl.iter().position(|x| given_generics.eq(&**x)) {
-                return Some(pos);
-            }
+
+        let impls = self.generic_implementations.borrow();
+        if let Some(idx) = impls.iter().position(|existing| generics.eq(&**existing)) {
+            return Some(idx);
         }
-        let mut generic_impl = self.generic_implementations.borrow_mut();
-        generic_impl.push(given_generics.to_vec().into());
-        Some(generic_impl.len() - 1)
-    }
-    pub fn get_layout(&self) -> Option<Layout> {
-        self.compiled_info.borrow().0.clone()
-    }
-    pub fn set_layout(&self, layout: Layout) {
-        assert!(
-            !self.is_generic(),
-            "Layout should not be set on a generic struct definition."
-        );
-        let mut info = self.compiled_info.borrow_mut();
-        if info.0.is_none() {
-            info.0 = Some(layout);
-        } else {
-            unreachable!("Layout for struct '{}' is already set", self.full_path());
-        }
+
+        drop(impls);
+        let mut mut_impls = self.generic_implementations.borrow_mut();
+        mut_impls.push(generics.to_vec().into_boxed_slice());
+        Some(mut_impls.len() - 1)
     }
     pub fn full_path(&self) -> &Box<str> {
         &self.full_path
     }
+    pub fn ensure_generic_implementation(&self, generics: &[CompilerType]) -> usize {
+        self.get_implementation_index(generics).unwrap()
+    }
+    pub fn get_cached_layout(&self) -> Option<Layout> {
+        *self.cached_layout.borrow()
+    }
+    pub fn set_cached_layout(&self, layout: Layout) {
+        assert!(!self.is_generic());
+        assert!(self.cached_layout.borrow().is_none());
+        *self.cached_layout.borrow_mut() = Some(layout);
+    }
 }
-pub mod function_flags {
-    pub const GENERIC: u8 = 8;
-    pub const PUBLIC: u8 = 16;
-    pub const INLINE: u8 = 32;
-    pub const CONST_EXPRESSION: u8 = 64;
-    pub const EXTERNAL: u8 = 128;
+#[derive(Debug, Clone, Copy, Default)]
+pub struct FunctionFlags {
+    pub is_generic: bool,
+    pub is_public: bool,
+    pub is_inline: bool,
+    pub is_const_expression: bool,
+    pub is_external: bool,
 }
+
+impl FunctionFlags {
+    fn to_byte(&self) -> u8 {
+        let mut b = 0;
+        if self.is_generic {
+            b |= 8;
+        }
+        if self.is_public {
+            b |= 16;
+        }
+        if self.is_inline {
+            b |= 32;
+        }
+        if self.is_const_expression {
+            b |= 64;
+        }
+        if self.is_external {
+            b |= 128;
+        }
+        b
+    }
+
+    fn from_byte(b: u8) -> Self {
+        Self {
+            is_generic: (b & 8) != 0,
+            is_public: (b & 16) != 0,
+            is_inline: (b & 32) != 0,
+            is_const_expression: (b & 64) != 0,
+            is_external: (b & 128) != 0,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Function {
     path: Box<str>,
@@ -757,19 +781,13 @@ pub struct Function {
     pub args: Box<[(String, CompilerType)]>,
     pub return_type: CompilerType,
     pub body: Box<[StmtData]>,
-    attribs: Box<[Attribute]>,
+    pub attributes: Box<[Attribute]>,
     flags: Cell<u8>,
 
     pub generic_params: Box<[String]>,
     pub generic_implementations: RefCell<Vec<Box<[CompilerType]>>>,
-    pub times_used: Cell<usize>,
+    pub usage_count: Cell<usize>,
 }
-impl FlagManager for Function {
-    fn get_flags(&self) -> &Cell<u8> {
-        &self.flags
-    }
-}
-
 impl Function {
     pub fn new(
         path: Box<str>,
@@ -777,8 +795,8 @@ impl Function {
         args: Box<[(String, CompilerType)]>,
         return_type: CompilerType,
         body: Box<[StmtData]>,
-        flags: Cell<u8>,
-        attribs: Box<[Attribute]>,
+        initial_flags: u8,
+        attributes: Box<[Attribute]>,
         generic_params: Box<[String]>,
     ) -> Self {
         let full_path = if path.is_empty() {
@@ -793,94 +811,82 @@ impl Function {
             args,
             return_type,
             body,
-            attribs,
-            flags,
+            attributes,
+            flags: Cell::new(initial_flags),
             generic_params,
             generic_implementations: RefCell::new(vec![]),
-            times_used: Cell::new(0),
+            usage_count: Cell::new(0),
         }
     }
+    pub fn get_flags(&self) -> FunctionFlags {
+        FunctionFlags::from_byte(self.flags.get())
+    }
+    pub fn is_normal(&self) -> bool {
+        !self.get_flags().is_generic && !self.get_flags().is_external && !self.get_flags().is_inline
+    }
     pub fn is_generic(&self) -> bool {
-        self.has_flag(function_flags::GENERIC)
+        self.get_flags().is_generic
     }
     pub fn is_external(&self) -> bool {
-        self.has_flag(function_flags::EXTERNAL)
+        self.get_flags().is_external
     }
     pub fn is_inline(&self) -> bool {
-        self.has_flag(function_flags::INLINE)
+        self.get_flags().is_inline
     }
-
-    pub fn is_normal(&self) -> bool {
-        !(self.is_generic() || self.is_inline() || self.is_external())
-    }
-
-    pub fn path(&self) -> &str {
-        &self.path
+    pub fn set_flags(&self, flags: FunctionFlags) {
+        self.flags.set(flags.to_byte());
     }
     pub fn name(&self) -> &str {
         &self.name
     }
-    pub fn use_fn(&self) {
-        self.times_used.replace(self.times_used.get() + 1);
+    pub fn path(&self) -> &str {
+        &self.path
     }
-    pub fn full_path(&self) -> &Box<str> {
+    pub fn full_path(&self) -> &str {
         &self.full_path
     }
-    pub fn get_implementation_index(&self, given_generics: &[CompilerType]) -> Option<usize> {
-        if !self.is_generic() {
-            panic!(
-                "get_implementation_index called on non-generic function: {}",
-                self.full_path()
-            );
-        }
-        if given_generics
-            .iter()
-            .any(|x| matches!(x, CompilerType::GenericSubst(..)))
-        {
-            panic!("Attempted to create a generic implementation with placeholder types for function: {}", self.full_path());
-        }
-        if self.generic_params.len() != given_generics.len() {
-            return None;
-        }
-        {
-            let generic_impls = self.generic_implementations.borrow();
-            if let Some(pos) = generic_impls.iter().position(|x| given_generics.eq(&**x)) {
-                return Some(pos);
-            }
-        }
 
-        let mut generic_impls = self.generic_implementations.borrow_mut();
-        generic_impls.push(given_generics.to_vec().into());
-        Some(generic_impls.len() - 1)
+    pub fn increment_usage(&self) {
+        self.usage_count.replace(self.usage_count.get() + 1);
     }
-    pub fn get_implementation_name(&self, impl_index: usize, symbols: &SymbolTable) -> Box<str> {
-        debug_assert!(impl_index < self.generic_implementations.borrow().len());
-
-        let base_name = self.full_path();
-
-        let implementations = self.generic_implementations.borrow();
-        let generic_args = implementations.get(impl_index).unwrap();
-
-        let type_names = generic_args
-            .iter()
-            .map(|t| {
-                t.llvm_representation_in_generic(symbols)
-                    .expect("Failed to get generic type representation")
-            })
-            .collect::<Vec<_>>()
-            .join(", ");
-        format!("\"{}<{}>\"", base_name, type_names).into_boxed_str()
-    }
-    pub fn get_type(&self) -> CompilerType {
+    pub fn get_signature_type(&self) -> CompilerType {
         CompilerType::Function(
             Box::new(self.return_type.clone()),
-            self.args
-                .iter()
-                .map(|(_, ty)| ty.clone())
-                .collect::<Box<_>>(),
+            self.args.iter().map(|(_, ty)| ty.clone()).collect(),
         )
     }
-    pub fn get_compiler_type_by_implementation_index(
+    pub fn get_generic_implementation_index(&self, generics: &[CompilerType]) -> Option<usize> {
+        assert!(self.is_generic());
+        if generics
+            .iter()
+            .any(|t| matches!(t, CompilerType::GenericPlaceholder(_)))
+        {
+            panic!("Cannot implement generic function with placeholders");
+        }
+        if self.generic_params.len() != generics.len() {
+            return None;
+        }
+        let impls = self.generic_implementations.borrow();
+        if let Some(idx) = impls.iter().position(|existing| generics.eq(&**existing)) {
+            return Some(idx);
+        }
+        drop(impls);
+        let mut mut_impls = self.generic_implementations.borrow_mut();
+        mut_impls.push(generics.to_vec().into());
+        Some(mut_impls.len() - 1)
+    }
+    pub fn get_implementation_name(&self, impl_idx: usize, symbols: &SymbolTable) -> String {
+        let impls = self.generic_implementations.borrow();
+        let args = &impls[impl_idx];
+        let arg_names = args
+            .iter()
+            .map(|t| t.llvm_representation_in_generic(symbols).unwrap())
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        format!("\"{}<{}>\"", self.full_path, arg_names)
+    }
+    pub fn get_concretized_signature(
         &self,
         impl_index: usize,
         symbols: &SymbolTable,
@@ -891,162 +897,160 @@ impl Function {
     }
     pub fn get_def_by_implementation_index(
         &self,
-        impl_index: usize,
+        impl_idx: usize,
         symbols: &SymbolTable,
     ) -> CompileResult<(Box<CompilerType>, Box<[CompilerType]>)> {
         assert!(self.is_generic());
+        let impls = self.generic_implementations.borrow();
+        let args = &impls[impl_idx];
         let mut map = HashMap::new();
-        {
-            let b = self.generic_implementations.borrow();
-            let implementation = b.get(impl_index).unwrap();
-            for (idx, name) in self.generic_params.iter().enumerate() {
-                map.insert(name.clone(), implementation[idx].clone());
-            }
+        for (i, name) in self.generic_params.iter().enumerate() {
+            map.insert(name.clone(), args[i].clone());
         }
         Ok((
-            Box::new(
-                self.return_type
-                    .with_substituted_generic_types(&map, symbols)?,
-            ),
+            Box::new(self.return_type.with_substituted_generics(&map, symbols)?),
             self.args
                 .iter()
-                .map(|(_, ty)| ty.with_substituted_generic_types(&map, symbols))
+                .map(|(_, ty)| ty.with_substituted_generics(&map, symbols))
                 .collect::<CompileResult<Box<_>>>()?,
         ))
     }
     pub fn attribs(&self) -> &[Attribute] {
-        &self.attribs
+        &self.attributes
     }
 }
-pub mod variable_flags {
-    pub const HAS_READ: u8 = 1;
-    pub const HAS_WROTE: u8 = 2;
-    pub const MODIFIED_CONTENT: u8 = 4;
-    pub const STATIC: u8 = 8;
-    pub const INLINE: u8 = 16;
-    pub const ALIAS_VALUE: u8 = 32;
-    pub const CONSTANT: u8 = 64;
-    pub const ARGUMENT: u8 = 128;
+#[derive(Debug, Clone, Copy, Default)]
+pub struct VariableFlags {
+    pub read: bool,
+    pub written: bool,
+    pub modified_content: bool,
+    pub static_storage: bool,
+    pub inline: bool,
+    pub is_alias: bool,
+    pub is_constant: bool,
+    pub is_argument: bool,
 }
 #[derive(Debug, Clone)]
 pub struct Variable {
-    compiler_type: CompilerType,
+    pub compiler_type: CompilerType,
     flags: Cell<u8>,
     value: RefCell<Option<LLVMVal>>,
 }
-impl FlagManager for Variable {
-    fn get_flags(&self) -> &Cell<u8> {
-        &self.flags
+impl VariableFlags {
+    fn to_byte(&self) -> u8 {
+        let mut b = 0;
+        if self.read {
+            b |= 1;
+        }
+        if self.written {
+            b |= 2;
+        }
+        if self.modified_content {
+            b |= 4;
+        }
+        if self.static_storage {
+            b |= 8;
+        }
+        if self.inline {
+            b |= 16;
+        }
+        if self.is_alias {
+            b |= 32;
+        }
+        if self.is_constant {
+            b |= 64;
+        }
+        if self.is_argument {
+            b |= 128;
+        }
+        b
+    }
+
+    fn from_byte(b: u8) -> Self {
+        Self {
+            read: (b & 1) != 0,
+            written: (b & 2) != 0,
+            modified_content: (b & 4) != 0,
+            static_storage: (b & 8) != 0,
+            inline: (b & 16) != 0,
+            is_alias: (b & 32) != 0,
+            is_constant: (b & 64) != 0,
+            is_argument: (b & 128) != 0,
+        }
     }
 }
-
 impl Variable {
-    pub fn new(comp_type: CompilerType, is_const: bool) -> Self {
-        let flags = if is_const {
-            variable_flags::CONSTANT
-        } else {
-            0
-        };
+    pub fn new(compiler_type: CompilerType, is_const: bool) -> Self {
+        Self::with_flags(
+            compiler_type,
+            VariableFlags {
+                is_constant: is_const,
+                ..Default::default()
+            },
+        )
+    }
+    pub fn new_static(compiler_type: CompilerType, is_const: bool) -> Self {
+        Self::with_flags(
+            compiler_type,
+            VariableFlags {
+                is_constant: is_const,
+                static_storage: true,
+                ..Default::default()
+            },
+        )
+    }
+    pub fn new_argument(compiler_type: CompilerType) -> Self {
+        Self::with_flags(
+            compiler_type,
+            VariableFlags {
+                is_argument: true,
+                ..Default::default()
+            },
+        )
+    }
+    fn with_flags(compiler_type: CompilerType, flags: VariableFlags) -> Self {
         Self {
-            compiler_type: comp_type,
-            flags: Cell::new(flags),
+            compiler_type,
+            flags: Cell::new(flags.to_byte()),
             value: RefCell::new(None),
         }
     }
-    pub fn new_static(comp_type: CompilerType, is_const: bool) -> Self {
-        let flags = if is_const {
-            variable_flags::CONSTANT | variable_flags::STATIC
-        } else {
-            variable_flags::STATIC
-        };
-        Self {
-            compiler_type: comp_type,
-            flags: Cell::new(flags),
-            value: RefCell::new(None),
+    pub fn get_flags(&self) -> VariableFlags {
+        VariableFlags::from_byte(self.flags.get())
+    }
+    pub fn update_flags<F>(&self, f: F)
+    where
+        F: FnOnce(&mut VariableFlags),
+    {
+        let mut flags = self.get_flags();
+        f(&mut flags);
+        self.flags.set(flags.to_byte());
+    }
+    pub fn mark_usage(&self, is_write: bool, modifies_content: bool) {
+        if self.get_flags().is_constant && is_write {
+            panic!("Attempted to write to constant variable");
         }
-    }
-    pub fn new_argument(comp_type: CompilerType) -> Self {
-        Self {
-            compiler_type: comp_type,
-            flags: Cell::new(variable_flags::ARGUMENT),
-            value: RefCell::new(None),
-        }
-    }
-    pub fn new_inline(comp_type: CompilerType) -> Self {
-        Self {
-            compiler_type: comp_type,
-            flags: Cell::new(variable_flags::INLINE),
-            value: RefCell::new(None),
-        }
-    }
-
-    pub fn get_type(&self, write: bool, modify_content: bool) -> &CompilerType {
-        if self.is_constant() && write {
-            panic!("Tried to mark constant variable as read or written");
-        }
-
-        let mut current = self.flags.get();
-        if write {
-            current |= variable_flags::HAS_WROTE;
-        } else {
-            current |= variable_flags::HAS_READ;
-        }
-        if modify_content {
-            current |= variable_flags::MODIFIED_CONTENT;
-        }
-        self.flags.set(current);
-
-        &self.compiler_type
-    }
-    pub fn is_argument(&self) -> bool {
-        self.has_flag(variable_flags::ARGUMENT)
-    }
-    pub fn is_inline(&self) -> bool {
-        self.has_flag(variable_flags::INLINE)
-    }
-    pub fn is_constant(&self) -> bool {
-        self.has_flag(variable_flags::CONSTANT)
-    }
-    fn is_static(&self) -> bool {
-        self.has_flag(variable_flags::STATIC)
-    }
-    pub fn has_read(&self) -> bool {
-        self.has_flag(variable_flags::HAS_READ)
-    }
-    pub fn has_wrote(&self) -> bool {
-        self.has_flag(variable_flags::HAS_WROTE)
-    }
-    pub fn modified(&self) -> bool {
-        self.has_flag(variable_flags::MODIFIED_CONTENT)
-    }
-
-    pub fn unusual_flags_to_string(&self) -> String {
-        let mut output = String::new();
-        if !self.has_read() {
-            output.push_str("Unread\t");
-        }
-        if !self.is_argument() || self.has_wrote() {
-            if !self.has_wrote() && !self.modified() {
-                output.push_str("Unwritten\\Unmodified\t");
+        self.update_flags(|f| {
+            if is_write {
+                f.written = true;
+            } else {
+                f.read = true;
             }
-            if self.is_argument() {
-                output.push_str("Argument\t");
+            if modifies_content {
+                f.modified_content = true;
             }
-        }
-        output
+        });
     }
-    pub fn set_value(&self, value: Option<LLVMVal>) {
-        self.value.replace(value);
+    pub fn set_constant_value(&self, value: Option<LLVMVal>) {
+        *self.value.borrow_mut() = value;
     }
-
     pub fn value(&self) -> &RefCell<Option<LLVMVal>> {
         &self.value
     }
-
     pub fn compiler_type(&self) -> &CompilerType {
         &self.compiler_type
     }
-    pub fn get_llvm_value(
+    pub fn load_llvm_value(
         &self,
         var_id: u32,
         var_name: &str,
@@ -1059,46 +1063,41 @@ impl Variable {
                 ptype: self.compiler_type.clone(),
             });
         }
-        if self.is_argument() {
+        let flags = self.get_flags();
+        if flags.is_argument {
             return Ok(CompiledValue::Value {
                 llvm_repr: LLVMVal::VariableName(var_name.to_string()),
                 ptype: self.compiler_type.clone(),
             });
         }
-        let type_str = {
-            let mut x = self.compiler_type.clone();
-            x.substitute_generic_types_global_aliases(ctx.symbols)?;
-            x
-        }
-        .llvm_representation(ctx.symbols)?;
-        let temp_id = ctx.aquire_unique_temp_value_counter();
-        if self.is_static() {
-            println!("{} is STATIC", var_name);
+        let mut concrete_type = self.compiler_type.clone();
+        concrete_type.substitute_global_aliases(ctx.symbols)?;
+        let type_str = concrete_type.llvm_representation(ctx.symbols)?;
+        let temp_id = ctx.acquire_temp_id();
+        if flags.static_storage {
             output.push_str(&format!(
                 "    %tmp{} = load {}, {}* @{}\n",
                 temp_id, type_str, type_str, var_name
             ));
-            return Ok(CompiledValue::Value {
-                llvm_repr: LLVMVal::Register(temp_id),
-                ptype: self.compiler_type.clone(),
-            });
+        } else {
+            output.push_str(&format!(
+                "    %tmp{} = load {}, {}* %v{}\n",
+                temp_id, type_str, type_str, var_id
+            ));
         }
-        output.push_str(&format!(
-            "    %tmp{} = load {}, {}* %v{}\n",
-            temp_id, type_str, type_str, var_id
-        ));
-        return Ok(CompiledValue::Value {
+
+        Ok(CompiledValue::Value {
             llvm_repr: LLVMVal::Register(temp_id),
             ptype: self.compiler_type.clone(),
-        });
+        })
     }
 }
 #[derive(Debug, Clone)]
 struct ScopeLayer {
     variables: OrderedHashMap<String, (Variable, u32)>,
-    loop_index: Option<u32>,
+    loop_tag: Option<u32>,
 }
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Scope {
     layers: Vec<ScopeLayer>,
 }
@@ -1107,19 +1106,11 @@ impl Scope {
         Self {
             layers: vec![ScopeLayer {
                 variables: OrderedHashMap::new(),
-                loop_index: None,
+                loop_tag: None,
             }],
         }
     }
-
-    pub fn clear(&mut self) {
-        self.layers.clear();
-        self.layers.push(ScopeLayer {
-            variables: OrderedHashMap::new(),
-            loop_index: None,
-        });
-    }
-    pub fn get_variable(&self, name: &str) -> Option<&(Variable, u32)> {
+    pub fn lookup(&self, name: &str) -> Option<&(Variable, u32)> {
         for layer in self.layers.iter().rev() {
             if let Some(var) = layer.variables.get(name) {
                 return Some(var);
@@ -1127,98 +1118,125 @@ impl Scope {
         }
         None
     }
-    pub fn add_variable(&mut self, name: String, variable: Variable, unique_value_tag: u32) {
-        let current_layer = self.layers.last_mut().expect("Scope stack is empty");
-
-        if current_layer.variables.contains_key(&name) {
-            let var = current_layer.variables.remove(&name).unwrap();
-            self.leave_scope((&name, &var));
+    pub fn define(
+        &mut self,
+        name: String,
+        variable: Variable,
+        id: u32,
+        table: &SymbolTable,
+    ) -> Vec<Stmt> {
+        let current = self.layers.last_mut().expect("Scope stack underflow");
+        let mut on_leave_context = vec![];
+        if let Some(prev_value) = current.variables.insert(name.clone(), (variable, id)) {
+            Self::leave_scope((&name, &prev_value), table, &mut on_leave_context);
         }
-
-        let current_layer = self.layers.last_mut().expect("Scope stack is empty");
-        current_layer
-            .variables
-            .insert(name, (variable, unique_value_tag));
+        on_leave_context
     }
-    pub fn leave_scope(&self, _variable: (&String, &(Variable, u32))) {
-        //println!("Variable {}, has left scope.\nFlags:\t{}", variable.0, variable.1.0.unusual_flags_to_string());
-    }
-    pub fn enter_scope(&mut self) {
-        let current_loop_index = self.loop_index();
+    pub fn push_layer(&mut self) {
+        let current_loop = self.layers.last().and_then(|l| l.loop_tag);
         self.layers.push(ScopeLayer {
             variables: OrderedHashMap::new(),
-            loop_index: current_loop_index,
+            loop_tag: current_loop,
         });
     }
-    pub fn exit_scope(&mut self) {
+    pub fn pop_layer(&mut self, table: &SymbolTable) -> Vec<Stmt> {
         if self.layers.len() <= 1 {
-            panic!("Attempted to drop the global scope");
+            panic!("Cannot pop global scope");
         }
-
         let layer = self.layers.pop().unwrap();
-
+        let mut on_scope_exit = vec![];
         for var in layer.variables.iter().rev() {
-            self.leave_scope(var);
+            Self::leave_scope(var, table, &mut on_scope_exit);
         }
+        return on_scope_exit;
     }
-    pub fn loop_index(&self) -> Option<u32> {
-        self.layers.last().and_then(|l| l.loop_index)
+    pub fn drop_current_scope(&mut self, table: &SymbolTable) -> Vec<Stmt> {
+        let layer = self.layers.last_mut().unwrap();
+        let mut on_scope_exit = vec![];
+        for var in layer.variables.iter().rev() {
+            Self::leave_scope(var, table, &mut on_scope_exit);
+        }
+        layer.variables.clear();
+        return on_scope_exit;
+    }
+    pub fn current_loop_tag(&self) -> Option<u32> {
+        self.layers.last().and_then(|l| l.loop_tag)
     }
 
-    pub fn set_loop_index(&mut self, loop_index: Option<u32>) {
+    pub fn set_loop_tag(&mut self, tag: Option<u32>) {
         if let Some(layer) = self.layers.last_mut() {
-            layer.loop_index = loop_index;
+            layer.loop_tag = tag;
         }
+    }
+
+    fn leave_scope(
+        var: (&String, &(Variable, u32)),
+        _table: &SymbolTable,
+        on_scope_exit: &mut Vec<Stmt>,
+    ) {
+        if var.1 .0.compiler_type().is_pointer() {
+            return;
+        }
+        if var
+            .1
+             .0
+            .compiler_type()
+            .as_primitive()
+            .map(|x| !x.is_dropable())
+            .unwrap_or(false)
+        {
+            return;
+        }
+        // Type dependent cleanup
+        on_scope_exit.push(Stmt::Debug(format!("Variable {} is out.", var.0)));
     }
 }
 
 pub struct CodeGenContext<'a> {
     pub symbols: &'a SymbolTable,
-    pub current_function: usize,
+    pub current_function_id: usize,
     pub scope: Scope,
 
-    temp_value_counter: Cell<u32>,
-    variable_counter: Cell<u32>,
-    logic_counter: Cell<u32>,
+    temp_counter: Cell<u32>,
+    var_counter: Cell<u32>,
+    label_counter: Cell<u32>,
 }
 impl<'a> CodeGenContext<'a> {
-    pub fn new(symbols: &'a SymbolTable, function: usize) -> Self {
+    pub fn new(symbols: &'a SymbolTable, current_function_id: usize) -> Self {
         Self {
             symbols,
-            current_function: function,
+            current_function_id,
             scope: Scope::new(),
-            temp_value_counter: Cell::new(0),
-            variable_counter: Cell::new(0),
-            logic_counter: Cell::new(0),
+            temp_counter: Cell::new(0),
+            var_counter: Cell::new(0),
+            label_counter: Cell::new(0),
         }
     }
     pub fn current_function(&self) -> &Function {
-        &self.symbols.get_function_by_id(self.current_function)
+        &self.symbols.get_function_by_id(self.current_function_id)
     }
-    pub fn current_function_path(&self) -> &str {
-        &self.symbols.get_function_by_id(self.current_function).path
+    pub fn current_path(&self) -> &str {
+        &self.current_function().path
     }
-    pub fn aquire_unique_temp_value_counter(&self) -> u32 {
-        self.temp_value_counter
-            .replace(self.temp_value_counter.get() + 1)
+    pub fn acquire_temp_id(&self) -> u32 {
+        self.temp_counter.replace(self.temp_counter.get() + 1)
     }
-    pub fn aquire_unique_variable_index(&self) -> u32 {
-        self.variable_counter
-            .replace(self.variable_counter.get() + 1)
+    pub fn acquire_var_id(&self) -> u32 {
+        self.var_counter.replace(self.var_counter.get() + 1)
     }
-    pub fn aquire_unique_logic_counter(&self) -> u32 {
-        self.logic_counter.replace(self.logic_counter.get() + 1)
+    pub fn acquire_label_id(&self) -> u32 {
+        self.label_counter.replace(self.label_counter.get() + 1)
     }
 }
 
-pub type CompileResult<T> = Result<T, CompilerErrorStruct>;
+pub type CompileResult<T> = Result<T, CompilerErrorWrapper>;
 #[derive(Debug)]
-pub struct CompilerErrorStruct {
+pub struct CompilerErrorWrapper {
     pub error: CompilerError,
     pub span: Option<Span>,
 }
 
-impl CompilerErrorStruct {
+impl CompilerErrorWrapper {
     pub fn extend(&mut self, str: &str) {
         self.error = CompilerError::Generic(format!("{}\n{}", self.error, str))
     }
@@ -1229,17 +1247,17 @@ impl CompilerErrorStruct {
         }
     }
 }
-
-impl From<CompilerError> for CompilerErrorStruct {
+impl From<CompilerError> for CompilerErrorWrapper {
     fn from(error: CompilerError) -> Self {
         Self { error, span: None }
     }
 }
-impl From<(Span, CompilerError)> for CompilerErrorStruct {
-    fn from(value: (Span, CompilerError)) -> Self {
+
+impl From<(Span, CompilerError)> for CompilerErrorWrapper {
+    fn from((span, error): (Span, CompilerError)) -> Self {
         Self {
-            error: value.1,
-            span: Some(value.0),
+            error,
+            span: Some(span),
         }
     }
 }
@@ -1263,16 +1281,12 @@ pub enum CompilerError {
     Io(std::io::Error),
     InvalidExpression(String),
     SymbolNotFound(String),
-    ArgumentCountMissmatch(String),
     TypeMismatch {
         expected: CompilerType,
         found: CompilerType,
     },
-    InvalidStatementInContext(String),
-    BinaryOpMissmatchedTypes(BinaryOp, String, String),
-
-    CompilerFunctionArgumentCountMissmatch(&'static str, u32, usize),
-    CompilerFunctionGenericCountMissmatch(&'static str, u32, usize),
+    OpTypeMismatch(BinaryOp, String, String),
+    ArgumentCountMismatch(String),
 }
 impl CompilerError {
     pub fn extend(&self, extention_message: &str) -> CompilerError {
@@ -1282,81 +1296,57 @@ impl CompilerError {
 impl std::fmt::Display for CompilerError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Generic(x) => f.write_str(x),
-            Self::BinaryOpMissmatchedTypes(op, left, right) => f.write_str(&format!(
-                "Binary operator '{:?}' cannot be applied to mismatched types '{}' and '{}'",
-                op, left, right
-            )),
-            Self::CompilerFunctionArgumentCountMissmatch(x, expected, got) => f.write_str(
-                &format!("{x} expects exactly {expected} argument, but got {got}"),
-            ),
-            Self::CompilerFunctionGenericCountMissmatch(x, expected, got) => f.write_str(&format!(
-                "{x} expects exactly {expected} generic target type, but got {got}"
-            )),
-            Self::InvalidExpression(x) => f.write_str(x),
-            Self::SymbolNotFound(x) => f.write_str(x),
-            Self::ArgumentCountMissmatch(x) => f.write_str(x),
-            Self::TypeMismatch { expected, found } => f.write_str(&format!(
-                "Type mismatch: expected '{:?}', found '{:?}'",
-                expected, found
-            )),
-            Self::InvalidStatementInContext(x) => f.write_str(x),
-            Self::Io(x) => f.write_str(&format!("IO Error: {}", x)),
+            Self::Generic(msg) => write!(f, "{}", msg),
+            Self::Io(e) => write!(f, "IO Error: {}", e),
+            Self::TypeMismatch { expected, found } => {
+                write!(f, "Expected {:?}, found {:?}", expected, found)
+            }
+            Self::OpTypeMismatch(op, l, r) => {
+                write!(f, "Binary op {:?} incompatible with {} and {}", op, l, r)
+            }
+            Self::SymbolNotFound(sym) => write!(f, "Symbol not found: {}", sym),
+            Self::ArgumentCountMismatch(msg) => write!(f, "Argument mismatch: {}", msg),
+            Self::InvalidExpression(msg) => write!(f, "Invalid expression: {}", msg),
         }
     }
 }
 
 impl From<std::io::Error> for CompilerError {
-    fn from(err: std::io::Error) -> Self {
-        CompilerError::Io(err)
+    fn from(e: std::io::Error) -> Self {
+        Self::Io(e)
     }
 }
-impl std::error::Error for CompilerError {}
-
 #[derive(Debug)]
 pub struct CompiledLValue {
-    pub ptr_val: LLVMVal,
-    pub inner_type: CompilerType,
+    pub location: LLVMVal,
+    pub value_type: CompilerType,
     pub is_mutable: bool,
-    pub id: Option<usize>,
+    pub function_id: Option<usize>,
 }
 impl CompiledLValue {
-    pub fn new(ptr_val: LLVMVal, inner_type: CompilerType, is_mutable: bool) -> Self {
+    pub fn new(location: LLVMVal, value_type: CompilerType, is_mutable: bool) -> Self {
         Self {
-            ptr_val,
-            inner_type,
+            location,
+            value_type,
             is_mutable,
-            id: None,
+            function_id: None,
         }
     }
-    pub fn new_fn(function_id: usize, symbol_table: &SymbolTable) -> CompileResult<Self> {
-        let func = symbol_table.get_function_by_id(function_id);
-        if !func.is_generic() {
-            return Ok(Self {
-                ptr_val: LLVMVal::Global(if func.is_external() {
-                    func.name().to_string()
-                } else {
-                    func.full_path().to_string()
-                }),
-                inner_type: func.get_type(),
-                is_mutable: false,
-                id: Some(function_id),
-            });
-        }
+    pub fn from_function(id: usize, symbols: &SymbolTable) -> CompileResult<Self> {
+        let func = symbols.get_function_by_id(id);
+        let location = if func.is_generic() {
+            LLVMVal::ConstantInteger(id as i128)
+        } else if func.is_external() {
+            LLVMVal::Global(func.name.to_string())
+        } else {
+            LLVMVal::Global(func.full_path.to_string())
+        };
 
-        return Ok(Self {
-            ptr_val: LLVMVal::ConstantInteger(function_id as i128),
-            inner_type: func.get_type(),
+        Ok(Self {
+            location,
+            value_type: func.get_signature_type(),
             is_mutable: false,
-            id: Some(function_id),
-        });
-    }
-
-    pub fn get_type(&self) -> &CompilerType {
-        &self.inner_type
-    }
-
-    pub fn get_llvm_rep(&self) -> &LLVMVal {
-        &self.ptr_val
+            function_id: Some(id),
+        })
     }
 }

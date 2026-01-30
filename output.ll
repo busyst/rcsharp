@@ -165,6 +165,8 @@ inline_exit0:
     %tmp11 = getelementptr inbounds [43 x i32], [43 x i32]* @yt, i32 0, i64 42
     %tmp12 = load i32, i32* %tmp11
     %tmp13 = add i32 %tmp10, %tmp12
+    ;DEBUG: Variable temp is out.
+    ;DEBUG: Variable y is out.
     ret i32 %tmp13
 }
 define %"struct.Pair<i32, %struct.Pair<i8, %struct.string.String>>" @"ax<i32>"(){
@@ -175,6 +177,7 @@ define %"struct.Pair<i32, %struct.Pair<i8, %struct.string.String>>" @"ax<i32>"()
     %tmp2 = getelementptr inbounds %"struct.Pair<i8, %struct.string.String>", %"struct.Pair<i8, %struct.string.String>"* %tmp1, i32 0, i32 0
     store i8 126, i8* %tmp2
     %tmp3 = load %"struct.Pair<i32, %struct.Pair<i8, %struct.string.String>>", %"struct.Pair<i32, %struct.Pair<i8, %struct.string.String>>"* %v0
+    ;DEBUG: Variable p is out.
     ret %"struct.Pair<i32, %struct.Pair<i8, %struct.string.String>>" %tmp3
 }
 define %"struct.test.QPair<i64, i64>" @xq(){
@@ -195,6 +198,7 @@ define %"struct.test.QPair<i64, i64>" @test.geg(){
     %tmp7 = sub i64 %tmp4, %tmp6
     store i64 %tmp7, i64* %tmp2
     %tmp8 = load %"struct.test.QPair<i64, i64>", %"struct.test.QPair<i64, i64>"* %v0
+    ;DEBUG: Variable temp is out.
     ret %"struct.test.QPair<i64, i64>" %tmp8
 }
 define void @window.start(){
@@ -270,6 +274,8 @@ endif6:
     call i64 @DispatchMessageA(%struct.window.MSG* %v1)
     br label %loop_body5
 loop_body5_exit:
+    ;DEBUG: Variable msg is out.
+    ;DEBUG: Variable wc is out.
     ret void
 }
 define i64 @window.WindowProc(i8* %hWnd, i32 %uMsg, i64 %wParam, i64 %lParam){
@@ -340,6 +346,7 @@ then9:
     br label %endif9
 endif9:
     call i32 @EndPaint(i8* %hWnd, %struct.window.PAINTSTRUCT* %v0)
+    ;DEBUG: Variable ps is out.
     ret i64 0
     br label %endif8
 endif8:
@@ -364,6 +371,7 @@ endif0:
     call i32 @BitBlt(i8* %hdc, i32 %x, i32 %y, i32 %tmp4, i32 %tmp6, i8* %tmp1, i32 0, i32 0, i32 13369376)
     call i8* @SelectObject(i8* %tmp1, i8* %tmp2)
     call i32 @DeleteDC(i8* %tmp1)
+    ;DEBUG: Variable bm is out.
     ret void
 }
 define void @console.print_char(i8 %n){
@@ -639,6 +647,7 @@ endif12:
     %tmp73 = load %struct.string.String, %struct.string.String* %v7
     call void @"vector.push<%struct.string.String>"(%"struct.vector.Vec<%struct.string.String>"* %v5, %struct.string.String %tmp73)
     br label %loop_body1
+    ;DEBUG: Variable temp_string is out.
     br label %endif10
 endif10:
     %tmp74 = load i8, i8* %v2
@@ -675,6 +684,7 @@ then14:
     %tmp94 = load %struct.string.String, %struct.string.String* %v8
     call void @"vector.push<%struct.string.String>"(%"struct.vector.Vec<%struct.string.String>"* %v5, %struct.string.String %tmp94)
     br label %loop_body1
+    ;DEBUG: Variable temp_string is out.
     br label %endif14
 endif14:
     %tmp95 = load i8, i8* %v2
@@ -732,6 +742,7 @@ loop_body16_exit:
     %tmp126 = load %struct.string.String, %struct.string.String* %v9
     call void @"vector.push<%struct.string.String>"(%"struct.vector.Vec<%struct.string.String>"* %v5, %struct.string.String %tmp126)
     br label %loop_body1
+    ;DEBUG: Variable temp_string is out.
     br label %endif15
 endif15:
     %tmp127 = load i8, i8* %v2
@@ -1077,6 +1088,9 @@ endif51:
 loop_body50_exit:
     call void @"vector.free<%struct.string.String>"(%"struct.vector.Vec<%struct.string.String>"* %v5)
     call void @string.free(%struct.string.String* %v0)
+    ;DEBUG: Variable tokens is out.
+    ;DEBUG: Variable data is out.
+    ;DEBUG: Variable file is out.
     ret void
 }
 define %"struct.vector.Vec<%struct.string.String>" @"vector.new<%struct.string.String>"(){
@@ -1088,6 +1102,7 @@ define %"struct.vector.Vec<%struct.string.String>" @"vector.new<%struct.string.S
     %tmp2 = getelementptr inbounds %"struct.vector.Vec<%struct.string.String>", %"struct.vector.Vec<%struct.string.String>"* %v0, i32 0, i32 2
     store i32 0, i32* %tmp2
     %tmp3 = load %"struct.vector.Vec<%struct.string.String>", %"struct.vector.Vec<%struct.string.String>"* %v0
+    ;DEBUG: Variable vec is out.
     ret %"struct.vector.Vec<%struct.string.String>" %tmp3
 }
 define %"struct.vector.Vec<i64>" @"vector.new<i64>"(){
@@ -1099,6 +1114,7 @@ define %"struct.vector.Vec<i64>" @"vector.new<i64>"(){
     %tmp2 = getelementptr inbounds %"struct.vector.Vec<i64>", %"struct.vector.Vec<i64>"* %v0, i32 0, i32 2
     store i32 0, i32* %tmp2
     %tmp3 = load %"struct.vector.Vec<i64>", %"struct.vector.Vec<i64>"* %v0
+    ;DEBUG: Variable vec is out.
     ret %"struct.vector.Vec<i64>" %tmp3
 }
 define void @"vector.push<%struct.string.String>"(%"struct.vector.Vec<%struct.string.String>"* %vec, %struct.string.String %data){
@@ -1147,6 +1163,7 @@ endif0:
     %tmp28 = load i32, i32* %tmp27
     %tmp29 = add i32 %tmp28, 1
     store i32 %tmp29, i32* %tmp26
+    ;DEBUG: Variable data is out.
     ret void
 }
 define void @"vector.free<%struct.string.String>"(%"struct.vector.Vec<%struct.string.String>"* %vec){
@@ -1406,6 +1423,7 @@ endif2:
     %tmp24 = getelementptr inbounds i8, i8* %tmp21, i32 %tmp23
     store i8 0, i8* %tmp24
     %tmp25 = load %struct.string.String, %struct.string.String* %v1
+    ;DEBUG: Variable buffer is out.
     ret %struct.string.String %tmp25
 }
 define i8* @string_utils.insert(i8* %src1, i8* %src2, i32 %index){
@@ -1438,6 +1456,7 @@ define %struct.string.String @string.empty(){
     %tmp1 = getelementptr inbounds %struct.string.String, %struct.string.String* %v0, i32 0, i32 1
     store i32 0, i32* %tmp1
     %tmp2 = load %struct.string.String, %struct.string.String* %v0
+    ;DEBUG: Variable x is out.
     ret %struct.string.String %tmp2
 }
 define i1 @string_utils.is_ascii_char(i8 %char){
@@ -1507,6 +1526,7 @@ define %struct.string.String @string.with_size(i32 %size){
     %tmp8 = sext i32 %tmp7 to i64
     call void @mem.zero_fill(i8* %tmp6, i64 %tmp8)
     %tmp9 = load %struct.string.String, %struct.string.String* %v0
+    ;DEBUG: Variable x is out.
     ret %struct.string.String %tmp9
 }
 define void @mem.zero_fill(i8* %dest, i64 %len){
@@ -1612,6 +1632,10 @@ endif1:
     call void @string.free(%struct.string.String* %v1)
     call void @string.free(%struct.string.String* %v0)
     call void @console.writeln(i8* @.str.17, i32 2)
+    ;DEBUG: Variable read is out.
+    ;DEBUG: Variable new_file_path is out.
+    ;DEBUG: Variable env_path is out.
+    ;DEBUG: Variable data is out.
     ret void
 }
 define i32 @fs.write_to_file(i8* %path, i8* %content, i32 %content_len){
@@ -1734,6 +1758,7 @@ define %struct.string.String @string.concat_with_c_string(%struct.string.String*
     %tmp19 = getelementptr inbounds %struct.string.String, %struct.string.String* %v0, i32 0, i32 1
     store i32 %tmp3, i32* %tmp19
     %tmp20 = load %struct.string.String, %struct.string.String* %v0
+    ;DEBUG: Variable str is out.
     ret %struct.string.String %tmp20
 }
 define %struct.string.String @string.from_c_string(i8* %c_string){
@@ -1762,6 +1787,7 @@ define %struct.string.String @string.from_c_string(i8* %c_string){
     %tmp18 = getelementptr inbounds i8, i8* %tmp15, i32 %tmp17
     store i8 0, i8* %tmp18
     %tmp19 = load %struct.string.String, %struct.string.String* %v0
+    ;DEBUG: Variable x is out.
     ret %struct.string.String %tmp19
 }
 define %struct.string.String @process.get_executable_env_path(){
@@ -1807,6 +1833,7 @@ loop_body0_exit:
     %tmp19 = add i32 %tmp18, 1
     store i32 %tmp19, i32* %tmp17
     %tmp20 = load %struct.string.String, %struct.string.String* %v0
+    ;DEBUG: Variable string is out.
     ret %struct.string.String %tmp20
 }
 define %struct.string.String @process.get_executable_path(){
@@ -1821,6 +1848,7 @@ define %struct.string.String @process.get_executable_path(){
     %tmp6 = getelementptr inbounds %struct.string.String, %struct.string.String* %v0, i32 0, i32 1
     store i32 %tmp5, i32* %tmp6
     %tmp7 = load %struct.string.String, %struct.string.String* %v0
+    ;DEBUG: Variable string is out.
     ret %struct.string.String %tmp7
 }
 define void @tests.console_test(){
@@ -1949,6 +1977,8 @@ endif3:
     call void @string.free(%struct.string.String* %v0)
     call void @string.free(%struct.string.String* %v1)
     call void @console.writeln(i8* @.str.17, i32 2)
+    ;DEBUG: Variable env_path is out.
+    ;DEBUG: Variable full_path is out.
     ret void
 }
 define void @tests.list_test(){
@@ -2062,6 +2092,7 @@ then9:
     br label %endif9
 endif9:
     call void @console.writeln(i8* @.str.17, i32 2)
+    ;DEBUG: Variable l is out.
     ret void
 }
 define %"struct.list.List<i32>" @"list.new<i32>"(){
@@ -2073,6 +2104,7 @@ define %"struct.list.List<i32>" @"list.new<i32>"(){
     %tmp2 = getelementptr inbounds %"struct.list.List<i32>", %"struct.list.List<i32>"* %v0, i32 0, i32 2
     store i32 0, i32* %tmp2
     %tmp3 = load %"struct.list.List<i32>", %"struct.list.List<i32>"* %v0
+    ;DEBUG: Variable list is out.
     ret %"struct.list.List<i32>" %tmp3
 }
 define void @"list.extend<i32>"(%"struct.list.List<i32>"* %list, i32 %data){
@@ -2366,6 +2398,7 @@ then15:
     br label %endif15
 endif15:
     call void @console.writeln(i8* @.str.17, i32 2)
+    ;DEBUG: Variable v is out.
     ret void
 }
 define %"struct.vector.Vec<i8>" @"vector.new<i8>"(){
@@ -2377,6 +2410,7 @@ define %"struct.vector.Vec<i8>" @"vector.new<i8>"(){
     %tmp2 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %v0, i32 0, i32 2
     store i32 0, i32* %tmp2
     %tmp3 = load %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %v0
+    ;DEBUG: Variable vec is out.
     ret %"struct.vector.Vec<i8>" %tmp3
 }
 define void @"vector.push<i8>"(%"struct.vector.Vec<i8>"* %vec, i8 %data){
@@ -2527,6 +2561,11 @@ endif4:
     call void @string.free(%struct.string.String* %v3)
     call void @string.free(%struct.string.String* %v4)
     call void @console.writeln(i8* @.str.17, i32 2)
+    ;DEBUG: Variable s5 is out.
+    ;DEBUG: Variable s4 is out.
+    ;DEBUG: Variable s3 is out.
+    ;DEBUG: Variable s2 is out.
+    ;DEBUG: Variable s1 is out.
     ret void
 }
 define void @tests.string_utils_test(){
@@ -2780,6 +2819,7 @@ endif3:
 loop_body1_exit:
     call i32 @HeapUnlock(i32* %tmp0)
     %tmp15 = load i64, i64* %v0
+    ;DEBUG: Variable entry is out.
     ret i64 %tmp15
 }
 define void @console.println_f64(double %n){

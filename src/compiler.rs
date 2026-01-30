@@ -1,3 +1,4 @@
+// TODO phi
 use std::{
     collections::{HashMap, HashSet, VecDeque},
     io::Read,
@@ -17,8 +18,8 @@ use rcsharp_parser::{
 
 use crate::{
     compiler_essentials::{
-        function_flags, struct_flags, CodeGenContext, CompileResult, CompileResultExt,
-        CompilerError, CompilerType, Enum, FlagManager, Function, LLVMVal, Struct, Variable,
+        CodeGenContext, CompileResult, CompileResultExt, CompilerError, CompilerType, Enum,
+        Function, LLVMVal, Struct, Variable,
     },
     expression_compiler::{compile_expression, constant_expression_compiler, Expected},
 };
@@ -103,13 +104,12 @@ fn handle_staticly_declared_variables(
         } else {
             format!("{}.{}", x.0, x.1)
         };
-        let t = CompilerType::into_path(&x.2, symbols, &x.0)?;
+        let t = CompilerType::from_parser_type(&x.2, symbols, &x.0)?;
         output.push_str_global(&format!(
             "@{} = internal global {} zeroinitializer",
             fp,
             t.llvm_representation(symbols)?
         ));
-        println!("ST:{}", fp);
         symbols
             .static_variables
             .insert(fp, Variable::new_static(t, false));
@@ -186,7 +186,6 @@ fn collect(
                         lexing_time += q.elapsed();
                         let q = Instant::now();
                         let parsed_stmts = GeneralParser::new(&lex).parse_all().map_err(|e| {
-                            println!("{:?}", e);
                             {
                                 (
                                     stmt_data.span,
@@ -204,7 +203,7 @@ fn collect(
                     } else {
                         return Err((
                             stmt_data.span,
-                            CompilerError::InvalidStatementInContext(
+                            CompilerError::InvalidExpression(
                                 "Include requires a string argument".into(),
                             ),
                         )
@@ -216,10 +215,7 @@ fn collect(
                 } else {
                     return Err((
                         stmt_data.span,
-                        CompilerError::InvalidStatementInContext(format!(
-                            "Unknown global attribute: {:?}",
-                            attr
-                        )),
+                        CompilerError::Generic(format!("Unknown global attribute: {:?}", attr)),
                     )
                         .into());
                 }
@@ -260,7 +256,7 @@ fn collect(
             _ => {
                 return Err((
                     stmt_data.span,
-                    CompilerError::InvalidStatementInContext(format!("{:?}", stmt_data.stmt)),
+                    CompilerError::Generic(format!("Invalid statement {:?}", stmt_data.stmt)),
                 )
                     .into());
             }
@@ -292,15 +288,7 @@ fn handle_types(
         };
         symbols.insert_type(
             &full_path,
-            Struct::new_placeholder(
-                str.path.to_string(),
-                str.name.to_string(),
-                if str.generic_params.is_empty() {
-                    0
-                } else {
-                    struct_flags::GENERIC
-                },
-            ),
+            Struct::new_placeholder(str.path.to_string(), str.name.to_string(), false),
         );
     }
 
@@ -316,7 +304,7 @@ fn handle_types(
         for prm in &str.generic_params {
             symbols.alias_types.insert(
                 prm.clone(),
-                CompilerType::GenericSubst(prm.to_string().into_boxed_str()),
+                CompilerType::GenericPlaceholder(prm.to_string().into_boxed_str()),
             );
         }
         for (name, attr_type) in str.fields {
@@ -324,8 +312,10 @@ fn handle_types(
                 compiler_struct_fields.push((name, CompilerType::Primitive(pt)));
                 continue;
             }
-            compiler_struct_fields
-                .push((name, CompilerType::into_path(&attr_type, symbols, &path)?));
+            compiler_struct_fields.push((
+                name,
+                CompilerType::from_parser_type(&attr_type, symbols, &path)?,
+            ));
         }
         symbols.insert_type(
             &full_path,
@@ -426,7 +416,7 @@ fn handle_functions(
         let function_attrs = pf.attributes;
         let function_generics = pf.generic_params;
         let function_body = pf.body;
-        let return_type = CompilerType::into_path(&pf.return_type, symbols, &current_path)?;
+        let return_type = CompilerType::from_parser_type(&pf.return_type, symbols, &current_path)?;
 
         let args = pf
             .args
@@ -434,7 +424,7 @@ fn handle_functions(
             .map(|x| {
                 (
                     x.0.clone(),
-                    CompilerType::into_path(&x.1, symbols, &current_path).unwrap(),
+                    CompilerType::from_parser_type(&x.1, symbols, &current_path).unwrap(),
                 )
             })
             .collect::<Box<[_]>>();
@@ -448,19 +438,20 @@ fn handle_functions(
             function_attrs,
             function_generics,
         );
-
+        let mut base = function.get_flags();
         if function_prefixes.iter().any(|x| x.as_str() == "public") {
-            function.set_flag(function_flags::PUBLIC);
+            base.is_public = true;
         }
         if function_prefixes.iter().any(|x| x.as_str() == "inline") {
-            function.set_flag(function_flags::INLINE);
+            base.is_inline = true;
         }
         if function_prefixes.iter().any(|x| x.as_str() == "constexpr") {
-            function.set_flag(function_flags::CONST_EXPRESSION);
+            base.is_const_expression = true;
         }
         if !function.generic_params.is_empty() {
-            function.set_flag(function_flags::GENERIC);
+            base.is_generic = true;
         }
+        function.set_flags(base);
         symbols.insert_function(&function.full_path().to_string(), function);
     }
     for x in &symbols.functions {
@@ -492,7 +483,7 @@ fn lazy_compile(symbols: &mut SymbolTable, output: &mut LLVMOutputHandler) -> Co
         for x in symbols
             .functions
             .iter()
-            .filter(|x| x.1 .1.is_normal() && x.1 .1.times_used.get() > 0)
+            .filter(|x| x.1 .1.is_normal() && x.1 .1.usage_count.get() > 0)
         {
             if !implemented_funcs.contains(&x.1 .0) && !implement_funcs.contains(&x.1 .0) {
                 implement_funcs.push(x.1 .0);
@@ -508,7 +499,7 @@ fn lazy_compile(symbols: &mut SymbolTable, output: &mut LLVMOutputHandler) -> Co
     .unwrap_or(false)
     {}
     for (_, (_id, function)) in symbols.functions.iter().filter(|x| x.1 .1.is_external()) {
-        if function.times_used.get() == 0 {
+        if function.usage_count.get() == 0 {
             continue;
         }
         // declare dllimport i32 @GetModuleFileNameA(i8*,i8*,i32)
@@ -531,7 +522,7 @@ fn lazy_compile(symbols: &mut SymbolTable, output: &mut LLVMOutputHandler) -> Co
             output.push_str_footer(&format!(
                 ";fn {} used times {}\n",
                 full_path,
-                function.times_used.get()
+                function.usage_count.get()
             ));
         }
     }
@@ -546,7 +537,7 @@ fn compile(symbols: &mut SymbolTable, output: &mut LLVMOutputHandler) -> Compile
             output.push_str_footer(&format!(
                 ";fn {} used times {}\n",
                 full_path,
-                function.times_used.get()
+                function.usage_count.get()
             ));
         }
     }
@@ -576,17 +567,17 @@ fn compile_function_body(
 ) -> CompileResult<()> {
     let function = symbols.get_function_by_id(function_id);
     let mut rt = function.return_type.clone();
-    rt.substitute_generic_types(&symbols.alias_types, symbols)?;
+    rt.substitute_generics(&symbols.alias_types, symbols)?;
     let rt = rt.llvm_representation(symbols)?;
     let mut ctx = CodeGenContext::new(symbols, function_id);
-
+    ctx.scope.push_layer();
     let args_str = function
         .args
         .iter()
         .map(|(name, ptype)| {
             {
                 let mut ptype = ptype.clone();
-                ptype.substitute_generic_types(&symbols.alias_types, symbols)?;
+                ptype.substitute_generics(&symbols.alias_types, symbols)?;
                 ptype
             }
             .llvm_representation(symbols)
@@ -601,10 +592,21 @@ fn compile_function_body(
     ));
 
     for (arg_name, arg_type) in function.args.iter() {
+        if ctx.scope.lookup(arg_name).is_some() {
+            return Err(CompilerError::Generic(format!(
+                "You declared argument '{}' twice",
+                arg_name
+            ))
+            .into());
+        }
         let mut arg_type = arg_type.clone();
-        arg_type.substitute_generic_types(&symbols.alias_types, symbols)?;
-        ctx.scope
-            .add_variable(arg_name.clone(), Variable::new_argument(arg_type), 0);
+        arg_type.substitute_generics(&symbols.alias_types, symbols)?;
+        ctx.scope.define(
+            arg_name.clone(),
+            Variable::new_argument(arg_type),
+            0,
+            symbols,
+        );
     }
 
     for stmt in function.body.iter() {
@@ -615,6 +617,18 @@ fn compile_function_body(
         if DONT_COMPILE_AFTER_RETURN && matches!(stmt.stmt, Stmt::Return(..)) {
             break;
         };
+    }
+    let x = ctx.scope.pop_layer(&mut ctx.symbols);
+    for x in x {
+        compile_statement(
+            &StmtData {
+                stmt: x,
+                span: Span::empty(),
+            },
+            &mut ctx,
+            output,
+        )
+        .extend("While closing context in function")?;
     }
     if !matches!(function.body.last().map(|x| &x.stmt), Some(Stmt::Return(_))) {
         if function.return_type.is_void() {
@@ -635,12 +649,12 @@ pub fn compile_statement(
     ctx: &mut CodeGenContext,
     output: &mut LLVMOutputHandler,
 ) -> CompileResult<()> {
-    let current_function_path = ctx.current_function_path();
+    let current_function_path = ctx.current_path();
     match &stmt.stmt {
         Stmt::ConstLet(name, var_type, expr) => {
             let mut var_type =
-                CompilerType::into_path(var_type, ctx.symbols, current_function_path)?;
-            var_type.substitute_generic_types(&ctx.symbols.alias_types, ctx.symbols)?;
+                CompilerType::from_parser_type(var_type, ctx.symbols, current_function_path)?;
+            var_type.substitute_generics(&ctx.symbols.alias_types, ctx.symbols)?;
             let var = Variable::new(var_type.clone(), true);
 
             let result =
@@ -648,22 +662,22 @@ pub fn compile_statement(
             if *result.try_get_type()? != var_type {
                 return Err((
                     stmt.span,
-                    CompilerError::InvalidExpression(format!(
-                        "Type mismatch in assignment: {:?} and {:?}",
-                        var_type, result
-                    )),
+                    CompilerError::TypeMismatch {
+                        expected: var_type,
+                        found: result.try_get_type()?.clone(),
+                    },
                 )
                     .into());
             }
-            var.set_value(Some(result.get_llvm_rep().clone()));
-            ctx.scope.add_variable(name.clone(), var, 0);
+            var.set_constant_value(Some(result.get_llvm_rep().clone()));
+            ctx.scope.define(name.clone(), var, 0, ctx.symbols);
         }
         Stmt::Let(name, var_type, expr) => {
             let mut var_type =
-                CompilerType::into_path(var_type, ctx.symbols, current_function_path)?;
-            var_type.substitute_generic_types(&ctx.symbols.alias_types, ctx.symbols)?;
+                CompilerType::from_parser_type(var_type, ctx.symbols, current_function_path)?;
+            var_type.substitute_generics(&ctx.symbols.alias_types, ctx.symbols)?;
             let var = Variable::new(var_type.clone(), false);
-            let x = ctx.aquire_unique_variable_index();
+            let x = ctx.acquire_var_id();
             output.push_function_intro(&format!(
                 "    %v{} = alloca {}; var: {}\n",
                 x,
@@ -682,14 +696,14 @@ pub fn compile_statement(
                     if &var_type != result.try_get_type()? {
                         return Err((
                             stmt.span,
-                            CompilerError::InvalidExpression(format!(
-                                "Type mismatch in assignment: {:?} and {:?}",
-                                var_type, result
-                            )),
+                            CompilerError::TypeMismatch {
+                                expected: var_type,
+                                found: result.try_get_type()?.clone(),
+                            },
                         )
                             .into());
                     }
-                    ctx.scope.add_variable(name.clone(), var, x);
+                    ctx.scope.define(name.clone(), var, x, ctx.symbols);
                     let t = var_type.llvm_representation(ctx.symbols)?;
                     output.push_str(&format!(
                         "    store {} {}, {}* {}\n",
@@ -700,14 +714,14 @@ pub fn compile_statement(
                     ));
                 }
                 None => {
-                    ctx.scope.add_variable(name.clone(), var, x);
+                    ctx.scope.define(name.clone(), var, x, ctx.symbols);
                 }
             }
         }
         Stmt::Static(_name, var_type, _expr) => {
             let mut var_type =
-                CompilerType::into_path(var_type, ctx.symbols, current_function_path)?;
-            var_type.substitute_generic_types(&ctx.symbols.alias_types, ctx.symbols)?;
+                CompilerType::from_parser_type(var_type, ctx.symbols, current_function_path)?;
+            var_type.substitute_generics(&ctx.symbols.alias_types, ctx.symbols)?;
             let _var = Variable::new_static(var_type.clone(), false);
             unimplemented!("Not yet supported!")
         }
@@ -716,23 +730,34 @@ pub fn compile_statement(
             compile_expression(expression, Expected::NoReturn, stmt.span, ctx, output)?;
         }
         Stmt::Loop(statement) => {
-            let lc = ctx.aquire_unique_logic_counter();
+            let lc = ctx.acquire_label_id();
 
             output.push_str(&format!("    br label %loop_body{}\n", lc));
             output.push_str(&format!("loop_body{}:\n", lc));
-            ctx.scope.enter_scope();
-            ctx.scope.set_loop_index(Some(lc));
+            ctx.scope.push_layer();
+            ctx.scope.set_loop_tag(Some(lc));
             for x in statement {
                 compile_statement(x, ctx, output)?;
                 if DONT_COMPILE_AFTER_RETURN && matches!(x.stmt, Stmt::Return(..)) {
                     break;
                 };
             }
-            ctx.scope.exit_scope();
             output.push_str(&format!("    br label %loop_body{}\n", lc));
             output.push_str(&format!("loop_body{}_exit:\n", lc));
+            let x = ctx.scope.pop_layer(&mut ctx.symbols);
+            for x in x {
+                compile_statement(
+                    &StmtData {
+                        stmt: x,
+                        span: stmt.span,
+                    },
+                    ctx,
+                    output,
+                )
+                .extend("While closing context in loop")?;
+            }
         }
-        Stmt::Continue => match ctx.scope.loop_index() {
+        Stmt::Continue => match ctx.scope.current_loop_tag() {
             Some(li) => {
                 output.push_str(&format!("    br label %loop_body{}\n", li));
                 return Ok(());
@@ -740,14 +765,12 @@ pub fn compile_statement(
             None => {
                 return Err((
                     stmt.span,
-                    CompilerError::InvalidStatementInContext(
-                        "Tried to continue without loop".to_string(),
-                    ),
+                    CompilerError::Generic("Tried to continue without loop".to_string()),
                 )
                     .into())
             }
         },
-        Stmt::Break => match ctx.scope.loop_index() {
+        Stmt::Break => match ctx.scope.current_loop_tag() {
             Some(li) => {
                 output.push_str(&format!("    br label %loop_body{}_exit\n", li));
                 return Ok(());
@@ -755,9 +778,7 @@ pub fn compile_statement(
             None => {
                 return Err((
                     stmt.span,
-                    CompilerError::InvalidStatementInContext(
-                        "Tried to break without loop".to_string(),
-                    ),
+                    CompilerError::Generic("Tried to break without loop".to_string()),
                 )
                     .into())
             }
@@ -767,7 +788,7 @@ pub fn compile_statement(
             let return_type = {
                 function
                     .return_type
-                    .with_substituted_generic_types(&ctx.symbols.alias_types, ctx.symbols)?
+                    .with_substituted_generics(&ctx.symbols.alias_types, ctx.symbols)?
             };
             if opt_expr.is_some() && return_type.is_void() {
                 return Err((
@@ -791,6 +812,18 @@ pub fn compile_statement(
                         },
                     )
                         .into());
+                }
+                let x = ctx.scope.drop_current_scope(&mut ctx.symbols);
+                for x in x {
+                    compile_statement(
+                        &StmtData {
+                            stmt: x,
+                            span: stmt.span,
+                        },
+                        ctx,
+                        output,
+                    )
+                    .extend("While closing context during return")?;
                 }
                 let llvm_type_str = return_type.llvm_representation(ctx.symbols)?;
                 output.push_str(&format!(
@@ -833,7 +866,7 @@ pub fn compile_statement(
                     .into());
             }
 
-            let logic_id = ctx.aquire_unique_logic_counter();
+            let logic_id = ctx.acquire_label_id();
             let then_label = format!("then{}", logic_id);
             let else_label = format!("else{}", logic_id);
             let end_label = format!("endif{}", logic_id);
@@ -851,31 +884,54 @@ pub fn compile_statement(
             ));
 
             output.push_str(&format!("{}:\n", then_label));
-            ctx.scope.enter_scope();
+            ctx.scope.push_layer();
             for then_stmt in then_body {
                 compile_statement(then_stmt, ctx, output)?;
                 if DONT_COMPILE_AFTER_RETURN && matches!(then_stmt.stmt, Stmt::Return(..)) {
                     break;
                 };
             }
-            ctx.scope.exit_scope();
+            let x = ctx.scope.pop_layer(&mut ctx.symbols);
+            for x in x {
+                compile_statement(
+                    &StmtData {
+                        stmt: x,
+                        span: stmt.span,
+                    },
+                    ctx,
+                    output,
+                )
+                .extend("While closing context in if statement")?;
+            }
             output.push_str(&format!("    br label %{}\n", end_label));
 
             if !else_body.is_empty() {
                 output.push_str(&format!("{}:\n", else_label));
-                ctx.scope.enter_scope();
+                ctx.scope.push_layer();
                 for else_stmt in else_body {
                     compile_statement(else_stmt, ctx, output)?;
                     if DONT_COMPILE_AFTER_RETURN && matches!(else_stmt.stmt, Stmt::Return(..)) {
                         break;
                     };
                 }
-                ctx.scope.exit_scope();
+                let x = ctx.scope.pop_layer(&mut ctx.symbols);
+                for x in x {
+                    compile_statement(
+                        &StmtData {
+                            stmt: x,
+                            span: stmt.span,
+                        },
+                        ctx,
+                        output,
+                    )
+                    .extend("While closing context in else statement")?;
+                }
                 output.push_str(&format!("    br label %{}\n", end_label));
             }
 
             output.push_str(&format!("{}:\n", end_label));
         }
+        Stmt::Debug(x) => output.push_str(&format!("    ;DEBUG: {}\n", x)),
         Stmt::Function(..)
         | Stmt::Struct(..)
         | Stmt::Enum(..)
@@ -883,7 +939,7 @@ pub fn compile_statement(
         | Stmt::CompilerHint(..) => {
             return Err((
                 stmt.span,
-                CompilerError::InvalidStatementInContext(format!("{:?}", stmt)),
+                CompilerError::Generic(format!("Invalid statement {:?}", stmt)),
             )
                 .into());
         }
@@ -973,8 +1029,7 @@ fn handle_generics(
             }
             let mut field_strings = Vec::new();
             for (_, field_type) in fields.iter() {
-                let substituted_type =
-                    field_type.with_substituted_generic_types(&type_map, symbols)?;
+                let substituted_type = field_type.with_substituted_generics(&type_map, symbols)?;
                 field_strings.push(substituted_type.llvm_representation(symbols)?);
             }
             let body = field_strings.join(", ");
@@ -993,11 +1048,13 @@ fn fn_attribs_handler(
     for x in function.attribs() {
         match &*x.name {
             "DllImport" => {
-                function.set_flag(function_flags::EXTERNAL);
+                let mut x = function.get_flags();
+                x.is_external = true;
+                function.set_flags(x);
             }
             "no_lazy" => {
-                if function.times_used.get() == 0 {
-                    function.use_fn();
+                if function.usage_count.get() == 0 {
+                    function.increment_usage();
                 }
             }
             "ExtentionOf" => {
@@ -1007,8 +1064,8 @@ fn fn_attribs_handler(
                         let x = symbols
                             .get_type_id(&format!("{}.{}", function.path(), name))
                             .or(symbols.get_type_id(name))
-                            .expect("Type not found");
-                        if arg.is_base_equal_to(x) {
+                            .expect(format!("Expected type '{}' for ExtentionOf", name).as_str());
+                        if arg.is_same_base_type(x) {
                             continue;
                         }
                         panic!("{} {:?} {}", function.full_path(), arg, x);
@@ -1216,7 +1273,7 @@ impl SymbolTable {
             .filter(|x| x.0 == function_id)
             .nth(0)
         {
-            func.1.use_fn();
+            func.1.increment_usage();
             return &func.1;
         }
         unreachable!()

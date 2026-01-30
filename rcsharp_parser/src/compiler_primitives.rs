@@ -57,6 +57,9 @@ impl PrimitiveInfo {
     pub fn is_decimal(&self) -> bool {
         matches!(self.kind, PrimitiveKind::Decimal)
     }
+    pub fn is_dropable(&self) -> bool {
+        false
+    }
 }
 
 pub const PRIMITIVE_TYPES_INFO: &[PrimitiveInfo] = &[
