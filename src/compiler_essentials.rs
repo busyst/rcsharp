@@ -9,10 +9,7 @@ use std::{
     collections::HashMap,
 };
 
-use crate::{
-    compiler::{LLVMOutputHandler, SymbolTable},
-    expression_compiler::CompiledValue,
-};
+use crate::{compiler::DONT_INSERT_REDUNDAND_STRINGS, expression_compiler::CompiledValue};
 #[derive(Debug, Clone, PartialEq)]
 pub enum LLVMVal {
     Register(u32),         // %tmp1
@@ -463,6 +460,12 @@ impl CompilerType {
             Self::Pointer(_) => POINTER_SIZED_TYPE.layout,
             Self::Struct(id) => {
                 let structure = symbols.get_type_by_id(*id);
+                if structure.is_generic() {
+                    panic!(
+                        "Cannot calculate layout for generic struct {:?}",
+                        structure.full_path()
+                    );
+                }
                 if let Some(layout) = structure.get_cached_layout() {
                     return layout;
                 }
@@ -1060,14 +1063,14 @@ impl Variable {
         if let Some(val) = self.value.borrow().as_ref() {
             return Ok(CompiledValue::Value {
                 llvm_repr: val.clone(),
-                ptype: self.compiler_type.clone(),
+                val_type: self.compiler_type.clone(),
             });
         }
         let flags = self.get_flags();
         if flags.is_argument {
             return Ok(CompiledValue::Value {
                 llvm_repr: LLVMVal::VariableName(var_name.to_string()),
-                ptype: self.compiler_type.clone(),
+                val_type: self.compiler_type.clone(),
             });
         }
         let mut concrete_type = self.compiler_type.clone();
@@ -1088,7 +1091,7 @@ impl Variable {
 
         Ok(CompiledValue::Value {
             llvm_repr: LLVMVal::Register(temp_id),
-            ptype: self.compiler_type.clone(),
+            val_type: self.compiler_type.clone(),
         })
     }
 }
@@ -1348,5 +1351,306 @@ impl CompiledLValue {
             is_mutable: false,
             function_id: Some(id),
         })
+    }
+}
+#[derive(PartialEq)]
+enum StringEntry {
+    Owned(String),
+    Suffix {
+        parent_index: usize,
+        byte_offset: usize,
+        length_with_null: usize,
+        content: String,
+    },
+}
+#[derive(Default)]
+pub struct LLVMOutputHandler {
+    header: String,
+    global_variables: String,
+    strings_header: Vec<StringEntry>,
+    include_header: String,
+    main: String,
+    footer: String,
+
+    function_intro: String,
+    function_body: String,
+}
+impl LLVMOutputHandler {
+    pub fn push_str(&mut self, s: &str) {
+        self.function_body.push_str(s);
+    }
+    pub fn push_main(&mut self, s: &str) {
+        self.main.push_str(s);
+    }
+    pub fn push_function_intro(&mut self, s: &str) {
+        self.function_intro.push_str(s);
+    }
+    pub fn push_str_include_header(&mut self, s: &str) {
+        self.include_header.push_str(s);
+    }
+    pub fn push_str_header(&mut self, s: &str) {
+        self.header.push_str(s);
+    }
+    pub fn push_str_global(&mut self, s: &str) {
+        self.global_variables.push_str(s);
+    }
+    pub fn push_str_footer(&mut self, s: &str) {
+        self.footer.push_str(s);
+    }
+    pub fn add_to_strings_header(&mut self, string: String) -> usize {
+        if DONT_INSERT_REDUNDAND_STRINGS {
+            if let Some(id) = self.strings_header.iter().position(|entry| match entry {
+                StringEntry::Owned(s) => s == &string,
+                StringEntry::Suffix { content, .. } => content == &string,
+            }) {
+                return id;
+            }
+
+            let suffix_match = self
+                .strings_header
+                .iter()
+                .enumerate()
+                .find_map(|(idx, entry)| {
+                    let (existing_str, actual_parent_idx, base_offset) = match entry {
+                        StringEntry::Owned(s) => (s, idx, 0),
+                        StringEntry::Suffix {
+                            parent_index,
+                            byte_offset,
+                            content,
+                            ..
+                        } => (content, *parent_index, *byte_offset),
+                    };
+
+                    if existing_str.ends_with(&string) && existing_str.len() > string.len() {
+                        let offset_diff = existing_str.len() - string.len();
+                        let absolute_offset = base_offset + offset_diff;
+                        Some((actual_parent_idx, absolute_offset))
+                    } else {
+                        None
+                    }
+                });
+
+            if let Some((parent_index, byte_offset)) = suffix_match {
+                let len_with_null = string.len() + 1;
+                self.strings_header.push(StringEntry::Suffix {
+                    parent_index,
+                    byte_offset,
+                    length_with_null: len_with_null,
+                    content: string,
+                });
+                return self.strings_header.len() - 1;
+            }
+        }
+        self.strings_header.push(StringEntry::Owned(string.clone()));
+        let new_index = self.strings_header.len() - 1;
+        if DONT_INSERT_REDUNDAND_STRINGS {
+            for i in 0..new_index {
+                if let StringEntry::Owned(old_content) = &self.strings_header[i] {
+                    if string.ends_with(old_content) && string.len() > old_content.len() {
+                        let offset = string.len() - old_content.len();
+                        let len_with_null = old_content.len() + 1;
+                        self.strings_header[i] = StringEntry::Suffix {
+                            parent_index: new_index,
+                            byte_offset: offset,
+                            length_with_null: len_with_null,
+                            content: old_content.clone(),
+                        };
+                    }
+                }
+            }
+        }
+        new_index
+    }
+    pub fn build(self) -> String {
+        let definitions = self.strings_header.iter().enumerate().map(|(index, entry)| {
+            match entry {
+                StringEntry::Owned(s) => {
+                    let escaped_val = s.replace("\"", "\\22")
+                        .replace("\n", "\\0A")
+                        .replace("\r", "\\0D")
+                        .replace("\t", "\\09");
+                    let str_len = s.len() + 1;
+                    format!("@.str.{} = private unnamed_addr constant [{} x i8] c\"{}\\00\"", index, str_len, escaped_val)
+                }
+                StringEntry::Suffix { parent_index, byte_offset, length_with_null, .. } => {
+                    let mut root_index = *parent_index;
+                    let mut total_offset = *byte_offset;
+                    let mut loops = 0;
+                    while let StringEntry::Suffix { parent_index: next_p, byte_offset: next_off, .. } = &self.strings_header[root_index] {
+                        root_index = *next_p;
+                        total_offset += next_off;
+                        loops += 1;
+                        if loops > 100 { panic!("Circular string dependency detected at index {}", index); }
+                    }
+                    let root_len = match &self.strings_header[root_index] {
+                        StringEntry::Owned(s) => s.len() + 1,
+                        _ => panic!("String dependency chain did not end in Owned at index {}", root_index),
+                    };
+                    format!(
+                        "@.str.{} = private unnamed_addr alias [{} x i8], [{} x i8]* bitcast (i8* getelementptr inbounds ([{} x i8], [{} x i8]* @.str.{}, i64 0, i64 {}) to [{} x i8]*)",
+                        index,
+                        length_with_null,
+                        length_with_null,
+                        root_len, root_len, root_index, total_offset,
+                        length_with_null
+                    )
+                }
+            }
+        }).collect::<Vec<String>>().join("\n");
+
+        format!(
+            "{}\n{}\n{}\n{}\n{}\n{}",
+            self.header,
+            self.include_header,
+            definitions,
+            self.global_variables,
+            self.main,
+            self.footer
+        )
+    }
+
+    pub fn start_function(
+        &mut self,
+        return_type_llvm: String,
+        full_function_name: &str,
+        args_str: String,
+    ) {
+        self.push_main(&format!(
+            "define {} @{}({}){{\n",
+            return_type_llvm, full_function_name, args_str
+        ));
+    }
+
+    pub fn end_function(&mut self) {
+        self.push_main(&self.function_intro.clone());
+        self.push_main(&self.function_body.clone());
+        self.push_main("}\n");
+        self.function_intro.clear();
+        self.function_body.clear();
+    }
+}
+
+#[derive(Default)]
+pub struct SymbolTable {
+    functions: OrderedHashMap<String, (usize, Function)>,
+    types: OrderedHashMap<String, (usize, Struct)>,
+    alias_types: HashMap<String, CompilerType>,
+    enums: OrderedHashMap<String, (usize, Enum)>,
+    static_variables: OrderedHashMap<String, Variable>,
+}
+impl SymbolTable {
+    pub fn get_type_by_id(&self, type_id: usize) -> &Struct {
+        self.types
+            .values()
+            .filter(|x| x.0 == type_id)
+            .nth(0)
+            .map(|x| &x.1)
+            .expect("Unexpected")
+    }
+    pub fn get_function_by_id(&self, function_id: usize) -> &Function {
+        if let Some(func) = self
+            .functions
+            .values()
+            .filter(|x| x.0 == function_id)
+            .nth(0)
+        {
+            return &func.1;
+        }
+        unreachable!()
+    }
+    pub fn get_function_by_id_use(&self, function_id: usize) -> &Function {
+        if let Some(func) = self
+            .functions
+            .values()
+            .filter(|x| x.0 == function_id)
+            .nth(0)
+        {
+            func.1.increment_usage();
+            return &func.1;
+        }
+        unreachable!()
+    }
+    pub fn get_enum_by_id(&self, enum_id: usize) -> &Enum {
+        self.enums
+            .values()
+            .filter(|x| x.0 == enum_id)
+            .nth(0)
+            .map(|x| &x.1)
+            .expect("Unexpected")
+    }
+
+    pub fn get_type_id(&self, fqn: &str) -> Option<usize> {
+        self.types.iter().position(|x| x.0 == fqn)
+    }
+    pub fn get_function_id(&self, fqn: &str) -> Option<usize> {
+        self.functions.iter().position(|x| x.0 == fqn)
+    }
+    pub fn get_enum_id(&self, fqn: &str) -> Option<usize> {
+        self.enums.iter().position(|x| x.0 == fqn)
+    }
+
+    pub fn get_type(&self, fqn: &str) -> Option<&Struct> {
+        self.get_type_id(fqn).map(|x| self.get_type_by_id(x))
+    }
+    pub fn get_function(&self, fqn: &str) -> Option<&Function> {
+        self.get_function_id(fqn)
+            .map(|x| self.get_function_by_id(x))
+    }
+    pub fn get_enum(&self, fqn: &str) -> Option<&Enum> {
+        self.get_enum_id(fqn).map(|x| self.get_enum_by_id(x))
+    }
+    pub fn get_static_var(&self, fqn: &str) -> Option<&Variable> {
+        self.static_variables.get(fqn)
+    }
+    pub fn insert_type(&mut self, full_path: &str, structure: Struct) {
+        if let Some(x) = self.types.get_mut(full_path) {
+            x.1 = structure;
+            return;
+        }
+        self.types
+            .insert(full_path.to_string(), (self.types.len(), structure));
+    }
+    pub fn insert_function(&mut self, full_path: &str, function: Function) {
+        if let Some(x) = self.functions.get_mut(full_path) {
+            x.1 = function;
+            return;
+        }
+        self.functions
+            .insert(full_path.to_string(), (self.functions.len(), function));
+    }
+    pub fn insert_enum(&mut self, full_path: &str, enum_type: Enum) {
+        if let Some(x) = self.enums.get_mut(full_path) {
+            x.1 = enum_type;
+            return;
+        }
+        self.enums
+            .insert(full_path.to_string(), (self.enums.len(), enum_type));
+    }
+    pub fn set_alias_types(&mut self, hm: HashMap<String, CompilerType>) {
+        self.alias_types = hm
+    }
+    pub fn insert_static_var(&mut self, name: &str, variable: Variable) -> CompileResult<()> {
+        if let Some(_) = self.static_variables.insert(name.to_string(), variable) {
+            return Err(CompilerError::Generic(format!(
+                "Static variable with name {} already exists!",
+                name
+            ))
+            .into());
+        }
+        return Ok(());
+    }
+
+    pub fn functions_iter(
+        &self,
+    ) -> ordered_hash_map::ordered_map::Iter<'_, std::string::String, (usize, Function)> {
+        self.functions.iter()
+    }
+    pub fn types_iter(
+        &self,
+    ) -> ordered_hash_map::ordered_map::Iter<'_, std::string::String, (usize, Struct)> {
+        self.types.iter()
+    }
+    pub fn alias_types(&self) -> &HashMap<String, CompilerType> {
+        &self.alias_types
     }
 }

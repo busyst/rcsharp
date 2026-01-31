@@ -5,6 +5,7 @@ use std::{io::Read, process, time::Instant};
 
 pub mod compiler;
 pub mod compiler_essentials;
+pub mod compiler_functions;
 pub mod expression_compiler;
 pub mod tests;
 fn main() -> Result<(), String> {

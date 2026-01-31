@@ -1,34 +1,21 @@
+use crate::{
+    compiler::{DONT_COMPILE_AFTER_RETURN, INTERGER_EXPRESION_OPTIMISATION},
+    compiler_essentials::{
+        CodeGenContext, CompileResult, CompiledLValue, CompilerError, CompilerType,
+        LLVMOutputHandler, LLVMVal, Scope, Variable,
+    },
+    compiler_functions::COMPILER_FUNCTIONS,
+};
 use std::collections::HashMap;
 
-use crate::{
-    compiler::{LLVMOutputHandler, DONT_COMPILE_AFTER_RETURN, INTERGER_EXPRESION_OPTIMISATION},
-    compiler_essentials::{
-        CodeGenContext, CompileResult, CompiledLValue, CompilerError, CompilerType, LLVMVal, Scope,
-        Variable,
-    },
-};
 use rcsharp_parser::{
     compiler_primitives::{
-        BOOL_TYPE, BYTE_TYPE, CHAR_TYPE, DEFAULT_DECIMAL_TYPE, DEFAULT_INTEGER_TYPE,
-        POINTER_SIZED_TYPE,
+        BOOL_TYPE, CHAR_TYPE, DEFAULT_DECIMAL_TYPE, DEFAULT_INTEGER_TYPE, POINTER_SIZED_TYPE,
+        PRIMITIVE_TYPES_INFO,
     },
     expression_parser::{BinaryOp, Expr, UnaryOp},
     parser::{ParserType, Span, Stmt, StmtData},
 };
-
-pub type CompilerFn =
-    fn(&mut ExpressionCompiler, &[Expr], &Expected) -> CompileResult<CompiledValue>;
-pub type GenericCompilerFn =
-    fn(&mut ExpressionCompiler, &[Expr], &[ParserType], &Expected) -> CompileResult<CompiledValue>;
-
-const COMPILER_FUNCTIONS: &[(&str, Option<CompilerFn>, Option<GenericCompilerFn>)] = &[
-    ("stalloc", Some(stalloc_impl), Some(stalloc_generic_impl)),
-    ("size_of", Some(size_of_impl), Some(size_of_generic_impl)),
-    ("align_of", Some(align_of_impl), Some(align_of_generic_impl)),
-    ("ptr_of", Some(ptr_of_impl), None),
-    ("bitcast", None, Some(bitcast_generic_impl)),
-    ("asm", Some(asm_impl), None),
-];
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expected<'a> {
@@ -41,11 +28,7 @@ pub enum Expected<'a> {
 pub enum CompiledValue {
     Value {
         llvm_repr: LLVMVal,
-        ptype: CompilerType,
-    },
-    Pointer {
-        llvm_repr: LLVMVal,
-        ptype: CompilerType,
+        val_type: CompilerType,
     },
     Function {
         internal_id: usize,
@@ -53,9 +36,8 @@ pub enum CompiledValue {
     GenericFunction {
         internal_id: usize,
     },
-    GenericFunctionImplementation {
-        internal_id: usize,
-        types: Box<[CompilerType]>,
+    Type {
+        compiler_type: CompilerType,
     },
     NoReturn,
 }
@@ -72,17 +54,19 @@ impl CompiledValue {
     }
     pub fn try_get_type(&self) -> CompileResult<&CompilerType> {
         match self {
-            Self::Value { ptype, .. } | Self::Pointer { ptype, .. } => Ok(ptype),
+            Self::Value {
+                val_type: ptype, ..
+            } => Ok(ptype),
             Self::NoReturn => {
                 Err(CompilerError::Generic("Expression yields no value".into()).into())
             }
+            Self::Type { compiler_type } => Ok(compiler_type),
             _ => Err(CompilerError::Generic(format!("Cannot get type of {:?}", self)).into()),
         }
     }
-
     pub fn try_get_llvm_rep(&self) -> CompileResult<&LLVMVal> {
         match self {
-            Self::Value { llvm_repr, .. } | Self::Pointer { llvm_repr, .. } => Ok(llvm_repr),
+            Self::Value { llvm_repr, .. } => Ok(llvm_repr),
             _ => Err(CompilerError::Generic(format!(
                 "Value {:?} has no LLVM representation",
                 self
@@ -92,8 +76,8 @@ impl CompiledValue {
     }
 }
 pub struct ExpressionCompiler<'a, 'b> {
-    ctx: &'a mut CodeGenContext<'b>,
-    output: &'a mut LLVMOutputHandler,
+    pub ctx: &'a mut CodeGenContext<'b>,
+    pub output: &'a mut LLVMOutputHandler,
 }
 impl<'a> Expected<'a> {
     pub fn get_type(&self) -> Option<&'a CompilerType> {
@@ -107,14 +91,14 @@ impl CompiledValue {
     pub fn get_llvm_rep(&self) -> &LLVMVal {
         match self {
             Self::Value { llvm_repr, .. } => llvm_repr,
-            Self::Pointer { llvm_repr, .. } => llvm_repr,
             _ => panic!("{:?}", self),
         }
     }
     pub fn equal_type(&self, other: &CompilerType) -> bool {
         match self {
-            Self::Value { ptype, .. } => ptype == other,
-            Self::Pointer { ptype, .. } => ptype == other,
+            Self::Value {
+                val_type: ptype, ..
+            } => ptype == other,
             _ => false,
         }
     }
@@ -123,7 +107,11 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
     fn new(ctx: &'a mut CodeGenContext<'b>, output: &'a mut LLVMOutputHandler) -> Self {
         Self { ctx, output }
     }
-    fn compile_rvalue(&mut self, expr: &Expr, expected: Expected) -> CompileResult<CompiledValue> {
+    pub fn compile_rvalue(
+        &mut self,
+        expr: &Expr,
+        expected: Expected,
+    ) -> CompileResult<CompiledValue> {
         match expr {
             Expr::Name(name) => self.compile_name_rvalue(name, expected),
             Expr::NameWithGenerics(name, generics) => {
@@ -132,10 +120,11 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             Expr::Integer(num_str) => self.compile_integer_literal(*num_str, expected),
             Expr::Decimal(num_str) => self.compile_decimal_literal(*num_str, expected),
             Expr::Assign(lhs, rhs) => self.compile_assignment(lhs, rhs, expected),
-            Expr::Call(callee, args) => self.compile_call(callee, args, expected),
+            Expr::Call(callee, args) => self.compile_unified_call(callee, args, None, expected),
             Expr::CallGeneric(callee, args, generic) => {
-                self.compile_call_generic(callee, args, generic, expected)
+                self.compile_unified_call(callee, args, Some(generic), expected)
             }
+
             Expr::MemberAccess(..) => self.compile_member_access_rvalue(expr),
             Expr::Cast(expr, target_type) => self.compile_cast(expr, target_type, expected),
             Expr::BinaryOp(l, op, r) => self.compile_binary_op(l, op, r, expected),
@@ -152,7 +141,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
         }
     }
     // RVAL
-    fn compile_name_rvalue(
+    pub fn compile_name_rvalue(
         &mut self,
         name: &str,
         _expected: Expected,
@@ -162,7 +151,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             return variable.load_llvm_value(*id, name, self.ctx, self.output);
         }
 
-        if let Some(function) = self
+        if let Some(internal_id) = self
             .ctx
             .symbols
             .get_function_id(&format!("{}.{}", name, self.ctx.current_path()))
@@ -172,16 +161,12 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
                 if self
                     .ctx
                     .symbols
-                    .get_function_by_id_use(function)
+                    .get_function_by_id_use(internal_id)
                     .is_generic()
                 {
-                    CompiledValue::GenericFunction {
-                        internal_id: function,
-                    }
+                    CompiledValue::GenericFunction { internal_id }
                 } else {
-                    CompiledValue::Function {
-                        internal_id: function,
-                    }
+                    CompiledValue::Function { internal_id }
                 },
             );
         }
@@ -195,9 +180,25 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             vtype.substitute_global_aliases(self.ctx.symbols)?;
             return variable.load_llvm_value(1666337, name, self.ctx, self.output);
         }
+        if let Some(ptype) = PRIMITIVE_TYPES_INFO.iter().find(|x| x.name == name) {
+            return Ok(CompiledValue::Type {
+                compiler_type: CompilerType::Primitive(ptype),
+            });
+        }
+        if let Some(type_id) = self
+            .ctx
+            .symbols
+            .get_type_id(&format!("{}.{}", self.ctx.current_path(), name))
+            .or(self.ctx.symbols.get_type_id(name))
+        {
+            return Ok(CompiledValue::Type {
+                compiler_type: CompilerType::Struct(type_id),
+            });
+        }
         Err(CompilerError::SymbolNotFound(format!(
             "RVAL:Symbol '{}' not found in '{}'",
-            name, self.ctx.current_function_id
+            name,
+            self.ctx.current_function().full_path()
         ))
         .into())
     }
@@ -211,27 +212,27 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
                 if p.is_integer() {
                     return Ok(CompiledValue::Value {
                         llvm_repr: LLVMVal::ConstantInteger(num),
-                        ptype: ptype.clone(),
+                        val_type: ptype.clone(),
                     });
                 }
                 if p.is_bool() {
                     let llvm_repr = if num != 0 { 1 } else { 0 };
                     return Ok(CompiledValue::Value {
                         llvm_repr: LLVMVal::ConstantInteger(llvm_repr),
-                        ptype: ptype.clone(),
+                        val_type: ptype.clone(),
                     });
                 }
             }
             if ptype.is_pointer() && num == 0 {
                 return Ok(CompiledValue::Value {
                     llvm_repr: LLVMVal::Null,
-                    ptype: ptype.clone(),
+                    val_type: ptype.clone(),
                 });
             }
         }
         Ok(CompiledValue::Value {
             llvm_repr: LLVMVal::ConstantInteger(num),
-            ptype: CompilerType::Primitive(DEFAULT_INTEGER_TYPE),
+            val_type: CompilerType::Primitive(DEFAULT_INTEGER_TYPE),
         })
     }
     fn compile_decimal_literal(
@@ -243,7 +244,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             return self.explicit_cast(
                 &CompiledValue::Value {
                     llvm_repr: LLVMVal::ConstantDecimal(num_str),
-                    ptype: x.clone(),
+                    val_type: x.clone(),
                 },
                 x,
             );
@@ -251,17 +252,41 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
 
         Ok(CompiledValue::Value {
             llvm_repr: LLVMVal::ConstantDecimal(num_str),
-            ptype: CompilerType::Primitive(DEFAULT_DECIMAL_TYPE),
+            val_type: CompilerType::Primitive(DEFAULT_DECIMAL_TYPE),
         })
     }
-    #[allow(unused_variables)]
     fn compile_name_with_generics_rvalue(
         &mut self,
         name: &Box<Expr>,
         generics: &[ParserType],
-        expected: Expected<'_>,
+        _expected: Expected<'_>,
     ) -> CompileResult<CompiledValue> {
-        unimplemented!()
+        let Expr::Name(fully_qualified_name) = &**name else {
+            eprintln!("{:?}", name);
+            unimplemented!()
+        };
+        if let Some(type_id) = self.ctx.symbols.get_type_id(fully_qualified_name) {
+            let mut q = vec![];
+            for x in generics {
+                q.push(CompilerType::from_parser_type(
+                    &x.clone(),
+                    self.ctx.symbols,
+                    self.ctx.current_path(),
+                )?);
+            }
+            return Ok(CompiledValue::Type {
+                compiler_type: CompilerType::GenericStructInstance(
+                    type_id,
+                    self.ctx
+                        .symbols
+                        .get_type_by_id(type_id)
+                        .get_implementation_index(&q)
+                        .unwrap(),
+                ),
+            });
+        }
+        println!("{:?}", fully_qualified_name);
+        unimplemented!();
     }
     fn compile_binary_op(
         &mut self,
@@ -275,10 +300,20 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             return self.compile_short_circuit_op(lhs, *op, rhs);
         }
         let mut left = self.compile_rvalue(lhs, Expected::Anything)?;
-        debug_assert!(left != CompiledValue::NoReturn);
+        let Ok(mut ltype) = left.try_get_type().cloned() else {
+            return Err(CompilerError::Generic(
+                "Left side of binary operation is not value".into(),
+            )
+            .into());
+        };
 
-        let mut right = self.compile_rvalue(rhs, Expected::Type(left.try_get_type()?))?;
-        debug_assert!(right != CompiledValue::NoReturn);
+        let mut right = self.compile_rvalue(rhs, Expected::Type(&ltype))?;
+        let Ok(mut rtype) = right.try_get_type().cloned() else {
+            return Err(CompilerError::Generic(
+                "Right side of binary operation is not value".into(),
+            )
+            .into());
+        };
 
         if INTERGER_EXPRESION_OPTIMISATION {
             if let (Some(x), Some(y)) = (left.as_literal_number(), right.as_literal_number()) {
@@ -288,7 +323,10 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
                     Box::new(Expr::Integer(*y)),
                 )) {
                     if let Some(ptype) = expected.get_type().filter(|x| x.is_integer()).cloned() {
-                        return Ok(CompiledValue::Value { llvm_repr, ptype });
+                        return Ok(CompiledValue::Value {
+                            llvm_repr,
+                            val_type: ptype,
+                        });
                     }
                     let ptype = match op {
                         BinaryOp::Equals
@@ -299,7 +337,10 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
                         | BinaryOp::GreaterEqual => CompilerType::Primitive(BOOL_TYPE),
                         _ => CompilerType::Primitive(DEFAULT_INTEGER_TYPE),
                     };
-                    return Ok(CompiledValue::Value { llvm_repr, ptype });
+                    return Ok(CompiledValue::Value {
+                        llvm_repr,
+                        val_type: ptype,
+                    });
                 }
             }
         }
@@ -322,19 +363,20 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             ))
         {
             (right, left) = (left, right);
+            (rtype, ltype) = (ltype, rtype);
         }
         if left.get_llvm_rep() == right.get_llvm_rep() {
             match op {
                 BinaryOp::Subtract | BinaryOp::Modulo | BinaryOp::BitXor => {
                     return Ok(CompiledValue::Value {
                         llvm_repr: LLVMVal::ConstantInteger(0),
-                        ptype: left.try_get_type()?.clone(),
+                        val_type: ltype,
                     })
                 }
                 BinaryOp::Divide => {
                     return Ok(CompiledValue::Value {
                         llvm_repr: LLVMVal::ConstantInteger(1),
-                        ptype: left.try_get_type()?.clone(),
+                        val_type: ltype,
                     })
                 }
                 BinaryOp::BitOr | BinaryOp::BitAnd => return Ok(left),
@@ -378,7 +420,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
                     if is_one {
                         return Ok(CompiledValue::Value {
                             llvm_repr: LLVMVal::ConstantInteger(0),
-                            ptype: left.try_get_type()?.clone(),
+                            val_type: ltype,
                         });
                     }
                 } // x % 1 = 0
@@ -407,23 +449,20 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
         }
 
         // Pointer math
-        if left.try_get_type()?.is_pointer() && right.try_get_type()?.is_integer() {
+        if ltype.is_pointer() && rtype.is_integer() {
             // *(array_pointer + iterator)
             assert!(matches!(op, BinaryOp::Add));
             let utvc = self.ctx.acquire_temp_id();
-            let llvm_pointed_to_type = left
-                .try_get_type()?
+            let llvm_pointed_to_type = ltype
                 .dereference()
                 .unwrap()
                 .llvm_representation(self.ctx.symbols)?;
             let left_ll = (
-                left.try_get_type()?.llvm_representation(self.ctx.symbols)?,
+                ltype.llvm_representation(self.ctx.symbols)?,
                 left.get_llvm_rep().to_string(),
             );
             let right_ll = (
-                right
-                    .try_get_type()?
-                    .llvm_representation(self.ctx.symbols)?,
+                rtype.llvm_representation(self.ctx.symbols)?,
                 right.get_llvm_rep().to_string(),
             );
             self.emit_gep(
@@ -434,38 +473,34 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             );
             return Ok(CompiledValue::Value {
                 llvm_repr: LLVMVal::Register(utvc),
-                ptype: left.try_get_type()?.clone(),
+                val_type: ltype,
             });
         }
-        if left.try_get_type()? != right.try_get_type()? {
-            if left.try_get_type()?.is_pointer()
-                && right.as_literal_number().map(|x| *x == 0).unwrap_or(false)
-            {
-            } else if right.try_get_type()?.is_pointer()
+        if ltype != rtype {
+            if ltype.is_pointer() && right.as_literal_number().map(|x| *x == 0).unwrap_or(false) {
+            } else if rtype.is_pointer()
                 && left.as_literal_number().map(|x| *x == 0).unwrap_or(false)
             {
             } else {
                 eprintln!("{:?}", left);
                 eprintln!("{:?}", right);
                 return Err(CompilerError::TypeMismatch {
-                    expected: left.try_get_type()?.clone(),
-                    found: right.try_get_type()?.clone(),
+                    expected: ltype,
+                    found: rtype,
                 }
                 .into());
             }
         }
-
-        let ltype = left.try_get_type()?;
         // Boolean math
         if ltype.is_bool() {
             return self.compile_boolean_op(left, op, right);
         }
         // Integer Arithmetic
         if ltype.is_integer() {
-            return self.compile_integer_op(left, op, right);
+            return self.compile_integer_op(left, op, right, ltype);
         }
         if ltype.is_decimal() {
-            return self.compile_decimal_op(left, op, right);
+            return self.compile_decimal_op(left, op, right, ltype);
         }
         if ltype.is_pointer() {
             let llvm_op = match op {
@@ -483,7 +518,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             ));
             return Ok(CompiledValue::Value {
                 llvm_repr: LLVMVal::Register(utvc),
-                ptype: CompilerType::Primitive(BOOL_TYPE),
+                val_type: CompilerType::Primitive(BOOL_TYPE),
             });
         }
 
@@ -501,10 +536,16 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
         rhs: &Expr,
     ) -> CompileResult<CompiledValue> {
         let left = self.compile_rvalue(lhs, Expected::Type(&CompilerType::Primitive(BOOL_TYPE)))?;
-        if !left.try_get_type()?.is_bool() {
+        let Ok(ltype) = left.try_get_type() else {
+            return Err(CompilerError::Generic(
+                "Left side of binary operation is not value".into(),
+            )
+            .into());
+        };
+        if !ltype.is_bool() {
             return Err(CompilerError::TypeMismatch {
                 expected: CompilerType::Primitive(BOOL_TYPE),
-                found: left.try_get_type()?.clone(),
+                found: ltype.clone(),
             }
             .into());
         }
@@ -545,11 +586,16 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
         self.output.push_str(&format!("{}:\n", label_eval_rhs));
         let right =
             self.compile_rvalue(rhs, Expected::Type(&CompilerType::Primitive(BOOL_TYPE)))?;
-
-        if !right.try_get_type()?.is_bool() {
+        let Ok(rtype) = right.try_get_type() else {
+            return Err(CompilerError::Generic(
+                "Right side of binary operation is not value".into(),
+            )
+            .into());
+        };
+        if !rtype.is_bool() {
             return Err(CompilerError::TypeMismatch {
                 expected: CompilerType::Primitive(BOOL_TYPE),
-                found: right.try_get_type()?.clone(),
+                found: rtype.clone(),
             }
             .into());
         }
@@ -570,7 +616,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
 
         Ok(CompiledValue::Value {
             llvm_repr: LLVMVal::Register(final_reg),
-            ptype: CompilerType::Primitive(BOOL_TYPE),
+            val_type: CompilerType::Primitive(BOOL_TYPE),
         })
     }
     fn compile_boolean_op(
@@ -603,7 +649,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
         );
         return Ok(CompiledValue::Value {
             llvm_repr: LLVMVal::Register(utvc),
-            ptype: CompilerType::Primitive(BOOL_TYPE),
+            val_type: CompilerType::Primitive(BOOL_TYPE),
         });
     }
     fn compile_integer_op(
@@ -611,8 +657,8 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
         left: CompiledValue,
         op: &BinaryOp,
         right: CompiledValue,
+        ltype: CompilerType,
     ) -> CompileResult<CompiledValue> {
-        let ltype = left.try_get_type()?;
         let is_signed = ltype.is_signed_integer();
 
         let llvm_op = match op {
@@ -693,12 +739,12 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
         let result_type = if llvm_op.starts_with("icmp") {
             CompilerType::Primitive(BOOL_TYPE)
         } else {
-            left.try_get_type()?.clone()
+            ltype.clone()
         };
 
         return Ok(CompiledValue::Value {
             llvm_repr: LLVMVal::Register(utvc),
-            ptype: result_type,
+            val_type: result_type,
         });
     }
     fn compile_decimal_op(
@@ -706,8 +752,8 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
         left: CompiledValue,
         op: &BinaryOp,
         right: CompiledValue,
+        ltype: CompilerType,
     ) -> CompileResult<CompiledValue> {
-        let ltype = left.try_get_type()?;
         let llvm_op = match op {
             BinaryOp::Add => "fadd",
             BinaryOp::Subtract => "fsub",
@@ -740,11 +786,11 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
         let result_type = if llvm_op.starts_with("fcmp") {
             CompilerType::Primitive(BOOL_TYPE)
         } else {
-            left.try_get_type()?.clone()
+            ltype
         };
         return Ok(CompiledValue::Value {
             llvm_repr: LLVMVal::Register(utvc),
-            ptype: result_type,
+            val_type: result_type,
         });
     }
     fn compile_assignment(
@@ -755,14 +801,18 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
     ) -> CompileResult<CompiledValue> {
         let left_ptr = self.compile_lvalue(lhs, true, false)?;
         let right_val = self.compile_rvalue(rhs, Expected::Type(&left_ptr.value_type))?;
-        assert_ne!(right_val, CompiledValue::NoReturn);
-        if left_ptr.value_type != *right_val.try_get_type()? {
+        let Ok(rtype) = right_val.try_get_type() else {
+            return Err(CompilerError::Generic(
+                "Right side of binary operation is not value".into(),
+            )
+            .into());
+        };
+        if left_ptr.value_type != *rtype {
             eprintln!("LEFT TYPE: {:?}", left_ptr.value_type);
-            eprintln!("RIGHT TYPE: {:?}", right_val.try_get_type()?);
+            eprintln!("RIGHT TYPE: {:?}", rtype);
             return Err(CompilerError::InvalidExpression(format!(
                 "Type mismatch in assignment: {:?} and {:?}",
-                left_ptr.value_type,
-                right_val.try_get_type()?
+                left_ptr.value_type, rtype
             ))
             .into());
         }
@@ -779,43 +829,132 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             Ok(right_val)
         }
     }
-    fn compile_call(
+    fn compile_unified_call(
         &mut self,
         callee: &Expr,
         given_args: &[Expr],
+        given_generics: Option<&[ParserType]>,
         expected: Expected<'_>,
     ) -> CompileResult<CompiledValue> {
-        if let Some(x) = self.compiler_function_calls(callee, given_args, &expected) {
-            return x;
+        // 1. Check for Internal/Compiler Intrinsics
+        if let Some(generics) = given_generics {
+            if let Some(x) =
+                self.compiler_function_calls_generic(callee, given_args, generics, &expected)
+            {
+                return x;
+            }
+        } else {
+            if let Some(x) = self.compiler_function_calls(callee, given_args, &expected) {
+                return x;
+            }
         }
-        let x = self.compile_lvalue(callee, false, false)?;
-        let (required_arguments, return_type, llvm_call_site) = {
-            if let CompilerType::Function(ret, args) = x.value_type {
-                if let Some(id) = x.function_id {
+
+        // 2. Resolve the Callee (Function pointer or Named Function)
+        let lvalue = self.compile_lvalue(callee, false, false)?;
+
+        // 3. Determine Call Target Properties
+        // We need: (Argument Types, Return Type, Call Site Name/Reg, Optional Inline Body)
+        let (required_arguments, return_type, llvm_call_site, inline_body_info) = {
+            if let CompilerType::Function(ret, args) = lvalue.value_type {
+                if let Some(id) = lvalue.function_id {
+                    // It is a named function in the symbol table
                     let func = self.ctx.symbols.get_function_by_id(id);
-                    if func.is_inline() {
-                        return self.compile_call_inline(
-                            given_args,
-                            &func.args,
-                            &func.return_type,
-                            &func.body,
-                            id,
-                        );
+
+                    if let Some(generics) = given_generics {
+                        // Generic Instantiation
+                        let generic_types = generics
+                            .iter()
+                            .map(|x| {
+                                CompilerType::from_parser_type(
+                                    x,
+                                    self.ctx.symbols,
+                                    self.ctx.current_path(),
+                                )
+                            })
+                            .collect::<CompileResult<Vec<_>>>()?;
+
+                        let impl_index = func
+                            .get_generic_implementation_index(&generic_types)
+                            .unwrap();
+
+                        // Get concrete signature
+                        let ft = func
+                            .get_def_by_implementation_index(impl_index, self.ctx.symbols)
+                            .unwrap();
+
+                        (
+                            ft.1.to_vec(),
+                            *ft.0.clone(),
+                            format!(
+                                "@{}",
+                                func.get_implementation_name(impl_index, self.ctx.symbols)
+                            ),
+                            None, // Generics currently not supported as inline in this parser flavor usually
+                        )
+                    } else if func.is_inline() {
+                        // Inline Function
+                        (
+                            func.args.iter().map(|(_, t)| t.clone()).collect(),
+                            func.return_type.clone(),
+                            String::new(), // No LLVM call site for inline
+                            Some((func.args.clone(), func.body.clone(), id)),
+                        )
+                    } else {
+                        // Standard Function
+                        (
+                            args.to_vec(),
+                            *ret.clone(),
+                            lvalue.location.to_string(),
+                            None,
+                        )
                     }
+                } else {
+                    // Function Pointer
+                    if given_generics.is_some() {
+                        return Err(CompilerError::Generic(
+                            "Cannot apply generics to function pointer".into(),
+                        )
+                        .into());
+                    }
+                    (
+                        args.to_vec(),
+                        *ret.clone(),
+                        lvalue.location.to_string(),
+                        None,
+                    )
                 }
-                (args.to_vec(), *ret.clone(), x.location)
             } else {
-                panic!("{:?}", x);
+                panic!("Lvalue for call was not a function: {:?}", lvalue);
             }
         };
+
+        // 4. Branch: Inline Expansion or Standard Call
+        if let Some((func_args_def, body, func_id)) = inline_body_info {
+            // === INLINE EXPANSION ===
+            // Note: Inline functions handle argument compilation internally because they need to
+            // set up a new scope variables, not just push values to a stack.
+            return self.perform_inline_expansion(
+                given_args,
+                &func_args_def,
+                &return_type,
+                &body,
+                func_id,
+            );
+        }
+
+        // === STANDARD CALL (LLVM `call`) ===
         let mut arg_string = vec![];
         for (i, ..) in required_arguments.iter().enumerate() {
-            let x = self.compile_rvalue(&given_args[i], Expected::Type(&required_arguments[i]))?;
-            if *x.try_get_type()? != required_arguments[i] {
+            let argument_rvalue =
+                self.compile_rvalue(&given_args[i], Expected::Type(&required_arguments[i]))?;
+            let Ok(argument_type) = argument_rvalue.try_get_type() else {
+                return Err(CompilerError::Generic("Argument is not a value".into()).into());
+            };
+            if *argument_type != required_arguments[i] {
                 return CompileResult::Err(
                     CompilerError::InvalidExpression(format!(
                         "{:?} vs {:?} type missmatch with {}th argument",
-                        x.try_get_type()?,
+                        argument_type,
                         &required_arguments[i],
                         i + 1
                     ))
@@ -824,12 +963,14 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             }
             arg_string.push(format!(
                 "{} {}",
-                x.try_get_type()?.llvm_representation(self.ctx.symbols)?,
-                x.get_llvm_rep()
+                argument_type.llvm_representation(self.ctx.symbols)?,
+                argument_rvalue.get_llvm_rep()
             ));
         }
+
         let arg_string = arg_string.join(", ");
         let return_type_repr = return_type.llvm_representation(self.ctx.symbols)?;
+
         if return_type.is_void() {
             self.output.push_str(&format!(
                 "    call void {}({})\n",
@@ -837,6 +978,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             ));
             return Ok(CompiledValue::NoReturn);
         }
+
         if expected != Expected::NoReturn {
             let utvc = self.ctx.acquire_temp_id();
             self.output.push_str(&format!(
@@ -845,17 +987,17 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             ));
             return Ok(CompiledValue::Value {
                 llvm_repr: LLVMVal::Register(utvc),
-                ptype: return_type.clone(),
+                val_type: return_type.clone(),
             });
         }
+
         self.output.push_str(&format!(
             "    call {} {}({})\n",
             return_type_repr, llvm_call_site, arg_string
         ));
         Ok(CompiledValue::NoReturn)
     }
-
-    fn compile_call_inline(
+    fn perform_inline_expansion(
         &mut self,
         given_args: &[Expr],
         func_args: &[(String, CompilerType)],
@@ -885,19 +1027,23 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
         } else {
             None
         };
+
         let mut prepared_args = vec![];
         for (idx, expr) in given_args.iter().enumerate() {
-            let x = self.compile_rvalue(expr, Expected::Type(&func_args[idx].1))?;
-            if x.try_get_type()? != &func_args[idx].1 {
+            let argument_rvalue = self.compile_rvalue(expr, Expected::Type(&func_args[idx].1))?;
+            let Ok(argument_type) = argument_rvalue.try_get_type() else {
+                return Err(CompilerError::Generic("Argument is not a value".into()).into());
+            };
+            if argument_type != &func_args[idx].1 {
                 return Err(CompilerError::InvalidExpression(format!(
                     "{:?} vs {:?} type missmatch with {}th argument",
-                    x.try_get_type()?,
+                    argument_type,
                     &func_args[idx].1,
                     idx + 1
                 ))
                 .into());
             }
-            prepared_args.push(x);
+            prepared_args.push(argument_rvalue);
         }
 
         let lp = self.ctx.current_function_id;
@@ -907,7 +1053,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
         self.ctx.current_function_id = current_function_id;
 
         for (idx, arg) in prepared_args.iter().enumerate() {
-            let var = Variable::new(arg.try_get_type()?.clone(), true);
+            let var = Variable::new(arg.try_get_type().unwrap().clone(), true);
             var.set_constant_value(Some(arg.get_llvm_rep().clone()));
             self.ctx
                 .scope
@@ -926,10 +1072,16 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
                     if let Some(expr) = opt_expr {
                         let return_tmp = return_tmp.as_ref().unwrap();
                         let value = self.compile_rvalue(expr, Expected::Type(return_type))?;
-                        if value.try_get_type()? != return_type {
+                        let Ok(value_type) = value.try_get_type() else {
+                            return Err(CompilerError::Generic(
+                                "Right side of binary operation is not value".into(),
+                            )
+                            .into());
+                        };
+                        if value_type != return_type {
                             return Err(CompilerError::TypeMismatch {
                                 expected: return_type.clone(),
-                                found: value.try_get_type()?.clone(),
+                                found: value_type.clone(),
                             }
                             .into());
                         }
@@ -973,105 +1125,11 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             self.emit_load(rv_utvc as usize, &LLVMVal::Register(id), &var_llvm_type);
             return Ok(CompiledValue::Value {
                 llvm_repr: LLVMVal::Register(rv_utvc),
-                ptype: func_return_type.clone(),
+                val_type: func_return_type.clone(),
             });
         }
         Ok(CompiledValue::NoReturn)
     }
-    fn compile_call_generic(
-        &mut self,
-        callee: &Expr,
-        given_args: &[Expr],
-        given_generic: &[ParserType],
-        expected: Expected<'_>,
-    ) -> CompileResult<CompiledValue> {
-        if let Some(x) =
-            self.compiler_function_calls_generic(callee, given_args, given_generic, &expected)
-        {
-            return x;
-        }
-        let x = self.compile_lvalue(callee, false, false)?;
-        let (required_arguments, return_type, llvm_call_site) = {
-            if let CompilerType::Function(..) = x.value_type {
-                if let Some(id) = x.function_id {
-                    let func = self.ctx.symbols.get_function_by_id(id);
-
-                    let func_id = func
-                        .get_generic_implementation_index(
-                            &given_generic
-                                .iter()
-                                .map(|x| {
-                                    CompilerType::from_parser_type(
-                                        x,
-                                        self.ctx.symbols,
-                                        self.ctx.current_path(),
-                                    )
-                                })
-                                .collect::<CompileResult<Vec<_>>>()?,
-                        )
-                        .unwrap();
-                    let ft = func
-                        .get_def_by_implementation_index(func_id, self.ctx.symbols)
-                        .unwrap();
-                    (
-                        ft.1.to_vec(),
-                        *ft.0.clone(),
-                        func.get_implementation_name(func_id, self.ctx.symbols),
-                    )
-                } else {
-                    unreachable!();
-                }
-            } else {
-                panic!("{:?}", x);
-            }
-        };
-        let mut arg_string = vec![];
-        for (i, ..) in required_arguments.iter().enumerate() {
-            let x = self.compile_rvalue(&given_args[i], Expected::Type(&required_arguments[i]))?;
-            if *x.try_get_type()? != required_arguments[i] {
-                return CompileResult::Err(
-                    CompilerError::InvalidExpression(format!(
-                        "{:?} vs {:?} type missmatch with {}th argument",
-                        x.try_get_type()?,
-                        &required_arguments[i],
-                        i + 1
-                    ))
-                    .into(),
-                );
-            }
-            arg_string.push(format!(
-                "{} {}",
-                x.try_get_type()?.llvm_representation(self.ctx.symbols)?,
-                x.get_llvm_rep()
-            ));
-        }
-        let arg_string = arg_string.join(", ");
-        let return_type_repr = return_type.llvm_representation(self.ctx.symbols)?;
-        if return_type.is_void() {
-            self.output.push_str(&format!(
-                "    call void @{}({})\n",
-                llvm_call_site, arg_string
-            ));
-            return Ok(CompiledValue::NoReturn);
-        }
-        if expected != Expected::NoReturn {
-            let utvc = self.ctx.acquire_temp_id();
-            self.output.push_str(&format!(
-                "    %tmp{} = call {} @{}({})\n",
-                utvc, return_type_repr, llvm_call_site, arg_string
-            ));
-            return Ok(CompiledValue::Value {
-                llvm_repr: LLVMVal::Register(utvc),
-                ptype: return_type.clone(),
-            });
-        }
-        self.output.push_str(&format!(
-            "    call {} {}({})\n",
-            return_type_repr, llvm_call_site, arg_string
-        ));
-        Ok(CompiledValue::NoReturn)
-    }
-
     fn compile_unary_op_rvalue(
         &mut self,
         op: &UnaryOp,
@@ -1080,21 +1138,27 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
     ) -> CompileResult<CompiledValue> {
         match op {
             UnaryOp::Deref => {
-                let value = self.compile_rvalue(operand_expr, expected)?;
-                if !value.try_get_type()?.is_pointer() {
+                let value_rval = self.compile_rvalue(operand_expr, expected)?;
+                let Ok(value_type) = value_rval.try_get_type() else {
+                    return Err(CompilerError::Generic(
+                        "Right side of unary operation is not value".into(),
+                    )
+                    .into());
+                };
+                if !value_type.is_pointer() {
                     return Err(CompilerError::Generic(format!(
                         "Cannot dereference non-pointer value {:?}",
-                        value
+                        value_rval
                     ))
                     .into());
                 }
-                let pointed_to_type = value.try_get_type()?.dereference().unwrap();
+                let pointed_to_type = value_type.dereference().unwrap();
                 let type_str = pointed_to_type.llvm_representation(self.ctx.symbols)?;
                 let temp_id = self.ctx.acquire_temp_id();
-                self.emit_load(temp_id as usize, value.try_get_llvm_rep()?, &type_str);
+                self.emit_load(temp_id as usize, value_rval.try_get_llvm_rep()?, &type_str);
                 Ok(CompiledValue::Value {
                     llvm_repr: LLVMVal::Register(temp_id),
-                    ptype: pointed_to_type.clone(),
+                    val_type: pointed_to_type.clone(),
                 })
             }
             UnaryOp::Pointer => {
@@ -1103,54 +1167,64 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
                 let ptype = lvalue.value_type.clone().reference();
                 Ok(CompiledValue::Value {
                     llvm_repr: lvalue.location.clone(),
-                    ptype,
+                    val_type: ptype,
                 })
             }
             UnaryOp::Negate => {
-                let value = self.compile_rvalue(operand_expr, expected)?;
-                if !value.try_get_type()?.is_integer() && !value.try_get_type()?.is_decimal() {
+                let value_rval = self.compile_rvalue(operand_expr, expected)?;
+                let Ok(value_type) = value_rval.try_get_type() else {
+                    return Err(CompilerError::Generic(
+                        "Right side of unary operation is not value".into(),
+                    )
+                    .into());
+                };
+                if !value_type.is_integer() && !value_type.is_decimal() {
                     return Err(CompilerError::Generic(
                         "Cannot negate non-integer type".to_string(),
                     )
                     .into());
                 }
-                if let Some(cnst) = value.as_literal_number() {
+                if let Some(cnst) = value_rval.as_literal_number() {
                     let num = -*cnst;
                     return Ok(CompiledValue::Value {
                         llvm_repr: LLVMVal::ConstantInteger(num),
-                        ptype: value.try_get_type()?.clone(),
+                        val_type: value_type.clone(),
                     });
                 }
-                let type_str = value
-                    .try_get_type()?
-                    .llvm_representation(self.ctx.symbols)?;
-                let temp_id = if value.try_get_type()?.is_decimal() {
+                let type_str = value_type.llvm_representation(self.ctx.symbols)?;
+                let temp_id = if value_type.is_decimal() {
                     self.emit_binary_op(
                         "fsub",
                         &type_str,
                         &&LLVMVal::ConstantDecimal(0.0),
-                        value.get_llvm_rep(),
+                        value_rval.get_llvm_rep(),
                     )
                 } else {
                     self.emit_binary_op(
                         "sub",
                         &type_str,
                         &LLVMVal::ConstantInteger(0),
-                        value.get_llvm_rep(),
+                        value_rval.get_llvm_rep(),
                     )
                 };
 
                 Ok(CompiledValue::Value {
                     llvm_repr: LLVMVal::Register(temp_id),
-                    ptype: value.try_get_type()?.clone(),
+                    val_type: value_type.clone(),
                 })
             }
             UnaryOp::Not => {
-                let value = self.compile_rvalue(
+                let value_rval = self.compile_rvalue(
                     operand_expr,
                     Expected::Type(&CompilerType::Primitive(BOOL_TYPE)),
                 )?;
-                if !value.try_get_type()?.is_bool() {
+                let Ok(value_type) = value_rval.try_get_type() else {
+                    return Err(CompilerError::Generic(
+                        "Right side of unary operation is not value".into(),
+                    )
+                    .into());
+                };
+                if !value_type.is_bool() {
                     return Err(CompilerError::InvalidExpression(
                         "Logical NOT can only be applied to booleans".to_string(),
                     )
@@ -1160,11 +1234,11 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
                     "xor",
                     "i1",
                     &LLVMVal::ConstantInteger(1),
-                    value.get_llvm_rep(),
+                    value_rval.get_llvm_rep(),
                 );
                 Ok(CompiledValue::Value {
                     llvm_repr: LLVMVal::Register(temp_id),
-                    ptype: value.try_get_type()?.clone(),
+                    val_type: value_type.clone(),
                 })
             }
         }
@@ -1212,7 +1286,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
                 .expect("msg");
             return Ok(CompiledValue::Value {
                 llvm_repr: e.1.clone(),
-                ptype: x.base_type.clone(),
+                val_type: x.base_type.clone(),
             });
         }
 
@@ -1238,7 +1312,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
         self.emit_load(temp_id as usize, &member_ptr.location, &type_str);
         Ok(CompiledValue::Value {
             llvm_repr: LLVMVal::Register(temp_id),
-            ptype,
+            val_type: ptype,
         })
     }
 
@@ -1251,7 +1325,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
         self.emit_load(temp_id as usize, &lrepr, &type_str);
         return Ok(CompiledValue::Value {
             llvm_repr: LLVMVal::Register(temp_id),
-            ptype: ltype.clone(),
+            val_type: ltype.clone(),
         });
     }
     fn compile_cast(
@@ -1263,25 +1337,27 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
         let mut target_type =
             CompilerType::from_parser_type(target_type, self.ctx.symbols, self.ctx.current_path())?;
         target_type.substitute_global_aliases(self.ctx.symbols)?;
-        let value = self.compile_rvalue(expr, expected)?;
-
-        if value.try_get_type()? == &target_type {
-            return Ok(value);
+        let value_rval = self.compile_rvalue(expr, expected)?;
+        let Ok(value_type) = value_rval.try_get_type() else {
+            return Err(CompilerError::Generic("Argument is not a value".into()).into());
+        };
+        if *value_type == target_type {
+            return Ok(value_rval);
         }
 
-        self.explicit_cast(&value, &target_type)
+        self.explicit_cast(&value_rval, &target_type)
     }
     fn compile_boolean(&mut self, value: bool) -> CompileResult<CompiledValue> {
         Ok(CompiledValue::Value {
             llvm_repr: LLVMVal::ConstantBoolean(value),
-            ptype: CompilerType::Primitive(BOOL_TYPE),
+            val_type: CompilerType::Primitive(BOOL_TYPE),
         })
     }
     fn compile_null(&mut self, expected: Expected<'_>) -> CompileResult<CompiledValue> {
         if let Some(ptype) = expected.get_type().and_then(|x| x.as_pointer()) {
             return Ok(CompiledValue::Value {
                 llvm_repr: LLVMVal::Null,
-                ptype: CompilerType::Pointer(Box::new(ptype.clone())),
+                val_type: CompilerType::Pointer(Box::new(ptype.clone())),
             });
         }
         Err(CompilerError::Generic("Wrong use of null".to_string()).into())
@@ -1291,11 +1367,11 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
         let const_id = self.output.add_to_strings_header(str_val.to_string());
         Ok(CompiledValue::Value {
             llvm_repr: LLVMVal::Global(format!(".str.{}", const_id)),
-            ptype: CompilerType::Pointer(Box::new(CompilerType::Primitive(CHAR_TYPE))),
+            val_type: CompilerType::Pointer(Box::new(CompilerType::Primitive(CHAR_TYPE))),
         })
     }
     // lval
-    fn compile_lvalue(
+    pub fn compile_lvalue(
         &mut self,
         expr: &Expr,
         write: bool,
@@ -1327,7 +1403,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             .into()),
         }
     }
-    fn compile_name_lvalue(
+    pub fn compile_name_lvalue(
         &mut self,
         name: &str,
         write: bool,
@@ -1413,22 +1489,24 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
                 let _func = self.ctx.symbols.get_function_by_id_use(internal_id);
                 let mut tp = _func.get_signature_type();
                 if !_func.is_generic() {
-                    return Err(CompilerError::Generic(format!("")).into());
+                    return Err(CompilerError::Generic(format!("Function is not generic")).into());
                 }
                 let mut map = HashMap::new();
-                let mut t = vec![];
+                let mut generic_types = vec![];
                 for (i, x) in _func.generic_params.iter().enumerate() {
                     let mut ct = CompilerType::from_parser_type(
                         &generics[i],
                         self.ctx.symbols,
                         self.ctx.current_path(),
                     )?;
-                    t.push(ct.clone());
+                    generic_types.push(ct.clone());
                     ct.substitute_global_aliases(self.ctx.symbols)?;
                     map.insert(x.to_string(), ct);
                 }
                 tp.substitute_generics(&map, self.ctx.symbols)?;
-                let impl_index = _func.get_generic_implementation_index(&t).unwrap();
+                let impl_index = _func
+                    .get_generic_implementation_index(&generic_types)
+                    .unwrap();
 
                 let mut x = CompiledLValue::new(
                     LLVMVal::Global(_func.get_implementation_name(impl_index, self.ctx.symbols)),
@@ -1456,7 +1534,13 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
 
         let (base_ptr_repr, mut struct_type) = if obj_lvalue.value_type.is_pointer() {
             let obj_rvalue = self.compile_rvalue(obj, Expected::Anything)?;
-            let internal_type = obj_rvalue.try_get_type()?.dereference().expect("Should");
+            let Ok(obj_type) = obj_rvalue.try_get_type() else {
+                return Err(CompilerError::Generic(
+                    "Object in member access is not a value".into(),
+                )
+                .into());
+            };
+            let internal_type = obj_type.dereference().unwrap();
             (obj_rvalue.get_llvm_rep().clone(), internal_type.clone())
         } else {
             (obj_lvalue.location.clone(), obj_lvalue.value_type.clone())
@@ -1539,6 +1623,9 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
                 index_expr,
                 Expected::Type(&CompilerType::Primitive(DEFAULT_INTEGER_TYPE)),
             )?;
+            let Ok(index_type) = index_val.try_get_type() else {
+                return Err(CompilerError::Generic("Index is not a value".into()).into());
+            };
             if let Some(x) = index_val.as_literal_number() {
                 if *x as usize >= size {
                     return Err(CompilerError::Generic(format!(
@@ -1560,9 +1647,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
                     format!("i32 0"),
                     format!(
                         "{} {}",
-                        index_val
-                            .try_get_type()?
-                            .llvm_representation(self.ctx.symbols)?,
+                        index_type.llvm_representation(self.ctx.symbols)?,
                         index_val.get_llvm_rep()
                     ),
                 ],
@@ -1575,10 +1660,13 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
         }
 
         let array_rval = self.compile_rvalue(array_expr, Expected::Anything)?;
-        let Some(base_type) = array_rval.try_get_type()?.as_pointer() else {
+        let Ok(array_type) = array_rval.try_get_type() else {
+            return Err(CompilerError::Generic("Array is not a value".into()).into());
+        };
+        let Some(base_type) = array_type.as_pointer() else {
             return Err(CompilerError::InvalidExpression(format!(
                 "Cannot index non-pointer type {:?}",
-                array_rval.try_get_type()?
+                array_type
             ))
             .into());
         };
@@ -1587,11 +1675,13 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             index_expr,
             Expected::Type(&CompilerType::Primitive(POINTER_SIZED_TYPE)),
         )?;
-
-        if !index_val.try_get_type()?.is_integer() {
+        let Ok(index_type) = index_val.try_get_type() else {
+            return Err(CompilerError::Generic("Index is not a value".into()).into());
+        };
+        if !index_type.is_integer() {
             return Err(CompilerError::InvalidExpression(format!(
-                "Index must be an integer, but got {:?}",
-                index_val.try_get_type()?
+                "Index must be an integer, but it is {:?}",
+                index_type
             ))
             .into());
         }
@@ -1606,9 +1696,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
             &array_rval.get_llvm_rep().to_string(),
             &[format!(
                 "{} {}",
-                index_val
-                    .try_get_type()?
-                    .llvm_representation(self.ctx.symbols)?,
+                index_type.llvm_representation(self.ctx.symbols)?,
                 index_val.get_llvm_rep()
             )],
         );
@@ -1648,14 +1736,19 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
         _modify_content: bool,
     ) -> CompileResult<CompiledLValue> {
         let pointer_rval = self.compile_rvalue(operand, Expected::Anything)?;
-        if !pointer_rval.try_get_type()?.is_pointer() {
+        let Ok(pointer_type) = pointer_rval.try_get_type() else {
+            return Err(
+                CompilerError::Generic("Dereferenced operand is not a value".into()).into(),
+            );
+        };
+        if !pointer_type.is_pointer() {
             return Err(CompilerError::Generic(format!(
                 "Cannot dereference non-pointer type: {:?}",
-                pointer_rval.try_get_type()?
+                pointer_type
             ))
             .into());
         }
-        let ptype = pointer_rval.try_get_type()?.dereference().expect("msg");
+        let ptype = pointer_type.dereference().unwrap();
         let llvm_repr = &pointer_rval;
         return Ok(CompiledLValue::new(
             llvm_repr.get_llvm_rep().clone(),
@@ -1669,19 +1762,21 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
         value: &CompiledValue,
         to_type: &CompilerType,
     ) -> CompileResult<CompiledValue> {
-        let lval_type = value.try_get_type()?;
-        if lval_type == to_type {
+        let Ok(value_type) = value.try_get_type() else {
+            return Err(CompilerError::Generic("Casting value is not a type".into()).into());
+        };
+        if *value_type == *to_type {
             return Ok(value.clone());
         }
 
         if let (Some(from_info), Some(to_info)) =
-            (value.try_get_type()?.as_primitive(), to_type.as_primitive())
+            (value_type.as_primitive(), to_type.as_primitive())
         {
             if from_info.is_integer() && to_info.is_integer() {
                 if from_info.layout == to_info.layout {
                     return Ok(CompiledValue::Value {
                         llvm_repr: value.get_llvm_rep().clone(),
-                        ptype: CompilerType::Primitive(to_info),
+                        val_type: CompilerType::Primitive(to_info),
                     });
                 }
                 let op = if from_info.layout.size < to_info.layout.size {
@@ -1702,13 +1797,13 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
                 );
                 return Ok(CompiledValue::Value {
                     llvm_repr: LLVMVal::Register(utvc),
-                    ptype: CompilerType::Primitive(to_info),
+                    val_type: CompilerType::Primitive(to_info),
                 });
             } else if from_info.is_decimal() && to_info.is_decimal() {
                 if from_info.layout == to_info.layout {
                     return Ok(CompiledValue::Value {
                         llvm_repr: value.get_llvm_rep().clone(),
-                        ptype: CompilerType::Primitive(to_info),
+                        val_type: CompilerType::Primitive(to_info),
                     });
                 }
                 let op = if from_info.layout.size < to_info.layout.size {
@@ -1724,7 +1819,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
                 );
                 return Ok(CompiledValue::Value {
                     llvm_repr: LLVMVal::Register(utvc),
-                    ptype: CompilerType::Primitive(to_info),
+                    val_type: CompilerType::Primitive(to_info),
                 });
             } else if from_info.is_integer() && to_info.is_decimal() {
                 let op = if from_info.is_unsigned_integer() {
@@ -1740,13 +1835,13 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
                 );
                 return Ok(CompiledValue::Value {
                     llvm_repr: LLVMVal::Register(utvc),
-                    ptype: CompilerType::Primitive(to_info),
+                    val_type: CompilerType::Primitive(to_info),
                 });
             } else if from_info.is_decimal() && to_info.is_integer() {
                 if let LLVMVal::ConstantDecimal(x) = value.get_llvm_rep() {
                     return Ok(CompiledValue::Value {
                         llvm_repr: LLVMVal::ConstantInteger(*x as i128),
-                        ptype: CompilerType::Primitive(to_info),
+                        val_type: CompilerType::Primitive(to_info),
                     });
                 }
                 let op = if to_type.is_unsigned_integer() {
@@ -1762,7 +1857,7 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
                 );
                 return Ok(CompiledValue::Value {
                     llvm_repr: LLVMVal::Register(utvc),
-                    ptype: CompilerType::Primitive(to_info),
+                    val_type: CompilerType::Primitive(to_info),
                 });
             } else if from_info.is_bool() && to_info.is_integer() {
                 let utvc = self.emit_cast(
@@ -1773,13 +1868,13 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
                 );
                 return Ok(CompiledValue::Value {
                     llvm_repr: LLVMVal::Register(utvc),
-                    ptype: CompilerType::Primitive(to_info),
+                    val_type: CompilerType::Primitive(to_info),
                 });
             }
-        } else if value.try_get_type()?.is_pointer() && to_type.is_pointer() {
+        } else if value_type.is_pointer() && to_type.is_pointer() {
             return Ok(CompiledValue::Value {
                 llvm_repr: value.get_llvm_rep().clone(),
-                ptype: to_type.clone(),
+                val_type: to_type.clone(),
             });
         }
         panic!("{:?} {:?}", value, to_type)
@@ -1821,19 +1916,25 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
     }
 }
 impl<'a, 'b> ExpressionCompiler<'a, 'b> {
-    fn emit_store(&mut self, value: &LLVMVal, ptr: &LLVMVal, type_repr: &str) {
+    pub fn emit_store(&mut self, value: &LLVMVal, ptr: &LLVMVal, type_repr: &str) {
         self.output.push_str(&format!(
             "    store {} {}, {}* {}\n",
             type_repr, value, type_repr, ptr
         ));
     }
-    fn emit_load(&mut self, target_reg: usize, ptr: &LLVMVal, type_repr: &str) {
+    pub fn emit_load(&mut self, target_reg: usize, ptr: &LLVMVal, type_repr: &str) {
         self.output.push_str(&format!(
             "    %tmp{} = load {}, {}* {}\n",
             target_reg, type_repr, type_repr, ptr
         ));
     }
-    fn emit_binary_op(&mut self, op: &str, type_repr: &str, lhs: &LLVMVal, rhs: &LLVMVal) -> u32 {
+    pub fn emit_binary_op(
+        &mut self,
+        op: &str,
+        type_repr: &str,
+        lhs: &LLVMVal,
+        rhs: &LLVMVal,
+    ) -> u32 {
         let utvc = self.ctx.acquire_temp_id();
         self.output.push_str(&format!(
             "    %tmp{} = {} {} {}, {}\n",
@@ -1841,14 +1942,20 @@ impl<'a, 'b> ExpressionCompiler<'a, 'b> {
         ));
         utvc
     }
-    fn emit_gep(&mut self, result_reg: u32, type_str: &str, base_ptr: &str, indices: &[String]) {
+    pub fn emit_gep(
+        &mut self,
+        result_reg: u32,
+        type_str: &str,
+        base_ptr: &str,
+        indices: &[String],
+    ) {
         let indices_str = indices.join(", ");
         self.output.push_str(&format!(
             "    %tmp{} = getelementptr inbounds {}, {}* {}, {}\n",
             result_reg, type_str, type_str, base_ptr, indices_str
         ));
     }
-    fn emit_cast(&mut self, op: &str, from_type: &str, from_val: &str, to_type: &str) -> u32 {
+    pub fn emit_cast(&mut self, op: &str, from_type: &str, from_val: &str, to_type: &str) -> u32 {
         let utvc = self.ctx.acquire_temp_id();
         self.output.push_str(&format!(
             "    %tmp{} = {} {} {} to {}\n",
@@ -1909,603 +2016,4 @@ pub fn compile_expression(
             x.extend_first_span(&format!("in expression {}", expr.debug_emit()), span);
             x
         })
-}
-
-fn stalloc_impl(
-    compiler: &mut ExpressionCompiler,
-    given_args: &[Expr],
-    _expected: &Expected,
-) -> CompileResult<CompiledValue> {
-    if given_args.len() != 1 {
-        return Err(CompilerError::Generic(format!(
-            "stalloc(count) expects exactly 1 argument, but got {}",
-            given_args.len()
-        ))
-        .into());
-    }
-
-    let int_type = CompilerType::Primitive(DEFAULT_INTEGER_TYPE);
-    let count_val = compiler.compile_rvalue(&given_args[0], Expected::Type(&int_type))?;
-
-    if !count_val.try_get_type()?.is_integer() {
-        return Err(CompilerError::Generic(format!(
-            "stalloc count must be an integer, but got {:?}",
-            count_val.try_get_type()?
-        ))
-        .into());
-    }
-
-    let utvc = compiler.ctx.acquire_temp_id();
-    let count_llvm_type = count_val
-        .try_get_type()?
-        .llvm_representation(compiler.ctx.symbols)?;
-
-    compiler.output.push_str(&format!(
-        "    %tmp{} = alloca i8, {} {}\n",
-        utvc,
-        count_llvm_type,
-        count_val.get_llvm_rep()
-    ));
-
-    Ok(CompiledValue::Value {
-        llvm_repr: LLVMVal::Register(utvc),
-        ptype: CompilerType::Pointer(Box::new(CompilerType::Primitive(BYTE_TYPE))),
-    })
-}
-fn stalloc_generic_impl(
-    compiler: &mut ExpressionCompiler,
-    given_args: &[Expr],
-    given_generic: &[ParserType],
-    _expected: &Expected,
-) -> CompileResult<CompiledValue> {
-    if given_generic.len() != 1 {
-        return Err(CompilerError::Generic(format!(
-            "stalloc<T>(count) expects exactly 1 generic type, but got {}",
-            given_generic.len()
-        ))
-        .into());
-    }
-    if given_args.len() != 1 {
-        return Err(CompilerError::Generic(format!(
-            "stalloc<T>(count) expects exactly 1 argument (count), but got {}",
-            given_args.len()
-        ))
-        .into());
-    }
-    let int_type = CompilerType::Primitive(DEFAULT_INTEGER_TYPE);
-    let count_val = compiler.compile_rvalue(&given_args[0], Expected::Type(&int_type))?;
-    if !count_val.try_get_type()?.is_integer() {
-        return Err(CompilerError::Generic(format!(
-            "stalloc count must be an integer, but got {:?}",
-            count_val.try_get_type()?
-        ))
-        .into());
-    }
-
-    let target_type = CompilerType::from_parser_type(
-        &given_generic[0],
-        compiler.ctx.symbols,
-        compiler.ctx.current_path(),
-    )?;
-    let llvm_type_str = target_type.llvm_representation(compiler.ctx.symbols)?;
-    let utvc = compiler.ctx.acquire_temp_id();
-    compiler.output.push_str(&format!(
-        "    %tmp{} = alloca {}, {} {}\n",
-        utvc,
-        llvm_type_str,
-        count_val
-            .try_get_type()?
-            .llvm_representation(compiler.ctx.symbols)?,
-        count_val.get_llvm_rep()
-    ));
-    Ok(CompiledValue::Value {
-        llvm_repr: LLVMVal::Register(utvc),
-        ptype: target_type.reference(),
-    })
-}
-
-fn size_of_impl(
-    compiler: &mut ExpressionCompiler,
-    given_args: &[Expr],
-    _expected: &Expected,
-) -> CompileResult<CompiledValue> {
-    if given_args.len() != 1 {
-        return Err(CompilerError::Generic(format!(
-            "size_of(Type) expects exactly 1 argument, but got {}",
-            given_args.len()
-        ))
-        .into());
-    }
-    let val = compiler.compile_rvalue(&given_args[0], Expected::Anything)?;
-    let size = val
-        .try_get_type()?
-        .calculate_layout(compiler.ctx.symbols)
-        .size;
-    Ok(CompiledValue::Value {
-        llvm_repr: LLVMVal::ConstantInteger(size as i128),
-        ptype: CompilerType::Primitive(DEFAULT_INTEGER_TYPE),
-    })
-}
-fn size_of_generic_impl(
-    compiler: &mut ExpressionCompiler,
-    given_args: &[Expr],
-    given_generic: &[ParserType],
-    expected: &Expected,
-) -> CompileResult<CompiledValue> {
-    if given_generic.len() != 1 {
-        return Err(CompilerError::Generic(format!(
-            "size_of<T>() expects exactly 1 generic type, but got {}",
-            given_generic.len()
-        ))
-        .into());
-    }
-    if !given_args.is_empty() {
-        return Err(CompilerError::Generic(format!(
-            "size_of<T>() expects 0 arguments, but got {}",
-            given_args.len()
-        ))
-        .into());
-    }
-    let mut target_type = CompilerType::from_parser_type(
-        &given_generic[0],
-        compiler.ctx.symbols,
-        compiler.ctx.current_path(),
-    )?;
-    target_type.substitute_global_aliases(compiler.ctx.symbols)?;
-    let size = target_type.calculate_layout(compiler.ctx.symbols).size;
-    let return_ptype = if let Expected::Type(pt) = expected {
-        if pt.is_integer() {
-            (*pt).clone()
-        } else {
-            CompilerType::Primitive(DEFAULT_INTEGER_TYPE)
-        }
-    } else {
-        CompilerType::Primitive(DEFAULT_INTEGER_TYPE)
-    };
-    Ok(CompiledValue::Value {
-        llvm_repr: LLVMVal::ConstantInteger(size as i128),
-        ptype: return_ptype,
-    })
-}
-
-fn ptr_of_impl(
-    compiler: &mut ExpressionCompiler,
-    given_args: &[Expr],
-    _expected: &Expected,
-) -> CompileResult<CompiledValue> {
-    if given_args.len() != 1 {
-        return Err(CompilerError::Generic(format!(
-            "ptr_of(variable) expects exactly 1 argument, but got {}",
-            given_args.len()
-        ))
-        .into());
-    }
-
-    let lvalue = compiler.compile_lvalue(&given_args[0], false, false)?;
-    match lvalue.location {
-        LLVMVal::Global(x) => {
-            if matches!(lvalue.value_type, CompilerType::Function(..)) {
-                return Ok(CompiledValue::Value {
-                    llvm_repr: LLVMVal::Global(x.clone()),
-                    ptype: lvalue.value_type.clone().reference(),
-                });
-            }
-        }
-        LLVMVal::Variable(x) => {
-            return Ok(CompiledValue::Value {
-                llvm_repr: LLVMVal::Variable(x),
-                ptype: lvalue.value_type.clone().reference(),
-            });
-        }
-        _ => {
-            unimplemented!("{:?}", lvalue);
-        }
-    }
-    unimplemented!("");
-    /*
-    match lvalue {
-        CompiledValue::Pointer { llvm_repr, ptype } => Ok(CompiledValue::Value {
-            llvm_repr,
-            ptype: ptype.reference(),
-        }),
-        CompiledValue::Function { internal_id } => {
-            let func = compiler.ctx.symbols.get_function_by_id(internal_id);
-            if func.is_external() {
-                return Err(CompilerError::Generic(format!(
-                    "Cannot get pointer of external function: {}",
-                    func.full_path()
-                ))
-                .into());
-            }
-            if func.is_inline() {
-                return Err(CompilerError::Generic(format!(
-                    "Cannot get pointer of inline function: {}",
-                    func.full_path()
-                ))
-                .into());
-            }
-            Ok(CompiledValue::Value {
-                llvm_repr: LLVMVal::Global(func.full_path().to_string()),
-                ptype: func.get_type().reference(),
-            })
-        }
-        CompiledValue::GenericFunctionImplementation { internal_id, types } => {
-            let func = compiler.ctx.symbols.get_function_by_id(internal_id);
-            let ind = func.get_implementation_index(&types).expect("msg");
-            let name = func.call_path_impl_index(ind, compiler.ctx.symbols);
-
-            let mut type_map = HashMap::new();
-            for (ind, prm) in func.generic_params.iter().enumerate() {
-                type_map.insert(prm.clone(), types[ind].clone());
-            }
-
-            let ptype = func
-                .get_type()
-                .with_substituted_generic_types(&type_map, compiler.ctx.symbols)?
-                .reference();
-            Ok(CompiledValue::Value {
-                llvm_repr: LLVMVal::Global(name.to_string()),
-                ptype,
-            })
-        }
-        _ => Err(CompilerError::Generic(format!(
-            "Cannot take the address of an R-value or non-addressable expression: {:?}",
-            given_args[0]
-        ))
-        .into()),
-    }
-     */
-}
-#[allow(unused)]
-fn align_of_impl(
-    compiler: &mut ExpressionCompiler,
-    given_args: &[Expr],
-    expected: &Expected,
-) -> CompileResult<CompiledValue> {
-    if given_args.len() != 1 {
-        return Err(CompilerError::Generic(format!(
-            "align_of(Type) expects exactly 1 argument, but got {}",
-            given_args.len()
-        ))
-        .into());
-    }
-    let val = compiler.compile_rvalue(&given_args[0], Expected::Anything)?;
-    let size = val
-        .try_get_type()?
-        .calculate_layout(compiler.ctx.symbols)
-        .align;
-    Ok(CompiledValue::Value {
-        llvm_repr: LLVMVal::ConstantInteger(size as i128),
-        ptype: CompilerType::Primitive(DEFAULT_INTEGER_TYPE),
-    })
-}
-#[allow(unused)]
-fn align_of_generic_impl(
-    compiler: &mut ExpressionCompiler,
-    given_args: &[Expr],
-    given_generic: &[ParserType],
-    expected: &Expected,
-) -> CompileResult<CompiledValue> {
-    if given_generic.len() != 1 {
-        return Err(CompilerError::Generic(format!(
-            "size_of<T>() expects exactly 1 generic type, but got {}",
-            given_generic.len()
-        ))
-        .into());
-    }
-    if !given_args.is_empty() {
-        return Err(CompilerError::Generic(format!(
-            "size_of<T>() expects 0 arguments, but got {}",
-            given_args.len()
-        ))
-        .into());
-    }
-    let mut target_type = CompilerType::from_parser_type(
-        &given_generic[0],
-        compiler.ctx.symbols,
-        compiler.ctx.current_path(),
-    )?;
-    target_type.substitute_global_aliases(compiler.ctx.symbols)?;
-    let align = target_type.calculate_layout(compiler.ctx.symbols).align;
-    let return_ptype = if let Expected::Type(pt) = expected {
-        if pt.is_integer() {
-            (*pt).clone()
-        } else {
-            CompilerType::Primitive(DEFAULT_INTEGER_TYPE)
-        }
-    } else {
-        CompilerType::Primitive(DEFAULT_INTEGER_TYPE)
-    };
-    Ok(CompiledValue::Value {
-        llvm_repr: LLVMVal::ConstantInteger(align as i128),
-        ptype: return_ptype,
-    })
-}
-// Done
-fn bitcast_generic_impl(
-    compiler: &mut ExpressionCompiler,
-    given_args: &[Expr],
-    given_generic: &[ParserType],
-    _expected: &Expected,
-) -> CompileResult<CompiledValue> {
-    if given_generic.len() != 1 {
-        return Err(CompilerError::ArgumentCountMismatch(format!(
-            "{} needs exactly 1 generic argument, but got {}",
-            "bitcast<T>(value)",
-            given_generic.len(),
-        ))
-        .into());
-    }
-    if given_args.len() != 1 {
-        return Err(CompilerError::ArgumentCountMismatch(format!(
-            "{} needs exactly 1 argument, but got {}",
-            "bitcast<T>(value)",
-            given_args.len()
-        ))
-        .into());
-    }
-    let source_val = compiler.compile_rvalue(&given_args[0], Expected::Anything)?;
-    let source_type = source_val.try_get_type()?;
-    let target_type = CompilerType::from_parser_type(
-        &given_generic[0],
-        compiler.ctx.symbols,
-        compiler.ctx.current_path(),
-    )?;
-
-    if !source_type.is_bitcast_compatible(&target_type, compiler.ctx.symbols) {
-        return Err(CompilerError::Generic(format!(
-            "bitcast size mismatch: cannot cast from {:?} to {:?}",
-            source_type, target_type
-        ))
-        .into());
-    }
-    if source_type.is_pointer() ^ target_type.is_pointer() {
-        let (from_t, from_v) = (
-            source_type.llvm_representation(compiler.ctx.symbols)?,
-            source_val.get_llvm_rep().to_string(),
-        );
-        let to_str = target_type.llvm_representation(compiler.ctx.symbols)?;
-        if source_type.is_pointer() {
-            let utvc = compiler.emit_cast("ptrtoint", &from_t, &from_v, &to_str);
-            return Ok(CompiledValue::Value {
-                llvm_repr: LLVMVal::Register(utvc),
-                ptype: target_type,
-            });
-        } else {
-            if from_v.parse::<i128>().map(|x| x == 0).unwrap_or(false) {
-                return Ok(CompiledValue::Value {
-                    llvm_repr: LLVMVal::Null,
-                    ptype: target_type.clone(),
-                });
-            }
-            let utvc = compiler.emit_cast("inttoptr", &from_t, &from_v, &to_str);
-            return Ok(CompiledValue::Value {
-                llvm_repr: LLVMVal::Register(utvc),
-                ptype: target_type,
-            });
-        }
-    }
-    if source_type.is_integer() ^ target_type.is_integer()
-        && source_type.is_decimal() ^ target_type.is_decimal()
-    {
-        if source_type.is_decimal() {
-            // decimal to int
-            if let CompiledValue::Value {
-                llvm_repr: LLVMVal::ConstantDecimal(x),
-                ptype: _,
-            } = source_val
-            {
-                return Ok(CompiledValue::Value {
-                    llvm_repr: LLVMVal::ConstantInteger(f64::to_bits(x).cast_signed() as i128),
-                    ptype: target_type,
-                });
-            }
-        } else {
-            // int to decimal
-            if let CompiledValue::Value {
-                llvm_repr: LLVMVal::ConstantInteger(x),
-                ptype: _,
-            } = source_val
-            {
-                return Ok(CompiledValue::Value {
-                    llvm_repr: LLVMVal::ConstantDecimal(f64::from_bits(i64::cast_unsigned(
-                        x as i64,
-                    ))),
-                    ptype: target_type,
-                });
-            }
-        }
-    }
-    let src_llvm_type = source_type.llvm_representation(compiler.ctx.symbols)?;
-    let dst_llvm_type = target_type.llvm_representation(compiler.ctx.symbols)?;
-    let utvc = compiler.emit_cast(
-        "bitcast",
-        &src_llvm_type,
-        &source_val.get_llvm_rep().to_string(),
-        &dst_llvm_type,
-    );
-
-    Ok(CompiledValue::Value {
-        llvm_repr: LLVMVal::Register(utvc),
-        ptype: target_type,
-    })
-}
-// Usage: asm("add rax, rbx", [["rax", foo]], [["rax", foo], ["rbx", bar]], ["flags"]);
-// Instruction: "add rax, rbx" RAX = RAX + RBX
-// Output: [["rax", foo]]
-// Input: [["rax", foo], ["rbx", bar]]
-// Clobbers: ["flags"]
-fn asm_impl(
-    compiler: &mut ExpressionCompiler,
-    given_args: &[Expr],
-    _expected: &Expected,
-) -> CompileResult<CompiledValue> {
-    if given_args.len() != 4 {
-        return Err(CompilerError::Generic(format!(
-            "asm_impl(variable) expects exactly 4 arguments, but got {}",
-            given_args.len()
-        ))
-        .into());
-    }
-    if *_expected != Expected::NoReturn {
-        return Err(CompilerError::Generic(
-            "asm() blocks currently do not support returning values directly. Use output operands."
-                .into(),
-        )
-        .into());
-    }
-    let asm_template_str = match &given_args[0] {
-        Expr::StringConst(s) => s.clone(),
-        _ => {
-            return Err(CompilerError::Generic(
-                "asm() arg 1 (code) must be a string literal.".to_string(),
-            )
-            .into())
-        }
-    };
-    let mut parse_operands =
-        |arg_index: usize, is_output: bool| -> CompileResult<Vec<(String, String, String)>> {
-            let arg_expr = &given_args[arg_index];
-            match arg_expr {
-                Expr::Array(arr) => {
-                    let mut results: Vec<(String, String, String)> = Vec::new();
-                    for (i, expr) in arr.iter().enumerate() {
-                        if let Expr::Array(inner) = expr {
-                            if inner.len() != 2 {
-                                return Err(CompilerError::Generic(format!(
-                                    "asm() arg {} index {} must be a pair ['constraint', variable]",
-                                    arg_index + 1,
-                                    i
-                                ))
-                                .into());
-                            }
-
-                            let constraint = match &inner[0] {
-                                Expr::StringConst(s) => s.clone(),
-                                _ => {
-                                    return Err(CompilerError::Generic(
-                                        "Operand constraint must be a string".into(),
-                                    )
-                                    .into())
-                                }
-                            };
-
-                            let (llvm_value, llvm_type) = if let Expr::Name(name) = &inner[1] {
-                                if is_output {
-                                    let lvalue = compiler.compile_name_lvalue(name, true, true)?;
-                                    (
-                                        lvalue.location.to_string(),
-                                        lvalue
-                                            .value_type
-                                            .llvm_representation(compiler.ctx.symbols)?,
-                                    )
-                                } else {
-                                    let rvalue =
-                                        compiler.compile_name_rvalue(name, Expected::Anything)?;
-                                    (
-                                        rvalue.get_llvm_rep().to_string(),
-                                        rvalue
-                                            .try_get_type()?
-                                            .llvm_representation(compiler.ctx.symbols)?,
-                                    )
-                                }
-                            } else {
-                                return Err(CompilerError::Generic(
-                                    "Operand variable must be a name".into(),
-                                )
-                                .into());
-                            };
-
-                            results.push((constraint, llvm_value, llvm_type));
-                        } else {
-                            return Err(CompilerError::Generic(format!(
-                                "asm() arg {} must be an array of arrays",
-                                arg_index + 1
-                            ))
-                            .into());
-                        }
-                    }
-                    Ok(results)
-                }
-                _ => Err(CompilerError::Generic(format!(
-                    "asm() arg {} must be an array",
-                    arg_index + 1
-                ))
-                .into()),
-            }
-        };
-    let outputs = parse_operands(1, true)?;
-    let inputs = parse_operands(2, false)?;
-    let inp = inputs
-        .iter()
-        .map(|x| format!("{{{}}}", x.0))
-        .collect::<Vec<_>>()
-        .join(",");
-    let flags = match &given_args[3] {
-        Expr::Array(args) => args
-            .iter()
-            .map(|arg| match arg {
-                Expr::StringConst(s) => Ok(format!("~{{{}}}", s)),
-                _ => Err(CompilerError::Generic(
-                    "asm() arg 1 (code) must be a string literal.".to_string(),
-                )
-                .into()),
-            })
-            .collect::<CompileResult<Vec<String>>>()?,
-        _ => panic!("Unexpected arg"),
-    }
-    .join(",");
-    if let Some((register, var_pointer, var_type)) = outputs.first() {
-        assert!(outputs.len() == 1);
-        let utvc = compiler.ctx.acquire_temp_id();
-        compiler.output.push_str(&format!(
-            "    %asm{utvc} = call {} asm sideeffect inteldialect \"{}\", \"{}\"({})\n",
-            var_type,
-            asm_template_str,
-            format!(
-                "={{{register}}},{}",
-                if !inp.is_empty() {
-                    format!("{},{}", inp, flags)
-                } else {
-                    flags
-                }
-            ),
-            inputs
-                .iter()
-                .map(|x| format!("{} {}", x.2, x.1))
-                .collect::<Vec<_>>()
-                .join(", ")
-        ));
-        /*
-        compiler.emit_store(
-            &LLVMVal::VariableName(format!("asm{}", utvc)),
-            var_pointer,
-            var_type,
-        );*/
-
-        compiler.output.push_str(&format!(
-            "    store {} {}, {}* {}\n",
-            var_type,
-            format!("%asm{utvc}"),
-            var_type,
-            var_pointer
-        ));
-    } else {
-        compiler.output.push_str(&format!(
-            "    call {} asm sideeffect inteldialect \"{}\", \"{}\"({})\n",
-            "void",
-            asm_template_str,
-            if !inp.is_empty() {
-                format!("{},{}", inp, flags)
-            } else {
-                flags
-            },
-            inputs
-                .iter()
-                .map(|x| format!("{} {}", x.2, x.1))
-                .collect::<Vec<_>>()
-                .join(", ")
-        ));
-    }
-    Ok(CompiledValue::NoReturn)
 }

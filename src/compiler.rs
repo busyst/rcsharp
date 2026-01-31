@@ -5,7 +5,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-use ordered_hash_map::OrderedHashMap;
 use rcsharp_lexer::lex_string_with_file_context;
 use rcsharp_parser::{
     compiler_primitives::BOOL_TYPE,
@@ -19,7 +18,7 @@ use rcsharp_parser::{
 use crate::{
     compiler_essentials::{
         CodeGenContext, CompileResult, CompileResultExt, CompilerError, CompilerType, Enum,
-        Function, LLVMVal, Struct, Variable,
+        Function, LLVMOutputHandler, LLVMVal, Struct, SymbolTable, Variable,
     },
     expression_compiler::{compile_expression, constant_expression_compiler, Expected},
 };
@@ -110,9 +109,7 @@ fn handle_staticly_declared_variables(
             fp,
             t.llvm_representation(symbols)?
         ));
-        symbols
-            .static_variables
-            .insert(fp, Variable::new_static(t, false));
+        symbols.insert_static_var(&fp, Variable::new_static(t, false))?;
     }
     Ok(())
 }
@@ -281,11 +278,7 @@ fn handle_types(
     let mut registered_types = vec![];
     for str in &structs {
         registered_types.push((str.path.to_string(), str.name.to_string()));
-        let full_path = if str.path.is_empty() {
-            str.name.to_string()
-        } else {
-            format!("{}.{}", str.path, str.name)
-        };
+        let full_path = resolve_full_path(&str.path, &str.name);
         symbols.insert_type(
             &full_path,
             Struct::new_placeholder(str.path.to_string(), str.name.to_string(), false),
@@ -295,18 +288,15 @@ fn handle_types(
     for str in structs {
         let mut compiler_struct_fields = vec![];
         let path = str.path;
-        let full_path = if path.is_empty() {
-            str.name.to_string()
-        } else {
-            format!("{}.{}", path, str.name)
-        };
-        symbols.alias_types.clear();
+        let full_path = resolve_full_path(&path, &str.name);
+        let mut new_alias_types = HashMap::new();
         for prm in &str.generic_params {
-            symbols.alias_types.insert(
+            new_alias_types.insert(
                 prm.clone(),
                 CompilerType::GenericPlaceholder(prm.to_string().into_boxed_str()),
             );
         }
+        symbols.set_alias_types(new_alias_types);
         for (name, attr_type) in str.fields {
             if let Some(pt) = attr_type.as_primitive_type() {
                 compiler_struct_fields.push((name, CompilerType::Primitive(pt)));
@@ -328,11 +318,10 @@ fn handle_types(
             ),
         );
     }
-    symbols.alias_types.clear();
+    symbols.set_alias_types(HashMap::new());
     let user_defined_structs: Vec<&Struct> = symbols
-        .types
-        .values()
-        .map(|x| &x.1)
+        .types_iter()
+        .map(|x| &x.1 .1)
         .filter(|s: &&Struct| !s.is_primitive() && !s.is_generic())
         .collect();
     for s in user_defined_structs {
@@ -365,11 +354,7 @@ fn handle_enums(
             enm.attributes,
             (enm.name, enm.enum_type, enm.fields),
         );
-        let full_path = if current_path.is_empty() {
-            enum_name.to_string()
-        } else {
-            format!("{}.{}", current_path, enum_name)
-        };
+        let full_path = resolve_full_path(&current_path, &enum_name);
         let mut compiler_enum_fields = vec![];
         if let Some(x) = enum_type.as_integer() {
             for (field_name, field_expr) in fields {
@@ -401,12 +386,8 @@ fn handle_functions(
     output: &mut LLVMOutputHandler,
 ) -> CompileResult<()> {
     let mut registered_funcs = vec![];
-    for s in &functions {
-        let full_path = if s.path.is_empty() {
-            s.name.to_string()
-        } else {
-            format!("{}.{}", s.path, s.name)
-        };
+    for p_func in &functions {
+        let full_path = resolve_full_path(&p_func.path, &p_func.name);
         registered_funcs.push(full_path);
     }
     for pf in functions {
@@ -454,7 +435,7 @@ fn handle_functions(
         function.set_flags(base);
         symbols.insert_function(&function.full_path().to_string(), function);
     }
-    for x in &symbols.functions {
+    for x in symbols.functions_iter() {
         fn_attribs_handler(&x.1 .1, x.1 .0, symbols, output)?;
     }
     Ok(())
@@ -481,8 +462,7 @@ fn lazy_compile(symbols: &mut SymbolTable, output: &mut LLVMOutputHandler) -> Co
         let func = symbols.get_function_by_id(id);
         compile_function_body(id, &func.full_path(), symbols, output)?;
         for x in symbols
-            .functions
-            .iter()
+            .functions_iter()
             .filter(|x| x.1 .1.is_normal() && x.1 .1.usage_count.get() > 0)
         {
             if !implemented_funcs.contains(&x.1 .0) && !implement_funcs.contains(&x.1 .0) {
@@ -498,7 +478,7 @@ fn lazy_compile(symbols: &mut SymbolTable, output: &mut LLVMOutputHandler) -> Co
     )
     .unwrap_or(false)
     {}
-    for (_, (_id, function)) in symbols.functions.iter().filter(|x| x.1 .1.is_external()) {
+    for (_, (_id, function)) in symbols.functions_iter().filter(|x| x.1 .1.is_external()) {
         if function.usage_count.get() == 0 {
             continue;
         }
@@ -518,7 +498,7 @@ fn lazy_compile(symbols: &mut SymbolTable, output: &mut LLVMOutputHandler) -> Co
         ));
     }
     if APPEND_DEBUG_FUNCTION_INFO {
-        for (full_path, (_id, function)) in symbols.functions.iter() {
+        for (full_path, (_id, function)) in symbols.functions_iter() {
             output.push_str_footer(&format!(
                 ";fn {} used times {}\n",
                 full_path,
@@ -529,11 +509,11 @@ fn lazy_compile(symbols: &mut SymbolTable, output: &mut LLVMOutputHandler) -> Co
     Ok(())
 }
 fn compile(symbols: &mut SymbolTable, output: &mut LLVMOutputHandler) -> CompileResult<()> {
-    for (full_path, (id, _function)) in symbols.functions.iter().filter(|x| x.1 .1.is_normal()) {
+    for (full_path, (id, _function)) in symbols.functions_iter().filter(|x| x.1 .1.is_normal()) {
         compile_function_body(*id, full_path, symbols, output)?;
     }
     if APPEND_DEBUG_FUNCTION_INFO {
-        for (full_path, (_id, function)) in symbols.functions.iter() {
+        for (full_path, (_id, function)) in symbols.functions_iter() {
             output.push_str_footer(&format!(
                 ";fn {} used times {}\n",
                 full_path,
@@ -541,7 +521,7 @@ fn compile(symbols: &mut SymbolTable, output: &mut LLVMOutputHandler) -> Compile
             ));
         }
     }
-    for (_, (_id, function)) in symbols.functions.iter().filter(|x| x.1 .1.is_external()) {
+    for (_, (_id, function)) in symbols.functions_iter().filter(|x| x.1 .1.is_external()) {
         // declare dllimport i32 @GetModuleFileNameA(i8*,i8*,i32)
         let rt = function.return_type.llvm_representation(symbols)?;
         let args = function
@@ -567,8 +547,8 @@ fn compile_function_body(
 ) -> CompileResult<()> {
     let function = symbols.get_function_by_id(function_id);
     let mut rt = function.return_type.clone();
-    rt.substitute_generics(&symbols.alias_types, symbols)?;
-    let rt = rt.llvm_representation(symbols)?;
+    rt.substitute_generics(&symbols.alias_types(), symbols)?;
+    let return_type_llvm = rt.llvm_representation(symbols)?;
     let mut ctx = CodeGenContext::new(symbols, function_id);
     ctx.scope.push_layer();
     let args_str = function
@@ -577,7 +557,7 @@ fn compile_function_body(
         .map(|(name, ptype)| {
             {
                 let mut ptype = ptype.clone();
-                ptype.substitute_generics(&symbols.alias_types, symbols)?;
+                ptype.substitute_generics(&symbols.alias_types(), symbols)?;
                 ptype
             }
             .llvm_representation(symbols)
@@ -585,11 +565,7 @@ fn compile_function_body(
         })
         .collect::<CompileResult<Vec<_>>>()?
         .join(", ");
-
-    output.push_main(&format!(
-        "define {} @{}({}){{\n",
-        rt, full_function_name, args_str
-    ));
+    output.start_function(return_type_llvm, full_function_name, args_str);
 
     for (arg_name, arg_type) in function.args.iter() {
         if ctx.scope.lookup(arg_name).is_some() {
@@ -600,7 +576,7 @@ fn compile_function_body(
             .into());
         }
         let mut arg_type = arg_type.clone();
-        arg_type.substitute_generics(&symbols.alias_types, symbols)?;
+        arg_type.substitute_generics(&symbols.alias_types(), symbols)?;
         ctx.scope.define(
             arg_name.clone(),
             Variable::new_argument(arg_type),
@@ -637,11 +613,7 @@ fn compile_function_body(
             output.push_str("\n    unreachable\n");
         }
     }
-    output.push_main(&output.function_intro.clone());
-    output.push_main(&output.function_body.clone());
-    output.push_main("}\n");
-    output.function_intro.clear();
-    output.function_body.clear();
+    output.end_function();
     Ok(())
 }
 pub fn compile_statement(
@@ -654,17 +626,23 @@ pub fn compile_statement(
         Stmt::ConstLet(name, var_type, expr) => {
             let mut var_type =
                 CompilerType::from_parser_type(var_type, ctx.symbols, current_function_path)?;
-            var_type.substitute_generics(&ctx.symbols.alias_types, ctx.symbols)?;
+            var_type.substitute_generics(&ctx.symbols.alias_types(), ctx.symbols)?;
             let var = Variable::new(var_type.clone(), true);
 
             let result =
                 compile_expression(expr, Expected::Type(&var_type), stmt.span, ctx, output)?;
-            if *result.try_get_type()? != var_type {
+            let Ok(result_type) = result.try_get_type() else {
+                return Err(CompilerError::Generic(
+                    "Right side of const let is not a value".into(),
+                )
+                .into());
+            };
+            if *result_type != var_type {
                 return Err((
                     stmt.span,
                     CompilerError::TypeMismatch {
                         expected: var_type,
-                        found: result.try_get_type()?.clone(),
+                        found: result_type.clone(),
                     },
                 )
                     .into());
@@ -675,7 +653,7 @@ pub fn compile_statement(
         Stmt::Let(name, var_type, expr) => {
             let mut var_type =
                 CompilerType::from_parser_type(var_type, ctx.symbols, current_function_path)?;
-            var_type.substitute_generics(&ctx.symbols.alias_types, ctx.symbols)?;
+            var_type.substitute_generics(&ctx.symbols.alias_types(), ctx.symbols)?;
             let var = Variable::new(var_type.clone(), false);
             let x = ctx.acquire_var_id();
             output.push_function_intro(&format!(
@@ -693,12 +671,18 @@ pub fn compile_statement(
                         ctx,
                         output,
                     )?;
-                    if &var_type != result.try_get_type()? {
+                    let Ok(result_type) = result.try_get_type() else {
+                        return Err(CompilerError::Generic(
+                            "Right side of let is not a value".into(),
+                        )
+                        .into());
+                    };
+                    if *result_type != var_type {
                         return Err((
                             stmt.span,
                             CompilerError::TypeMismatch {
                                 expected: var_type,
-                                found: result.try_get_type()?.clone(),
+                                found: result_type.clone(),
                             },
                         )
                             .into());
@@ -721,7 +705,7 @@ pub fn compile_statement(
         Stmt::Static(_name, var_type, _expr) => {
             let mut var_type =
                 CompilerType::from_parser_type(var_type, ctx.symbols, current_function_path)?;
-            var_type.substitute_generics(&ctx.symbols.alias_types, ctx.symbols)?;
+            var_type.substitute_generics(&ctx.symbols.alias_types(), ctx.symbols)?;
             let _var = Variable::new_static(var_type.clone(), false);
             unimplemented!("Not yet supported!")
         }
@@ -788,7 +772,7 @@ pub fn compile_statement(
             let return_type = {
                 function
                     .return_type
-                    .with_substituted_generics(&ctx.symbols.alias_types, ctx.symbols)?
+                    .with_substituted_generics(&ctx.symbols.alias_types(), ctx.symbols)?
             };
             if opt_expr.is_some() && return_type.is_void() {
                 return Err((
@@ -801,14 +785,19 @@ pub fn compile_statement(
                     .into());
             }
             if let Some(expr) = opt_expr {
-                let value =
+                let result_value =
                     compile_expression(expr, Expected::Type(&return_type), stmt.span, ctx, output)?;
-                if value.try_get_type()? != &return_type {
+                let Ok(result_type) = result_value.try_get_type() else {
+                    return Err(
+                        CompilerError::Generic("Return expression is not a value".into()).into(),
+                    );
+                };
+                if *result_type != return_type {
                     return Err((
                         stmt.span,
                         CompilerError::TypeMismatch {
                             expected: return_type.clone(),
-                            found: value.try_get_type()?.clone(),
+                            found: result_type.clone(),
                         },
                     )
                         .into());
@@ -829,7 +818,7 @@ pub fn compile_statement(
                 output.push_str(&format!(
                     "    ret {} {}\n",
                     llvm_type_str,
-                    value.get_llvm_rep()
+                    result_value.get_llvm_rep()
                 ));
             } else {
                 if !return_type.is_void() {
@@ -853,14 +842,18 @@ pub fn compile_statement(
                 ctx,
                 output,
             )?;
-
-            if cond_val.try_get_type()? != &bool_type {
+            let Ok(cond_val_type) = cond_val.try_get_type() else {
+                return Err(CompilerError::Generic(
+                    "Right side of if condition is not value".into(),
+                )
+                .into());
+            };
+            if *cond_val_type != bool_type {
                 return Err((
                     stmt.span,
                     CompilerError::InvalidExpression(format!(
                         "'{:?}' must result in bool, instead resulted in {:?}",
-                        condition,
-                        cond_val.try_get_type()?
+                        condition, cond_val_type
                     )),
                 )
                     .into());
@@ -957,7 +950,7 @@ fn handle_generics(
         let mut new = false;
         let mut func_impl_queue = Vec::new();
         let mut type_impl_queue = Vec::new();
-        for (id, func) in symbols.functions.values() {
+        for (id, func) in symbols.functions_iter().map(|x| x.1) {
             if !func.is_generic() {
                 continue;
             }
@@ -972,7 +965,7 @@ fn handle_generics(
                 new = true;
             }
         }
-        for (id, strct) in symbols.types.values() {
+        for (id, strct) in symbols.types_iter().map(|x| x.1) {
             if !strct.is_generic() {
                 continue;
             }
@@ -1008,10 +1001,10 @@ fn handle_generics(
                     type_map.insert(prm.clone(), concrete_type.clone());
                 }
             }
-            symbols.alias_types = type_map;
+            symbols.set_alias_types(type_map);
             compile_function_body(id, &specialized_name, symbols, output)?;
         }
-        symbols.alias_types.clear();
+        symbols.set_alias_types(HashMap::new());
         for (id, impl_index, concrete_types) in type_impl_queue {
             let (specialized_name, generic_params, fields) = {
                 let strct = symbols.get_type_by_id(id);
@@ -1038,12 +1031,11 @@ fn handle_generics(
     }
     Ok(any_new)
 }
-#[allow(unused)]
 fn fn_attribs_handler(
     function: &Function,
-    function_id: usize,
+    _function_id: usize,
     symbols: &SymbolTable,
-    output: &mut LLVMOutputHandler,
+    _output: &mut LLVMOutputHandler,
 ) -> CompileResult<()> {
     for x in function.attribs() {
         match &*x.name {
@@ -1080,261 +1072,10 @@ fn fn_attribs_handler(
     Ok(())
 }
 
-#[derive(PartialEq)]
-enum StringEntry {
-    Owned(String),
-    Suffix {
-        parent_index: usize,
-        byte_offset: usize,
-        length_with_null: usize,
-        content: String,
-    },
-}
-
-#[derive(Default)]
-pub struct LLVMOutputHandler {
-    header: String,
-    global_variables: String,
-    strings_header: Vec<StringEntry>,
-    include_header: String,
-    main: String,
-    footer: String,
-
-    function_intro: String,
-    function_body: String,
-}
-impl LLVMOutputHandler {
-    pub fn push_str(&mut self, s: &str) {
-        self.function_body.push_str(s);
-    }
-    pub fn push_main(&mut self, s: &str) {
-        self.main.push_str(s);
-    }
-    pub fn push_function_intro(&mut self, s: &str) {
-        self.function_intro.push_str(s);
-    }
-    pub fn push_str_include_header(&mut self, s: &str) {
-        self.include_header.push_str(s);
-    }
-    pub fn push_str_header(&mut self, s: &str) {
-        self.header.push_str(s);
-    }
-    pub fn push_str_global(&mut self, s: &str) {
-        self.global_variables.push_str(s);
-    }
-    pub fn push_str_footer(&mut self, s: &str) {
-        self.footer.push_str(s);
-    }
-    pub fn add_to_strings_header(&mut self, string: String) -> usize {
-        if DONT_INSERT_REDUNDAND_STRINGS {
-            if let Some(id) = self.strings_header.iter().position(|entry| match entry {
-                StringEntry::Owned(s) => s == &string,
-                StringEntry::Suffix { content, .. } => content == &string,
-            }) {
-                return id;
-            }
-
-            let suffix_match = self
-                .strings_header
-                .iter()
-                .enumerate()
-                .find_map(|(idx, entry)| {
-                    let (existing_str, actual_parent_idx, base_offset) = match entry {
-                        StringEntry::Owned(s) => (s, idx, 0),
-                        StringEntry::Suffix {
-                            parent_index,
-                            byte_offset,
-                            content,
-                            ..
-                        } => (content, *parent_index, *byte_offset),
-                    };
-
-                    if existing_str.ends_with(&string) && existing_str.len() > string.len() {
-                        let offset_diff = existing_str.len() - string.len();
-                        let absolute_offset = base_offset + offset_diff;
-                        Some((actual_parent_idx, absolute_offset))
-                    } else {
-                        None
-                    }
-                });
-
-            if let Some((parent_index, byte_offset)) = suffix_match {
-                let len_with_null = string.len() + 1;
-                self.strings_header.push(StringEntry::Suffix {
-                    parent_index,
-                    byte_offset,
-                    length_with_null: len_with_null,
-                    content: string,
-                });
-                return self.strings_header.len() - 1;
-            }
-        }
-        self.strings_header.push(StringEntry::Owned(string.clone()));
-        let new_index = self.strings_header.len() - 1;
-        if DONT_INSERT_REDUNDAND_STRINGS {
-            for i in 0..new_index {
-                if let StringEntry::Owned(old_content) = &self.strings_header[i] {
-                    if string.ends_with(old_content) && string.len() > old_content.len() {
-                        let offset = string.len() - old_content.len();
-                        let len_with_null = old_content.len() + 1;
-                        self.strings_header[i] = StringEntry::Suffix {
-                            parent_index: new_index,
-                            byte_offset: offset,
-                            length_with_null: len_with_null,
-                            content: old_content.clone(),
-                        };
-                    }
-                }
-            }
-        }
-        new_index
-    }
-    pub fn build(self) -> String {
-        let definitions = self.strings_header.iter().enumerate().map(|(index, entry)| {
-            match entry {
-                StringEntry::Owned(s) => {
-                    let escaped_val = s.replace("\"", "\\22")
-                        .replace("\n", "\\0A")
-                        .replace("\r", "\\0D")
-                        .replace("\t", "\\09");
-                    let str_len = s.len() + 1;
-                    format!("@.str.{} = private unnamed_addr constant [{} x i8] c\"{}\\00\"", index, str_len, escaped_val)
-                }
-                StringEntry::Suffix { parent_index, byte_offset, length_with_null, .. } => {
-                    let mut root_index = *parent_index;
-                    let mut total_offset = *byte_offset;
-                    let mut loops = 0;
-                    while let StringEntry::Suffix { parent_index: next_p, byte_offset: next_off, .. } = &self.strings_header[root_index] {
-                        root_index = *next_p;
-                        total_offset += next_off;
-                        loops += 1;
-                        if loops > 100 { panic!("Circular string dependency detected at index {}", index); }
-                    }
-                    let root_len = match &self.strings_header[root_index] {
-                        StringEntry::Owned(s) => s.len() + 1,
-                        _ => panic!("String dependency chain did not end in Owned at index {}", root_index),
-                    };
-                    format!(
-                        "@.str.{} = private unnamed_addr alias [{} x i8], [{} x i8]* bitcast (i8* getelementptr inbounds ([{} x i8], [{} x i8]* @.str.{}, i64 0, i64 {}) to [{} x i8]*)",
-                        index,
-                        length_with_null,
-                        length_with_null,
-                        root_len, root_len, root_index, total_offset,
-                        length_with_null
-                    )
-                }
-            }
-        }).collect::<Vec<String>>().join("\n");
-
-        format!(
-            "{}\n{}\n{}\n{}\n{}\n{}",
-            self.header,
-            self.include_header,
-            definitions,
-            self.global_variables,
-            self.main,
-            self.footer
-        )
-    }
-}
-
-#[derive(Default)]
-pub struct SymbolTable {
-    functions: OrderedHashMap<String, (usize, Function)>,
-    types: OrderedHashMap<String, (usize, Struct)>,
-    alias_types: HashMap<String, CompilerType>,
-    enums: OrderedHashMap<String, (usize, Enum)>,
-    static_variables: OrderedHashMap<String, Variable>,
-}
-impl SymbolTable {
-    pub fn get_type_by_id(&self, type_id: usize) -> &Struct {
-        self.types
-            .values()
-            .filter(|x| x.0 == type_id)
-            .nth(0)
-            .map(|x| &x.1)
-            .expect("Unexpected")
-    }
-    pub fn get_function_by_id(&self, function_id: usize) -> &Function {
-        if let Some(func) = self
-            .functions
-            .values()
-            .filter(|x| x.0 == function_id)
-            .nth(0)
-        {
-            return &func.1;
-        }
-        unreachable!()
-    }
-    pub fn get_function_by_id_use(&self, function_id: usize) -> &Function {
-        if let Some(func) = self
-            .functions
-            .values()
-            .filter(|x| x.0 == function_id)
-            .nth(0)
-        {
-            func.1.increment_usage();
-            return &func.1;
-        }
-        unreachable!()
-    }
-    pub fn get_enum_by_id(&self, enum_id: usize) -> &Enum {
-        self.enums
-            .values()
-            .filter(|x| x.0 == enum_id)
-            .nth(0)
-            .map(|x| &x.1)
-            .expect("Unexpected")
-    }
-
-    pub fn get_type_id(&self, fqn: &str) -> Option<usize> {
-        self.types.iter().position(|x| x.0 == fqn)
-    }
-    pub fn get_function_id(&self, fqn: &str) -> Option<usize> {
-        self.functions.iter().position(|x| x.0 == fqn)
-    }
-    pub fn get_enum_id(&self, fqn: &str) -> Option<usize> {
-        self.enums.iter().position(|x| x.0 == fqn)
-    }
-
-    pub fn get_type(&self, fqn: &str) -> Option<&Struct> {
-        self.get_type_id(fqn).map(|x| self.get_type_by_id(x))
-    }
-    pub fn get_function(&self, fqn: &str) -> Option<&Function> {
-        self.get_function_id(fqn)
-            .map(|x| self.get_function_by_id(x))
-    }
-    pub fn get_enum(&self, fqn: &str) -> Option<&Enum> {
-        self.get_enum_id(fqn).map(|x| self.get_enum_by_id(x))
-    }
-    pub fn get_static_var(&self, fqn: &str) -> Option<&Variable> {
-        self.static_variables.get(fqn)
-    }
-    pub fn insert_type(&mut self, full_path: &str, structure: Struct) {
-        if let Some(x) = self.types.get_mut(full_path) {
-            x.1 = structure;
-            return;
-        }
-        self.types
-            .insert(full_path.to_string(), (self.types.len(), structure));
-    }
-    pub fn insert_function(&mut self, full_path: &str, function: Function) {
-        if let Some(x) = self.functions.get_mut(full_path) {
-            x.1 = function;
-            return;
-        }
-        self.functions
-            .insert(full_path.to_string(), (self.functions.len(), function));
-    }
-    pub fn insert_enum(&mut self, full_path: &str, enum_type: Enum) {
-        if let Some(x) = self.enums.get_mut(full_path) {
-            x.1 = enum_type;
-            return;
-        }
-        self.enums
-            .insert(full_path.to_string(), (self.enums.len(), enum_type));
-    }
-    pub fn alias_types(&self) -> &HashMap<String, CompilerType> {
-        &self.alias_types
+fn resolve_full_path(path: &str, name: &str) -> String {
+    if path.is_empty() {
+        name.to_string()
+    } else {
+        format!("{}.{}", path, name)
     }
 }
