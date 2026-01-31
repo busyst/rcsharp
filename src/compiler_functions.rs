@@ -58,11 +58,10 @@ fn stalloc_impl(
         count_llvm_type,
         count_val.get_llvm_rep()
     ));
-
-    Ok(CompiledValue::Value {
-        llvm_repr: LLVMVal::Register(utvc),
-        val_type: CompilerType::Pointer(Box::new(CompilerType::Primitive(BYTE_TYPE))),
-    })
+    Ok(CompiledValue::new_value(
+        LLVMVal::Register(utvc),
+        CompilerType::Pointer(Box::new(CompilerType::Primitive(BYTE_TYPE))),
+    ))
 }
 fn stalloc_generic_impl(
     compiler: &mut ExpressionCompiler,
@@ -111,10 +110,10 @@ fn stalloc_generic_impl(
         count_type.llvm_representation(compiler.ctx.symbols)?,
         count_val.get_llvm_rep()
     ));
-    Ok(CompiledValue::Value {
-        llvm_repr: LLVMVal::Register(utvc),
-        val_type: target_type.reference(),
-    })
+    Ok(CompiledValue::new_value(
+        LLVMVal::Register(utvc),
+        target_type.reference(),
+    ))
 }
 
 fn size_of_impl(
@@ -134,14 +133,14 @@ fn size_of_impl(
         return Err(CompilerError::Generic("size_of(Type) Type is not a type".into()).into());
     };
     let size = value_type.calculate_layout(compiler.ctx.symbols).size;
-    Ok(CompiledValue::Value {
-        llvm_repr: LLVMVal::ConstantInteger(size as i128),
-        val_type: expected
+    Ok(CompiledValue::new_value(
+        LLVMVal::ConstantInteger(size as i128),
+        expected
             .get_type()
             .filter(|x| x.is_integer())
             .unwrap_or(&CompilerType::Primitive(DEFAULT_INTEGER_TYPE))
             .clone(),
-    })
+    ))
 }
 fn size_of_generic_impl(
     compiler: &mut ExpressionCompiler,
@@ -170,14 +169,14 @@ fn size_of_generic_impl(
     )?;
     target_type.substitute_global_aliases(compiler.ctx.symbols)?;
     let size = target_type.calculate_layout(compiler.ctx.symbols).size;
-    Ok(CompiledValue::Value {
-        llvm_repr: LLVMVal::ConstantInteger(size as i128),
-        val_type: expected
+    Ok(CompiledValue::new_value(
+        LLVMVal::ConstantInteger(size as i128),
+        expected
             .get_type()
             .filter(|x| x.is_integer())
             .unwrap_or(&CompilerType::Primitive(DEFAULT_INTEGER_TYPE))
             .clone(),
-    })
+    ))
 }
 
 fn ptr_of_impl(
@@ -197,17 +196,17 @@ fn ptr_of_impl(
     match lvalue.location {
         LLVMVal::Global(x) => {
             if matches!(lvalue.value_type, CompilerType::Function(..)) {
-                return Ok(CompiledValue::Value {
-                    llvm_repr: LLVMVal::Global(x.clone()),
-                    val_type: lvalue.value_type.clone().reference(),
-                });
+                return Ok(CompiledValue::new_value(
+                    LLVMVal::Global(x.clone()),
+                    lvalue.value_type.clone().reference(),
+                ));
             }
         }
         LLVMVal::Variable(x) => {
-            return Ok(CompiledValue::Value {
-                llvm_repr: LLVMVal::Variable(x),
-                val_type: lvalue.value_type.clone().reference(),
-            });
+            return Ok(CompiledValue::new_value(
+                LLVMVal::Variable(x),
+                lvalue.value_type.clone().reference(),
+            ));
         }
         _ => {
             unimplemented!("{:?}", lvalue);
@@ -286,14 +285,14 @@ fn align_of_impl(
         return Err(CompilerError::Generic("align_of(Type) is not a type".into()).into());
     };
     let size = value_type.calculate_layout(compiler.ctx.symbols).align;
-    Ok(CompiledValue::Value {
-        llvm_repr: LLVMVal::ConstantInteger(size as i128),
-        val_type: expected
+    Ok(CompiledValue::new_value(
+        LLVMVal::ConstantInteger(size as i128),
+        expected
             .get_type()
             .filter(|x| x.is_integer())
             .unwrap_or(&CompilerType::Primitive(DEFAULT_INTEGER_TYPE))
             .clone(),
-    })
+    ))
 }
 #[allow(unused)]
 fn align_of_generic_impl(
@@ -332,10 +331,10 @@ fn align_of_generic_impl(
     } else {
         CompilerType::Primitive(DEFAULT_INTEGER_TYPE)
     };
-    Ok(CompiledValue::Value {
-        llvm_repr: LLVMVal::ConstantInteger(align as i128),
-        val_type: return_ptype,
-    })
+    Ok(CompiledValue::new_value(
+        LLVMVal::ConstantInteger(align as i128),
+        return_ptype,
+    ))
 }
 // Done
 fn bitcast_generic_impl(
@@ -385,22 +384,19 @@ fn bitcast_generic_impl(
         let to_str = target_type.llvm_representation(compiler.ctx.symbols)?;
         if source_type.is_pointer() {
             let utvc = compiler.emit_cast("ptrtoint", &from_t, &from_v, &to_str);
-            return Ok(CompiledValue::Value {
-                llvm_repr: LLVMVal::Register(utvc),
-                val_type: target_type,
-            });
+            return Ok(CompiledValue::new_value(
+                LLVMVal::Register(utvc),
+                target_type,
+            ));
         } else {
             if from_v.parse::<i128>().map(|x| x == 0).unwrap_or(false) {
-                return Ok(CompiledValue::Value {
-                    llvm_repr: LLVMVal::Null,
-                    val_type: target_type.clone(),
-                });
+                return Ok(CompiledValue::new_value(LLVMVal::Null, target_type.clone()));
             }
             let utvc = compiler.emit_cast("inttoptr", &from_t, &from_v, &to_str);
-            return Ok(CompiledValue::Value {
-                llvm_repr: LLVMVal::Register(utvc),
-                val_type: target_type,
-            });
+            return Ok(CompiledValue::new_value(
+                LLVMVal::Register(utvc),
+                target_type,
+            ));
         }
     }
     if source_type.is_integer() ^ target_type.is_integer()
@@ -410,27 +406,25 @@ fn bitcast_generic_impl(
             // decimal to int
             if let CompiledValue::Value {
                 llvm_repr: LLVMVal::ConstantDecimal(x),
-                val_type: _,
+                ..
             } = source_val
             {
-                return Ok(CompiledValue::Value {
-                    llvm_repr: LLVMVal::ConstantInteger(f64::to_bits(x).cast_signed() as i128),
-                    val_type: target_type,
-                });
+                return Ok(CompiledValue::new_value(
+                    LLVMVal::ConstantInteger(f64::to_bits(x).cast_signed() as i128),
+                    target_type,
+                ));
             }
         } else {
             // int to decimal
             if let CompiledValue::Value {
                 llvm_repr: LLVMVal::ConstantInteger(x),
-                val_type: _,
+                ..
             } = source_val
             {
-                return Ok(CompiledValue::Value {
-                    llvm_repr: LLVMVal::ConstantDecimal(f64::from_bits(i64::cast_unsigned(
-                        x as i64,
-                    ))),
-                    val_type: target_type,
-                });
+                return Ok(CompiledValue::new_value(
+                    LLVMVal::ConstantDecimal(f64::from_bits(i64::cast_unsigned(x as i64))),
+                    target_type,
+                ));
             }
         }
     }
@@ -443,10 +437,10 @@ fn bitcast_generic_impl(
         &dst_llvm_type,
     );
 
-    Ok(CompiledValue::Value {
-        llvm_repr: LLVMVal::Register(utvc),
-        val_type: target_type,
-    })
+    Ok(CompiledValue::new_value(
+        LLVMVal::Register(utvc),
+        target_type,
+    ))
 }
 // Usage: asm("add rax, rbx", [["rax", foo]], [["rax", foo], ["rbx", bar]], ["flags"]);
 // Instruction: "add rax, rbx" RAX = RAX + RBX
@@ -625,5 +619,7 @@ fn asm_impl(
                 .join(", ")
         ));
     }
-    Ok(CompiledValue::NoReturn)
+    Ok(CompiledValue::NoReturn {
+        program_halt: false,
+    })
 }

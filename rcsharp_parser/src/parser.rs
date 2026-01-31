@@ -435,6 +435,8 @@ impl<'a> GeneralParser<'a> {
             Token::KeywordInline => self.parse_with_modifier("inline", attributes),
             Token::KeywordConstExpr => self.parse_with_modifier("constexpr", attributes),
             Token::KeywordPub => self.parse_with_modifier("public", attributes),
+            Token::KeywordNoReturn => self.parse_with_modifier("no_return", attributes),
+            Token::KeywordExtern => self.parse_with_modifier("extern", attributes),
             Token::KeywordStatic => self.parse_static_let_statement(start_span.start),
             _ => {
                 if !attributes.is_empty() {

@@ -4,4 +4,3 @@
 output.obj
 /src/lib.rs
 .code_snippets/*
-output.ll

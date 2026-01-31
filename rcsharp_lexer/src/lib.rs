@@ -115,6 +115,10 @@ pub enum Token {
     KeywordConst,
     #[token("constexpr")]
     KeywordConstExpr,
+    #[token("extern")]
+    KeywordExtern,
+    #[token("no_return")]
+    KeywordNoReturn,
     #[token("match")]
     KeywordMatch,
 

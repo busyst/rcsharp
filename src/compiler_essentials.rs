@@ -742,11 +742,15 @@ pub struct FunctionFlags {
     pub is_inline: bool,
     pub is_const_expression: bool,
     pub is_external: bool,
+    pub is_program_halt: bool,
 }
 
 impl FunctionFlags {
     fn to_byte(&self) -> u8 {
         let mut b = 0;
+        if self.is_program_halt {
+            b |= 4;
+        }
         if self.is_generic {
             b |= 8;
         }
@@ -767,6 +771,7 @@ impl FunctionFlags {
 
     fn from_byte(b: u8) -> Self {
         Self {
+            is_program_halt: (b & 4) != 0,
             is_generic: (b & 8) != 0,
             is_public: (b & 16) != 0,
             is_inline: (b & 32) != 0,
@@ -835,6 +840,10 @@ impl Function {
     }
     pub fn is_inline(&self) -> bool {
         self.get_flags().is_inline
+    }
+
+    pub fn is_program_halt(&self) -> bool {
+        self.get_flags().is_program_halt
     }
     pub fn set_flags(&self, flags: FunctionFlags) {
         self.flags.set(flags.to_byte());
@@ -1061,17 +1070,17 @@ impl Variable {
         output: &mut LLVMOutputHandler,
     ) -> CompileResult<CompiledValue> {
         if let Some(val) = self.value.borrow().as_ref() {
-            return Ok(CompiledValue::Value {
-                llvm_repr: val.clone(),
-                val_type: self.compiler_type.clone(),
-            });
+            return Ok(CompiledValue::new_value(
+                val.clone(),
+                self.compiler_type().clone(),
+            ));
         }
         let flags = self.get_flags();
         if flags.is_argument {
-            return Ok(CompiledValue::Value {
-                llvm_repr: LLVMVal::VariableName(var_name.to_string()),
-                val_type: self.compiler_type.clone(),
-            });
+            return Ok(CompiledValue::new_value(
+                LLVMVal::VariableName(var_name.to_string()),
+                self.compiler_type.clone(),
+            ));
         }
         let mut concrete_type = self.compiler_type.clone();
         concrete_type.substitute_global_aliases(ctx.symbols)?;
@@ -1089,10 +1098,10 @@ impl Variable {
             ));
         }
 
-        Ok(CompiledValue::Value {
-            llvm_repr: LLVMVal::Register(temp_id),
-            val_type: self.compiler_type.clone(),
-        })
+        Ok(CompiledValue::new_value(
+            LLVMVal::Register(temp_id),
+            self.compiler_type.clone(),
+        ))
     }
 }
 #[derive(Debug, Clone)]

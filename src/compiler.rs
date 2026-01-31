@@ -429,6 +429,16 @@ fn handle_functions(
         if function_prefixes.iter().any(|x| x.as_str() == "constexpr") {
             base.is_const_expression = true;
         }
+        if function_prefixes.iter().any(|x| x.as_str() == "no_return") {
+            if !function.return_type.is_void() {
+                return Err(CompilerError::Generic(format!(
+                    "Function '{}' is marked as no_return but has a non-void return type",
+                    function.full_path()
+                ))
+                .into());
+            }
+            base.is_program_halt = true;
+        }
         if !function.generic_params.is_empty() {
             base.is_generic = true;
         }
@@ -584,13 +594,21 @@ fn compile_function_body(
             symbols,
         );
     }
-
-    for stmt in function.body.iter() {
-        compile_statement(stmt, &mut ctx, output).extend(&format!(
+    let mut last_instr = function.body.len() - 1;
+    let mut fx = function.body.to_vec();
+    if function.return_type.is_void() {
+        fx.push(StmtData {
+            span: Span::empty(),
+            stmt: Stmt::Return(None),
+        });
+    }
+    for (i, stmt) in fx.iter().enumerate() {
+        let x = compile_statement(stmt, &mut ctx, output).extend(&format!(
             "while compiling function '{}'",
             full_function_name
         ))?;
-        if DONT_COMPILE_AFTER_RETURN && matches!(stmt.stmt, Stmt::Return(..)) {
+        if DONT_COMPILE_AFTER_RETURN && x {
+            last_instr = i;
             break;
         };
     }
@@ -606,12 +624,11 @@ fn compile_function_body(
         )
         .extend("While closing context in function")?;
     }
-    if !matches!(function.body.last().map(|x| &x.stmt), Some(Stmt::Return(_))) {
-        if function.return_type.is_void() {
-            output.push_str("    ret void\n");
-        } else {
-            output.push_str("\n    unreachable\n");
-        }
+    if !matches!(
+        fx.iter().nth(last_instr).map(|x| &x.stmt),
+        Some(Stmt::Return(_))
+    ) {
+        output.push_str("\n    unreachable\n");
     }
     output.end_function();
     Ok(())
@@ -620,7 +637,7 @@ pub fn compile_statement(
     stmt: &StmtData,
     ctx: &mut CodeGenContext,
     output: &mut LLVMOutputHandler,
-) -> CompileResult<()> {
+) -> CompileResult<bool> {
     let current_function_path = ctx.current_path();
     match &stmt.stmt {
         Stmt::ConstLet(name, var_type, expr) => {
@@ -711,7 +728,10 @@ pub fn compile_statement(
         }
 
         Stmt::Expr(expression) => {
-            compile_expression(expression, Expected::NoReturn, stmt.span, ctx, output)?;
+            return Ok(
+                compile_expression(expression, Expected::NoReturn, stmt.span, ctx, output)?
+                    .is_program_halt(),
+            );
         }
         Stmt::Loop(statement) => {
             let lc = ctx.acquire_label_id();
@@ -721,8 +741,8 @@ pub fn compile_statement(
             ctx.scope.push_layer();
             ctx.scope.set_loop_tag(Some(lc));
             for x in statement {
-                compile_statement(x, ctx, output)?;
-                if DONT_COMPILE_AFTER_RETURN && matches!(x.stmt, Stmt::Return(..)) {
+                let end_compile = compile_statement(x, ctx, output)?;
+                if DONT_COMPILE_AFTER_RETURN && end_compile {
                     break;
                 };
             }
@@ -744,7 +764,7 @@ pub fn compile_statement(
         Stmt::Continue => match ctx.scope.current_loop_tag() {
             Some(li) => {
                 output.push_str(&format!("    br label %loop_body{}\n", li));
-                return Ok(());
+                return Ok(false);
             }
             None => {
                 return Err((
@@ -757,7 +777,7 @@ pub fn compile_statement(
         Stmt::Break => match ctx.scope.current_loop_tag() {
             Some(li) => {
                 output.push_str(&format!("    br label %loop_body{}_exit\n", li));
-                return Ok(());
+                return Ok(true);
             }
             None => {
                 return Err((
@@ -832,6 +852,7 @@ pub fn compile_statement(
                 }
                 output.push_str("    ret void\n");
             }
+            return Ok(true);
         }
         Stmt::If(condition, then_body, else_body) => {
             let bool_type = CompilerType::Primitive(BOOL_TYPE);
@@ -879,8 +900,8 @@ pub fn compile_statement(
             output.push_str(&format!("{}:\n", then_label));
             ctx.scope.push_layer();
             for then_stmt in then_body {
-                compile_statement(then_stmt, ctx, output)?;
-                if DONT_COMPILE_AFTER_RETURN && matches!(then_stmt.stmt, Stmt::Return(..)) {
+                let end_compile = compile_statement(then_stmt, ctx, output)?;
+                if DONT_COMPILE_AFTER_RETURN && end_compile {
                     break;
                 };
             }
@@ -902,8 +923,8 @@ pub fn compile_statement(
                 output.push_str(&format!("{}:\n", else_label));
                 ctx.scope.push_layer();
                 for else_stmt in else_body {
-                    compile_statement(else_stmt, ctx, output)?;
-                    if DONT_COMPILE_AFTER_RETURN && matches!(else_stmt.stmt, Stmt::Return(..)) {
+                    let end_compile = compile_statement(else_stmt, ctx, output)?;
+                    if DONT_COMPILE_AFTER_RETURN && end_compile {
                         break;
                     };
                 }
@@ -937,7 +958,7 @@ pub fn compile_statement(
                 .into());
         }
     }
-    Ok(())
+    Ok(false)
 }
 fn handle_generics(
     implemented_funcs: &mut HashMap<usize, usize>,
