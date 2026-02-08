@@ -722,6 +722,7 @@ impl LLVMGenPass {
         self.cgctx.current_function_return_type = return_type.clone();
         self.cgctx.var_counter.set(0);
         self.cgctx.temp_counter.set(0);
+        self.cgctx.label_counter.set(0);
         self.cgctx.scope.push_layer();
         self.cgctx.current_block_name = "entry".to_string();
         self.cgctx.pending_returns = Vec::new();
