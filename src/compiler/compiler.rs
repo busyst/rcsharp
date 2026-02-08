@@ -279,10 +279,7 @@ fn handle_types(
     for str in &structs {
         registered_types.push((str.path.to_string(), str.name.to_string()));
         let full_path = resolve_full_path(&str.path, &str.name);
-        symbols.insert_type(
-            &full_path,
-            Struct::new_placeholder(str.path.to_string(), str.name.to_string(), false),
-        );
+        symbols.insert_type(&full_path, Struct::new_placeholder());
     }
 
     for str in structs {
@@ -594,7 +591,6 @@ fn compile_function_body(
             symbols,
         );
     }
-    let mut last_instr = function.body.len() - 1;
     let mut fx = function.body.to_vec();
     if function.return_type.is_void() {
         fx.push(StmtData {

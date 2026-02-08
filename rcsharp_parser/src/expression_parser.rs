@@ -93,7 +93,22 @@ pub enum BinaryOp {
     ShiftLeft,
     ShiftRight,
 }
-
+impl BinaryOp {
+    pub fn symetrical(&self) -> bool {
+        matches!(
+            self,
+            BinaryOp::Add
+                | BinaryOp::Multiply
+                | BinaryOp::BitAnd
+                | BinaryOp::BitOr
+                | BinaryOp::BitXor
+                | BinaryOp::And
+                | BinaryOp::Or
+                | BinaryOp::Equals
+                | BinaryOp::NotEqual
+        )
+    }
+}
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum UnaryOp {
     Negate,

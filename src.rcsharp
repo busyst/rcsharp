@@ -1,6 +1,6 @@
 #include("./src_base_structs.rcsharp")
 
-inline fn basic_functions() {
+ fn basic_functions() {
     console::AllocConsole();
     tests::run();
     window::start();
@@ -47,5 +47,5 @@ fn main(): i32 {
     console::println_f64(bitcast::<f64>(bitcast::<i64>(f) + 123123123123));
     basic_functions();
     const temp : test::QPair<i64, i64> = xq();
-    return (bitcast::<i64>(tx) - bitcast::<i64>(tp)) as i32 + yt[42];
+    return (bitcast::<isize>(tx) - bitcast::<isize>(tp)) as i32 + yt[42];
 }

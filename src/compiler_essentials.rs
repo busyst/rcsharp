@@ -9,7 +9,7 @@ use std::{
     collections::HashMap,
 };
 
-use crate::{compiler::DONT_INSERT_REDUNDAND_STRINGS, expression_compiler::CompiledValue};
+use crate::{compiler::passes::CodeGenContext, expression_compiler::CompiledValue};
 #[derive(Debug, Clone, PartialEq)]
 pub enum LLVMVal {
     Register(u32),         // %tmp1
@@ -50,6 +50,12 @@ pub enum CompilerType {
     GenericStructInstance(usize, usize), // index in symbol table, index in implementation table
     GenericStructTemplate(usize, Box<[CompilerType]>), // index in symbol table, implementation template
     Function(Box<CompilerType>, Box<[CompilerType]>), // return type index in symbol table, arguments indexes in implementation table
+}
+
+impl Default for CompilerType {
+    fn default() -> Self {
+        Self::Primitive(VOID_TYPE)
+    }
 }
 impl std::fmt::Debug for CompilerType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -239,7 +245,7 @@ impl CompilerType {
             let id = symbols
                 .get_type_id(&local_path)
                 .or_else(|| symbols.get_type_id(name))
-                .expect("Generic type not found");
+                .expect(&format!("Generic type {} not found", name));
 
             let mut compiled_args = Vec::new();
             let mut is_concrete = true;
@@ -632,27 +638,16 @@ impl Struct {
             cached_layout: RefCell::new(None),
         }
     }
-    pub fn new_placeholder(path: String, name: String, is_primitive: bool) -> Self {
-        let full_path = if path.is_empty() {
-            name.clone()
-        } else {
-            format!("{}.{}", path, name)
-        }
-        .into_boxed_str();
-        let flags = StructFlags {
-            is_generic: false,
-            is_primitive,
-        };
-
+    pub fn new_placeholder() -> Self {
         Self {
-            path: path.into_boxed_str(),
-            name: name.into_boxed_str(),
-            full_path,
+            path: format!("").into_boxed_str(),
+            name: format!("").into_boxed_str(),
+            full_path: format!("").into_boxed_str(),
             fields: Box::new([]),
             generic_params: Box::new([]),
             generic_implementations: RefCell::new(vec![]),
             attributes: Box::new([]),
-            flags: Cell::new(flags.to_byte()),
+            flags: Cell::new(0),
             cached_layout: RefCell::new(None),
         }
     }
@@ -733,6 +728,10 @@ impl Struct {
         assert!(!self.is_generic());
         assert!(self.cached_layout.borrow().is_none());
         *self.cached_layout.borrow_mut() = Some(layout);
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
     }
 }
 #[derive(Debug, Clone, Copy, Default)]
@@ -940,7 +939,6 @@ pub struct VariableFlags {
     pub inline: bool,
     pub is_alias: bool,
     pub is_constant: bool,
-    pub is_argument: bool,
 }
 #[derive(Debug, Clone)]
 pub struct Variable {
@@ -972,9 +970,6 @@ impl VariableFlags {
         if self.is_constant {
             b |= 64;
         }
-        if self.is_argument {
-            b |= 128;
-        }
         b
     }
 
@@ -987,35 +982,16 @@ impl VariableFlags {
             inline: (b & 16) != 0,
             is_alias: (b & 32) != 0,
             is_constant: (b & 64) != 0,
-            is_argument: (b & 128) != 0,
         }
     }
 }
 impl Variable {
-    pub fn new(compiler_type: CompilerType, is_const: bool) -> Self {
+    pub fn new(compiler_type: CompilerType, is_const: bool, is_static: bool) -> Self {
         Self::with_flags(
             compiler_type,
             VariableFlags {
                 is_constant: is_const,
-                ..Default::default()
-            },
-        )
-    }
-    pub fn new_static(compiler_type: CompilerType, is_const: bool) -> Self {
-        Self::with_flags(
-            compiler_type,
-            VariableFlags {
-                is_constant: is_const,
-                static_storage: true,
-                ..Default::default()
-            },
-        )
-    }
-    pub fn new_argument(compiler_type: CompilerType) -> Self {
-        Self::with_flags(
-            compiler_type,
-            VariableFlags {
-                is_argument: true,
+                static_storage: is_static,
                 ..Default::default()
             },
         )
@@ -1062,38 +1038,30 @@ impl Variable {
     pub fn compiler_type(&self) -> &CompilerType {
         &self.compiler_type
     }
+    pub fn try_load_const_llvm_value(&self) -> Option<CompiledValue> {
+        self.value
+            .borrow()
+            .as_ref()
+            .map(|val| CompiledValue::new_value(val.clone(), self.compiler_type().clone()))
+    }
     pub fn load_llvm_value(
         &self,
         var_id: u32,
         var_name: &str,
         ctx: &CodeGenContext,
+        type_str: &str,
         output: &mut LLVMOutputHandler,
     ) -> CompileResult<CompiledValue> {
-        if let Some(val) = self.value.borrow().as_ref() {
-            return Ok(CompiledValue::new_value(
-                val.clone(),
-                self.compiler_type().clone(),
-            ));
-        }
         let flags = self.get_flags();
-        if flags.is_argument {
-            return Ok(CompiledValue::new_value(
-                LLVMVal::VariableName(var_name.to_string()),
-                self.compiler_type.clone(),
-            ));
-        }
-        let mut concrete_type = self.compiler_type.clone();
-        concrete_type.substitute_global_aliases(ctx.symbols)?;
-        let type_str = concrete_type.llvm_representation(ctx.symbols)?;
         let temp_id = ctx.acquire_temp_id();
         if flags.static_storage {
-            output.push_str(&format!(
-                "    %tmp{} = load {}, {}* @{}\n",
+            output.push_function_body(&format!(
+                "\t%tmp{} = load {}, {}* @{}\n",
                 temp_id, type_str, type_str, var_name
             ));
         } else {
-            output.push_str(&format!(
-                "    %tmp{} = load {}, {}* %v{}\n",
+            output.push_function_body(&format!(
+                "\t%tmp{} = load {}, {}* %v{}\n",
                 temp_id, type_str, type_str, var_id
             ));
         }
@@ -1113,6 +1081,12 @@ struct ScopeLayer {
 pub struct Scope {
     layers: Vec<ScopeLayer>,
 }
+
+impl Default for Scope {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 impl Scope {
     pub fn new() -> Self {
         Self {
@@ -1130,19 +1104,9 @@ impl Scope {
         }
         None
     }
-    pub fn define(
-        &mut self,
-        name: String,
-        variable: Variable,
-        id: u32,
-        table: &SymbolTable,
-    ) -> Vec<Stmt> {
+    pub fn define(&mut self, name: String, variable: Variable, id: u32) {
         let current = self.layers.last_mut().expect("Scope stack underflow");
-        let mut on_leave_context = vec![];
-        if let Some(prev_value) = current.variables.insert(name.clone(), (variable, id)) {
-            Self::leave_scope((&name, &prev_value), table, &mut on_leave_context);
-        }
-        on_leave_context
+        if let Some(_prev_value) = current.variables.insert(name.clone(), (variable, id)) {}
     }
     pub fn push_layer(&mut self) {
         let current_loop = self.layers.last().and_then(|l| l.loop_tag);
@@ -1152,7 +1116,7 @@ impl Scope {
         });
     }
     pub fn pop_layer(&mut self, table: &SymbolTable) -> Vec<Stmt> {
-        if self.layers.len() <= 1 {
+        if self.layers.len() == 1 {
             panic!("Cannot pop global scope");
         }
         let layer = self.layers.pop().unwrap();
@@ -1202,42 +1166,18 @@ impl Scope {
         // Type dependent cleanup
         on_scope_exit.push(Stmt::Debug(format!("Variable {} is out.", var.0)));
     }
-}
 
-pub struct CodeGenContext<'a> {
-    pub symbols: &'a SymbolTable,
-    pub current_function_id: usize,
-    pub scope: Scope,
+    pub fn deep(&self) -> usize {
+        self.layers.len()
+    }
 
-    temp_counter: Cell<u32>,
-    var_counter: Cell<u32>,
-    label_counter: Cell<u32>,
-}
-impl<'a> CodeGenContext<'a> {
-    pub fn new(symbols: &'a SymbolTable, current_function_id: usize) -> Self {
-        Self {
-            symbols,
-            current_function_id,
-            scope: Scope::new(),
-            temp_counter: Cell::new(0),
-            var_counter: Cell::new(0),
-            label_counter: Cell::new(0),
+    pub fn pop_layer_immutable<'a>(&self, symbols: &'a SymbolTable) -> Vec<Stmt> {
+        let layer = self.layers.last().unwrap();
+        let mut on_scope_exit = vec![];
+        for var in layer.variables.iter().rev() {
+            Self::leave_scope(var, symbols, &mut on_scope_exit);
         }
-    }
-    pub fn current_function(&self) -> &Function {
-        &self.symbols.get_function_by_id(self.current_function_id)
-    }
-    pub fn current_path(&self) -> &str {
-        &self.current_function().path
-    }
-    pub fn acquire_temp_id(&self) -> u32 {
-        self.temp_counter.replace(self.temp_counter.get() + 1)
-    }
-    pub fn acquire_var_id(&self) -> u32 {
-        self.var_counter.replace(self.var_counter.get() + 1)
-    }
-    pub fn acquire_label_id(&self) -> u32 {
-        self.label_counter.replace(self.label_counter.get() + 1)
+        return on_scope_exit;
     }
 }
 
@@ -1385,86 +1325,82 @@ pub struct LLVMOutputHandler {
     function_body: String,
 }
 impl LLVMOutputHandler {
-    pub fn push_str(&mut self, s: &str) {
-        self.function_body.push_str(s);
-    }
     pub fn push_main(&mut self, s: &str) {
         self.main.push_str(s);
     }
     pub fn push_function_intro(&mut self, s: &str) {
         self.function_intro.push_str(s);
     }
-    pub fn push_str_include_header(&mut self, s: &str) {
+    pub fn push_function_body(&mut self, s: &str) {
+        self.function_body.push_str(s);
+    }
+    pub fn push_header_include(&mut self, s: &str) {
         self.include_header.push_str(s);
     }
-    pub fn push_str_header(&mut self, s: &str) {
+    pub fn push_header(&mut self, s: &str) {
         self.header.push_str(s);
     }
-    pub fn push_str_global(&mut self, s: &str) {
+    pub fn push_global_variables(&mut self, s: &str) {
         self.global_variables.push_str(s);
     }
-    pub fn push_str_footer(&mut self, s: &str) {
+    pub fn push_footer(&mut self, s: &str) {
         self.footer.push_str(s);
     }
     pub fn add_to_strings_header(&mut self, string: String) -> usize {
-        if DONT_INSERT_REDUNDAND_STRINGS {
-            if let Some(id) = self.strings_header.iter().position(|entry| match entry {
-                StringEntry::Owned(s) => s == &string,
-                StringEntry::Suffix { content, .. } => content == &string,
-            }) {
-                return id;
-            }
+        if let Some(id) = self.strings_header.iter().position(|entry| match entry {
+            StringEntry::Owned(s) => s == &string,
+            StringEntry::Suffix { content, .. } => content == &string,
+        }) {
+            return id;
+        }
 
-            let suffix_match = self
-                .strings_header
-                .iter()
-                .enumerate()
-                .find_map(|(idx, entry)| {
-                    let (existing_str, actual_parent_idx, base_offset) = match entry {
-                        StringEntry::Owned(s) => (s, idx, 0),
-                        StringEntry::Suffix {
-                            parent_index,
-                            byte_offset,
-                            content,
-                            ..
-                        } => (content, *parent_index, *byte_offset),
-                    };
+        let suffix_match = self
+            .strings_header
+            .iter()
+            .enumerate()
+            .find_map(|(idx, entry)| {
+                let (existing_str, actual_parent_idx, base_offset) = match entry {
+                    StringEntry::Owned(s) => (s, idx, 0),
+                    StringEntry::Suffix {
+                        parent_index,
+                        byte_offset,
+                        content,
+                        ..
+                    } => (content, *parent_index, *byte_offset),
+                };
 
-                    if existing_str.ends_with(&string) && existing_str.len() > string.len() {
-                        let offset_diff = existing_str.len() - string.len();
-                        let absolute_offset = base_offset + offset_diff;
-                        Some((actual_parent_idx, absolute_offset))
-                    } else {
-                        None
-                    }
-                });
+                if existing_str.ends_with(&string) && existing_str.len() > string.len() {
+                    let offset_diff = existing_str.len() - string.len();
+                    let absolute_offset = base_offset + offset_diff;
+                    Some((actual_parent_idx, absolute_offset))
+                } else {
+                    None
+                }
+            });
 
-            if let Some((parent_index, byte_offset)) = suffix_match {
-                let len_with_null = string.len() + 1;
-                self.strings_header.push(StringEntry::Suffix {
-                    parent_index,
-                    byte_offset,
-                    length_with_null: len_with_null,
-                    content: string,
-                });
-                return self.strings_header.len() - 1;
-            }
+        if let Some((parent_index, byte_offset)) = suffix_match {
+            let len_with_null = string.len() + 1;
+            self.strings_header.push(StringEntry::Suffix {
+                parent_index,
+                byte_offset,
+                length_with_null: len_with_null,
+                content: string,
+            });
+            return self.strings_header.len() - 1;
         }
         self.strings_header.push(StringEntry::Owned(string.clone()));
         let new_index = self.strings_header.len() - 1;
-        if DONT_INSERT_REDUNDAND_STRINGS {
-            for i in 0..new_index {
-                if let StringEntry::Owned(old_content) = &self.strings_header[i] {
-                    if string.ends_with(old_content) && string.len() > old_content.len() {
-                        let offset = string.len() - old_content.len();
-                        let len_with_null = old_content.len() + 1;
-                        self.strings_header[i] = StringEntry::Suffix {
-                            parent_index: new_index,
-                            byte_offset: offset,
-                            length_with_null: len_with_null,
-                            content: old_content.clone(),
-                        };
-                    }
+        for i in 0..new_index {
+            if let StringEntry::Owned(old_content) = &self.strings_header[i] {
+                if string.ends_with(old_content) && string.len() > old_content.len() {
+                    let offset = string.len() - old_content.len();
+                    let len_with_null = old_content.len() + 1;
+                    self.strings_header[i] = StringEntry::Suffix {
+                        parent_index: new_index,
+                        byte_offset: offset,
+                        length_with_null: len_with_null,
+                        content: old_content.clone(),
+                    };
                 }
             }
         }
@@ -1520,9 +1456,9 @@ impl LLVMOutputHandler {
 
     pub fn start_function(
         &mut self,
-        return_type_llvm: String,
+        return_type_llvm: &str,
         full_function_name: &str,
-        args_str: String,
+        args_str: &str,
     ) {
         self.push_main(&format!(
             "define {} @{}({}){{\n",
@@ -1536,6 +1472,27 @@ impl LLVMOutputHandler {
         self.push_main("}\n");
         self.function_intro.clear();
         self.function_body.clear();
+    }
+
+    pub fn emit_line_body(&mut self, format: &str) {
+        self.push_function_body(&format!("\t{}\n", format));
+    }
+    pub fn emit_ret_void(&mut self) {
+        self.push_function_body(&format!("\tret void\n"));
+    }
+
+    pub fn emit_unconditional_jump_to(&mut self, label_name: &str) {
+        self.push_function_body(&format!("\tbr label %{label_name}\n"));
+    }
+
+    pub fn emit_label(&mut self, label_name: &str) {
+        self.push_function_body(&format!("{label_name}:\n"));
+    }
+    pub fn emit_label_intro(&mut self, label_name: &str) {
+        self.push_function_intro(&format!("{label_name}:\n"));
+    }
+    pub fn emit_comment(&mut self, comment: &str) {
+        self.push_function_body(&format!("; {comment}\n"));
     }
 }
 
@@ -1654,10 +1611,20 @@ impl SymbolTable {
     ) -> ordered_hash_map::ordered_map::Iter<'_, std::string::String, (usize, Function)> {
         self.functions.iter()
     }
+    pub fn functions_iter_mut(
+        &mut self,
+    ) -> ordered_hash_map::ordered_map::IterMut<'_, std::string::String, (usize, Function)> {
+        self.functions.iter_mut()
+    }
     pub fn types_iter(
         &self,
     ) -> ordered_hash_map::ordered_map::Iter<'_, std::string::String, (usize, Struct)> {
         self.types.iter()
+    }
+    pub fn static_vars_iter(
+        &self,
+    ) -> ordered_hash_map::ordered_map::Iter<'_, std::string::String, Variable> {
+        self.static_variables.iter()
     }
     pub fn alias_types(&self) -> &HashMap<String, CompilerType> {
         &self.alias_types

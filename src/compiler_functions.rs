@@ -50,10 +50,10 @@ fn stalloc_impl(
     }
 
     let utvc = compiler.ctx.acquire_temp_id();
-    let count_llvm_type = count_type.llvm_representation(compiler.ctx.symbols)?;
+    let count_llvm_type = count_type.llvm_representation(compiler.symbols())?;
 
-    compiler.output.push_str(&format!(
-        "    %tmp{} = alloca i8, {} {}\n",
+    compiler.output.push_function_body(&format!(
+        "\t%tmp{} = alloca i8, {} {}\n",
         utvc,
         count_llvm_type,
         count_val.get_llvm_rep()
@@ -98,16 +98,16 @@ fn stalloc_generic_impl(
 
     let target_type = CompilerType::from_parser_type(
         &given_generic[0],
-        compiler.ctx.symbols,
-        compiler.ctx.current_path(),
+        compiler.symbols(),
+        &compiler.ctx.current_function_path,
     )?;
-    let llvm_type_str = target_type.llvm_representation(compiler.ctx.symbols)?;
+    let llvm_type_str = target_type.llvm_representation(compiler.symbols())?;
     let utvc = compiler.ctx.acquire_temp_id();
-    compiler.output.push_str(&format!(
-        "    %tmp{} = alloca {}, {} {}\n",
+    compiler.output.push_function_body(&format!(
+        "\t%tmp{} = alloca {}, {} {}\n",
         utvc,
         llvm_type_str,
-        count_type.llvm_representation(compiler.ctx.symbols)?,
+        count_type.llvm_representation(compiler.symbols())?,
         count_val.get_llvm_rep()
     ));
     Ok(CompiledValue::new_value(
@@ -132,7 +132,7 @@ fn size_of_impl(
     let Ok(value_type) = value.try_get_type() else {
         return Err(CompilerError::Generic("size_of(Type) Type is not a type".into()).into());
     };
-    let size = value_type.calculate_layout(compiler.ctx.symbols).size;
+    let size = value_type.calculate_layout(compiler.symbols()).size;
     Ok(CompiledValue::new_value(
         LLVMVal::ConstantInteger(size as i128),
         expected
@@ -164,11 +164,11 @@ fn size_of_generic_impl(
     }
     let mut target_type = CompilerType::from_parser_type(
         &given_generic[0],
-        compiler.ctx.symbols,
-        compiler.ctx.current_path(),
+        compiler.symbols(),
+        &compiler.ctx.current_function_path,
     )?;
-    target_type.substitute_global_aliases(compiler.ctx.symbols)?;
-    let size = target_type.calculate_layout(compiler.ctx.symbols).size;
+    target_type.substitute_global_aliases(compiler.symbols())?;
+    let size = target_type.calculate_layout(compiler.symbols()).size;
     Ok(CompiledValue::new_value(
         LLVMVal::ConstantInteger(size as i128),
         expected
@@ -220,7 +220,7 @@ fn ptr_of_impl(
             ptype: ptype.reference(),
         }),
         CompiledValue::Function { internal_id } => {
-            let func = compiler.ctx.symbols.get_function_by_id(internal_id);
+            let func = compiler.symbols().get_function_by_id(internal_id);
             if func.is_external() {
                 return Err(CompilerError::Generic(format!(
                     "Cannot get pointer of external function: {}",
@@ -241,9 +241,9 @@ fn ptr_of_impl(
             })
         }
         CompiledValue::GenericFunctionImplementation { internal_id, types } => {
-            let func = compiler.ctx.symbols.get_function_by_id(internal_id);
+            let func = compiler.symbols().get_function_by_id(internal_id);
             let ind = func.get_implementation_index(&types).expect("msg");
-            let name = func.call_path_impl_index(ind, compiler.ctx.symbols);
+            let name = func.call_path_impl_index(ind, compiler.symbols());
 
             let mut type_map = HashMap::new();
             for (ind, prm) in func.generic_params.iter().enumerate() {
@@ -252,7 +252,7 @@ fn ptr_of_impl(
 
             let ptype = func
                 .get_type()
-                .with_substituted_generic_types(&type_map, compiler.ctx.symbols)?
+                .with_substituted_generic_types(&type_map, compiler.symbols())?
                 .reference();
             Ok(CompiledValue::Value {
                 llvm_repr: LLVMVal::Global(name.to_string()),
@@ -284,7 +284,7 @@ fn align_of_impl(
     let Ok(value_type) = value.try_get_type() else {
         return Err(CompilerError::Generic("align_of(Type) is not a type".into()).into());
     };
-    let size = value_type.calculate_layout(compiler.ctx.symbols).align;
+    let size = value_type.calculate_layout(compiler.symbols()).align;
     Ok(CompiledValue::new_value(
         LLVMVal::ConstantInteger(size as i128),
         expected
@@ -317,11 +317,11 @@ fn align_of_generic_impl(
     }
     let mut target_type = CompilerType::from_parser_type(
         &given_generic[0],
-        compiler.ctx.symbols,
-        compiler.ctx.current_path(),
+        compiler.symbols(),
+        &compiler.ctx.current_function_path,
     )?;
-    target_type.substitute_global_aliases(compiler.ctx.symbols)?;
-    let align = target_type.calculate_layout(compiler.ctx.symbols).align;
+    target_type.substitute_global_aliases(compiler.symbols())?;
+    let align = target_type.calculate_layout(compiler.symbols()).align;
     let return_ptype = if let Expected::Type(pt) = expected {
         if pt.is_integer() {
             (*pt).clone()
@@ -365,11 +365,11 @@ fn bitcast_generic_impl(
     };
     let target_type = CompilerType::from_parser_type(
         &given_generic[0],
-        compiler.ctx.symbols,
-        compiler.ctx.current_path(),
+        compiler.symbols(),
+        &compiler.ctx.current_function_path,
     )?;
 
-    if !source_type.is_bitcast_compatible(&target_type, compiler.ctx.symbols) {
+    if !source_type.is_bitcast_compatible(&target_type, compiler.symbols()) {
         return Err(CompilerError::Generic(format!(
             "bitcast size mismatch: cannot cast from {:?} to {:?}",
             source_type, target_type
@@ -378,10 +378,10 @@ fn bitcast_generic_impl(
     }
     if source_type.is_pointer() ^ target_type.is_pointer() {
         let (from_t, from_v) = (
-            source_type.llvm_representation(compiler.ctx.symbols)?,
+            source_type.llvm_representation(compiler.symbols())?,
             source_val.get_llvm_rep().to_string(),
         );
-        let to_str = target_type.llvm_representation(compiler.ctx.symbols)?;
+        let to_str = target_type.llvm_representation(compiler.symbols())?;
         if source_type.is_pointer() {
             let utvc = compiler.emit_cast("ptrtoint", &from_t, &from_v, &to_str);
             return Ok(CompiledValue::new_value(
@@ -428,8 +428,8 @@ fn bitcast_generic_impl(
             }
         }
     }
-    let src_llvm_type = source_type.llvm_representation(compiler.ctx.symbols)?;
-    let dst_llvm_type = target_type.llvm_representation(compiler.ctx.symbols)?;
+    let src_llvm_type = source_type.llvm_representation(compiler.symbols())?;
+    let dst_llvm_type = target_type.llvm_representation(compiler.symbols())?;
     let utvc = compiler.emit_cast(
         "bitcast",
         &src_llvm_type,
@@ -475,77 +475,76 @@ fn asm_impl(
             .into())
         }
     };
-    let mut parse_operands =
-        |arg_index: usize, is_output: bool| -> CompileResult<Vec<(String, String, String)>> {
-            let arg_expr = &given_args[arg_index];
-            match arg_expr {
-                Expr::Array(arr) => {
-                    let mut results: Vec<(String, String, String)> = Vec::new();
-                    for (i, expr) in arr.iter().enumerate() {
-                        if let Expr::Array(inner) = expr {
-                            if inner.len() != 2 {
-                                return Err(CompilerError::Generic(format!(
-                                    "asm() arg {} index {} must be a pair ['constraint', variable]",
-                                    arg_index + 1,
-                                    i
-                                ))
-                                .into());
-                            }
-
-                            let constraint = match &inner[0] {
-                                Expr::StringConst(s) => s.clone(),
-                                _ => {
-                                    return Err(CompilerError::Generic(
-                                        "Operand constraint must be a string".into(),
-                                    )
-                                    .into())
-                                }
-                            };
-
-                            let (llvm_value, llvm_type) = if let Expr::Name(name) = &inner[1] {
-                                if is_output {
-                                    let lvalue = compiler.compile_name_lvalue(name, true, true)?;
-                                    (
-                                        lvalue.location.to_string(),
-                                        lvalue
-                                            .value_type
-                                            .llvm_representation(compiler.ctx.symbols)?,
-                                    )
-                                } else {
-                                    let rvalue =
-                                        compiler.compile_name_rvalue(name, Expected::Anything)?;
-                                    (
-                                        rvalue.get_llvm_rep().to_string(),
-                                        rvalue
-                                            .try_get_type()?
-                                            .llvm_representation(compiler.ctx.symbols)?,
-                                    )
-                                }
-                            } else {
-                                return Err(CompilerError::Generic(
-                                    "Operand variable must be a name".into(),
-                                )
-                                .into());
-                            };
-
-                            results.push((constraint, llvm_value, llvm_type));
-                        } else {
+    let mut parse_operands = |arg_index: usize,
+                              is_output: bool|
+     -> CompileResult<Vec<(String, String, String)>> {
+        let arg_expr = &given_args[arg_index];
+        match arg_expr {
+            Expr::Array(arr) => {
+                let mut results: Vec<(String, String, String)> = Vec::new();
+                for (i, expr) in arr.iter().enumerate() {
+                    if let Expr::Array(inner) = expr {
+                        if inner.len() != 2 {
                             return Err(CompilerError::Generic(format!(
-                                "asm() arg {} must be an array of arrays",
-                                arg_index + 1
+                                "asm() arg {} index {} must be a pair ['constraint', variable]",
+                                arg_index + 1,
+                                i
                             ))
                             .into());
                         }
+
+                        let constraint = match &inner[0] {
+                            Expr::StringConst(s) => s.clone(),
+                            _ => {
+                                return Err(CompilerError::Generic(
+                                    "Operand constraint must be a string".into(),
+                                )
+                                .into())
+                            }
+                        };
+
+                        let (llvm_value, llvm_type) = if let Expr::Name(name) = &inner[1] {
+                            if is_output {
+                                let lvalue = compiler.compile_name_lvalue(name, true, true)?;
+                                (
+                                    lvalue.location.to_string(),
+                                    lvalue.value_type.llvm_representation(compiler.symbols())?,
+                                )
+                            } else {
+                                let rvalue =
+                                    compiler.compile_name_rvalue(name, Expected::Anything)?;
+                                (
+                                    rvalue.get_llvm_rep().to_string(),
+                                    rvalue
+                                        .try_get_type()?
+                                        .llvm_representation(compiler.symbols())?,
+                                )
+                            }
+                        } else {
+                            return Err(CompilerError::Generic(
+                                "Operand variable must be a name".into(),
+                            )
+                            .into());
+                        };
+
+                        results.push((constraint, llvm_value, llvm_type));
+                    } else {
+                        return Err(CompilerError::Generic(format!(
+                            "asm() arg {} must be an array of arrays",
+                            arg_index + 1
+                        ))
+                        .into());
                     }
-                    Ok(results)
                 }
-                _ => Err(CompilerError::Generic(format!(
-                    "asm() arg {} must be an array",
-                    arg_index + 1
-                ))
-                .into()),
+                Ok(results)
             }
-        };
+            _ => Err(CompilerError::Generic(format!(
+                "asm() arg {} must be an array",
+                arg_index + 1
+            ))
+            .into()),
+        }
+    };
     let outputs = parse_operands(1, true)?;
     let inputs = parse_operands(2, false)?;
     let inp = inputs
@@ -570,8 +569,8 @@ fn asm_impl(
     if let Some((register, var_pointer, var_type)) = outputs.first() {
         assert!(outputs.len() == 1);
         let utvc = compiler.ctx.acquire_temp_id();
-        compiler.output.push_str(&format!(
-            "    %asm{utvc} = call {} asm sideeffect inteldialect \"{}\", \"{}\"({})\n",
+        compiler.output.push_function_body(&format!(
+            "\t%asm{utvc} = call {} asm sideeffect inteldialect \"{}\", \"{}\"({})\n",
             var_type,
             asm_template_str,
             format!(
@@ -595,16 +594,16 @@ fn asm_impl(
             var_type,
         );*/
 
-        compiler.output.push_str(&format!(
-            "    store {} {}, {}* {}\n",
+        compiler.output.push_function_body(&format!(
+            "\tstore {} {}, {}* {}\n",
             var_type,
             format!("%asm{utvc}"),
             var_type,
             var_pointer
         ));
     } else {
-        compiler.output.push_str(&format!(
-            "    call {} asm sideeffect inteldialect \"{}\", \"{}\"({})\n",
+        compiler.output.push_function_body(&format!(
+            "\tcall {} asm sideeffect inteldialect \"{}\", \"{}\"({})\n",
             "void",
             asm_template_str,
             if !inp.is_empty() {

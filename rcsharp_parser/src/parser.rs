@@ -7,7 +7,7 @@ use crate::{
 use rcsharp_lexer::{Token, TokenData};
 use std::fmt;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct Span {
     pub start: usize,
     pub end: usize,
@@ -390,6 +390,26 @@ impl<'a> GeneralParser<'a> {
         Ok(statements)
     }
 
+    pub fn parse_compiler_only(&mut self) -> ParserResult<Vec<(Span, Attribute)>> {
+        let mut a = vec![];
+        while !self.is_at_end() {
+            if self.peek().token == Token::Hint {
+                let next_token = self.peek_offset(1);
+                if next_token.token != Token::LSquareBrace {
+                    let StmtData {
+                        span,
+                        stmt: Stmt::CompilerHint(x),
+                    } = self.parse_hint_stmt()?
+                    else {
+                        unreachable!();
+                    };
+                    a.push((span, x));
+                }
+            }
+            self.advance();
+        }
+        return Ok(a);
+    }
     fn parse_toplevel_item(&mut self) -> ParserResult<StmtData> {
         let mut attributes = Vec::new();
         let mut start_span = self.peek_span();
