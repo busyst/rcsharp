@@ -175,7 +175,9 @@ pub enum Stmt {
     Struct(ParsedStruct),                       // struct foo <T> { bar : i8, ... }
     Enum(ParsedEnum),                           // enum foo 'base_type' { bar = ..., ... }
     Namespace(String, Box<[StmtData]>),         // namespace foo { fn bar() ... {...} ... }
+    StatementBlock(Box<[StmtData]>),            // ; { ... }
     Debug(String),                              // ; 'debug statement'
+    CompilerDud,                                // ; does absolutely nothing
 }
 impl Stmt {
     pub fn recursive_statement_count(&self) -> u64 {

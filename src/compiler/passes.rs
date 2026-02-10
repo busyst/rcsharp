@@ -8,7 +8,7 @@ use crate::{
 use rcsharp_lexer::{Lexer, LexingError, TokenData};
 use rcsharp_parser::{
     compiler_primitives::BOOL_TYPE,
-    expression_parser::Expr,
+    expression_parser::{Expr, UnaryOp},
     parser::{GeneralParser, ParserType, Span, Stmt, StmtData},
 };
 use std::{cell::Cell, collections::HashMap};
@@ -224,7 +224,8 @@ impl<'a> CompilerPass<'a> for TypeCheckPass {
                 }
                 compiler_enum_fields.push((
                     field_name.to_string(),
-                    constant_expression_compiler(&field_expr)?,
+                    constant_expression_compiler(&field_expr)
+                        .ok_or(CompilerError::Generic(format!("Placeholder").into()))?,
                 ));
             }
             ctx.symbols.insert_enum(
@@ -321,12 +322,29 @@ impl<'a> CompilerPass<'a> for OptimizerPass {
     type Output = ();
 
     fn run(&mut self, _: Self::Input, ctx: &mut CompilerContext) -> CompileResult<Self::Output> {
+        self.controll_flow_rearangement(ctx)?;
         self.expression_optimisation(ctx)?;
         self.statements_after_return_optimisation(ctx)?;
         Ok(())
     }
 }
 impl OptimizerPass {
+    fn controll_flow_rearangement(&mut self, ctx: &mut CompilerContext) -> CompileResult<()> {
+        for func in ctx.symbols.functions_iter_mut() {
+            if !func.1 .1.body.is_empty() {
+                for stmt in func.1 .1.body.iter_mut() {
+                    if let Stmt::If(x, y, z) = &mut stmt.stmt {
+                        if y.is_empty() && !z.is_empty() {
+                            std::mem::swap(y, z);
+                            *x = Expr::UnaryOp(UnaryOp::Not, Box::new(x.clone()));
+                            println!("OPT: Change order")
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
     fn expression_optimisation(&mut self, ctx: &mut CompilerContext) -> CompileResult<()> {
         let mut exprs = vec![];
         for func in ctx.symbols.functions_iter_mut() {
@@ -894,6 +912,9 @@ impl LLVMGenPass {
         builder: &mut LLVMOutputHandler,
         ctx: &mut CompilerContext,
     ) -> CompileResult<bool> {
+        if r#then.is_empty() && r#else.is_empty() {
+            return Ok(false);
+        }
         let bool_type = CompilerType::Primitive(BOOL_TYPE);
         let cond_result = compile_expression_v2(
             expr,
@@ -928,6 +949,11 @@ impl LLVMGenPass {
         let then_label = format!("then{}", logic_id);
         let else_label = format!("else{}", logic_id);
         let end_label = format!("endif{}", logic_id);
+        let target_then = if r#then.is_empty() {
+            &end_label
+        } else {
+            &then_label
+        };
         let target_else = if r#else.is_empty() {
             &end_label
         } else {
@@ -936,36 +962,39 @@ impl LLVMGenPass {
         builder.push_function_body(&format!(
             "\tbr i1 {}, label %{}, label %{}\n",
             cond_result.get_llvm_rep(),
-            then_label,
+            target_then,
             target_else
         ));
-        builder.emit_label(&then_label);
-        self.cgctx.current_block_name = then_label;
-        self.cgctx.scope.push_layer();
-        for then_stmt in then {
-            let end_compile = self.compile_statement(then_stmt, builder, ctx)?;
-            if end_compile {
-                break;
-            };
+        if !r#then.is_empty() {
+            builder.emit_label(&then_label);
+            self.cgctx.current_block_name = then_label;
+            self.cgctx.scope.push_layer();
+            for then_stmt in then {
+                let end_compile = self.compile_statement(then_stmt, builder, ctx)?;
+                if end_compile {
+                    break;
+                };
+            }
+            let exit_stmts = self.cgctx.scope.pop_layer(&mut ctx.symbols);
+            for x in exit_stmts {
+                self.compile_statement(
+                    &StmtData {
+                        stmt: x,
+                        span: self.span,
+                    },
+                    builder,
+                    ctx,
+                )?;
+            }
+            if then
+                .last()
+                .map(|x| !matches!(x.stmt, Stmt::Return(..)))
+                .unwrap_or(false)
+            {
+                builder.emit_unconditional_jump_to(&end_label);
+            }
         }
-        let exit_stmts = self.cgctx.scope.pop_layer(&mut ctx.symbols);
-        for x in exit_stmts {
-            self.compile_statement(
-                &StmtData {
-                    stmt: x,
-                    span: self.span,
-                },
-                builder,
-                ctx,
-            )?;
-        }
-        if then
-            .last()
-            .map(|x| !matches!(x.stmt, Stmt::Return(..)))
-            .unwrap_or(false)
-        {
-            builder.emit_unconditional_jump_to(&end_label);
-        }
+
         if !r#else.is_empty() {
             builder.emit_label(&else_label);
             self.cgctx.current_block_name = else_label;
