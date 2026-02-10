@@ -5,7 +5,7 @@ use crate::{
     },
     expression_compiler::{self, compile_expression_v2, constant_expression_compiler, Expected},
 };
-use rcsharp_lexer::{Lexer, LexingError};
+use rcsharp_lexer::{Lexer, LexingError, TokenData};
 use rcsharp_parser::{
     compiler_primitives::BOOL_TYPE,
     expression_parser::Expr,
@@ -32,14 +32,30 @@ pub fn compile(entry_path: &str) -> CompileResult<(CompilerContext, String)> {
     let mut ctx = CompilerContext::default();
 
     let mut loader = ModuleLoaderPass::default();
-    let ast = loader.run(entry_path, &mut ctx)?;
+    let (tokens, ast) = loader.run(entry_path, &mut ctx)?;
 
     let mut type_checker = TypeCheckPass::default();
     type_checker.run(&ast, &mut ctx)?;
     let mut optimizer = OptimizerPass::default();
     optimizer.run((), &mut ctx)?;
     let mut codegen = LLVMGenPass::default();
-    let llvm_ir = codegen.run((), &mut ctx)?;
+    let llvm_ir = match codegen.run((), &mut ctx) {
+        Ok(x) => x,
+        Err(x) => {
+            if let Some(span) = x.span {
+                format!(
+                    "{:?}\n{:#?}",
+                    &tokens[span.start + 1..span.end]
+                        .iter()
+                        .map(|x| &x.token)
+                        .collect::<Vec<_>>(),
+                    x.error
+                )
+            } else {
+                format!("{:#?}", x.error)
+            }
+        }
+    };
 
     Ok((ctx, llvm_ir))
 }
@@ -59,7 +75,7 @@ pub struct ModuleLoaderPass {}
 impl<'a> CompilerPass<'a> for ModuleLoaderPass {
     type Input = &'a str;
 
-    type Output = Vec<StmtData>;
+    type Output = (Vec<TokenData>, Vec<StmtData>);
 
     fn run(
         &mut self,
@@ -99,7 +115,14 @@ impl<'a> CompilerPass<'a> for ModuleLoaderPass {
             let mut parse = GeneralParser::new(tokens).parse_all().unwrap();
             stmt_vec.append(&mut parse);
         }
-        Ok(stmt_vec)
+        Ok((
+            runned_throu
+                .iter()
+                .map(|x| x.1.clone())
+                .flatten()
+                .collect::<Vec<_>>(),
+            stmt_vec,
+        ))
     }
 }
 #[derive(Default)]
@@ -388,7 +411,7 @@ impl OptimizerPass {
 }
 #[derive(Default)]
 pub struct LLVMGenPass {
-    cgctx: CodeGenContext,
+    pub cgctx: CodeGenContext,
     span: Span,
 }
 impl<'a> CompilerPass<'a> for LLVMGenPass {
@@ -411,6 +434,10 @@ impl<'a> CompilerPass<'a> for LLVMGenPass {
     }
 }
 impl LLVMGenPass {
+    pub fn new(cgctx: CodeGenContext, span: Span) -> Self {
+        Self { cgctx, span }
+    }
+
     fn emit_external(
         &mut self,
         builder: &mut LLVMOutputHandler,
@@ -921,8 +948,8 @@ impl LLVMGenPass {
                 break;
             };
         }
-        let x = self.cgctx.scope.pop_layer(&mut ctx.symbols);
-        for x in x {
+        let exit_stmts = self.cgctx.scope.pop_layer(&mut ctx.symbols);
+        for x in exit_stmts {
             self.compile_statement(
                 &StmtData {
                     stmt: x,
@@ -932,7 +959,13 @@ impl LLVMGenPass {
                 ctx,
             )?;
         }
-        builder.emit_unconditional_jump_to(&end_label);
+        if then
+            .last()
+            .map(|x| !matches!(x.stmt, Stmt::Return(..)))
+            .unwrap_or(false)
+        {
+            builder.emit_unconditional_jump_to(&end_label);
+        }
         if !r#else.is_empty() {
             builder.emit_label(&else_label);
             self.cgctx.current_block_name = else_label;
@@ -955,7 +988,13 @@ impl LLVMGenPass {
                 )?;
             }
         }
-        builder.emit_unconditional_jump_to(&end_label);
+        if r#else
+            .last()
+            .map(|x| !matches!(x.stmt, Stmt::Return(..)))
+            .unwrap_or(false)
+        {
+            builder.emit_unconditional_jump_to(&end_label);
+        }
         builder.emit_label(&end_label);
         self.cgctx.current_block_name = end_label;
         Ok(false)
@@ -1103,7 +1142,6 @@ impl LLVMGenPass {
         for x in inside {
             self.compile_statement(x, builder, ctx)?;
         }
-        builder.emit_unconditional_jump_to(&format!("loop_body{}", lc));
         builder.emit_label(&format!("loop_body{}_exit", lc));
         self.cgctx.current_block_name = format!("loop_body{}_exit", lc);
         let x = self.cgctx.scope.pop_layer(&mut ctx.symbols);

@@ -894,18 +894,7 @@ impl<'a> ExpressionCompiler<'a> {
             )
             .into());
         }
-
-        let inline_exit_handle = self.ctx.acquire_label_id();
-        let return_tmp = if !func_return_type.is_void() {
-            let return_utvc = self.ctx.acquire_temp_id();
-            let return_llvm = func_return_type.llvm_representation(self.symbols())?;
-            self.output
-                .push_function_body(&format!("\t%tmp{} = alloca {}\n", return_utvc, return_llvm));
-            Some((return_utvc, return_llvm))
-        } else {
-            None
-        };
-
+        let inline_id = self.ctx.acquire_label_id();
         let mut prepared_args = vec![];
         for (idx, expr) in given_args.iter().enumerate() {
             let argument_rvalue = self.compile_rvalue(expr, Expected::Type(&func_args[idx].1))?;
@@ -921,96 +910,62 @@ impl<'a> ExpressionCompiler<'a> {
                 ))
                 .into());
             }
-            prepared_args.push(argument_rvalue);
+            let var = Variable::new(argument_type.clone(), true, false);
+            var.set_constant_value(Some(argument_rvalue.get_llvm_rep().clone()));
+            prepared_args.push((func_args[idx].0.clone(), var));
         }
-
-        let lp = self.ctx.current_function_path.clone();
-        let og_scope = self.ctx.scope.clone();
-
-        self.ctx.current_function_path = current_function_path.to_string();
-
-        let mut gener = LLVMGenPass::default();
-        for (idx, arg) in prepared_args.iter().enumerate() {
-            let var = Variable::new(arg.try_get_type().unwrap().clone(), true, false);
-            var.set_constant_value(Some(arg.get_llvm_rep().clone()));
-            self.ctx.scope.define(func_args[idx].0.clone(), var, 0);
-        }
-
-        let mut terminated = false;
-
-        for x in body {
-            match &x.stmt {
-                Stmt::Return(opt_expr) => {
-                    let return_type = func_return_type;
-                    if opt_expr.is_some() && return_type.is_void() {
-                        return Err(CompilerError::Generic(
-                            "This inline function does not return anything".to_string(),
-                        )
-                        .into());
-                    }
-                    if let Some(expr) = opt_expr {
-                        let return_tmp = return_tmp.as_ref().unwrap();
-                        let value = self.compile_rvalue(expr, Expected::Type(return_type))?;
-                        let Ok(value_type) = value.try_get_type() else {
-                            return Err(CompilerError::Generic(
-                                "Right side of binary operation is not value".into(),
-                            )
-                            .into());
-                        };
-                        if value_type != return_type {
-                            return Err(CompilerError::TypeMismatch {
-                                expected: return_type.clone(),
-                                found: value_type.clone(),
-                            }
-                            .into());
-                        }
-                        let llvm_type_str = &return_tmp.1;
-                        self.emit_store(
-                            value.try_get_llvm_rep()?,
-                            &LLVMVal::Register(return_tmp.0),
-                            llvm_type_str,
-                        );
-                    } else if !return_type.is_void() {
-                        return Err(CompilerError::Generic(
-                            "Cannot return without a value from a non-void function.".to_string(),
-                        )
-                        .into());
-                    }
-
-                    self.output.push_function_body(&format!(
-                        "\tbr label %inline_exit{}\n",
-                        inline_exit_handle
-                    ));
-                    terminated = true;
-                    break;
-                }
-                _ => {
-                    //gener.compile_statement(x, self.output, self.compctx)?;
-                }
-            }
-        }
-
-        if !terminated {
-            self.output
-                .emit_unconditional_jump_to(&format!("inline_exit{}", inline_exit_handle));
-        }
+        let mut code_gen_ctx = CodeGenContext::default();
+        code_gen_ctx.current_function_return_type = func_return_type.clone();
+        code_gen_ctx.label_counter.set(self.ctx.label_counter.get());
+        code_gen_ctx.temp_counter.set(self.ctx.temp_counter.get());
+        code_gen_ctx.var_counter.set(self.ctx.var_counter.get());
+        code_gen_ctx.return_label_name = format!("inl_exit{inline_id}");
+        code_gen_ctx.current_block_name = format!("inl_entry{inline_id}");
         self.output
-            .emit_label(&format!("inline_exit{}", inline_exit_handle));
-
-        self.ctx.scope = og_scope;
-        self.ctx.current_function_path = lp;
-        self.ctx.current_block_name = format!("inline_exit{}", inline_exit_handle);
-        if let Some((id, var_llvm_type)) = return_tmp {
-            let rv_utvc = self.ctx.acquire_temp_id();
-            self.emit_load(rv_utvc as usize, &LLVMVal::Register(id), &var_llvm_type);
-            return Ok(CompiledValue::new_value(
-                LLVMVal::Register(rv_utvc),
-                func_return_type.clone(),
-            ));
+            .emit_unconditional_jump_to(&format!("inl_entry{inline_id}"));
+        self.output.emit_label(&format!("inl_entry{inline_id}"));
+        for arg in prepared_args {
+            code_gen_ctx.scope.define(arg.0, arg.1, 0);
         }
-        Ok(CompiledValue::NoReturn {
-            program_halt: false,
-        })
+        let mut gen = LLVMGenPass::new(code_gen_ctx, Span::empty());
+        for x in body {
+            gen.compile_statement(x, self.output, self.compctx)?;
+        }
+        if body
+            .last()
+            .map(|x| !matches!(x.stmt, Stmt::Return(..)))
+            .unwrap_or(false)
+        {
+            self.output
+                .emit_unconditional_jump_to(&format!("inl_exit{inline_id}"));
+        }
+        self.output.emit_label(&format!("inl_exit{inline_id}"));
+        gen.cgctx.label_counter.swap(&self.ctx.label_counter);
+        gen.cgctx.temp_counter.swap(&self.ctx.temp_counter);
+        gen.cgctx.var_counter.swap(&self.ctx.var_counter);
+        if func_return_type.is_void() {
+            return Ok(CompiledValue::Value {
+                llvm_repr: LLVMVal::Void,
+                val_type: func_return_type.clone(),
+            });
+        }
+        let phi_uid = self.ctx.acquire_temp_id();
+        let phi_ops = gen
+            .cgctx
+            .pending_returns
+            .iter()
+            .map(|(val, blk)| format!("[ {}, %{} ]", val, blk))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let return_type_llvm = func_return_type.llvm_representation(&self.compctx.symbols)?;
+        self.output.emit_line_body(&format!(
+            "%tmp{} = phi {} {}",
+            phi_uid, return_type_llvm, phi_ops
+        ));
+        return Ok(CompiledValue::Value {
+            llvm_repr: LLVMVal::Register(phi_uid),
+            val_type: func_return_type.clone(),
+        });
     }
     fn compile_unary_op_rvalue(
         &mut self,
