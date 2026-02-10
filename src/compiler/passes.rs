@@ -1142,6 +1142,8 @@ impl LLVMGenPass {
         for x in inside {
             self.compile_statement(x, builder, ctx)?;
         }
+
+        builder.emit_unconditional_jump_to(&format!("loop_body{}", lc));
         builder.emit_label(&format!("loop_body{}_exit", lc));
         self.cgctx.current_block_name = format!("loop_body{}_exit", lc);
         let x = self.cgctx.scope.pop_layer(&mut ctx.symbols);
