@@ -791,9 +791,7 @@ impl LLVMGenPass {
         for stmt in fx.iter() {
             self.compile_statement(stmt, builder, ctx)?;
         }
-        if !return_type.is_void() {
-            builder.emit_line_body("unreachable");
-        } else {
+        if return_type.is_void() {
             builder.emit_unconditional_jump_to(&self.cgctx.return_label_name);
         }
         builder.emit_label(&self.cgctx.return_label_name);
@@ -814,18 +812,25 @@ impl LLVMGenPass {
             if self.cgctx.pending_returns.is_empty() {
                 builder.emit_line_body("unreachable");
             } else {
-                let phi_ops = self
-                    .cgctx
-                    .pending_returns
-                    .iter()
-                    .map(|(val, blk)| format!("[ {}, %{} ]", val, blk))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                builder.emit_line_body(&format!(
-                    "%final_ret = phi {} {}",
-                    return_type_llvm, phi_ops
-                ));
-                builder.emit_line_body(&format!("ret {} %final_ret", return_type_llvm));
+                if self.cgctx.pending_returns.len() > 1 {
+                    let phi_ops = self
+                        .cgctx
+                        .pending_returns
+                        .iter()
+                        .map(|(val, blk)| format!("[ {}, %{} ]", val, blk))
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    builder.emit_line_body(&format!(
+                        "%final_ret = phi {} {}",
+                        return_type_llvm, phi_ops
+                    ));
+                    builder.emit_line_body(&format!("ret {} %final_ret", return_type_llvm));
+                } else {
+                    builder.emit_line_body(&format!(
+                        "ret {} {}",
+                        return_type_llvm, self.cgctx.pending_returns[0].0
+                    ));
+                }
             }
         }
         builder.end_function();
@@ -988,7 +993,7 @@ impl LLVMGenPass {
             }
             if then
                 .last()
-                .map(|x| !matches!(x.stmt, Stmt::Return(..)))
+                .map(|x| !matches!(x.stmt, Stmt::Return(..) | Stmt::Break | Stmt::Continue))
                 .unwrap_or(false)
             {
                 builder.emit_unconditional_jump_to(&end_label);
@@ -1019,7 +1024,7 @@ impl LLVMGenPass {
         }
         if r#else
             .last()
-            .map(|x| !matches!(x.stmt, Stmt::Return(..)))
+            .map(|x| !matches!(x.stmt, Stmt::Return(..) | Stmt::Break | Stmt::Continue))
             .unwrap_or(false)
         {
             builder.emit_unconditional_jump_to(&end_label);
