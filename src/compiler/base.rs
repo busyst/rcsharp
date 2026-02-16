@@ -1,6 +1,8 @@
+use rcsharp_lexer::{Lexer, LexingError};
+
 use crate::{
     compiler::{
-        context::CompilerContext,
+        context::{CompilerContext, ErrorSeverity},
         passes::{
             pass_llvm_gen::LLVMGenPass, pass_module_loader::ModuleLoaderPass,
             pass_optimizer::OptimizerPass, pass_type_check::TypeCheckPass, traits::CompilerPass,
@@ -10,13 +12,25 @@ use crate::{
 };
 
 pub fn compile_to_file(entry_path: &str, output_path: &str) -> CompileResult<()> {
-    let x = compile(entry_path)?;
-    std::fs::write(output_path, x.1).unwrap();
-    let diag = x.0.diagnostics;
-    if diag.is_empty() {
-        return Ok(());
+    let (ctx, llvm_ir) = compile(entry_path)?;
+    let diag = &ctx.diagnostics;
+    let error_count = diag
+        .iter()
+        .filter(|(sev, _)| matches!(sev, ErrorSeverity::Error | ErrorSeverity::Panic))
+        .count();
+    if error_count > 0 {
+        for (_, err) in diag {
+            eprintln!("{}", err);
+        }
+        return Err(CompilerError::Generic(format!(
+            "Compilation failed with {} errors",
+            error_count
+        ))
+        .into());
     }
-    Err(CompilerError::Generic(format!("{}", diag.len())).into())
+
+    std::fs::write(output_path, llvm_ir).map_err(|e| CompilerError::Generic(e.to_string()))?;
+    Ok(())
 }
 pub fn compile(entry_path: &str) -> CompileResult<(CompilerContext, String)> {
     let mut ctx = CompilerContext::default();
@@ -30,20 +44,46 @@ pub fn compile(entry_path: &str) -> CompileResult<(CompilerContext, String)> {
     optimizer.run((), &mut ctx)?;
     let mut codegen = LLVMGenPass::default();
     let llvm_ir = match codegen.run((), &mut ctx) {
-        Ok(x) => x,
-        Err(x) => {
-            let x = if let Some(span) = x.span {
-                let loc = ctx.source_manager.get_debug_loc(&span);
-                let snippet = ctx.source_manager.get_source_slice(&span).unwrap_or("<?>");
+        Ok(ir) => ir,
+        Err(err) => {
+            let error_msg = if let Some(span) = err.span {
+                let l = ctx
+                    .source_manager
+                    .files
+                    .iter()
+                    .map(|x| {
+                        Lexer::new(&x.content)
+                            .collect::<Result<Vec<_>, LexingError>>()
+                            .unwrap()
+                    })
+                    .collect::<Vec<_>>();
+                let mut indx = span.start;
+                let mut v = &l[0];
+                let mut qidx = 0;
+                for (idx, q) in l.iter().enumerate() {
+                    if indx >= q.len() {
+                        indx -= q.len();
+                    } else {
+                        v = q;
+                        qidx = idx;
+                        break;
+                    }
+                }
+                let x = &v[span.start];
                 format!(
-                    "Error at {} :\n    Code: {}\n    Message: {}",
-                    loc, snippet, x.error
+                    "Error at {}:{}:{}\n    Message: {}",
+                    ctx.source_manager.files[qidx].path, x.row, x.col, err.error
                 )
             } else {
-                format!("{:#?}", x.error)
+                format!("Error: {}", err.error)
             };
-            println!("{}", x);
-            return Err(CompilerError::Generic(format!("Error")).into());
+            ctx.diagnostics.push((
+                ErrorSeverity::Error,
+                CompilerError::Generic(error_msg.clone()),
+            ));
+            println!("{}", error_msg);
+
+            return Err(CompilerError::Generic("Codegen failed".into()).into());
         }
     };
 

@@ -9,7 +9,8 @@ use rcsharp_parser::{
 use crate::{
     compiler::{context::CompilerContext, passes::traits::CompilerPass},
     compiler_essentials::{
-        CompileResult, CompilerError, CompilerType, LLVMOutputHandler, LLVMVal, Scope, Variable,
+        CompileResult, CompileResultExt, CompilerError, CompilerType, LLVMOutputHandler, LLVMVal,
+        Scope, Variable,
     },
     expression_compiler::{compile_expression_v2, Expected},
 };
@@ -410,7 +411,10 @@ impl LLVMGenPass {
         }
         let fx = body.clone();
         for stmt in fx.iter() {
-            self.compile_statement(stmt, builder, ctx)?;
+            self.compile_statement(stmt, builder, ctx).extend(&format!(
+                "During compilation of function '{}':namespace('{}')",
+                full_function_name, function_path
+            ))?;
         }
         if return_type.is_void() {
             builder.emit_unconditional_jump_to(&self.cgctx.return_label_name);
@@ -472,8 +476,12 @@ impl LLVMGenPass {
                 builder.emit_comment(&comment);
                 Ok(false)
             }
-            Stmt::If(x, y, z) => Ok(self.compile_if_statement(x, y, z, builder, ctx)?),
-            Stmt::Return(x) => Ok(self.compile_return(x, builder, ctx)?),
+            Stmt::If(x, y, z) => Ok(self
+                .compile_if_statement(x, y, z, builder, ctx)
+                .extend(&format!("During compilation of if statement"))?),
+            Stmt::Return(x) => Ok(self
+                .compile_return(x, builder, ctx)
+                .extend(&format!("During compilation of return statement"))?),
             Stmt::Expr(x) => Ok(compile_expression_v2(
                 x,
                 Expected::NoReturn,
@@ -488,19 +496,32 @@ impl LLVMGenPass {
                     (name, var_type, &Some(z.clone()), true, false),
                     builder,
                     ctx,
+                )
+                .extend_set_span_if_none(
+                    &format!("During declaration of constant {}", name),
+                    self.span,
                 )?;
                 Ok(false)
             }
             Stmt::Static(name, var_type, z) => {
-                self.compile_var_decl((name, var_type, z, false, true), builder, ctx)?;
+                self.compile_var_decl((name, var_type, z, false, true), builder, ctx)
+                    .extend_set_span_if_none(
+                        &format!("During declaration of static variable {}", name),
+                        self.span,
+                    )?;
                 Ok(false)
             }
             Stmt::Let(name, var_type, z) => {
-                self.compile_var_decl((name, var_type, z, false, false), builder, ctx)?;
+                self.compile_var_decl((name, var_type, z, false, false), builder, ctx)
+                    .extend_set_span_if_none(
+                        &format!("During declaration of variable {}", name),
+                        self.span,
+                    )?;
                 Ok(false)
             }
             Stmt::Loop(inside) => {
-                self.compile_loop(inside, builder, ctx)?;
+                self.compile_loop(inside, builder, ctx)
+                    .extend(&format!("Inside loop"))?;
                 Ok(false)
             }
             Stmt::Continue => match self.cgctx.scope.current_loop_tag() {

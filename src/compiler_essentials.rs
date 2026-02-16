@@ -1201,6 +1201,7 @@ impl From<(Span, CompilerError)> for CompilerErrorWrapper {
 }
 pub trait CompileResultExt<T> {
     fn extend(self, str: &str) -> CompileResult<T>;
+    fn extend_set_span_if_none(self, str: &str, span: Span) -> CompileResult<T>;
 }
 impl<T> CompileResultExt<T> for CompileResult<T> {
     fn extend(self, str: &str) -> CompileResult<T> {
@@ -1208,6 +1209,16 @@ impl<T> CompileResultExt<T> for CompileResult<T> {
             Ok(_) => self,
             Err(mut x) => {
                 x.extend(str);
+                Err(x)
+            }
+        }
+    }
+
+    fn extend_set_span_if_none(self, str: &str, span: Span) -> CompileResult<T> {
+        match self {
+            Ok(_) => self,
+            Err(mut x) => {
+                x.extend_first_span(str, span);
                 Err(x)
             }
         }

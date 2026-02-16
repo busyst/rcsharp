@@ -79,7 +79,7 @@ impl fmt::Display for ParserError {
         }
     }
 }
-
+/// (span, (row, column), err)
 pub type ParserResult<T> = Result<T, (Span, (usize, usize), ParserError)>;
 
 pub trait ParserResultExt<T> {
@@ -396,8 +396,7 @@ impl<'a> GeneralParser<'a> {
         let mut a = vec![];
         while !self.is_at_end() {
             if self.peek().token == Token::Hint {
-                let next_token = self.peek_offset(1);
-                if next_token.token != Token::LSquareBrace {
+                if self.peek_offset(1).token != Token::LSquareBrace {
                     let StmtData {
                         span,
                         stmt: Stmt::CompilerHint(x),

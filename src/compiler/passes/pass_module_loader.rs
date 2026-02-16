@@ -30,17 +30,26 @@ impl<'a> CompilerPass<'a> for ModuleLoaderPass {
             let file_data = std::fs::read_to_string(&path).unwrap();
             ctx.source_manager
                 .add_file(&path, file_data.clone(), offset);
-            let lexed = Lexer::new(&file_data).collect::<Result<Vec<_>, LexingError>>();
-            let mut lexed = if let Ok(x) = lexed {
-                x
-            } else {
-                let err = lexed.err().unwrap();
-
-                panic!("{}", &file_data[err.span.start..err.span.end])
+            let mut lexed = match Lexer::new(&file_data).collect::<Result<Vec<_>, LexingError>>() {
+                Ok(x) => x,
+                Err(err) => panic!(
+                    "Lexing error at {}:{}:{} '{}'",
+                    path,
+                    err.row,
+                    err.col,
+                    &file_data[err.span.start..err.span.end]
+                ),
             };
-            let q = rcsharp_parser::parser::GeneralParser::new(&lexed)
-                .parse_compiler_only()
-                .unwrap();
+            let q = match rcsharp_parser::parser::GeneralParser::new(&lexed).parse_compiler_only() {
+                Ok(x) => x,
+                Err(err) => {
+                    return Err(CompilerError::Generic(format!(
+                        "Parsing error {}\nAt {}:{}:{}",
+                        err.2, path, err.1 .0, err.1 .1
+                    ))
+                    .into());
+                }
+            };
             for (span, attr) in q.iter() {
                 if attr.name_equals("include") {
                     let include_path_expr = attr.one_argument();
@@ -58,21 +67,23 @@ impl<'a> CompilerPass<'a> for ModuleLoaderPass {
             }
             if offset != 0 {
                 for x in lexed.iter_mut() {
-                    x.span.start = x.span.start + offset;
-                    x.span.end = x.span.end + offset;
+                    x.span.start += offset;
+                    x.span.end += offset;
                 }
             }
-            offset = lexed.last().map(|x| x.span.end).unwrap_or(0);
+            offset += lexed.len();
             runned_throu.push((path, lexed));
         }
         for (_path, tokens) in runned_throu.iter() {
-            let parse = GeneralParser::new(tokens).parse_all();
-
-            let mut parse = if let Ok(parse) = parse {
-                parse
-            } else {
-                let err = parse.err().unwrap();
-                panic!("{:#?}", err.2)
+            let mut parse = match GeneralParser::new(tokens).parse_all() {
+                Ok(parse) => parse,
+                Err(err) => {
+                    return Err(CompilerError::Generic(format!(
+                        "Parsing error {}\nAt {}:{}:{}",
+                        err.2, _path, err.1 .0, err.1 .1
+                    ))
+                    .into());
+                }
             };
             stmt_vec.append(&mut parse);
         }

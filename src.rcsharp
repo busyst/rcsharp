@@ -14,7 +14,6 @@ fn ax<T>() : Pair<T, Pair<i8, string::String>>{
     return p;
 }
 fn ay<T>() : Pair<T, Pair<i8, Pair<T, Pair<i8, Pair<T, Pair<i8, Pair<T, Pair<Pair<T, Pair<i8, string::String>>, string::String>>>>>>>>{
-    
 }
 fn of_fn() : &fn() : &fn() : void{
     return of_fn();
