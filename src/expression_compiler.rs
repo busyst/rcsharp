@@ -1,8 +1,12 @@
 use crate::{
-    compiler::passes::{CodeGenContext, CompilerContext, LLVMGenPass},
+    compiler::{
+        context::CompilerContext,
+        passes::pass_llvm_gen::{CodeGenContext, LLVMGenPass},
+        structs::{ContextPath, ContextPathEnd},
+    },
     compiler_essentials::{
-        CompileResult, CompiledLValue, CompilerError, CompilerType, LLVMOutputHandler, LLVMVal,
-        SymbolTable, Variable,
+        CompileResult, CompileResultExt, CompiledLValue, CompilerError, CompilerType,
+        LLVMOutputHandler, LLVMVal, SymbolTable, Variable,
     },
     compiler_functions::COMPILER_FUNCTIONS,
 };
@@ -125,7 +129,7 @@ impl CompiledValue {
 }
 impl<'a> ExpressionCompiler<'a> {
     fn new(
-        ctx: &'a mut crate::compiler::passes::CodeGenContext,
+        ctx: &'a mut CodeGenContext,
         output: &'a mut LLVMOutputHandler,
         compctx: &'a mut CompilerContext,
     ) -> Self {
@@ -202,11 +206,10 @@ impl<'a> ExpressionCompiler<'a> {
                 },
             );
         }
-        if let Some(variable) = self
+        if let Some((path, variable)) = self
             .symbols()
             .get_static_var(&format!("{}.{}", self.ctx.current_function_path, name))
             .or(self.symbols().get_static_var(name))
-            .cloned()
         {
             let mut vtype = variable.compiler_type.clone();
             vtype.substitute_global_aliases(self.symbols())?;
@@ -216,7 +219,14 @@ impl<'a> ExpressionCompiler<'a> {
             }
             let concrete_type = variable.compiler_type.clone();
             let type_str = concrete_type.llvm_representation(self.symbols())?;
-            return variable.load_llvm_value(0, name, self.ctx, &type_str, self.output);
+            let variable = variable.clone();
+            return variable.load_llvm_value(
+                0,
+                &path.to_string(),
+                self.ctx,
+                &type_str,
+                self.output,
+            );
         }
         if let Some(ptype) = PRIMITIVE_TYPES_INFO.iter().find(|x| x.name == name) {
             return Ok(CompiledValue::Type(CompilerType::Primitive(ptype)));
@@ -308,7 +318,7 @@ impl<'a> ExpressionCompiler<'a> {
                     .unwrap(),
             )));
         }
-        println!("{:?}", fully_qualified_name);
+        eprintln!("{:?}", fully_qualified_name);
         unimplemented!();
     }
     fn compile_binary_op(
@@ -929,7 +939,11 @@ impl<'a> ExpressionCompiler<'a> {
         }
         let mut gen = LLVMGenPass::new(code_gen_ctx, Span::empty());
         for x in body {
-            gen.compile_statement(x, self.output, self.compctx)?;
+            gen.compile_statement(x, self.output, self.compctx)
+                .extend(&format!(
+                    "While compoling inline of {}",
+                    _current_function_path
+                ))?;
         }
         if body
             .last()
@@ -1081,7 +1095,7 @@ impl<'a> ExpressionCompiler<'a> {
         &mut self,
         expr: &Expr,
         member: &str,
-        expected: Expected,
+        _expected: Expected,
     ) -> CompileResult<CompiledValue> {
         let mut path = vec![member];
         let mut cursor = expr;
@@ -1089,48 +1103,36 @@ impl<'a> ExpressionCompiler<'a> {
             cursor = x;
             path.push(y);
         }
-        let Expr::Name(core) = expr else {
-            return Err(CompilerError::Generic("Expected name".into()).into());
+        let Expr::Name(base) = cursor else {
+            return Err(CompilerError::Generic(format!("Expected name")).into());
         };
-        let enum_path = if path.len() == 1 {
-            core.clone()
-        } else {
-            format!(
-                "{}.{}",
-                core,
-                path.iter()
-                    .skip(1)
-                    .rev()
-                    .map(|x| x.to_string())
-                    .collect::<Vec<_>>()
-                    .join(".")
-            )
-        };
-        if let Some(x) = self
+        path.push(base);
+        let func_path = ContextPath::from_string(&self.ctx.current_function_path);
+        // First try enum
+        let field = path.first().unwrap();
+        let enum_path = ContextPathEnd::from_vec(
+            path.iter()
+                .skip(1)
+                .map(|x| x.to_string().into_boxed_str())
+                .collect::<Vec<_>>(),
+        );
+        if let Some(x) = self.symbols().get_enum_by_path(&enum_path).or(self
             .symbols()
-            .get_enum(&format!("{}.{}", self.ctx.current_function_path, enum_path))
-            .or(self.symbols().get_enum(&enum_path))
+            .get_enum_by_path(&enum_path.with_start(&func_path)))
         {
-            let e = x
-                .fields
-                .iter()
-                .filter(|x| x.0 == member)
-                .nth(0)
-                .expect("msg");
-            return Ok(CompiledValue::new_value(e.1.clone(), x.base_type.clone()));
+            return Ok(CompiledValue::Value {
+                llvm_repr: x
+                    .fields
+                    .iter()
+                    .find(|x| x.0 == *field)
+                    .map(|x| x.1.clone())
+                    .unwrap(),
+                val_type: x.base_type.clone(),
+            });
         }
 
-        let full_path = format!(
-            "{}.{}",
-            core,
-            path.iter()
-                .rev()
-                .map(|x| x.to_string())
-                .collect::<Vec<_>>()
-                .join(".")
-        );
-
-        self.compile_name_rvalue(&full_path, expected)
+        unimplemented!()
+        //self.compile_name_rvalue(&full_path, expected)
     }
     fn compile_member_access_rvalue(&mut self, expr: &Expr) -> CompileResult<CompiledValue> {
         let member_ptr = self.compile_lvalue(expr, false, false)?;
@@ -1276,12 +1278,12 @@ impl<'a> ExpressionCompiler<'a> {
             self.symbols().get_function_by_id_use(function);
             return Ok(CompiledLValue::from_function(function, self.symbols())?);
         }
-        if let Some(variable) = self
+        if let Some((path, variable)) = self
             .symbols()
             .get_static_var(&format!("{}.{}", self.ctx.current_function_path, name))
             .or(self.symbols().get_static_var(name))
         {
-            let llvm_repr = LLVMVal::Global(name.to_string());
+            let llvm_repr = LLVMVal::Global(path.to_string());
             variable.mark_usage(write, modify_content);
             return Ok(CompiledLValue::new(
                 llvm_repr,
@@ -1377,7 +1379,7 @@ impl<'a> ExpressionCompiler<'a> {
                     .fields
                     .iter()
                     .position(|x| x.0 == member)
-                    .expect("Member not found");
+                    .expect(&format!("Member {} not found inside ", member));
                 let field_type = given_struct.fields[index].1.clone();
 
                 let llvm_struct_type = given_struct.llvm_representation();
@@ -1539,19 +1541,17 @@ impl<'a> ExpressionCompiler<'a> {
             cursor = x;
             path.push(y);
         }
-        let Expr::Name(core) = expr else {
-            return Err(CompilerError::Generic("Expected name".into()).into());
+        let Expr::Name(base) = cursor else {
+            return Err(CompilerError::Generic(format!("Expected name")).into());
         };
-        let full_path = format!(
-            "{}.{}",
-            core,
+        path.push(base);
+        let full_path = ContextPathEnd::from_vec(
             path.iter()
                 .rev()
-                .map(|x| x.to_string())
-                .collect::<Vec<_>>()
-                .join(".")
+                .map(|x| x.to_string().into_boxed_str())
+                .collect::<Vec<_>>(),
         );
-        self.compile_name_lvalue(&full_path, write, modify_content)
+        self.compile_name_lvalue(&full_path.to_string(), write, modify_content)
     }
     fn compile_deref_lvalue(
         &mut self,
@@ -1711,9 +1711,9 @@ impl<'a> ExpressionCompiler<'a> {
     ) -> Option<CompileResult<CompiledValue>> {
         // --
         if let Expr::Name(name) = callee {
-            if let Some((_, Some(func_ptr), _)) = COMPILER_FUNCTIONS
+            if let Some((_, Some(func_ptr), _, _)) = COMPILER_FUNCTIONS
                 .iter()
-                .find(|(n, _, _)| n == &name.as_str())
+                .find(|(n, _, _, _)| n == &name.as_str())
             {
                 return Some(func_ptr(self, given_args, expected));
             }
@@ -1729,9 +1729,9 @@ impl<'a> ExpressionCompiler<'a> {
     ) -> Option<CompileResult<CompiledValue>> {
         // --
         if let Expr::Name(name) = callee {
-            if let Some((_, _, Some(generic_ptr))) = COMPILER_FUNCTIONS
+            if let Some((_, _, Some(generic_ptr), ..)) = COMPILER_FUNCTIONS
                 .iter()
-                .find(|(n, _, _)| n == &name.as_str())
+                .find(|(n, ..)| n == &name.as_str())
             {
                 return Some(generic_ptr(self, given_args, given_generic, expected));
             }
@@ -1991,7 +1991,7 @@ pub fn compile_expression_v2(
     expr: &Expr,
     expected: Expected,
     span: Span,
-    ctx: &mut crate::compiler::passes::CodeGenContext,
+    ctx: &mut CodeGenContext,
     compctx: &mut CompilerContext,
     output: &mut LLVMOutputHandler,
 ) -> CompileResult<CompiledValue> {

@@ -14,13 +14,28 @@ pub type CompilerFn =
 pub type GenericCompilerFn =
     fn(&mut ExpressionCompiler, &[Expr], &[ParserType], &Expected) -> CompileResult<CompiledValue>;
 
-pub const COMPILER_FUNCTIONS: &[(&str, Option<CompilerFn>, Option<GenericCompilerFn>)] = &[
-    ("stalloc", Some(stalloc_impl), Some(stalloc_generic_impl)),
-    ("size_of", Some(size_of_impl), Some(size_of_generic_impl)),
-    ("align_of", Some(align_of_impl), Some(align_of_generic_impl)),
-    ("ptr_of", Some(ptr_of_impl), None),
-    ("bitcast", None, Some(bitcast_generic_impl)),
-    ("asm", Some(asm_impl), None),
+pub const COMPILER_FUNCTIONS: &[(&str, Option<CompilerFn>, Option<GenericCompilerFn>, bool)] = &[
+    (
+        "stalloc",
+        Some(stalloc_impl),
+        Some(stalloc_generic_impl),
+        false,
+    ),
+    (
+        "size_of",
+        Some(size_of_impl),
+        Some(size_of_generic_impl),
+        true,
+    ),
+    (
+        "align_of",
+        Some(align_of_impl),
+        Some(align_of_generic_impl),
+        true,
+    ),
+    ("ptr_of", Some(ptr_of_impl), None, false),
+    ("bitcast", None, Some(bitcast_generic_impl), false),
+    ("asm", Some(asm_impl), None, false),
 ];
 
 fn stalloc_impl(
@@ -99,7 +114,7 @@ fn stalloc_generic_impl(
     let target_type = CompilerType::from_parser_type(
         &given_generic[0],
         compiler.symbols(),
-        &compiler.ctx.current_function_path,
+        &compiler.ctx.current_function_path.to_string(),
     )?;
     let llvm_type_str = target_type.llvm_representation(compiler.symbols())?;
     let utvc = compiler.ctx.acquire_temp_id();
@@ -165,7 +180,7 @@ fn size_of_generic_impl(
     let mut target_type = CompilerType::from_parser_type(
         &given_generic[0],
         compiler.symbols(),
-        &compiler.ctx.current_function_path,
+        &compiler.ctx.current_function_path.to_string(),
     )?;
     target_type.substitute_global_aliases(compiler.symbols())?;
     let size = target_type.calculate_layout(compiler.symbols()).size;
@@ -208,64 +223,12 @@ fn ptr_of_impl(
                 lvalue.value_type.clone().reference(),
             ));
         }
+
         _ => {
             unimplemented!("{:?}", lvalue);
         }
     }
-    unimplemented!("");
-    /*
-    match lvalue {
-        CompiledValue::Pointer { llvm_repr, ptype } => Ok(CompiledValue::Value {
-            llvm_repr,
-            ptype: ptype.reference(),
-        }),
-        CompiledValue::Function { internal_id } => {
-            let func = compiler.symbols().get_function_by_id(internal_id);
-            if func.is_external() {
-                return Err(CompilerError::Generic(format!(
-                    "Cannot get pointer of external function: {}",
-                    func.full_path()
-                ))
-                .into());
-            }
-            if func.is_inline() {
-                return Err(CompilerError::Generic(format!(
-                    "Cannot get pointer of inline function: {}",
-                    func.full_path()
-                ))
-                .into());
-            }
-            Ok(CompiledValue::Value {
-                llvm_repr: LLVMVal::Global(func.full_path().to_string()),
-                ptype: func.get_type().reference(),
-            })
-        }
-        CompiledValue::GenericFunctionImplementation { internal_id, types } => {
-            let func = compiler.symbols().get_function_by_id(internal_id);
-            let ind = func.get_implementation_index(&types).expect("msg");
-            let name = func.call_path_impl_index(ind, compiler.symbols());
-
-            let mut type_map = HashMap::new();
-            for (ind, prm) in func.generic_params.iter().enumerate() {
-                type_map.insert(prm.clone(), types[ind].clone());
-            }
-
-            let ptype = func
-                .get_type()
-                .with_substituted_generic_types(&type_map, compiler.symbols())?
-                .reference();
-            Ok(CompiledValue::Value {
-                llvm_repr: LLVMVal::Global(name.to_string()),
-                ptype,
-            })
-        }
-        _ => Err(CompilerError::Generic(format!(
-            "Cannot take the address of an R-value or non-addressable expression: {:?}",
-            given_args[0]
-        ))
-        .into()),
-    }
-     */
+    unimplemented!("")
 }
 
 fn align_of_impl(
@@ -318,7 +281,7 @@ fn align_of_generic_impl(
     let mut target_type = CompilerType::from_parser_type(
         &given_generic[0],
         compiler.symbols(),
-        &compiler.ctx.current_function_path,
+        &compiler.ctx.current_function_path.to_string(),
     )?;
     target_type.substitute_global_aliases(compiler.symbols())?;
     let align = target_type.calculate_layout(compiler.symbols()).align;
@@ -366,7 +329,7 @@ fn bitcast_generic_impl(
     let target_type = CompilerType::from_parser_type(
         &given_generic[0],
         compiler.symbols(),
-        &compiler.ctx.current_function_path,
+        &compiler.ctx.current_function_path.to_string(),
     )?;
 
     if !source_type.is_bitcast_compatible(&target_type, compiler.symbols()) {

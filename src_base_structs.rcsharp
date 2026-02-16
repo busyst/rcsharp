@@ -1,6 +1,7 @@
 #[no_lazy]
 fn __chkstk() : void {
-    asm(
+    /*
+asm(
         "push rcx
          push rax
          cmp rax, 4096
@@ -22,6 +23,8 @@ fn __chkstk() : void {
         [],
         ["flags"] 
     );
+    */
+    return;
 }
 
 #[no_lazy]
@@ -324,6 +327,9 @@ namespace console{
         return stdout_handle;
     }
     fn write(buffer: &i8, len: i32){
+        if len == 0{
+            return;
+        }
         let chars_written: i32;
         WriteConsoleA(get_stdout(), buffer, len, &chars_written, null);
         if len != chars_written{
@@ -338,16 +344,10 @@ namespace console{
         }
     }
     fn writeln(buffer: &i8, len: i32){
-        if len == 0{
-            return;
-        }
-        let chars_written: i32;
-        WriteConsoleA(get_stdout(), buffer, len, &chars_written, null);
-        if len != chars_written{
-            process::ExitProcess(-2);
-        }
+        write(buffer, len);
+        let cw : i32;
         let nl : i8 = 10;
-        WriteConsoleA(get_stdout(), &nl, 1, &chars_written, null);
+        WriteConsoleA(get_stdout(), &nl, 1, &cw, null);
     }
     fn print_char(n: i8) {
         let b : i8 = n;
@@ -507,8 +507,79 @@ namespace string{
         stallocd_buffer[string.len] = 0;
     }
 }
+namespace char_utils{ 
+    pub fn is_alnum(c: i8) : bool {
+        return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9');
+    }
+    pub fn is_alpha(c: i8) : bool {
+        return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+    }
+    pub fn is_cntrl(c: i8) : bool {
+        return (c >= 0 && c <= 31) || c == 127;
+    }
+    pub fn is_digit(c: i8) : bool {
+        return c >= '0' && c <= '9';
+    }
+    pub fn is_graph(c: i8) : bool {
+        return c >= 33 && c <= 126;
+    }
+    pub fn is_lower(c: i8) : bool {
+        return c >= 'a' && c <= 'z';
+    }
+    pub fn is_print(c: i8) : bool {
+        return c >= 32 && c <= 126;
+    }
+    pub fn is_punct(c: i8) : bool {
+        return is_graph(c) && !is_alnum(c);
+    }
+    pub fn is_space(c: i8) : bool {
+        return c == ' ' || c == '\t' || c == '\n' || c == '\v' || c == '\f' || c == '\r';
+    }
+    pub fn is_upper(c: i8) : bool {
+        return c >= 'A' && c <= 'Z';
+    }
+    pub fn is_xdigit(c: i8) : bool {
+        return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+    }
+    pub fn to_lower(c: i8) : i8 {
+        if is_upper(c) {
+            return c + ('a' - 'A');
+        }
+        return c;
+    }
+    pub fn to_upper(c: i8) : i8 {
+        if is_lower(c) {
+            return c - ('a' - 'A');
+        }
+        return c;
+    }
+}
 namespace string_utils{
-    fn insert(src1: &i8, src2: &i8, index: i32) : &i8{
+    pub fn c_str_copy(dest: &i8, src: &i8) : &i8 {
+        let i : i32 = 0;
+        loop {
+            dest[i] = src[i];
+            if src[i] == 0 { break; }
+            i = i + 1;
+        }
+        return dest;
+    }
+    pub fn c_str_n_copy(dest: &i8, src: &i8, n: i32) : &i8 {
+        let i : i32 = 0;
+        loop {
+            if i >= n { break; }
+            dest[i] = src[i];
+            if src[i] == 0 { break; }
+            i = i + 1;
+        }
+        loop {
+            if i >= n { break; }
+            dest[i] = 0;
+            i = i + 1;
+        }
+        return dest;
+    }
+    pub fn insert(src1: &i8, src2: &i8, index: i32) : &i8{
         const len1 : i32 = c_str_len(src1);
         const len2 : i32 = c_str_len(src2);
         const output : &i8 = mem::malloc((len1 + len2 + 1) as i64) as &i8;
@@ -518,7 +589,7 @@ namespace string_utils{
         output[len1 + len2] = 0;
         return output;
     }
-    fn c_str_len(str: &i8) : i32{
+    pub fn c_str_len(str: &i8) : i32{
         let len : i32 = 0;
         loop{
             if str[len] == 0{
@@ -528,14 +599,68 @@ namespace string_utils{
         }
         return len;
     }
-    fn is_ascii_num(char: i8) : bool{
-        return char >= '0' && char <= '9';
+}
+namespace stdlib { 
+    pub fn atoi(str: &i8) : i32 {
+        let res : i32 = 0;
+        let sign : i32 = 1;
+        let i : i32 = 0;
+
+        loop { if !char_utils::is_space(str[i]) { break; } i = i + 1; }
+
+        if str[i] == '-' { sign = -1; i = i + 1; } 
+        else if str[i] == '+' { i = i + 1; }
+
+        loop {
+            if !char_utils::is_digit(str[i]) { break; }
+            res = res * 10 + (str[i] - '0');
+            i = i + 1;
+        }
+        return res * sign;
     }
-    fn is_ascii_char(char: i8) : bool{
-        return (char >= 'A' && char <= 'Z') || (char >= 'a' && char <= 'z');
+    pub fn str_to_l(str: &i8, endptr: &&i8, base: i32) : i64 {
+        let i: i32 = 0;
+        loop { if !char_utils::is_space(str[i]) { break; } i = i + 1; }
+
+        let sign: i64 = 1;
+        if str[i] == '+' { i = i + 1; } 
+        else if str[i] == '-' { sign = -1; i = i + 1; }
+
+        let b: i32 = base;
+        if b == 0 {
+            if str[i] == '0' {
+                if char_utils::to_lower(str[i+1]) == 'x' { b = 16; } else { b = 8; }
+            } else { b = 10; }
+        }
+
+        if b == 16 && str[i] == '0' && char_utils::to_lower(str[i+1]) == 'x' {
+            i = i + 2;
+        }
+
+        let result: i64 = 0;
+        let digit_val: i32;
+        loop {
+            const c: i8 = str[i];
+            if char_utils::is_digit(c) { digit_val = c - '0'; }
+            else if char_utils::is_alpha(c) { digit_val = char_utils::to_lower(c) - 'a' + 10; }
+            else { break; }
+            
+            if digit_val >= b { break; }
+
+            result = result * b as i64 + digit_val as i64;
+            i = i + 1;
+        }
+
+        if endptr != null { *endptr = str + i as i64; }
+        return result * sign;
     }
-    fn is_ascii_hex(char: i8) : bool{
-        return (char >= '0' && char <= '9') || (char >= 'A' && char <= 'F') || (char >= 'a' && char <= 'f');
+    static rand_seed: u32;
+    pub fn srand(seed: u32) {
+        rand_seed = seed;
+    }
+    pub fn rand() : i32 {
+        rand_seed = (rand_seed * 1103515245 + 12345);
+        return ((rand_seed / 65536) % 32768) as i32;
     }
 }
 namespace fs{
@@ -675,9 +800,9 @@ namespace tests{
         if string_utils::c_str_len("test") != 4 { process::throw("string_utils_test: c_str_len failed"); }
         if string_utils::c_str_len("") != 0 { process::throw("string_utils_test: c_str_len empty failed"); }
 
-        if !string_utils::is_ascii_num('7') || string_utils::is_ascii_num('b') { process::throw("string_utils_test: is_ascii_num failed"); }
-        if !string_utils::is_ascii_char('a') || string_utils::is_ascii_char('9') { process::throw("string_utils_test: is_ascii_char failed"); }
-        if !string_utils::is_ascii_hex('F') || string_utils::is_ascii_hex('G') { process::throw("string_utils_test: is_ascii_hex failed"); }
+        if !char_utils::is_digit('7') || char_utils::is_digit('b') { process::throw("char_utils: charis_digit failed"); }
+        if !char_utils::is_alpha('a') || char_utils::is_alpha('9') { process::throw("char_utils: is_alpha failed"); }
+        if !char_utils::is_xdigit('F') || char_utils::is_xdigit('G') { process::throw("char_utils: is_xdigit failed"); }
 
         const inserted: &i8 = string_utils::insert("ac", "b", 1);
         const expected: &i8 = "abc";
@@ -856,8 +981,8 @@ namespace tests{
         }
     }
     fn not_new_line(c:i8) : bool { return c != '\n'; }
-    fn valid_name_token(c:i8) : bool { return string_utils::is_ascii_char(c) || string_utils::is_ascii_num(c) || c == '_'; }
-    fn is_valid_number_token(c:i8) : bool { return string_utils::is_ascii_num(c) || string_utils::is_ascii_hex(c) || c == '_'; }
+    fn valid_name_token(c:i8) : bool { return char_utils::is_alpha(c) || char_utils::is_digit(c) || c == '_'; }
+    fn is_valid_number_token(c:i8) : bool { return char_utils::is_digit(c) || char_utils::is_xdigit(c) || c == '_'; }
     enum LexerTokens{
         String
     }
@@ -896,7 +1021,7 @@ namespace tests{
                 consume_while(&file, &iterator, &not_new_line);
                 continue;
             }
-            if string_utils::is_ascii_num(char){
+            if char_utils::is_digit(char){
                 index = iterator;
                 if next_char == 'x' || next_char == 'b'{
                     iterator = iterator + 2;
@@ -908,7 +1033,7 @@ namespace tests{
                 continue;
             }
 
-            if string_utils::is_ascii_char(char) || char == '_'{
+            if char_utils::is_alpha(char) || char == '_'{
                 index = iterator;
                 consume_while(&file, &iterator, &valid_name_token);
                 let temp_string: string::String = string::with_size(iterator - index);

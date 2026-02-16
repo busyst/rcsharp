@@ -9,7 +9,16 @@ use std::{
     collections::HashMap,
 };
 
-use crate::{compiler::passes::CodeGenContext, expression_compiler::CompiledValue};
+use crate::{
+    compiler::{
+        passes::pass_llvm_gen::CodeGenContext,
+        structs::{
+            ContextPath, ContextPathDictionary, ContextPathDictionaryIter,
+            ContextPathDictionaryIterMut, ContextPathEnd,
+        },
+    },
+    expression_compiler::CompiledValue,
+};
 #[derive(Debug, Clone, PartialEq)]
 pub enum LLVMVal {
     Register(u32),         // %tmp1
@@ -19,7 +28,6 @@ pub enum LLVMVal {
     ConstantInteger(i128), // 42
     ConstantDecimal(f64),  // 42.0, 0.5
     ConstantBoolean(bool), // true/false
-    Constant(String),      // anything, realy
     Null,                  // null
     Void,                  // void
 }
@@ -30,7 +38,6 @@ impl std::fmt::Display for LLVMVal {
             LLVMVal::Variable(id) => write!(f, "%v{}", id),
             LLVMVal::VariableName(name) => write!(f, "%{}", name),
             LLVMVal::Global(name) => write!(f, "@{}", name),
-            LLVMVal::Constant(val) => write!(f, "{}", val),
             LLVMVal::ConstantInteger(val) => write!(f, "{}", val),
             LLVMVal::ConstantDecimal(val) => write!(f, "0x{:X}", val.to_bits()),
             LLVMVal::ConstantBoolean(val) => write!(f, "{}", val),
@@ -231,7 +238,7 @@ impl CompilerType {
                 .get_enum(&local_path)
                 .or_else(|| symbols.get_enum(name))
             {
-                return Ok(enum_def.base_type.clone());
+                return Ok(enum_def.1.base_type.clone());
             }
 
             if let Some(alias) = symbols.alias_types().get(name) {
@@ -362,7 +369,11 @@ impl CompilerType {
                     *self = replacement.clone();
                     Ok(())
                 } else {
-                    panic!("Generic placeholder {} not found in substitution map", name);
+                    return Err(CompilerError::Generic(format!(
+                        "Generic placeholder {} not found in substitution map",
+                        name,
+                    ))
+                    .into());
                 }
             }
             Self::GenericStructTemplate(template_id, args) => {
@@ -544,8 +555,7 @@ impl CompilerType {
 }
 #[derive(Debug, Clone)]
 pub struct Enum {
-    pub path: Box<str>,
-    pub name: Box<str>,
+    pub full_path: ContextPathEnd,
     pub base_type: CompilerType,
     pub fields: Box<[(String, LLVMVal)]>,
     pub flags: Cell<u8>,
@@ -553,15 +563,13 @@ pub struct Enum {
 }
 impl Enum {
     pub fn new(
-        path: Box<str>,
-        name: Box<str>,
+        full_name: ContextPathEnd,
         base_type: CompilerType,
         fields: Box<[(String, LLVMVal)]>,
         attribs: Box<[Attribute]>,
     ) -> Self {
         Self {
-            path,
-            name,
+            full_path: full_name,
             base_type,
             fields,
             attributes: attribs,
@@ -597,9 +605,7 @@ impl StructFlags {
 #[allow(unused)]
 #[derive(Debug, Clone)]
 pub struct Struct {
-    path: Box<str>,
-    name: Box<str>,
-    full_path: Box<str>,
+    full_path: ContextPathEnd,
     pub fields: Box<[(String, CompilerType)]>,
     pub generic_params: Box<[String]>,
     pub generic_implementations: RefCell<Vec<Box<[CompilerType]>>>,
@@ -610,26 +616,18 @@ pub struct Struct {
 
 impl Struct {
     pub fn new(
-        path: Box<str>,
-        name: Box<str>,
+        path: ContextPathEnd,
         fields: Box<[(String, CompilerType)]>,
         attributes: Box<[Attribute]>,
         generic_params: Box<[String]>,
     ) -> Self {
-        let full_path = if path.is_empty() {
-            name.clone()
-        } else {
-            format!("{}.{}", path, name).into()
-        };
         let flags = StructFlags {
             is_generic: !generic_params.is_empty(),
             is_primitive: false,
         };
 
         Self {
-            path,
-            name,
-            full_path,
+            full_path: path,
             fields,
             attributes,
             generic_params,
@@ -640,9 +638,7 @@ impl Struct {
     }
     pub fn new_placeholder() -> Self {
         Self {
-            path: format!("").into_boxed_str(),
-            name: format!("").into_boxed_str(),
-            full_path: format!("").into_boxed_str(),
+            full_path: ContextPathEnd::default(),
             fields: Box::new([]),
             generic_params: Box::new([]),
             generic_implementations: RefCell::new(vec![]),
@@ -666,7 +662,7 @@ impl Struct {
     pub fn llvm_representation(&self) -> String {
         assert!(!self.is_generic());
         if self.is_primitive() {
-            self.name.to_string()
+            self.name().to_string()
         } else {
             format!("%{}", self.llvm_representation_without_percent())
         }
@@ -674,15 +670,15 @@ impl Struct {
 
     pub fn llvm_representation_without_percent(&self) -> String {
         if self.is_primitive() {
-            self.name.to_string()
+            self.name().to_string()
         } else {
-            format!("struct.{}", self.full_path)
+            format!("struct.{}", self.full_path().to_string())
         }
     }
     pub fn llvm_repr_index(&self, impl_index: usize, symbols: &SymbolTable) -> Box<str> {
         assert!(self.is_generic());
         debug_assert!(impl_index < self.generic_implementations.borrow().len());
-        let base_name = format!("struct.{}", self.full_path);
+        let base_name = format!("struct.{}", self.full_path().to_string());
 
         let implementations = self.generic_implementations.borrow();
         let generic_args = implementations.get(impl_index).unwrap();
@@ -715,7 +711,7 @@ impl Struct {
         mut_impls.push(generics.to_vec().into_boxed_slice());
         Some(mut_impls.len() - 1)
     }
-    pub fn full_path(&self) -> &Box<str> {
+    pub fn full_path(&self) -> &ContextPathEnd {
         &self.full_path
     }
     pub fn ensure_generic_implementation(&self, generics: &[CompilerType]) -> usize {
@@ -731,7 +727,7 @@ impl Struct {
     }
 
     pub fn name(&self) -> &str {
-        &self.name
+        &self.full_path.name()
     }
 }
 #[derive(Debug, Clone, Copy, Default)]
@@ -782,9 +778,7 @@ impl FunctionFlags {
 
 #[derive(Debug, Clone)]
 pub struct Function {
-    path: Box<str>,
-    name: Box<str>,
-    full_path: Box<str>,
+    full_path: ContextPathEnd,
     pub args: Box<[(String, CompilerType)]>,
     pub return_type: CompilerType,
     pub body: Box<[StmtData]>,
@@ -797,8 +791,7 @@ pub struct Function {
 }
 impl Function {
     pub fn new(
-        path: Box<str>,
-        name: Box<str>,
+        path: ContextPathEnd,
         args: Box<[(String, CompilerType)]>,
         return_type: CompilerType,
         body: Box<[StmtData]>,
@@ -806,15 +799,8 @@ impl Function {
         attributes: Box<[Attribute]>,
         generic_params: Box<[String]>,
     ) -> Self {
-        let full_path = if path.is_empty() {
-            name.clone()
-        } else {
-            format!("{}.{}", path, name).into()
-        };
         Self {
-            path,
-            name,
-            full_path,
+            full_path: path,
             args,
             return_type,
             body,
@@ -848,12 +834,12 @@ impl Function {
         self.flags.set(flags.to_byte());
     }
     pub fn name(&self) -> &str {
-        &self.name
+        &self.full_path.name()
     }
-    pub fn path(&self) -> &str {
-        &self.path
+    pub fn path(&self) -> &ContextPath {
+        &self.full_path.context_path()
     }
-    pub fn full_path(&self) -> &str {
+    pub fn full_path(&self) -> &ContextPathEnd {
         &self.full_path
     }
 
@@ -895,7 +881,7 @@ impl Function {
             .collect::<Vec<_>>()
             .join(", ");
 
-        format!("\"{}<{}>\"", self.full_path, arg_names)
+        format!("\"{}<{}>\"", self.full_path().to_string(), arg_names)
     }
     pub fn get_concretized_signature(
         &self,
@@ -1289,7 +1275,7 @@ impl CompiledLValue {
         let location = if func.is_generic() {
             LLVMVal::ConstantInteger(id as i128)
         } else if func.is_external() {
-            LLVMVal::Global(func.name.to_string())
+            LLVMVal::Global(func.name().to_string())
         } else {
             LLVMVal::Global(func.full_path.to_string())
         };
@@ -1498,61 +1484,37 @@ impl LLVMOutputHandler {
 
 #[derive(Default)]
 pub struct SymbolTable {
-    functions: OrderedHashMap<String, (usize, Function)>,
-    types: OrderedHashMap<String, (usize, Struct)>,
+    functions: ContextPathDictionary<Function>,
+    types: ContextPathDictionary<Struct>,
     alias_types: HashMap<String, CompilerType>,
-    enums: OrderedHashMap<String, (usize, Enum)>,
-    static_variables: OrderedHashMap<String, Variable>,
+    enums: ContextPathDictionary<Enum>,
+    static_variables: ContextPathDictionary<Variable>,
 }
 impl SymbolTable {
     pub fn get_type_by_id(&self, type_id: usize) -> &Struct {
-        self.types
-            .values()
-            .filter(|x| x.0 == type_id)
-            .nth(0)
-            .map(|x| &x.1)
-            .expect("Unexpected")
+        self.types.values().nth(type_id).expect("Unexpected")
     }
     pub fn get_function_by_id(&self, function_id: usize) -> &Function {
-        if let Some(func) = self
-            .functions
-            .values()
-            .filter(|x| x.0 == function_id)
-            .nth(0)
-        {
-            return &func.1;
+        if let Some(func) = self.functions.values().nth(function_id) {
+            return func;
         }
         unreachable!()
     }
     pub fn get_function_by_id_use(&self, function_id: usize) -> &Function {
-        if let Some(func) = self
-            .functions
-            .values()
-            .filter(|x| x.0 == function_id)
-            .nth(0)
-        {
-            func.1.increment_usage();
-            return &func.1;
+        if let Some(func) = self.functions.values().nth(function_id) {
+            func.increment_usage();
+            return func;
         }
         unreachable!()
     }
-    pub fn get_enum_by_id(&self, enum_id: usize) -> &Enum {
-        self.enums
-            .values()
-            .filter(|x| x.0 == enum_id)
-            .nth(0)
-            .map(|x| &x.1)
-            .expect("Unexpected")
-    }
 
     pub fn get_type_id(&self, fqn: &str) -> Option<usize> {
-        self.types.iter().position(|x| x.0 == fqn)
+        let end = ContextPathEnd::from_full_path(fqn);
+        self.types.index_of(&end)
     }
     pub fn get_function_id(&self, fqn: &str) -> Option<usize> {
-        self.functions.iter().position(|x| x.0 == fqn)
-    }
-    pub fn get_enum_id(&self, fqn: &str) -> Option<usize> {
-        self.enums.iter().position(|x| x.0 == fqn)
+        let end = ContextPathEnd::from_full_path(fqn);
+        self.functions.index_of(&end)
     }
 
     pub fn get_type(&self, fqn: &str) -> Option<&Struct> {
@@ -1562,68 +1524,75 @@ impl SymbolTable {
         self.get_function_id(fqn)
             .map(|x| self.get_function_by_id(x))
     }
-    pub fn get_enum(&self, fqn: &str) -> Option<&Enum> {
-        self.get_enum_id(fqn).map(|x| self.get_enum_by_id(x))
+    pub fn get_enum(&self, fqn: &str) -> Option<(ContextPathEnd, &Enum)> {
+        let end = ContextPathEnd::from_full_path(fqn);
+        self.enums.get(&end).map(|x| (end, x))
     }
-    pub fn get_static_var(&self, fqn: &str) -> Option<&Variable> {
-        self.static_variables.get(fqn)
+    pub fn get_enum_by_path(&self, fqn: &ContextPathEnd) -> Option<&Enum> {
+        self.enums.get(&fqn)
     }
-    pub fn insert_type(&mut self, full_path: &str, structure: Struct) {
-        if let Some(x) = self.types.get_mut(full_path) {
-            x.1 = structure;
+    pub fn get_static_var(&self, fqn: &str) -> Option<(ContextPathEnd, &Variable)> {
+        let end = ContextPathEnd::from_full_path(fqn);
+        self.static_variables.get(&end).map(|x| (end, x))
+    }
+    pub fn insert_type(&mut self, full_path: ContextPathEnd, structure: Struct) {
+        if let Some(x) = self.types.get_mut(&full_path) {
+            *x = structure;
+            (*x).full_path = full_path;
             return;
         }
-        self.types
-            .insert(full_path.to_string(), (self.types.len(), structure));
+        let mut structure_type = structure;
+        structure_type.full_path = full_path.clone();
+        self.types.insert(&full_path, structure_type);
     }
-    pub fn insert_function(&mut self, full_path: &str, function: Function) {
-        if let Some(x) = self.functions.get_mut(full_path) {
-            x.1 = function;
+    pub fn insert_function(&mut self, full_path: ContextPathEnd, function_type: Function) {
+        if let Some(x) = self.functions.get_mut(&full_path) {
+            *x = function_type;
+            (*x).full_path = full_path;
             return;
         }
-        self.functions
-            .insert(full_path.to_string(), (self.functions.len(), function));
+        let mut function_type = function_type;
+        function_type.full_path = full_path.clone();
+        self.functions.insert(&full_path, function_type);
     }
-    pub fn insert_enum(&mut self, full_path: &str, enum_type: Enum) {
-        if let Some(x) = self.enums.get_mut(full_path) {
-            x.1 = enum_type;
+    pub fn insert_enum(&mut self, full_path: ContextPathEnd, enum_type: Enum) {
+        if let Some(x) = self.enums.get_mut(&full_path) {
+            *x = enum_type;
+            (*x).full_path = full_path;
             return;
         }
-        self.enums
-            .insert(full_path.to_string(), (self.enums.len(), enum_type));
+        let mut enum_type = enum_type;
+        enum_type.full_path = full_path.clone();
+        self.enums.insert(&full_path, enum_type);
     }
     pub fn set_alias_types(&mut self, hm: HashMap<String, CompilerType>) {
         self.alias_types = hm
     }
-    pub fn insert_static_var(&mut self, name: &str, variable: Variable) -> CompileResult<()> {
-        if let Some(_) = self.static_variables.insert(name.to_string(), variable) {
+    pub fn insert_static_var(
+        &mut self,
+        full_path: ContextPathEnd,
+        variable: Variable,
+    ) -> CompileResult<()> {
+        if let Some(_) = self.static_variables.insert(&full_path, variable) {
             return Err(CompilerError::Generic(format!(
                 "Static variable with name {} already exists!",
-                name
+                full_path.to_string()
             ))
             .into());
         }
         return Ok(());
     }
 
-    pub fn functions_iter(
-        &self,
-    ) -> ordered_hash_map::ordered_map::Iter<'_, std::string::String, (usize, Function)> {
+    pub fn functions_iter(&self) -> ContextPathDictionaryIter<'_, Function> {
         self.functions.iter()
     }
-    pub fn functions_iter_mut(
-        &mut self,
-    ) -> ordered_hash_map::ordered_map::IterMut<'_, std::string::String, (usize, Function)> {
+    pub fn functions_iter_mut(&mut self) -> ContextPathDictionaryIterMut<'_, Function> {
         self.functions.iter_mut()
     }
-    pub fn types_iter(
-        &self,
-    ) -> ordered_hash_map::ordered_map::Iter<'_, std::string::String, (usize, Struct)> {
+    pub fn types_iter(&self) -> ContextPathDictionaryIter<'_, Struct> {
         self.types.iter()
     }
-    pub fn static_vars_iter(
-        &self,
-    ) -> ordered_hash_map::ordered_map::Iter<'_, std::string::String, Variable> {
+    pub fn static_vars_iter(&self) -> ContextPathDictionaryIter<'_, Variable> {
         self.static_variables.iter()
     }
     pub fn alias_types(&self) -> &HashMap<String, CompilerType> {

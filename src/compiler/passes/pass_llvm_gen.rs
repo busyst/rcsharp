@@ -1,432 +1,19 @@
-use crate::{
-    compiler_essentials::{
-        CompileResult, CompilerError, CompilerType, Enum, Function, LLVMOutputHandler, LLVMVal,
-        Scope, Struct, SymbolTable, Variable,
-    },
-    expression_compiler::{self, compile_expression_v2, constant_expression_compiler, Expected},
-};
-use rcsharp_lexer::{Lexer, LexingError, TokenData};
-use rcsharp_parser::{
-    compiler_primitives::BOOL_TYPE,
-    expression_parser::{Expr, UnaryOp},
-    parser::{GeneralParser, ParserType, Span, Stmt, StmtData},
-};
 use std::{cell::Cell, collections::HashMap};
 
-pub trait CompilerPass<'a> {
-    type Input;
-    type Output;
-    fn run(&mut self, input: Self::Input, ctx: &mut CompilerContext)
-        -> CompileResult<Self::Output>;
-}
-pub fn compile_to_file(entry_path: &str, output_path: &str) -> CompileResult<()> {
-    let x = compile(entry_path)?;
-    std::fs::write(output_path, x.1).unwrap();
-    let diag = x.0.diagnostics;
-    if diag.is_empty() {
-        return Ok(());
-    }
-    Err(CompilerError::Generic(format!("{}", diag.len())).into())
-}
-pub fn compile(entry_path: &str) -> CompileResult<(CompilerContext, String)> {
-    let mut ctx = CompilerContext::default();
+use rcsharp_parser::{
+    compiler_primitives::BOOL_TYPE,
+    expression_parser::Expr,
+    parser::{ParserType, Span, Stmt, StmtData},
+};
 
-    let mut loader = ModuleLoaderPass::default();
-    let (tokens, ast) = loader.run(entry_path, &mut ctx)?;
+use crate::{
+    compiler::{context::CompilerContext, passes::traits::CompilerPass},
+    compiler_essentials::{
+        CompileResult, CompilerError, CompilerType, LLVMOutputHandler, LLVMVal, Scope, Variable,
+    },
+    expression_compiler::{compile_expression_v2, Expected},
+};
 
-    let mut type_checker = TypeCheckPass::default();
-    type_checker.run(&ast, &mut ctx)?;
-    let mut optimizer = OptimizerPass::default();
-    optimizer.run((), &mut ctx)?;
-    let mut codegen = LLVMGenPass::default();
-    let llvm_ir = match codegen.run((), &mut ctx) {
-        Ok(x) => x,
-        Err(x) => {
-            if let Some(span) = x.span {
-                format!(
-                    "{:?}\n{:#?}",
-                    &tokens[span.start + 1..span.end]
-                        .iter()
-                        .map(|x| &x.token)
-                        .collect::<Vec<_>>(),
-                    x.error
-                )
-            } else {
-                format!("{:#?}", x.error)
-            }
-        }
-    };
-
-    Ok((ctx, llvm_ir))
-}
-#[derive(Default)]
-pub struct CompilerContext {
-    pub symbols: SymbolTable,
-    pub config: CompilerConfig,
-    pub source_manager: SourceManager,
-    pub diagnostics: Vec<CompilerError>,
-}
-#[derive(Default)]
-pub struct CompilerConfig {}
-#[derive(Default)]
-pub struct SourceManager {}
-#[derive(Default)]
-pub struct ModuleLoaderPass {}
-impl<'a> CompilerPass<'a> for ModuleLoaderPass {
-    type Input = &'a str;
-
-    type Output = (Vec<TokenData>, Vec<StmtData>);
-
-    fn run(
-        &mut self,
-        input: Self::Input,
-        _ctx: &mut CompilerContext,
-    ) -> CompileResult<Self::Output> {
-        let mut stmt_vec = vec![];
-
-        let mut to_runn_throu = vec![input.to_string()];
-        let mut runned_throu = vec![];
-        while let Some(path) = to_runn_throu.pop() {
-            let file_data = std::fs::read_to_string(&path).unwrap();
-            let lexed = Lexer::new(&file_data)
-                .collect::<Result<Vec<_>, LexingError>>()
-                .unwrap();
-            let q = rcsharp_parser::parser::GeneralParser::new(&lexed)
-                .parse_compiler_only()
-                .unwrap();
-            for (span, attr) in q.iter() {
-                if attr.name_equals("include") {
-                    let include_path_expr = attr.one_argument();
-                    let Some(Expr::StringConst(include_path)) = include_path_expr else {
-                        return Err((
-                            span.clone(),
-                            CompilerError::InvalidExpression(
-                                "Include requires a string argument".into(),
-                            ),
-                        )
-                            .into());
-                    };
-                    to_runn_throu.push(include_path.to_string());
-                }
-            }
-            runned_throu.push((path, lexed));
-        }
-        for (_path, tokens) in runned_throu.iter() {
-            let mut parse = GeneralParser::new(tokens).parse_all().unwrap();
-            stmt_vec.append(&mut parse);
-        }
-        Ok((
-            runned_throu
-                .iter()
-                .map(|x| x.1.clone())
-                .flatten()
-                .collect::<Vec<_>>(),
-            stmt_vec,
-        ))
-    }
-}
-#[derive(Default)]
-pub struct TypeCheckPass {}
-impl<'a> CompilerPass<'a> for TypeCheckPass {
-    type Input = &'a Vec<StmtData>;
-
-    type Output = ();
-
-    fn run(
-        &mut self,
-        input: Self::Input,
-        ctx: &mut CompilerContext,
-    ) -> CompileResult<Self::Output> {
-        let mut to_runn_throu: Vec<(String, &[StmtData])> = vec![(format!(""), input.as_slice())];
-        let get_full_path = |x: &str, y: &str| {
-            if x == "" {
-                return y.to_string();
-            }
-            format!("{}.{}", x, y)
-        };
-        let mut runned_throu: Vec<(String, &[StmtData])> = vec![];
-        let mut types = vec![];
-        let mut enums = vec![];
-        let mut static_variables = vec![];
-        let mut functions = vec![];
-        while let Some((path, body)) = to_runn_throu.pop() {
-            for x in body {
-                match &x.stmt {
-                    Stmt::Namespace(x, body) => {
-                        to_runn_throu.push((get_full_path(&path, x), body));
-                    }
-                    Stmt::Struct(x) => {
-                        types.push((path.clone(), x));
-                    }
-                    Stmt::Function(x) => {
-                        functions.push((path.clone(), x));
-                    }
-                    Stmt::Enum(x) => {
-                        enums.push((path.clone(), x));
-                    }
-                    Stmt::Static(name, var_type, expression) => {
-                        static_variables.push((path.clone(), (name, var_type, expression)));
-                    }
-                    _ => {}
-                }
-            }
-            runned_throu.push((path, body));
-        }
-        for (current_path, parsed_type) in types.iter() {
-            let full_path = get_full_path(current_path, &parsed_type.name);
-            ctx.symbols
-                .insert_type(&full_path, Struct::new_placeholder());
-        }
-        for (current_path, parsed_type) in types.iter() {
-            let str = parsed_type;
-            let full_path = get_full_path(current_path, &parsed_type.name);
-            let mut compiler_struct_fields = vec![];
-            let mut new_alias_types = HashMap::new();
-            for prm in &str.generic_params {
-                new_alias_types.insert(
-                    prm.clone(),
-                    CompilerType::GenericPlaceholder(prm.to_string().into_boxed_str()),
-                );
-            }
-            ctx.symbols.set_alias_types(new_alias_types);
-            for (name, attr_type) in str.fields.iter() {
-                if let Some(pt) = attr_type.as_primitive_type() {
-                    compiler_struct_fields.push((name.to_string(), CompilerType::Primitive(pt)));
-                    continue;
-                }
-                compiler_struct_fields.push((
-                    name.to_string(),
-                    CompilerType::from_parser_type(&attr_type, &ctx.symbols, current_path)?,
-                ));
-            }
-            ctx.symbols.insert_type(
-                &full_path,
-                Struct::new(
-                    current_path.clone().into_boxed_str(),
-                    str.name.clone(),
-                    compiler_struct_fields.into_boxed_slice(),
-                    str.attributes.clone(),
-                    str.generic_params.clone(),
-                ),
-            );
-        }
-        for (current_path, parsed_enum) in enums.iter() {
-            let full_path = get_full_path(current_path, &parsed_enum.name);
-            let mut compiler_enum_fields = vec![];
-            let Some(x) = parsed_enum.enum_type.as_integer() else {
-                todo!("")
-            };
-            for (field_name, field_expr) in &parsed_enum.fields {
-                if let Expr::Integer(int) = &field_expr {
-                    compiler_enum_fields
-                        .push((field_name.to_string(), LLVMVal::ConstantInteger(*int)));
-                    continue;
-                }
-                compiler_enum_fields.push((
-                    field_name.to_string(),
-                    constant_expression_compiler(&field_expr)
-                        .ok_or(CompilerError::Generic(format!("Placeholder").into()))?,
-                ));
-            }
-            ctx.symbols.insert_enum(
-                &full_path,
-                Enum::new(
-                    current_path.clone().into_boxed_str(),
-                    parsed_enum.name.clone(),
-                    CompilerType::Primitive(x),
-                    compiler_enum_fields.into_boxed_slice(),
-                    parsed_enum.attributes.clone(),
-                ),
-            );
-        }
-        for (current_path, (name, var_type, _expresson)) in static_variables.iter() {
-            let full_path = get_full_path(current_path, name);
-            let t = CompilerType::from_parser_type(*var_type, &ctx.symbols, &full_path)?;
-            ctx.symbols
-                .insert_static_var(name, Variable::new(t, false, false))?;
-        }
-        for (current_path, parsed_function) in functions.iter() {
-            let return_type = CompilerType::from_parser_type(
-                &parsed_function.return_type,
-                &ctx.symbols,
-                &current_path,
-            )?;
-            let args = parsed_function
-                .args
-                .iter()
-                .map(|x| {
-                    (
-                        x.0.clone(),
-                        CompilerType::from_parser_type(&x.1, &ctx.symbols, &current_path).unwrap(),
-                    )
-                })
-                .collect::<Box<[_]>>();
-            let function = Function::new(
-                current_path.clone().into_boxed_str(),
-                parsed_function.name.clone(),
-                args,
-                return_type,
-                parsed_function.body.clone(),
-                0.into(),
-                parsed_function.attributes.clone(),
-                parsed_function.generic_params.clone(),
-            );
-            let mut base = function.get_flags();
-            let function_prefixes = &parsed_function.prefixes;
-            if function_prefixes.iter().any(|x| x.as_str() == "extern")
-                || function
-                    .attributes
-                    .iter()
-                    .any(|x| x.name_equals("DllImport"))
-            {
-                base.is_external = true;
-            }
-            if function.attributes.iter().any(|x| x.name_equals("no_lazy")) {
-                function.increment_usage();
-            }
-            if function_prefixes.iter().any(|x| x.as_str() == "public") {
-                base.is_public = true;
-            }
-            if function_prefixes.iter().any(|x| x.as_str() == "inline") {
-                base.is_inline = true;
-            }
-            if function_prefixes.iter().any(|x| x.as_str() == "constexpr") {
-                base.is_const_expression = true;
-            }
-            if function_prefixes.iter().any(|x| x.as_str() == "no_return") {
-                if !function.return_type.is_void() {
-                    return Err(CompilerError::Generic(format!(
-                        "Function '{}' is marked as no_return but has a non-void return type",
-                        function.full_path()
-                    ))
-                    .into());
-                }
-                base.is_program_halt = true;
-            }
-            if !function.generic_params.is_empty() {
-                base.is_generic = true;
-            }
-            function.set_flags(base);
-            ctx.symbols
-                .insert_function(&function.full_path().to_string(), function);
-        }
-
-        Ok(())
-    }
-}
-#[derive(Default)]
-pub struct OptimizerPass {}
-impl<'a> CompilerPass<'a> for OptimizerPass {
-    type Input = ();
-
-    type Output = ();
-
-    fn run(&mut self, _: Self::Input, ctx: &mut CompilerContext) -> CompileResult<Self::Output> {
-        self.controll_flow_rearangement(ctx)?;
-        self.expression_optimisation(ctx)?;
-        self.statements_after_return_optimisation(ctx)?;
-        Ok(())
-    }
-}
-impl OptimizerPass {
-    fn controll_flow_rearangement(&mut self, ctx: &mut CompilerContext) -> CompileResult<()> {
-        for func in ctx.symbols.functions_iter_mut() {
-            if !func.1 .1.body.is_empty() {
-                for stmt in func.1 .1.body.iter_mut() {
-                    if let Stmt::If(x, y, z) = &mut stmt.stmt {
-                        if y.is_empty() && !z.is_empty() {
-                            std::mem::swap(y, z);
-                            *x = Expr::UnaryOp(UnaryOp::Not, Box::new(x.clone()));
-                            println!("OPT: Change order")
-                        }
-                    }
-                }
-            }
-        }
-        Ok(())
-    }
-    fn expression_optimisation(&mut self, ctx: &mut CompilerContext) -> CompileResult<()> {
-        let mut exprs = vec![];
-        for func in ctx.symbols.functions_iter_mut() {
-            for x in &mut func.1 .1.body {
-                match &mut x.stmt {
-                    Stmt::Expr(expr) => exprs.push(expr),
-                    Stmt::ConstLet(_, _, expr) => exprs.push(expr),
-                    Stmt::Static(_, _, expr) => {
-                        if let Some(expr) = expr {
-                            exprs.push(expr)
-                        }
-                    }
-                    Stmt::Let(_, _, expr) => {
-                        if let Some(expr) = expr {
-                            exprs.push(expr)
-                        }
-                    }
-                    Stmt::Return(expr) => {
-                        if let Some(expr) = expr {
-                            exprs.push(expr)
-                        }
-                    }
-                    Stmt::If(expr, ..) => exprs.push(expr),
-                    _ => {}
-                }
-            }
-        }
-        for expr in exprs {
-            if let Some(x) = expression_compiler::constant_expression_optimizer_base(expr) {
-                println!("Opt FROM EXPR:{}", expr.debug_emit());
-                println!("Opt TO EXPR:{}", x.debug_emit());
-                *expr = x;
-            }
-        }
-
-        Ok(())
-    }
-    fn statements_after_return_optimisation(
-        &mut self,
-        ctx: &mut CompilerContext,
-    ) -> CompileResult<()> {
-        let mut bodies = vec![];
-        for func in ctx.symbols.functions_iter_mut() {
-            if !func.1 .1.body.is_empty() {
-                bodies.push(&mut func.1 .1.body);
-            }
-        }
-        while let Some(body) = bodies.pop() {
-            if let Some(end) = body
-                .iter()
-                .position(|x| {
-                    matches!(x.stmt, Stmt::Return(..))
-                        || x.stmt == Stmt::Break
-                        || x.stmt == Stmt::Continue
-                })
-                .filter(|pos| *pos != body.len() - 1)
-            {
-                println!("Saving:{}", body.len() - end);
-                *body = body.split_at(end).0.to_vec().into_boxed_slice();
-            };
-            for statement in body {
-                match &mut statement.stmt {
-                    Stmt::Loop(x) => {
-                        if !x.is_empty() {
-                            bodies.push(x)
-                        }
-                    }
-                    Stmt::If(_, x, y) => {
-                        if !x.is_empty() {
-                            bodies.push(x)
-                        }
-                        if !y.is_empty() {
-                            bodies.push(y)
-                        }
-                    }
-                    _ => {}
-                }
-            }
-        }
-        Ok(())
-    }
-}
 #[derive(Default)]
 pub struct LLVMGenPass {
     pub cgctx: CodeGenContext,
@@ -464,9 +51,9 @@ impl LLVMGenPass {
         for x in ctx
             .symbols
             .functions_iter()
-            .filter(|x| x.1 .1.is_external() && x.1 .1.usage_count.get() >= 1)
+            .filter(|x| x.1.is_external() && x.1.usage_count.get() >= 1)
         {
-            let func = &x.1 .1;
+            let func = &x.1;
             let return_llvm = func.return_type.llvm_representation(&ctx.symbols)?;
             let name_llvm = func.name();
             let args_llvm = func
@@ -494,23 +81,22 @@ impl LLVMGenPass {
         for x in ctx
             .symbols
             .functions_iter()
-            .filter(|x| !x.1 .1.is_external() && x.1 .1.usage_count.get() > 0)
+            .filter(|x| !x.1.is_external() && x.1.usage_count.get() > 0)
         {
             builder.push_footer(&format!(
                 ";func {} {:?}\n",
-                x.0,
-                x.1 .1
-                    .attributes
+                x.0.to_string(),
+                x.1.attributes
                     .iter()
                     .map(|x| x.name.to_string())
                     .collect::<Vec<_>>()
             ));
         }
         for x in ctx.symbols.types_iter().filter(|x| {
-            (x.1 .1.is_generic() && !x.1 .1.generic_implementations.borrow().is_empty())
-                || (!x.1 .1.is_generic())
+            (x.1.is_generic() && !x.1.generic_implementations.borrow().is_empty())
+                || (!x.1.is_generic())
         }) {
-            builder.push_footer(&format!(";type {}\n", x.0));
+            builder.push_footer(&format!(";type {}\n", x.0.to_string()));
         }
         Ok(())
     }
@@ -521,8 +107,8 @@ impl LLVMGenPass {
     ) -> CompileResult<()> {
         for (path, var) in ctx.symbols.static_vars_iter() {
             builder.push_global_variables(&format!(
-                "@{} = internal global {} zeroinitializer",
-                path,
+                "@{} = internal global {} zeroinitializer\n",
+                path.to_string(),
                 var.compiler_type().llvm_representation(&ctx.symbols)?
             ));
         }
@@ -533,27 +119,37 @@ impl LLVMGenPass {
         builder: &mut LLVMOutputHandler,
         ctx: &mut CompilerContext,
     ) -> CompileResult<()> {
-        for (path, (_, r#type)) in ctx.symbols.types_iter().filter(|x| !x.1 .1.is_generic()) {
+        for (path, r#type) in ctx.symbols.types_iter().filter(|x| !x.1.is_generic()) {
             let field_types = r#type
                 .fields
                 .iter()
                 .map(|(_field_name, field_type)| field_type.llvm_representation(&ctx.symbols))
                 .collect::<CompileResult<Vec<_>>>()?
                 .join(", ");
-            builder.push_header(&format!("%struct.{} = type {{ {} }}\n", path, field_types));
+            builder.push_header(&format!(
+                "%struct.{} = type {{ {} }}\n",
+                path.to_string(),
+                field_types
+            ));
         }
         let mut done = HashMap::new();
         loop {
             let mut new = false;
-            for (_, (id, r#type)) in ctx.symbols.types_iter().filter(|x| x.1 .1.is_generic()) {
+            for (full_path, r#type) in ctx.symbols.types_iter().filter(|x| x.1.is_generic()) {
                 let imps_len = { r#type.generic_implementations.borrow().len() };
                 if imps_len == 0 {
                     continue;
                 }
-                if done.get(id).filter(|x| **x == imps_len).is_some() {
+                let index = ctx
+                    .symbols
+                    .types_iter()
+                    .position(|x| x.0 == full_path)
+                    .unwrap();
+
+                if done.get(&index).filter(|x| **x == imps_len).is_some() {
                     continue;
                 }
-                let from_index = done.insert(*id, imps_len).unwrap_or(0);
+                let from_index = done.insert(index, imps_len).unwrap_or(0);
                 for ind in from_index..imps_len {
                     new = true;
                     let name = r#type.llvm_repr_index(ind, &ctx.symbols);
@@ -589,7 +185,13 @@ impl LLVMGenPass {
         ctx: &mut CompilerContext,
     ) -> CompileResult<()> {
         let Some(main) = ctx.symbols.get_function_id("main") else {
-            return Err(CompilerError::Generic(format!("Function 'main' was not found!")).into());
+            for f in ctx.symbols.functions_iter() {
+                println!("{}", f.0.to_string());
+            }
+            return Err(CompilerError::Generic(format!(
+                "Function 'main' was not found! Dumped all function names"
+            ))
+            .into());
         };
         let mut to_do = vec![main];
         let mut done = vec![];
@@ -603,33 +205,47 @@ impl LLVMGenPass {
                 if !to_do.is_empty() {
                     continue;
                 }
-                for (_, (id, _)) in ctx.symbols.functions_iter().filter(|x| {
-                    x.1 .1.usage_count.get() != 0
-                        && !x.1 .1.is_generic()
-                        && !x.1 .1.is_external()
-                        && !x.1 .1.is_inline()
+                for (path, _) in ctx.symbols.functions_iter().filter(|x| {
+                    x.1.usage_count.get() != 0
+                        && !x.1.is_generic()
+                        && !x.1.is_external()
+                        && !x.1.is_inline()
                 }) {
-                    if done.iter().any(|x| *x == *id) {
+                    let index = ctx
+                        .symbols
+                        .functions_iter()
+                        .position(|x| x.0 == path)
+                        .unwrap();
+                    if done.iter().any(|x| *x == index) {
                         continue;
                     }
-                    to_do.push(*id);
+                    to_do.push(index);
                 }
             }
             let mut new = false;
-            for (_, (id, func)) in ctx.symbols.functions_iter().filter(|x| {
-                x.1 .1.usage_count.get() != 0
-                    && x.1 .1.is_generic()
-                    && !x.1 .1.is_external()
-                    && !x.1 .1.is_inline()
+            for (path, func) in ctx.symbols.functions_iter().filter(|x| {
+                x.1.usage_count.get() != 0
+                    && x.1.is_generic()
+                    && !x.1.is_external()
+                    && !x.1.is_inline()
             }) {
                 let imps_len = { func.generic_implementations.borrow().len() };
                 if imps_len == 0 {
                     continue;
                 }
-                if done_generics.get(id).filter(|x| **x == imps_len).is_some() {
+                let index = ctx
+                    .symbols
+                    .functions_iter()
+                    .position(|x| x.0 == path)
+                    .unwrap();
+                if done_generics
+                    .get(&index)
+                    .filter(|x| **x == imps_len)
+                    .is_some()
+                {
                     continue;
                 }
-                let from_index = done_generics.insert(*id, imps_len).unwrap_or(0);
+                let from_index = done_generics.insert(index, imps_len).unwrap_or(0);
                 for ind in from_index..imps_len {
                     new = true;
                     let implementation = { func.generic_implementations.borrow()[ind].clone() };
@@ -675,17 +291,22 @@ impl LLVMGenPass {
                     ctx,
                 )?;
             }
-            for (_, (id, _)) in ctx.symbols.functions_iter().filter(|x| {
-                x.1 .1.usage_count.get() != 0
-                    && !x.1 .1.is_generic()
-                    && !x.1 .1.is_external()
-                    && !x.1 .1.is_inline()
+            for (path, _) in ctx.symbols.functions_iter().filter(|x| {
+                x.1.usage_count.get() != 0
+                    && !x.1.is_generic()
+                    && !x.1.is_external()
+                    && !x.1.is_inline()
             }) {
-                if done.iter().any(|x| *x == *id) {
+                let index = ctx
+                    .symbols
+                    .functions_iter()
+                    .position(|x| x.0 == path)
+                    .unwrap();
+                if done.iter().any(|x| *x == index) {
                     continue;
                 }
                 new = true;
-                to_do.push(*id);
+                to_do.push(index);
             }
             if !new {
                 break;
@@ -793,8 +414,12 @@ impl LLVMGenPass {
         }
         if return_type.is_void() {
             builder.emit_unconditional_jump_to(&self.cgctx.return_label_name);
+            builder.emit_label(&self.cgctx.return_label_name);
+        } else if self.cgctx.pending_returns.is_empty() {
+            builder.emit_line_body("unreachable");
+        } else {
+            builder.emit_label(&self.cgctx.return_label_name);
         }
-        builder.emit_label(&self.cgctx.return_label_name);
         let x = self.cgctx.scope.pop_layer(&mut ctx.symbols);
         for x in x {
             self.compile_statement(
@@ -810,7 +435,6 @@ impl LLVMGenPass {
             builder.emit_ret_void();
         } else {
             if self.cgctx.pending_returns.is_empty() {
-                builder.emit_line_body("unreachable");
             } else {
                 if self.cgctx.pending_returns.len() > 1 {
                     let phi_ops = self

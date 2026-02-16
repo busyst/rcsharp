@@ -1,7 +1,6 @@
 use std::time::Instant;
 
-use crate::compiler::passes::compile_to_file;
-
+use crate::compiler::base::compile_to_file;
 pub mod compiler;
 pub mod compiler_essentials;
 pub mod compiler_functions;

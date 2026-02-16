@@ -161,7 +161,7 @@ pub enum Token {
     DummyToken,
     #[regex(r"[a-zA-Z_]\w*", |lex| lex.slice().to_string().into_boxed_str())]
     Name(Box<str>),
-    #[regex(r"0x[0-9a-fA-F]+|0b[01]+|\d+", unhex_num)]
+    #[regex(r"-?(?:0x[0-9a-fA-F]+|0b[01]+|\d+)", unhex_num)]
     Integer(i128),
     #[regex(r"[0-9]+\.[0-9]+", undecimal_num)]
     Decimal(f64),
@@ -256,22 +256,27 @@ fn unescape_char(lex: &mut logos::Lexer<Token>) -> Result<char, ()> {
     }
 }
 fn unhex_num(lex: &mut logos::Lexer<Token>) -> i128 {
-    let slice = lex.slice();
-    if slice.len() < 2 {
-        return slice.parse::<i128>().unwrap();
+    let s = lex.slice().replace('_', "");
+    let (is_neg, s_without_sign) = if let Some(stripped) = s.strip_prefix('-') {
+        (true, stripped)
+    } else {
+        (false, s.as_str())
+    };
+    let (radix, digits) = if let Some(stripped) = s_without_sign.strip_prefix("0x") {
+        (16, stripped)
+    } else if let Some(stripped) = s_without_sign.strip_prefix("0b") {
+        (2, stripped)
+    } else if let Some(stripped) = s_without_sign.strip_prefix("0o") {
+        (8, stripped)
+    } else {
+        (10, s_without_sign)
+    };
+    let abs_val = u128::from_str_radix(digits, radix).unwrap();
+    if is_neg {
+        (abs_val as i128).wrapping_neg()
+    } else {
+        abs_val as i128
     }
-
-    let mut chars = slice.chars();
-    let second_char = chars.nth(1).unwrap();
-
-    if second_char == 'x' {
-        return i128::from_str_radix(&slice[2..], 16).unwrap();
-    }
-    if second_char == 'b' {
-        return i128::from_str_radix(&slice[2..], 2).unwrap();
-    }
-
-    slice.parse::<i128>().unwrap()
 }
 fn undecimal_num(lex: &mut logos::Lexer<Token>) -> f64 {
     let slice = lex.slice();
@@ -304,6 +309,8 @@ fn unescape_content(content: &str, is_string: bool) -> String {
 
         match next_char {
             'n' => unescaped.push('\n'),
+            'v' => unescaped.push('\x11'),
+            'f' => unescaped.push('\x12'),
             't' => unescaped.push('\t'),
             'r' => unescaped.push('\r'),
             '\\' => unescaped.push('\\'),
