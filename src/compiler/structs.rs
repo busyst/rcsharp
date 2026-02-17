@@ -76,7 +76,7 @@ impl<T> Default for ContextPathDictionary<T> {
         }
     }
 }
-#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Default, Eq, PartialOrd, Ord)]
 pub struct ContextPath {
     path_sections: Box<[Box<str>]>,
 }
@@ -108,6 +108,18 @@ impl ContextPath {
     pub fn path_sections(&self) -> &[Box<str>] {
         &self.path_sections
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.path_sections.is_empty()
+    }
+}
+impl PartialEq for ContextPath {
+    fn eq(&self, other: &Self) -> bool {
+        self.path_sections
+            .iter()
+            .rev()
+            .eq(other.path_sections.iter().rev())
+    }
 }
 impl ToString for ContextPath {
     fn to_string(&self) -> String {
@@ -119,12 +131,6 @@ impl ToString for ContextPath {
 pub struct ContextPathEnd {
     context_path: ContextPath,
     name: Box<str>,
-}
-
-impl PartialEq for ContextPathEnd {
-    fn eq(&self, other: &Self) -> bool {
-        self.name == other.name && self.context_path == other.context_path
-    }
 }
 impl ContextPathEnd {
     pub fn new(context_path: ContextPath, name: Box<str>) -> Self {
@@ -191,6 +197,11 @@ impl ContextPathEnd {
 
     pub fn name(&self) -> &str {
         &self.name
+    }
+}
+impl PartialEq for ContextPathEnd {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name && self.context_path == other.context_path
     }
 }
 impl ToString for ContextPathEnd {

@@ -175,7 +175,7 @@ pub enum Stmt {
     Struct(ParsedStruct),                       // struct foo <T> { bar : i8, ... }
     Enum(ParsedEnum),                           // enum foo 'base_type' { bar = ..., ... }
     Namespace(String, Box<[StmtData]>),         // namespace foo { fn bar() ... {...} ... }
-    StatementBlock(Box<[StmtData]>),            // ; { ... }
+    Block(Box<[StmtData]>),                     // ; { ... }
     Debug(String),                              // ; 'debug statement'
     CompilerDud,                                // ; does absolutely nothing
 }
@@ -840,7 +840,28 @@ impl<'a> GeneralParser<'a> {
                     span: Span::new(start, self.cursor),
                 })
             }
-            Token::LBrace | Token::RBrace | Token::SemiColon => {
+            Token::LBrace => {
+                self.advance();
+                let mut q = vec![];
+                while self.peek().token != Token::RBrace {
+                    let stmt = self.parse_statement()?;
+                    if stmt.stmt != Stmt::CompilerDud {
+                        q.push(stmt);
+                    }
+                }
+                self.advance();
+                if q.is_empty() {
+                    return Ok(StmtData {
+                        stmt: Stmt::CompilerDud,
+                        span: Span::new(start, self.cursor),
+                    });
+                }
+                return Ok(StmtData {
+                    stmt: Stmt::Block(q.into()),
+                    span: Span::new(start, self.cursor),
+                });
+            }
+            Token::RBrace | Token::SemiColon => {
                 let t = self.peek();
                 Err((
                     self.peek_span(),

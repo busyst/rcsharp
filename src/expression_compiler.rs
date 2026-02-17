@@ -145,7 +145,9 @@ impl<'a> ExpressionCompiler<'a> {
         expected: Expected,
     ) -> CompileResult<CompiledValue> {
         match expr {
-            Expr::Name(name) => self.compile_name_rvalue(name, expected),
+            Expr::Name(name) => {
+                self.compile_name_rvalue(ContextPathEnd::from_path("", name), expected)
+            }
             Expr::NameWithGenerics(name, generics) => {
                 self.compile_name_with_generics_rvalue(name, generics, expected)
             }
@@ -175,74 +177,89 @@ impl<'a> ExpressionCompiler<'a> {
     // RVAL
     pub fn compile_name_rvalue(
         &mut self,
-        name: &str,
+        name: ContextPathEnd,
         _expected: Expected,
     ) -> CompileResult<CompiledValue> {
-        if let Some((variable, id)) = self.ctx.scope.lookup(name) {
-            variable.mark_usage(false, false);
-            if let Some(val) = variable.try_load_const_llvm_value() {
-                return Ok(val);
-            }
+        if name.context_path().is_empty() {
+            let name = name.name();
+            if let Some((variable, id)) = self.ctx.scope.lookup(name) {
+                variable.mark_usage(false, false);
+                if let Some(val) = variable.try_load_const_llvm_value() {
+                    return Ok(val);
+                }
 
-            let concrete_type = variable.compiler_type.clone();
-            let type_str = concrete_type.llvm_representation(self.symbols())?;
-            return variable.load_llvm_value(*id, name, self.ctx, &type_str, self.output);
-        }
-
-        if let Some(internal_id) = self
-            .symbols()
-            .get_function_id(&format!("{}.{}", name, self.ctx.current_function_path))
-            .or(self.symbols().get_function_id(name))
-        {
-            return Ok(
-                if self
-                    .symbols()
-                    .get_function_by_id_use(internal_id)
-                    .is_generic()
-                {
-                    CompiledValue::GenericFunction { internal_id }
-                } else {
-                    CompiledValue::Function { internal_id }
-                },
-            );
-        }
-        if let Some((path, variable)) = self
-            .symbols()
-            .get_static_var(&format!("{}.{}", self.ctx.current_function_path, name))
-            .or(self.symbols().get_static_var(name))
-        {
-            let mut vtype = variable.compiler_type.clone();
-            vtype.substitute_global_aliases(self.symbols())?;
-            variable.mark_usage(false, false);
-            if let Some(val) = variable.try_load_const_llvm_value() {
-                return Ok(val);
+                let concrete_type = variable.compiler_type.clone();
+                let type_str = concrete_type.llvm_representation(self.symbols())?;
+                return variable.load_llvm_value(*id, name, self.ctx, &type_str, self.output);
             }
-            let concrete_type = variable.compiler_type.clone();
-            let type_str = concrete_type.llvm_representation(self.symbols())?;
-            let variable = variable.clone();
-            return variable.load_llvm_value(
-                0,
-                &path.to_string(),
-                self.ctx,
-                &type_str,
-                self.output,
-            );
+            let glob_path =
+                ContextPathEnd::from_context_path(self.ctx.current_function_path.clone(), name);
+            let local_path = ContextPathEnd::from_path("", name);
+
+            if let Some(internal_id) = self
+                .symbols()
+                .get_function_id_by_path(&glob_path)
+                .or_else(|| self.symbols().get_function_id_by_path(&local_path))
+            {
+                return Ok(
+                    if self
+                        .symbols()
+                        .get_function_by_id_use(internal_id)
+                        .is_generic()
+                    {
+                        CompiledValue::GenericFunction { internal_id }
+                    } else {
+                        CompiledValue::Function { internal_id }
+                    },
+                );
+            }
+            if let Some((path, variable)) = self
+                .symbols()
+                .get_static_by_path(&glob_path)
+                .or_else(|| self.symbols().get_static_by_path(&local_path))
+            {
+                let mut vtype = variable.compiler_type.clone();
+                vtype.substitute_global_aliases(self.symbols())?;
+                variable.mark_usage(false, false);
+                if let Some(val) = variable.try_load_const_llvm_value() {
+                    return Ok(val);
+                }
+                let concrete_type = variable.compiler_type.clone();
+                let type_str = concrete_type.llvm_representation(self.symbols())?;
+                let variable = variable.clone();
+                return variable.load_llvm_value(
+                    0,
+                    &path.to_string(),
+                    self.ctx,
+                    &type_str,
+                    self.output,
+                );
+            }
+            if let Some(ptype) = PRIMITIVE_TYPES_INFO.iter().find(|x| x.name == name) {
+                return Ok(CompiledValue::Type(CompilerType::Primitive(ptype)));
+            }
+            if let Some(type_id) = self
+                .symbols()
+                .get_type_id_by_path(&glob_path)
+                .or_else(|| self.symbols().get_type_id_by_path(&local_path))
+            {
+                return Ok(CompiledValue::Type(CompilerType::Struct(type_id)));
+            }
+        } else {
         }
-        if let Some(ptype) = PRIMITIVE_TYPES_INFO.iter().find(|x| x.name == name) {
-            return Ok(CompiledValue::Type(CompilerType::Primitive(ptype)));
-        }
-        if let Some(type_id) = self
-            .symbols()
-            .get_type_id(&format!("{}.{}", self.ctx.current_function_path, name))
-            .or(self.symbols().get_type_id(name))
-        {
-            return Ok(CompiledValue::Type(CompilerType::Struct(type_id)));
-        }
+        panic!("{:?}", name);
+        /*
+
+
+
+
         Err(CompilerError::SymbolNotFound(format!(
             "RVAL:Symbol '{}' not found in '{}'",
-            name, self.ctx.current_function_path
+            name,
+            self.ctx.current_function_path.to_string()
         ))
         .into())
+         */
     }
     fn compile_integer_literal(
         &mut self,
@@ -301,7 +318,8 @@ impl<'a> ExpressionCompiler<'a> {
             eprintln!("{:?}", name);
             unimplemented!()
         };
-        if let Some(type_id) = self.symbols().get_type_id(fully_qualified_name) {
+        let glob_path = ContextPathEnd::from_full_path(fully_qualified_name);
+        if let Some(type_id) = self.symbols().get_type_id_by_path(&glob_path) {
             let mut q = vec![];
             for x in generics {
                 q.push(CompilerType::from_parser_type(
@@ -410,8 +428,8 @@ impl<'a> ExpressionCompiler<'a> {
                 "\t%tmp{} = {} ptr {}, {}\n",
                 utvc,
                 llvm_op,
-                left.get_llvm_rep(),
-                right.get_llvm_rep()
+                left.get_llvm_rep().to_string(),
+                right.get_llvm_rep().to_string()
             ));
             return Ok(CompiledValue::new_value(
                 LLVMVal::Register(utvc),
@@ -465,7 +483,7 @@ impl<'a> ExpressionCompiler<'a> {
             BinaryOp::And => {
                 self.output.push_function_body(&format!(
                     "\tbr i1 {}, label %{}, label %{}\n",
-                    left.get_llvm_rep(),
+                    left.get_llvm_rep().to_string(),
                     label_eval_rhs,
                     label_end
                 ));
@@ -473,7 +491,7 @@ impl<'a> ExpressionCompiler<'a> {
             BinaryOp::Or => {
                 self.output.push_function_body(&format!(
                     "\tbr i1 {}, label %{}, label %{}\n",
-                    left.get_llvm_rep(),
+                    left.get_llvm_rep().to_string(),
                     label_end,
                     label_eval_rhs
                 ));
@@ -854,7 +872,7 @@ impl<'a> ExpressionCompiler<'a> {
             arg_string.push(format!(
                 "{} {}",
                 argument_type.llvm_representation(self.symbols())?,
-                argument_rvalue.get_llvm_rep()
+                argument_rvalue.get_llvm_rep().to_string()
             ));
         }
 
@@ -1107,7 +1125,7 @@ impl<'a> ExpressionCompiler<'a> {
             return Err(CompilerError::Generic(format!("Expected name")).into());
         };
         path.push(base);
-        let func_path = ContextPath::from_string(&self.ctx.current_function_path);
+        let func_path = ContextPath::from_string(&self.ctx.current_function_path.to_string());
         // First try enum
         let field = path.first().unwrap();
         let enum_path = ContextPathEnd::from_vec(
@@ -1116,10 +1134,10 @@ impl<'a> ExpressionCompiler<'a> {
                 .map(|x| x.to_string().into_boxed_str())
                 .collect::<Vec<_>>(),
         );
-        if let Some(x) = self.symbols().get_enum_by_path(&enum_path).or(self
-            .symbols()
-            .get_enum_by_path(&enum_path.with_start(&func_path)))
-        {
+        if let Some(x) = self.symbols().get_enum_by_path(&enum_path).or_else(|| {
+            self.symbols()
+                .get_enum_by_path(&enum_path.with_start(&func_path))
+        }) {
             return Ok(CompiledValue::Value {
                 llvm_repr: x
                     .fields
@@ -1210,7 +1228,9 @@ impl<'a> ExpressionCompiler<'a> {
         modify_content: bool,
     ) -> CompileResult<CompiledLValue> {
         match expr {
-            Expr::Name(name) => self.compile_name_lvalue(name, write, modify_content),
+            Expr::Name(name) => {
+                self.compile_name_lvalue(ContextPathEnd::from_path("", name), write, modify_content)
+            }
             Expr::NameWithGenerics(name, generics) => {
                 self.compile_name_with_generics_lvalue(name, generics, write, modify_content)
             }
@@ -1237,62 +1257,77 @@ impl<'a> ExpressionCompiler<'a> {
     }
     pub fn compile_name_lvalue(
         &mut self,
-        name: &str,
+        name: ContextPathEnd,
         write: bool,
         modify_content: bool,
     ) -> CompileResult<CompiledLValue> {
-        if let Some((variable, id)) = self.ctx.scope.lookup(name) {
-            variable.mark_usage(write, modify_content);
-            let ptype = variable.compiler_type.clone();
-            if variable.get_flags().is_constant {
-                if ptype.is_pointer() {
-                    if write {
-                        return Err(CompilerError::Generic(format!(
-                            "Cannot assign to constant variable '{}'",
-                            name
-                        ))
-                        .into());
+        if name.context_path().is_empty() {
+            let name = name.name();
+            if let Some((variable, id)) = self.ctx.scope.lookup(name) {
+                variable.mark_usage(write, modify_content);
+                let ptype = variable.compiler_type.clone();
+                if variable.get_flags().is_constant {
+                    if ptype.is_pointer() {
+                        if write {
+                            return Err(CompilerError::Generic(format!(
+                                "Cannot assign to constant variable '{}'",
+                                name
+                            ))
+                            .into());
+                        }
+                        return Ok(CompiledLValue::new(
+                            variable.value().borrow().clone().unwrap(),
+                            ptype,
+                            false,
+                        ));
                     }
-                    return Ok(CompiledLValue::new(
-                        variable.value().borrow().clone().unwrap(),
-                        ptype,
-                        false,
-                    ));
+                    panic!(
+                        "Constant variable '{}' should not be accessed as an lvalue",
+                        name
+                    );
                 }
-                panic!(
-                    "Constant variable '{}' should not be accessed as an lvalue",
-                    name
-                );
-                //let x = variable.value().borrow().clone().ok_or_else(|| CompileError::InvalidExpression(format!("Constant variable '{}' has no value assigned", name)))?;
-                // Allocate if not allocated yet
-                //return Ok(CompiledValue::Pointer { llvm_repr: x, ptype });
+                let llvm_repr = LLVMVal::Variable(*id);
+                return Ok(CompiledLValue::new(llvm_repr, ptype, true));
             }
-            let llvm_repr = LLVMVal::Variable(*id);
-            return Ok(CompiledLValue::new(llvm_repr, ptype, true));
+            let glob_path =
+                ContextPathEnd::from_context_path(self.ctx.current_function_path.clone(), name);
+            let local_path = ContextPathEnd::from_path("", name);
+
+            if let Some(function) = self
+                .symbols()
+                .get_function_id_by_path(&glob_path)
+                .or_else(|| self.symbols().get_function_id_by_path(&local_path))
+            {
+                self.symbols().get_function_by_id_use(function);
+                return Ok(CompiledLValue::from_function(function, self.symbols())?);
+            }
+            if let Some((path, variable)) = self
+                .symbols()
+                .get_static_by_path(&glob_path)
+                .or_else(|| self.symbols().get_static_by_path(&local_path))
+            {
+                let llvm_repr = LLVMVal::Global(path.to_string());
+                variable.mark_usage(write, modify_content);
+                return Ok(CompiledLValue::new(
+                    llvm_repr,
+                    variable.compiler_type.clone(),
+                    true,
+                ));
+            }
+        } else {
+            if let Some(function) = self.symbols().get_function_id_by_path(&name) {
+                self.symbols().get_function_by_id_use(function);
+                return Ok(CompiledLValue::from_function(function, self.symbols())?);
+            }
         }
-        if let Some(function) = self
-            .symbols()
-            .get_function_id(&format!("{}.{}", self.ctx.current_function_path, name))
-            .or(self.symbols().get_function_id(name))
-        {
-            self.symbols().get_function_by_id_use(function);
-            return Ok(CompiledLValue::from_function(function, self.symbols())?);
-        }
-        if let Some((path, variable)) = self
-            .symbols()
-            .get_static_var(&format!("{}.{}", self.ctx.current_function_path, name))
-            .or(self.symbols().get_static_var(name))
-        {
-            let llvm_repr = LLVMVal::Global(path.to_string());
-            variable.mark_usage(write, modify_content);
-            return Ok(CompiledLValue::new(
-                llvm_repr,
-                variable.compiler_type.clone(),
-                true,
-            ));
-        }
-        eprintln!("Current Path: {}", self.ctx.current_function_path);
-        Err(CompilerError::SymbolNotFound(format!("Lvalue '{}' not found", name)).into())
+        eprintln!(
+            "Current Path: '{}'",
+            self.ctx.current_function_path.to_string()
+        );
+        Err(
+            CompilerError::SymbolNotFound(format!("Lvalue '{}' not found", name.to_string()))
+                .into(),
+        )
     }
     fn compile_name_with_generics_lvalue(
         &mut self,
@@ -1474,7 +1509,7 @@ impl<'a> ExpressionCompiler<'a> {
                     format!(
                         "{} {}",
                         index_type.llvm_representation(self.symbols())?,
-                        index_val.get_llvm_rep()
+                        index_val.get_llvm_rep().to_string()
                     ),
                 ],
             );
@@ -1523,7 +1558,7 @@ impl<'a> ExpressionCompiler<'a> {
             &[format!(
                 "{} {}",
                 index_type.llvm_representation(self.symbols())?,
-                index_val.get_llvm_rep()
+                index_val.get_llvm_rep().to_string()
             )],
         );
         Ok(CompiledLValue::new(gep_ptr_reg, base_type.clone(), true))
@@ -1551,7 +1586,7 @@ impl<'a> ExpressionCompiler<'a> {
                 .map(|x| x.to_string().into_boxed_str())
                 .collect::<Vec<_>>(),
         );
-        self.compile_name_lvalue(&full_path.to_string(), write, modify_content)
+        self.compile_name_lvalue(full_path, write, modify_content)
     }
     fn compile_deref_lvalue(
         &mut self,
@@ -1743,13 +1778,19 @@ impl<'a> ExpressionCompiler<'a> {
     pub fn emit_store(&mut self, value: &LLVMVal, ptr: &LLVMVal, type_repr: &str) {
         self.output.push_function_body(&format!(
             "\tstore {} {}, {}* {}\n",
-            type_repr, value, type_repr, ptr
+            type_repr,
+            value.to_string(),
+            type_repr,
+            ptr.to_string()
         ));
     }
     pub fn emit_load(&mut self, target_reg: usize, ptr: &LLVMVal, type_repr: &str) {
         self.output.push_function_body(&format!(
             "\t%tmp{} = load {}, {}* {}\n",
-            target_reg, type_repr, type_repr, ptr
+            target_reg,
+            type_repr,
+            type_repr,
+            ptr.to_string()
         ));
     }
     pub fn emit_binary_op(
@@ -1762,7 +1803,11 @@ impl<'a> ExpressionCompiler<'a> {
         let utvc = self.ctx.acquire_temp_id();
         self.output.push_function_body(&format!(
             "\t%tmp{} = {} {} {}, {}\n",
-            utvc, op, type_repr, lhs, rhs
+            utvc,
+            op,
+            type_repr,
+            lhs.to_string(),
+            rhs.to_string()
         ));
         utvc
     }

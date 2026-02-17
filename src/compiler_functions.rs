@@ -5,6 +5,7 @@ use rcsharp_parser::{
 };
 
 use crate::{
+    compiler::structs::ContextPathEnd,
     compiler_essentials::{CompileResult, CompilerError, CompilerType, LLVMVal},
     expression_compiler::{CompiledValue, Expected, ExpressionCompiler},
 };
@@ -71,7 +72,7 @@ fn stalloc_impl(
         "\t%tmp{} = alloca i8, {} {}\n",
         utvc,
         count_llvm_type,
-        count_val.get_llvm_rep()
+        count_val.get_llvm_rep().to_string()
     ));
     Ok(CompiledValue::new_value(
         LLVMVal::Register(utvc),
@@ -114,7 +115,7 @@ fn stalloc_generic_impl(
     let target_type = CompilerType::from_parser_type(
         &given_generic[0],
         compiler.symbols(),
-        &compiler.ctx.current_function_path.to_string(),
+        &compiler.ctx.current_function_path,
     )?;
     let llvm_type_str = target_type.llvm_representation(compiler.symbols())?;
     let utvc = compiler.ctx.acquire_temp_id();
@@ -123,7 +124,7 @@ fn stalloc_generic_impl(
         utvc,
         llvm_type_str,
         count_type.llvm_representation(compiler.symbols())?,
-        count_val.get_llvm_rep()
+        count_val.get_llvm_rep().to_string()
     ));
     Ok(CompiledValue::new_value(
         LLVMVal::Register(utvc),
@@ -180,7 +181,7 @@ fn size_of_generic_impl(
     let mut target_type = CompilerType::from_parser_type(
         &given_generic[0],
         compiler.symbols(),
-        &compiler.ctx.current_function_path.to_string(),
+        &compiler.ctx.current_function_path,
     )?;
     target_type.substitute_global_aliases(compiler.symbols())?;
     let size = target_type.calculate_layout(compiler.symbols()).size;
@@ -281,7 +282,7 @@ fn align_of_generic_impl(
     let mut target_type = CompilerType::from_parser_type(
         &given_generic[0],
         compiler.symbols(),
-        &compiler.ctx.current_function_path.to_string(),
+        &compiler.ctx.current_function_path,
     )?;
     target_type.substitute_global_aliases(compiler.symbols())?;
     let align = target_type.calculate_layout(compiler.symbols()).align;
@@ -329,7 +330,7 @@ fn bitcast_generic_impl(
     let target_type = CompilerType::from_parser_type(
         &given_generic[0],
         compiler.symbols(),
-        &compiler.ctx.current_function_path.to_string(),
+        &compiler.ctx.current_function_path,
     )?;
 
     if !source_type.is_bitcast_compatible(&target_type, compiler.symbols()) {
@@ -468,14 +469,20 @@ fn asm_impl(
 
                         let (llvm_value, llvm_type) = if let Expr::Name(name) = &inner[1] {
                             if is_output {
-                                let lvalue = compiler.compile_name_lvalue(name, true, true)?;
+                                let lvalue = compiler.compile_name_lvalue(
+                                    ContextPathEnd::from_path("", name),
+                                    true,
+                                    true,
+                                )?;
                                 (
                                     lvalue.location.to_string(),
                                     lvalue.value_type.llvm_representation(compiler.symbols())?,
                                 )
                             } else {
-                                let rvalue =
-                                    compiler.compile_name_rvalue(name, Expected::Anything)?;
+                                let rvalue = compiler.compile_name_rvalue(
+                                    ContextPathEnd::from_path("", name),
+                                    Expected::Anything,
+                                )?;
                                 (
                                     rvalue.get_llvm_rep().to_string(),
                                     rvalue

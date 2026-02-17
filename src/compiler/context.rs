@@ -18,6 +18,7 @@ pub struct CompilerConfig {
     pub optimization_level: u8,
     pub include_paths: Vec<PathBuf>,
     pub emit_debug_info: bool,
+    pub no_lazy_compile: bool,
     pub target_triple: String,
 }
 #[derive(Debug, Default)]

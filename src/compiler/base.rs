@@ -28,13 +28,21 @@ pub fn compile_to_file(entry_path: &str, output_path: &str) -> CompileResult<()>
         ))
         .into());
     }
-
+    let warnings_count = diag
+        .iter()
+        .filter(|(sev, _)| matches!(sev, ErrorSeverity::Warning))
+        .count();
+    if warnings_count > 0 {
+        for (_, err) in diag {
+            eprintln!("{}", err);
+        }
+    }
     std::fs::write(output_path, llvm_ir).map_err(|e| CompilerError::Generic(e.to_string()))?;
     Ok(())
 }
 pub fn compile(entry_path: &str) -> CompileResult<(CompilerContext, String)> {
     let mut ctx = CompilerContext::default();
-
+    ctx.config.no_lazy_compile = true;
     let mut loader = ModuleLoaderPass::default();
     let ast = loader.run(entry_path, &mut ctx)?;
 

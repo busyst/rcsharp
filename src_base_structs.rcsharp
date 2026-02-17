@@ -24,7 +24,6 @@ asm(
         ["flags"] 
     );
     */
-    return;
 }
 
 #[no_lazy]
@@ -613,7 +612,7 @@ namespace stdlib {
 
         loop {
             if !char_utils::is_digit(str[i]) { break; }
-            res = res * 10 + (str[i] - '0');
+            res = res * 10 + (str[i] - '0') as i32;
             i = i + 1;
         }
         return res * sign;
@@ -641,8 +640,8 @@ namespace stdlib {
         let digit_val: i32;
         loop {
             const c: i8 = str[i];
-            if char_utils::is_digit(c) { digit_val = c - '0'; }
-            else if char_utils::is_alpha(c) { digit_val = char_utils::to_lower(c) - 'a' + 10; }
+            if char_utils::is_digit(c) { digit_val = (c - '0') as i32; }
+            else if char_utils::is_alpha(c) { digit_val = (char_utils::to_lower(c) - 'a' + 10) as i32; }
             else { break; }
             
             if digit_val >= b { break; }

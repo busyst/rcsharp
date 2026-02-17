@@ -31,18 +31,18 @@ pub enum LLVMVal {
     Null,                  // null
     Void,                  // void
 }
-impl std::fmt::Display for LLVMVal {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl ToString for LLVMVal {
+    fn to_string(&self) -> String {
         match self {
-            LLVMVal::Register(id) => write!(f, "%tmp{}", id),
-            LLVMVal::Variable(id) => write!(f, "%v{}", id),
-            LLVMVal::VariableName(name) => write!(f, "%{}", name),
-            LLVMVal::Global(name) => write!(f, "@{}", name),
-            LLVMVal::ConstantInteger(val) => write!(f, "{}", val),
-            LLVMVal::ConstantDecimal(val) => write!(f, "0x{:X}", val.to_bits()),
-            LLVMVal::ConstantBoolean(val) => write!(f, "{}", val),
-            LLVMVal::Void => write!(f, "void"),
-            LLVMVal::Null => write!(f, "null"),
+            LLVMVal::Register(id) => format!("%tmp{}", id),
+            LLVMVal::Variable(id) => format!("%v{}", id),
+            LLVMVal::VariableName(name) => format!("%{}", name),
+            LLVMVal::Global(name) => format!("@{}", name),
+            LLVMVal::ConstantInteger(val) => format!("{}", val),
+            LLVMVal::ConstantDecimal(val) => format!("0x{:X}", val.to_bits()),
+            LLVMVal::ConstantBoolean(val) => format!("{}", val),
+            LLVMVal::Void => format!("void"),
+            LLVMVal::Null => format!("null"),
         }
     }
 }
@@ -67,7 +67,7 @@ impl Default for CompilerType {
 impl std::fmt::Debug for CompilerType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Primitive(info) => write!(f, "@{}", info.name),
+            Self::Primitive(info) => write!(f, "#{}", info.name),
             Self::Pointer(inner) => f.debug_tuple("Pointer").field(inner).finish(),
             Self::ConstantArray(size, inner) => f
                 .debug_tuple("ConstantArray")
@@ -207,7 +207,7 @@ impl CompilerType {
     pub fn from_parser_type(
         given_type: &ParserType,
         symbols: &SymbolTable,
-        current_path: &str,
+        current_path: &ContextPath,
     ) -> CompileResult<CompilerType> {
         if let Some(pt) = given_type.as_primitive_type() {
             return Ok(Self::Primitive(pt));
@@ -225,20 +225,21 @@ impl CompilerType {
             return Ok(Self::Function(Box::new(ret_type), arg_types));
         }
         if let ParserType::Named(name) = given_type {
-            let local_path = format!("{}.{}", current_path, name);
+            let glob_path = ContextPathEnd::from_context_path(current_path.clone(), name);
+            let local_path = ContextPathEnd::from_path("", name);
 
             if let Some(id) = symbols
-                .get_type_id(&local_path)
-                .or_else(|| symbols.get_type_id(name))
+                .get_type_id_by_path(&glob_path)
+                .or_else(|| symbols.get_type_id_by_path(&local_path))
             {
                 return Ok(Self::Struct(id));
             }
 
             if let Some(enum_def) = symbols
-                .get_enum(&local_path)
-                .or_else(|| symbols.get_enum(name))
+                .get_enum_by_path(&glob_path)
+                .or_else(|| symbols.get_enum_by_path(&local_path))
             {
-                return Ok(enum_def.1.base_type.clone());
+                return Ok(enum_def.base_type.clone());
             }
 
             if let Some(alias) = symbols.alias_types().get(name) {
@@ -248,10 +249,11 @@ impl CompilerType {
             return Ok(Self::GenericPlaceholder(name.clone().into_boxed_str()));
         }
         if let ParserType::Generic(name, args) = given_type {
-            let local_path = format!("{}.{}", current_path, name);
+            let glob_path = ContextPathEnd::from_context_path(current_path.clone(), name);
+            let local_path = ContextPathEnd::from_path("", name);
             let id = symbols
-                .get_type_id(&local_path)
-                .or_else(|| symbols.get_type_id(name))
+                .get_type_id_by_path(&glob_path)
+                .or_else(|| symbols.get_type_id_by_path(&local_path))
                 .expect(&format!("Generic type {} not found", name));
 
             let mut compiled_args = Vec::new();
@@ -282,14 +284,18 @@ impl CompilerType {
             }
         }
         if let ParserType::NamespaceLink(link, inner) = given_type {
-            let mut path_builder = link.to_string();
+            let mut path_builder = vec![link.to_string().into_boxed_str()];
             let mut current = &**inner;
             while let ParserType::NamespaceLink(next_segment, next_inner) = current {
-                path_builder.push('.');
-                path_builder.push_str(next_segment);
+                path_builder.push(next_segment.to_string().into_boxed_str());
                 current = &**next_inner;
             }
-            return Self::resolve_namespaced_type(current, symbols, &path_builder, current_path);
+            return Self::resolve_namespaced_type(
+                current,
+                symbols,
+                &ContextPath::new(path_builder.into_boxed_slice()),
+                current_path,
+            );
         }
         if let ParserType::ConstantSizeArray(inner, size) = given_type {
             let inner_type = Self::from_parser_type(inner, symbols, current_path)?;
@@ -300,14 +306,14 @@ impl CompilerType {
     fn resolve_namespaced_type(
         given_type: &ParserType,
         symbols: &SymbolTable,
-        namespace_path: &str,
-        context_path: &str,
+        namespace_path: &ContextPath,
+        context_path: &ContextPath,
     ) -> CompileResult<Self> {
         if let Some((name, args)) = given_type.as_generic() {
-            let full_name = format!("{}.{}", namespace_path, name);
+            let glob_path = ContextPathEnd::from_context_path(namespace_path.clone(), name);
             let id = symbols
-                .get_type_id(&full_name)
-                .expect(&format!("Type {} not found", full_name));
+                .get_type_id_by_path(&glob_path)
+                .expect(&format!("Type {} not found", glob_path.to_string()));
 
             let mut compiled_args = Vec::new();
             let mut is_concrete = true;
@@ -332,15 +338,15 @@ impl CompilerType {
         }
 
         if let ParserType::Named(name) = given_type {
-            let full_name = format!("{}.{}", namespace_path, name);
-            if let Some(id) = symbols.get_type_id(&full_name) {
+            let glob_path = ContextPathEnd::from_context_path(namespace_path.clone(), name);
+            if let Some(id) = symbols.get_type_id_by_path(&glob_path) {
                 return Ok(Self::Struct(id));
             }
-            panic!("Type {} not found", full_name);
+            panic!("Type {} not found", glob_path.to_string());
         }
 
         panic!(
-            "Invalid namespaced type: {:?} in {}",
+            "Invalid namespaced type: {:?} in {:?}",
             given_type, namespace_path
         );
     }
@@ -1506,45 +1512,32 @@ impl SymbolTable {
         self.types.values().nth(type_id).expect("Unexpected")
     }
     pub fn get_function_by_id(&self, function_id: usize) -> &Function {
-        if let Some(func) = self.functions.values().nth(function_id) {
-            return func;
-        }
-        unreachable!()
+        let Some(func) = self.functions.values().nth(function_id) else {
+            unreachable!()
+        };
+        func
     }
     pub fn get_function_by_id_use(&self, function_id: usize) -> &Function {
-        if let Some(func) = self.functions.values().nth(function_id) {
-            func.increment_usage();
-            return func;
-        }
-        unreachable!()
+        let Some(func) = self.functions.values().nth(function_id) else {
+            unreachable!()
+        };
+        func.increment_usage();
+        func
     }
-
-    pub fn get_type_id(&self, fqn: &str) -> Option<usize> {
-        let end = ContextPathEnd::from_full_path(fqn);
-        self.types.index_of(&end)
+    pub fn get_type_id_by_path(&self, fqn: &ContextPathEnd) -> Option<usize> {
+        self.types.index_of(&fqn)
     }
-    pub fn get_function_id(&self, fqn: &str) -> Option<usize> {
-        let end = ContextPathEnd::from_full_path(fqn);
-        self.functions.index_of(&end)
-    }
-
-    pub fn get_type(&self, fqn: &str) -> Option<&Struct> {
-        self.get_type_id(fqn).map(|x| self.get_type_by_id(x))
-    }
-    pub fn get_function(&self, fqn: &str) -> Option<&Function> {
-        self.get_function_id(fqn)
-            .map(|x| self.get_function_by_id(x))
-    }
-    pub fn get_enum(&self, fqn: &str) -> Option<(ContextPathEnd, &Enum)> {
-        let end = ContextPathEnd::from_full_path(fqn);
-        self.enums.get(&end).map(|x| (end, x))
+    pub fn get_function_id_by_path(&self, fqn: &ContextPathEnd) -> Option<usize> {
+        self.functions.index_of(&fqn)
     }
     pub fn get_enum_by_path(&self, fqn: &ContextPathEnd) -> Option<&Enum> {
         self.enums.get(&fqn)
     }
-    pub fn get_static_var(&self, fqn: &str) -> Option<(ContextPathEnd, &Variable)> {
-        let end = ContextPathEnd::from_full_path(fqn);
-        self.static_variables.get(&end).map(|x| (end, x))
+    pub fn get_static_by_path<'a>(
+        &'a self,
+        fqn: &'a ContextPathEnd,
+    ) -> Option<(&'a ContextPathEnd, &'a Variable)> {
+        self.static_variables.get(&fqn).map(|x| (fqn, x))
     }
     pub fn insert_type(&mut self, full_path: ContextPathEnd, structure: Struct) {
         if let Some(x) = self.types.get_mut(&full_path) {

@@ -7,7 +7,7 @@ use rcsharp_parser::{
 
 use crate::{
     compiler::{
-        context::CompilerContext,
+        context::{CompilerContext, ErrorSeverity},
         passes::traits::CompilerPass,
         structs::{ContextPath, ContextPathEnd},
     },
@@ -67,9 +67,6 @@ impl<'a> CompilerPass<'a> for TypeCheckPass {
                 .insert_type(type_path, Struct::new_placeholder());
         }
         for (type_env_path, struct_decl) in types {
-            let type_path_str = type_env_path.to_string();
-
-            // Handle Generics
             let mut new_alias_types = HashMap::new();
             for prm in &struct_decl.generic_params {
                 new_alias_types.insert(
@@ -77,8 +74,6 @@ impl<'a> CompilerPass<'a> for TypeCheckPass {
                     CompilerType::GenericPlaceholder(prm.to_string().into_boxed_str()),
                 );
             }
-            // Note: This assumes set_alias_types replaces the previous map.
-            // If the context is shared/global, this needs to be scoped carefully.
             ctx.symbols.set_alias_types(new_alias_types);
 
             let mut compiler_struct_fields = Vec::with_capacity(struct_decl.fields.len());
@@ -87,7 +82,7 @@ impl<'a> CompilerPass<'a> for TypeCheckPass {
                 let field_type = if let Some(pt) = attr_type.as_primitive_type() {
                     CompilerType::Primitive(pt)
                 } else {
-                    CompilerType::from_parser_type(attr_type, &ctx.symbols, &type_path_str)?
+                    CompilerType::from_parser_type(attr_type, &ctx.symbols, &type_env_path)?
                 };
                 compiler_struct_fields.push((name.to_string(), field_type));
             }
@@ -144,32 +139,33 @@ impl<'a> CompilerPass<'a> for TypeCheckPass {
         }
 
         for (current_path, (name, var_type, _expression)) in static_variables {
+            let t = CompilerType::from_parser_type(var_type, &ctx.symbols, &current_path)?;
             let full_path = ContextPathEnd::from_context_path(current_path, name);
-            let t = CompilerType::from_parser_type(var_type, &ctx.symbols, &full_path.to_string())?;
             ctx.symbols
                 .insert_static_var(full_path, Variable::new(t, false, true))?;
         }
         for (current_path, parsed_function) in functions {
-            let current_path_str = current_path.to_string();
             let return_type = CompilerType::from_parser_type(
                 &parsed_function.return_type,
                 &ctx.symbols,
-                &current_path_str,
+                &current_path,
             )?;
             let mut args_vec = Vec::with_capacity(parsed_function.args.len());
             for (name, type_expr) in &parsed_function.args {
                 let arg_type =
-                    CompilerType::from_parser_type(type_expr, &ctx.symbols, &current_path_str)?;
+                    CompilerType::from_parser_type(type_expr, &ctx.symbols, &current_path)?;
                 args_vec.push((name.clone(), arg_type));
             }
             let args = args_vec.into_boxed_slice();
 
             let full_path = ContextPathEnd::from_context_path(current_path, &parsed_function.name);
+            let b = type_check_function_body(&parsed_function.body, &return_type, &args, ctx)
+                .unwrap_or(parsed_function.body.clone());
             let function = Function::new(
                 ContextPathEnd::default(),
                 args,
                 return_type,
-                parsed_function.body.clone(),
+                b,
                 0.into(),
                 parsed_function.attributes.clone(),
                 parsed_function.generic_params.clone(),
@@ -184,6 +180,53 @@ impl<'a> CompilerPass<'a> for TypeCheckPass {
         }
 
         Ok(())
+    }
+}
+fn type_check_function_body(
+    body: &[StmtData],
+    return_type: &CompilerType,
+    _args: &[(String, CompilerType)],
+    ctx: &mut CompilerContext,
+) -> Option<Box<[StmtData]>> {
+    let mut new_body = None;
+    if return_type.is_void() {
+        if body
+            .last()
+            .map(|x| matches!(x.stmt, Stmt::Return(..)))
+            .unwrap_or(false)
+        {
+            let mut x = new_body.unwrap_or(body.to_vec());
+            while x
+                .last()
+                .map(|x| matches!(x.stmt, Stmt::Return(..)))
+                .unwrap_or(false)
+            {
+                let r = x.remove(x.len() - 1);
+                if !matches!(r.stmt, Stmt::Return(None)) {
+                    ctx.diagnostics.push((
+                        ErrorSeverity::Error,
+                        CompilerError::Generic(format!(
+                            "TCFB: Trying to return something in void function"
+                        )),
+                    ));
+                } else {
+                    ctx.diagnostics.push((
+                        ErrorSeverity::Warning,
+                        CompilerError::Generic(format!(
+                            "TCFB: Unnecesary return {}:{}",
+                            r.span.start, r.span.end
+                        )),
+                    ));
+                }
+            }
+            new_body = Some(x)
+        }
+    }
+
+    if let Some(x) = new_body {
+        Some(x.into_boxed_slice())
+    } else {
+        None
     }
 }
 fn determine_function_flags(

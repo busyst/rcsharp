@@ -38,23 +38,20 @@ impl OptimizerPass {
 
                 Stmt::If(cond, then_block, else_block) => {
                     self.optimize_expression_tree(cond);
-
-                    self.optimize_block(then_block)?;
-                    self.optimize_block(else_block)?;
-
                     if let Expr::Boolean(val) = cond {
-                        if *val {
-                            *else_block = Box::new([]);
+                        return Ok(if *val {
+                            self.optimize_block(then_block)?;
+                            stmt_data.stmt = Stmt::Block(then_block.clone());
                             println!("OPT: Pruned dead ELSE branch (cond is true)");
                         } else {
-                            std::mem::swap(then_block, else_block);
-                            *cond = Expr::Boolean(true);
-                            *else_block = Box::new([]);
+                            self.optimize_block(else_block)?;
+                            stmt_data.stmt = Stmt::Block(else_block.clone());
                             println!("OPT: Pruned dead THEN branch (cond is false)");
-                        }
-                    } else if matches!(cond, Expr::UnaryOp(UnaryOp::Not, _))
-                        && !else_block.is_empty()
-                    {
+                        });
+                    }
+                    self.optimize_block(then_block)?;
+                    self.optimize_block(else_block)?;
+                    if matches!(cond, Expr::UnaryOp(UnaryOp::Not, _)) && !else_block.is_empty() {
                         if let Expr::UnaryOp(UnaryOp::Not, inner) = cond {
                             std::mem::swap(then_block, else_block);
                             *cond = *inner.clone();
@@ -67,10 +64,8 @@ impl OptimizerPass {
                     }
                 }
 
-                Stmt::Loop(block) => {
-                    self.optimize_block(block)?;
-                }
-
+                Stmt::Loop(block) => self.optimize_block(block)?,
+                Stmt::Block(block) => self.optimize_block(block)?,
                 _ => {}
             }
         }
@@ -114,7 +109,6 @@ impl OptimizerPass {
             *expr = optimized;
         }
     }
-
     fn remove_unreachable_code(&mut self, body: &mut Box<[StmtData]>) -> CompileResult<()> {
         if let Some(termination_index) = body
             .iter()

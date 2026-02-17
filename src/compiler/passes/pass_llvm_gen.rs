@@ -7,7 +7,11 @@ use rcsharp_parser::{
 };
 
 use crate::{
-    compiler::{context::CompilerContext, passes::traits::CompilerPass},
+    compiler::{
+        context::CompilerContext,
+        passes::traits::CompilerPass,
+        structs::{ContextPath, ContextPathEnd},
+    },
     compiler_essentials::{
         CompileResult, CompileResultExt, CompilerError, CompilerType, LLVMOutputHandler, LLVMVal,
         Scope, Variable,
@@ -30,6 +34,11 @@ impl<'a> CompilerPass<'a> for LLVMGenPass {
         _input: Self::Input,
         ctx: &mut CompilerContext,
     ) -> CompileResult<Self::Output> {
+        if ctx.config.no_lazy_compile {
+            for x in ctx.symbols.functions_iter() {
+                x.1.increment_usage();
+            }
+        }
         let mut builder = LLVMOutputHandler::default();
         self.emit_static_vars(&mut builder, ctx)?;
         self.compile_functions(&mut builder, ctx)?;
@@ -185,7 +194,10 @@ impl LLVMGenPass {
         builder: &mut LLVMOutputHandler,
         ctx: &mut CompilerContext,
     ) -> CompileResult<()> {
-        let Some(main) = ctx.symbols.get_function_id("main") else {
+        let Some(main) = ctx
+            .symbols
+            .get_function_id_by_path(&ContextPathEnd::from_path("", "main"))
+        else {
             for f in ctx.symbols.functions_iter() {
                 println!("{}", f.0.to_string());
             }
@@ -270,7 +282,7 @@ impl LLVMGenPass {
                         .collect::<CompileResult<Vec<_>>>()?;
                     to_do_generics.push((
                         type_map,
-                        func.path().to_string(),
+                        func.path().clone(),
                         func.get_implementation_name(ind, &ctx.symbols),
                         return_type,
                         args,
@@ -283,7 +295,7 @@ impl LLVMGenPass {
             {
                 ctx.symbols.set_alias_types(type_map);
                 self.compile_function_base(
-                    &function_path,
+                    function_path,
                     &full_function_name,
                     return_type,
                     args,
@@ -343,14 +355,14 @@ impl LLVMGenPass {
             let body = function.body.clone();
             (
                 full_function_name,
-                function.path().to_string(),
+                function.path().clone(),
                 return_type,
                 args,
                 body,
             )
         };
         self.compile_function_base(
-            &path,
+            path,
             &full_function_name,
             return_type,
             args,
@@ -362,7 +374,7 @@ impl LLVMGenPass {
     }
     fn compile_function_base(
         &mut self,
-        function_path: &str,
+        function_path: ContextPath,
         full_function_name: &str,
         return_type: CompilerType,
         args: Vec<(String, CompilerType)>,
@@ -385,7 +397,7 @@ impl LLVMGenPass {
         builder.start_function(&return_type_llvm, full_function_name, &args_str);
         builder.emit_label_intro("entry");
         self.cgctx.scope = Scope::new();
-        self.cgctx.current_function_path = function_path.to_string();
+        self.cgctx.current_function_path = function_path;
         self.cgctx.current_function_return_type = return_type.clone();
         self.cgctx.var_counter.set(0);
         self.cgctx.temp_counter.set(0);
@@ -413,7 +425,8 @@ impl LLVMGenPass {
         for stmt in fx.iter() {
             self.compile_statement(stmt, builder, ctx).extend(&format!(
                 "During compilation of function '{}':namespace('{}')",
-                full_function_name, function_path
+                full_function_name,
+                self.cgctx.current_function_path.to_string()
             ))?;
         }
         if return_type.is_void() {
@@ -479,6 +492,11 @@ impl LLVMGenPass {
             Stmt::If(x, y, z) => Ok(self
                 .compile_if_statement(x, y, z, builder, ctx)
                 .extend(&format!("During compilation of if statement"))?),
+            Stmt::Block(x) => {
+                self.compile_block(x, builder, ctx)
+                    .extend(&format!("During compilation of block"))?;
+                Ok(false)
+            }
             Stmt::Return(x) => Ok(self
                 .compile_return(x, builder, ctx)
                 .extend(&format!("During compilation of return statement"))?),
@@ -551,6 +569,7 @@ impl LLVMGenPass {
                 }
             },
             Stmt::CompilerHint(..) => panic!(),
+            Stmt::CompilerDud => Ok(false),
             _ => unimplemented!("{:?}", statement),
         }
     }
@@ -611,7 +630,7 @@ impl LLVMGenPass {
         };
         builder.push_function_body(&format!(
             "\tbr i1 {}, label %{}, label %{}\n",
-            cond_result.get_llvm_rep(),
+            cond_result.get_llvm_rep().to_string(),
             target_then,
             target_else
         ));
@@ -717,7 +736,7 @@ impl LLVMGenPass {
                     self.span,
                     CompilerError::Generic(format!(
                         "Function {} does not return anything, but got expression:{}",
-                        self.cgctx.current_function_path,
+                        self.cgctx.current_function_path.to_string(),
                         expr.as_ref().unwrap().debug_emit()
                     )),
                 )
@@ -752,7 +771,7 @@ impl LLVMGenPass {
             let x = self.cgctx.acquire_var_id();
             builder.push_function_intro(&format!(
                 "\t{} = alloca {}; var: {}\n",
-                LLVMVal::Variable(x),
+                LLVMVal::Variable(x).to_string(),
                 variable.compiler_type().llvm_representation(&ctx.symbols)?,
                 name
             ));
@@ -800,7 +819,7 @@ impl LLVMGenPass {
         builder.emit_line_body(&format!(
             "store {} {}, {}* {}",
             t,
-            result.get_llvm_rep(),
+            result.get_llvm_rep().to_string(),
             t,
             ptr_reg
         ));
@@ -838,6 +857,32 @@ impl LLVMGenPass {
         }
         Ok(())
     }
+    fn compile_block(
+        &mut self,
+        inside: &[StmtData],
+        builder: &mut LLVMOutputHandler,
+        ctx: &mut CompilerContext,
+    ) -> CompileResult<()> {
+        let lc = self.cgctx.acquire_label_id();
+        self.cgctx.scope.push_layer();
+        self.cgctx.current_block_name = format!("block{}", lc);
+        for x in inside {
+            self.compile_statement(x, builder, ctx)?;
+        }
+
+        let x = self.cgctx.scope.pop_layer(&mut ctx.symbols);
+        for x in x {
+            self.compile_statement(
+                &StmtData {
+                    stmt: x,
+                    span: Span::empty(),
+                },
+                builder,
+                ctx,
+            )?;
+        }
+        Ok(())
+    }
 }
 #[derive(Default)]
 pub struct CodeGenContext {
@@ -850,7 +895,7 @@ pub struct CodeGenContext {
     pub label_counter: Cell<u32>,
 
     pub current_function_return_type: CompilerType,
-    pub current_function_path: String,
+    pub current_function_path: ContextPath,
 }
 impl CodeGenContext {
     pub fn set_current_block(&mut self, name: String) {
