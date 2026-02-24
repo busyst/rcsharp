@@ -1,7 +1,7 @@
 use core::fmt;
-use std::fmt::Write;
+use std::{cell::Cell, fmt::Write};
 
-use rcsharp_lexer::{Token, TokenData};
+use rcsharp_lexer::{LexerSymbolTable, Token, TokenData};
 
 use crate::parser::{ParserError, ParserResult, ParserType, Span};
 #[derive(Debug, Clone, PartialEq)]
@@ -142,46 +142,46 @@ fn get_precedence(token: &Token) -> u8 {
 
 pub struct ExpressionParser<'a> {
     tokens: &'a [TokenData],
-    cursor: usize,
+    symbol_table: &'a LexerSymbolTable,
+    cursor: Cell<usize>,
     len: usize,
     pending_gt: bool,
 }
 impl<'a> ExpressionParser<'a> {
-    pub fn new(tokens: &'a [TokenData]) -> Self {
+    pub fn new(tokens: &'a [TokenData], symbol_table: &'a LexerSymbolTable) -> Self {
         Self {
             tokens,
-            cursor: 0,
+            symbol_table,
+            cursor: Cell::new(0),
             len: tokens.len(),
             pending_gt: false,
         }
     }
     #[inline(always)]
     pub fn is_at_end(&self) -> bool {
-        self.cursor >= self.len
+        self.cursor.get() >= self.len
     }
 
     #[inline(always)]
     pub fn cursor(&self) -> usize {
-        self.cursor
+        self.cursor.get()
     }
     #[inline(always)]
     fn peek(&self) -> &TokenData {
-        if self.cursor < self.len {
-            unsafe { self.tokens.get_unchecked(self.cursor) }
+        if self.cursor.get() < self.len {
+            unsafe { self.tokens.get_unchecked(self.cursor.get()) }
         } else {
             static DUMMY_EOF: TokenData = TokenData {
                 token: Token::DummyToken,
                 span: 0..0,
-                row: 0,
-                col: 0,
             };
             &DUMMY_EOF
         }
     }
     #[inline(always)]
     fn peek_span(&self) -> Span {
-        if self.cursor < self.len {
-            let t = unsafe { self.tokens.get_unchecked(self.cursor) };
+        if self.cursor.get() < self.len {
+            let t = unsafe { self.tokens.get_unchecked(self.cursor.get()) };
             Span::new(t.span.start, t.span.end)
         } else if self.len > 0 {
             let last = unsafe { self.tokens.get_unchecked(self.len - 1) };
@@ -191,10 +191,10 @@ impl<'a> ExpressionParser<'a> {
         }
     }
     #[inline(always)]
-    fn advance(&mut self) -> &TokenData {
-        if self.cursor < self.len {
-            self.cursor += 1;
-            unsafe { self.tokens.get_unchecked(self.cursor - 1) }
+    fn advance(&self) -> &TokenData {
+        if self.cursor.get() < self.len {
+            self.cursor.set(self.cursor.get() + 1);
+            unsafe { self.tokens.get_unchecked(self.cursor.get() - 1) }
         } else {
             self.peek()
         }
@@ -207,7 +207,6 @@ impl<'a> ExpressionParser<'a> {
         } else {
             Err((
                 self.peek_span(),
-                (token_data.row as usize, token_data.col as usize),
                 ParserError::UnexpectedToken {
                     expected: format!("{:?}", expected),
                     found: format!("{:?}", token_data.token),
@@ -219,18 +218,14 @@ impl<'a> ExpressionParser<'a> {
     fn consume_name(&mut self) -> ParserResult<String> {
         let token_data = self.peek();
         match &token_data.token {
-            Token::Name(name) => {
-                let s = name.to_string();
-                self.cursor += 1;
+            Token::Name(sym) => {
+                let s = self.symbol_table.get(sym).to_string();
+                self.cursor.set(self.cursor.get() + 1);
                 Ok(s)
             }
             _ => {
                 let found = format!("{:?}", token_data.token);
-                Err((
-                    self.peek_span(),
-                    (token_data.row as usize, token_data.col as usize),
-                    ParserError::ExpectedIdentifier { found },
-                ))
+                Err((self.peek_span(), ParserError::ExpectedIdentifier { found }))
             }
         }
     }
@@ -259,8 +254,8 @@ impl<'a> ExpressionParser<'a> {
             Token::Integer(val) => Ok(Expr::Integer(*val)),
             Token::Char(val) => Ok(Expr::Integer(*val as i128)),
             Token::Decimal(val) => Ok(Expr::Decimal(*val)),
-            Token::String(val) => Ok(Expr::StringConst(val.to_string())),
-            Token::Name(name) => Ok(Expr::Name(name.to_string())),
+            Token::String(sym) => Ok(Expr::StringConst(self.symbol_table.get(sym).to_string())),
+            Token::Name(sym) => Ok(Expr::Name(self.symbol_table.get(sym).to_string())),
 
             Token::KeywordTrue => Ok(Expr::Boolean(true)),
             Token::KeywordFalse => Ok(Expr::Boolean(false)),
@@ -303,7 +298,6 @@ impl<'a> ExpressionParser<'a> {
                 let t = token_data.clone();
                 Err((
                     Span::new(t.span.start, t.span.end),
-                    (t.row as usize, t.col as usize),
                     ParserError::UnexpectedToken {
                         expected: "expression".to_string(),
                         found: format!("{:?}", t.token),
@@ -352,7 +346,6 @@ impl<'a> ExpressionParser<'a> {
                 let t = self.peek();
                 Err((
                     self.peek_span(),
-                    (t.row as usize, t.col as usize),
                     ParserError::UnexpectedToken {
                         expected: "infix operator".to_string(),
                         found: format!("{:?}", t.token),

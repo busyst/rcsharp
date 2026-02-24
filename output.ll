@@ -3364,7 +3364,7 @@ logic_end_1:
 	store i1 %tmp6, i1* %tmp7
 	br i1 %tmp6, label %logic_end_2, label %logic_rhs_2
 logic_rhs_2:
-	%tmp8 = icmp eq i8 %c, 17
+	%tmp8 = icmp eq i8 %c, 118
 	store i1 %tmp8, i1* %tmp7
 	br label %logic_end_2
 logic_end_2:
@@ -3372,7 +3372,7 @@ logic_end_2:
 	store i1 %tmp9, i1* %tmp10
 	br i1 %tmp9, label %logic_end_3, label %logic_rhs_3
 logic_rhs_3:
-	%tmp11 = icmp eq i8 %c, 18
+	%tmp11 = icmp eq i8 %c, 102
 	store i1 %tmp11, i1* %tmp10
 	br label %logic_end_3
 logic_end_3:

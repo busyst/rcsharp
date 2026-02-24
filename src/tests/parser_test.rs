@@ -2,7 +2,7 @@
 #[cfg(test)]
 mod parser_tests {
 
-    use rcsharp_lexer::Lexer;
+    use rcsharp_lexer::{lex_text, LexerSymbolTable};
     use rcsharp_parser::{
         expression_parser::{BinaryOp, Expr},
         parser::{
@@ -13,14 +13,10 @@ mod parser_tests {
 
     fn parse(src: &str) -> ParserResult<Vec<Stmt>> {
         let mut tokens = vec![];
-        for x in Lexer::new(&src) {
-            match x {
-                Ok(x) => tokens.push(x),
-                Err(x) => panic!("Lexing error: {:?}", x),
-            }
-        }
+        let mut symbol_table = LexerSymbolTable::new();
+        lex_text(src, &mut tokens, &mut symbol_table).unwrap();
 
-        return Ok(GeneralParser::new(&tokens)
+        return Ok(GeneralParser::new(&tokens, &symbol_table)
             .parse_all()?
             .into_iter()
             .map(|x| x.stmt)

@@ -1,4 +1,4 @@
-use rcsharp_lexer::{Lexer, LexingError};
+use rcsharp_lexer::{lex_file, LexerSymbolTable};
 use rcsharp_parser::{
     expression_parser::Expr,
     parser::{GeneralParser, StmtData},
@@ -26,26 +26,25 @@ impl<'a> CompilerPass<'a> for ModuleLoaderPass {
         let mut to_runn_throu = vec![input.to_string()];
         let mut runned_throu = vec![];
         let mut offset = 0;
+        let mut symbol = LexerSymbolTable::new();
         while let Some(path) = to_runn_throu.pop() {
             let file_data = std::fs::read_to_string(&path).unwrap();
             ctx.source_manager
                 .add_file(&path, file_data.clone(), offset);
-            let mut lexed = match Lexer::new(&file_data).collect::<Result<Vec<_>, LexingError>>() {
-                Ok(x) => x,
-                Err(err) => panic!(
-                    "Lexing error at {}:{}:{} '{}'",
-                    path,
-                    err.row,
-                    err.col,
-                    &file_data[err.span.start..err.span.end]
-                ),
+            offset += file_data.len();
+            let mut lexed = vec![];
+            match lex_file(&path, &mut lexed, &mut symbol) {
+                Ok(()) => {}
+                Err(err) => panic!("{:?}", err),
             };
-            let q = match rcsharp_parser::parser::GeneralParser::new(&lexed).parse_compiler_only() {
+            let q = match rcsharp_parser::parser::GeneralParser::new(&lexed, &symbol)
+                .parse_compiler_only()
+            {
                 Ok(x) => x,
                 Err(err) => {
                     return Err(CompilerError::Generic(format!(
-                        "Parsing error {}\nAt {}:{}:{}",
-                        err.2, path, err.1 .0, err.1 .1
+                        "Parsing error {}\nAt {}::",
+                        err.1, path
                     ))
                     .into());
                 }
@@ -65,22 +64,27 @@ impl<'a> CompilerPass<'a> for ModuleLoaderPass {
                     to_runn_throu.push(include_path.to_string());
                 }
             }
-            if offset != 0 {
-                for x in lexed.iter_mut() {
-                    x.span.start += offset;
-                    x.span.end += offset;
-                }
-            }
-            offset += lexed.len();
             runned_throu.push((path, lexed));
         }
         for (_path, tokens) in runned_throu.iter() {
-            let mut parse = match GeneralParser::new(tokens).parse_all() {
+            let mut parse = match GeneralParser::new(tokens, &symbol).parse_all() {
                 Ok(parse) => parse,
                 Err(err) => {
+                    let rc = ctx
+                        .source_manager
+                        .files
+                        .iter()
+                        .find(|x| x.path == *_path)
+                        .map(|x| &x.content)
+                        .unwrap();
+                    for x in symbol.strings.iter().enumerate() {
+                        println!("{:000}|{}", x.0, x.1)
+                    }
                     return Err(CompilerError::Generic(format!(
-                        "Parsing error {}\nAt {}:{}:{}",
-                        err.2, _path, err.1 .0, err.1 .1
+                        "Parsing error {}\nAt {} {}",
+                        err.1,
+                        _path,
+                        &rc[err.0.start..err.0.end]
                     ))
                     .into());
                 }

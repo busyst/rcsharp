@@ -8,7 +8,7 @@ resolver = "3"
 members = ["rcsharp_lexer", "rcsharp_parser"]
 
 [dependencies]
-rcsharp_lexer = { path = "./rcsharp_lexer"}
-rcsharp_parser = { path = "./rcsharp_parser"}
-ordered_hash_map = "0.4.0"
+rcsharp_lexer = { path = "./rcsharp_lexer" }
+rcsharp_parser = { path = "./rcsharp_parser" }
+ordered_hash_map = "0.5.0"
 regex = "1.11.2"

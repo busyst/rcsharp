@@ -1,456 +1,926 @@
-use logos::{Lexer as LogosLexer, Logos, Span};
-use std::fmt;
+pub type Span = core::ops::Range<usize>;
+use std::{
+    collections::HashMap,
+    fs::File,
+    io::{BufRead, BufReader, Cursor, Read, Write},
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct TokenData {
     pub token: Token,
     pub span: Span,
-    pub row: u32,
-    pub col: u32,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LexingError {
-    pub span: Span,
-    pub row: u32,
-    pub col: u32,
-}
-
-impl fmt::Display for LexingError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Invalid token at row {}, col {}", self.row, self.col)
-    }
-}
-impl std::error::Error for LexingError {}
-
-#[derive(Logos, Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Token {
-    #[regex(r"[ \t\f\r]+")]
-    Whitespace,
-
-    #[token("\n")]
-    Newline,
-
-    #[regex(r"//[^\n]*")]
-    LineComment,
-
-    #[regex(r"/\*[^*]*\*+([^/*][^*]*\*+)*/")]
-    BlockComment,
-
-    #[token("(")]
     LParen,
-    #[token(")")]
     RParen,
-    #[token("{")]
     LBrace,
-    #[token("}")]
     RBrace,
-    #[token("[")]
     LSquareBrace,
-    #[token("]")]
     RSquareBrace,
-    #[token(":")]
     Colon,
-    #[token("::")]
     DoubleColon,
-    #[token(";")]
     SemiColon,
-    #[token(",")]
     Comma,
-    #[token(".")]
     Dot,
-    #[token("#")]
     Hint,
 
-    #[token("=")]
     Equal,
-    #[token("+")]
     Plus,
-    #[token("-")]
     Minus,
-    #[token("*")]
     Multiply,
-    #[token("/")]
     Divide,
-    #[token("%")]
     Modulo,
-
-    #[token("!")]
     LogicNot,
-    #[token("==")]
     LogicEqual,
-    #[token("!=")]
     LogicNotEqual,
-    #[token("||")]
     LogicOr,
-    #[token("&&")]
     LogicAnd,
-    #[token(">")]
     LogicGreater,
-    #[token(">=")]
     LogicGreaterEqual,
-    #[token("<")]
     LogicLess,
-    #[token("<=")]
     LogicLessEqual,
-
-    #[token("~")]
     BinaryNot,
-    #[token("|")]
     BinaryOr,
-    #[token("&")]
     BinaryAnd,
-    #[token("^")]
     BinaryXor,
-    #[token("<<")]
     BinaryShiftL,
-    #[token(">>")]
     BinaryShiftR,
 
-    #[token("pub")]
     KeywordPub,
-    #[token("inline")]
     KeywordInline,
-    #[token("const")]
     KeywordConst,
-    #[token("constexpr")]
     KeywordConstExpr,
-    #[token("extern")]
     KeywordExtern,
-    #[token("no_return")]
     KeywordNoReturn,
-    #[token("match")]
     KeywordMatch,
-
-    #[token("fn")]
     KeywordFunction,
-    #[token("let")]
     KeywordVariableDeclaration,
-    #[token("static")]
     KeywordStatic,
-    #[token("as")]
     KeywordAs,
-    #[token("if")]
     KeywordIf,
-    #[token("else")]
     KeywordElse,
-    #[token("struct")]
     KeywordStruct,
-    #[token("enum")]
     KeywordEnum,
-    #[token("loop")]
     KeywordLoop,
-    #[token("break")]
     KeywordBreak,
-    #[token("continue")]
     KeywordContinue,
-    #[token("return")]
     KeywordReturn,
-    #[token("this")]
     KeywordThis,
-    #[token("operator")]
     KeywordOperator,
-    #[token("namespace")]
     KeywordNamespace,
-    #[token("true")]
     KeywordTrue,
-    #[token("false")]
     KeywordFalse,
-    #[token("null")]
     KeywordNull,
-    DummyToken,
-    #[regex(r"[a-zA-Z_]\w*", |lex| lex.slice().to_string().into_boxed_str())]
-    Name(Box<str>),
-    #[regex(r"-?(?:0x[0-9a-fA-F]+|0b[01]+|\d+)", unhex_num)]
-    Integer(i128),
-    #[regex(r"[0-9]+\.[0-9]+", undecimal_num)]
-    Decimal(f64),
-    #[regex(r#""([^"\\]|\\.)*""#, unescape_string)]
-    String(Box<str>),
 
-    #[regex(r"'([^'\\]|\\.)*'", |lex| unescape_char(lex).ok())]
+    DummyToken,
+    Name(Symbol),
+    Integer(i128),
+    Decimal(f64),
+    String(Symbol),
     Char(char),
 }
 
-pub struct Lexer<'source> {
-    logos: LogosLexer<'source, Token>,
-    pub row: u32,
-    pub col: u32,
+const ALLOWED_FILE_SIZE: u64 = 1024 * 1024 * 16; // 16 MB
+#[derive(Debug)]
+pub enum LexerResultError {
+    FileNotFound(String),
+    FileIsDirectory(String),
+    IoError(std::io::Error),
+    UnexpectedEOF(String),
+    InvalidUtf8,
+    UnclosedString(Span),
+    UnclosedChar(Span),
+    InvalidNumber(String, Span),
+    InvalidCharLiteral(Span),
 }
-impl<'source> Lexer<'source> {
-    pub fn new(source: &'source str) -> Self {
+pub type LexerResult<T> = Result<T, LexerResultError>;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Symbol(usize);
+impl ToString for Symbol {
+    fn to_string(&self) -> String {
+        format!("SYMBOL: {}", self.0)
+    }
+}
+pub struct LexerSymbolTable {
+    pub strings: Vec<String>,
+    indices: HashMap<String, usize>,
+}
+impl LexerSymbolTable {
+    pub fn new() -> Self {
         Self {
-            logos: Token::lexer(source),
-            col: 1,
-            row: 1,
+            strings: Vec::new(),
+            indices: HashMap::new(),
         }
     }
-    fn advance_loc(&mut self, slice: &str) {
-        let newlines = slice.bytes().filter(|&b| b == b'\n').count();
-        if newlines > 0 {
-            self.row += newlines as u32;
-            let last_newline = slice.rfind('\n').unwrap();
-            self.col = slice[last_newline + 1..].chars().count() as u32 + 1;
+
+    pub fn get_or_intern(&mut self, s: &str) -> Symbol {
+        if let Some(&idx) = self.indices.get(s) {
+            Symbol(idx)
         } else {
-            self.col += slice.chars().count() as u32;
+            let idx = self.strings.len();
+            self.strings.push(s.to_string());
+            self.indices.insert(s.to_string(), idx);
+            Symbol(idx)
         }
     }
+    pub fn get(&self, s: &Symbol) -> &str {
+        &self.strings[s.0]
+    }
 }
-impl<'source> Iterator for Lexer<'source> {
-    type Item = Result<TokenData, LexingError>;
+pub fn lex_file(
+    path: &str,
+    tokens: &mut Vec<TokenData>,
+    symbol_table: &mut LexerSymbolTable,
+) -> LexerResult<()> {
+    fn metadata_check(path: &str, file: &File) -> LexerResult<u64> {
+        let metadata = file.metadata().map_err(LexerResultError::IoError)?;
+        if metadata.is_dir() {
+            return Err(LexerResultError::FileIsDirectory(path.to_string()));
+        }
+        Ok(metadata.len())
+    }
+    let file = File::open(path).map_err(|_| LexerResultError::FileNotFound(path.to_string()))?;
+    let file_size = metadata_check(path, &file)?;
 
-    fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            let token_result = self.logos.next()?;
-            let span = self.logos.span();
-            let slice = self.logos.slice();
+    println!("File: {} Size: {}", path, file_size);
 
-            let start_loc_c = self.col;
-            let start_loc_r = self.row;
+    let mut reader: Box<dyn BufRead> = if file_size < ALLOWED_FILE_SIZE {
+        let mut content = String::new();
+        let mut f = file;
+        f.read_to_string(&mut content)
+            .map_err(LexerResultError::IoError)?;
+        Box::new(Cursor::new(content))
+    } else {
+        Box::new(BufReader::new(file))
+    };
 
-            self.advance_loc(slice);
-
-            match token_result {
-                Err(_) => {
-                    let err = LexingError {
-                        span,
-                        col: start_loc_c,
-                        row: start_loc_r,
-                    };
-                    return Some(Err(err));
+    lex_stream(&mut reader, tokens, symbol_table)?;
+    debug_lex_emit(tokens, symbol_table);
+    Ok(())
+}
+pub fn lex_text(
+    content: &str,
+    tokens: &mut Vec<TokenData>,
+    symbol_table: &mut LexerSymbolTable,
+) -> LexerResult<()> {
+    let mut reader = Box::new(Cursor::new(content));
+    lex_stream(&mut reader, tokens, symbol_table)?;
+    debug_lex_emit(tokens, symbol_table);
+    Ok(())
+}
+fn debug_lex_emit(tokens: &Vec<TokenData>, symbol_table: &LexerSymbolTable) {
+    // Just for debug safety, panic less often
+    if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(true)
+        .write(true)
+        .open("./debug_lexer")
+    {
+        let mut str = String::new();
+        for token_data in tokens {
+            match &token_data.token {
+                Token::Name(symbol) => {
+                    str.push_str(&symbol_table.strings[symbol.0]);
                 }
-                Ok(Token::Whitespace)
-                | Ok(Token::Newline)
-                | Ok(Token::LineComment)
-                | Ok(Token::BlockComment) => {
-                    continue;
+                Token::String(symbol) => {
+                    str.push_str(&format!("\"{}\"", symbol_table.strings[symbol.0]));
                 }
-                Ok(token) => {
-                    return Some(Ok(TokenData {
-                        token,
-                        span,
-                        col: start_loc_c,
-                        row: start_loc_r,
-                    }));
+                Token::Integer(val) => str.push_str(&val.to_string()),
+                Token::Decimal(val) => str.push_str(&val.to_string()),
+                Token::KeywordVariableDeclaration => str.push_str("let "),
+                Token::KeywordConst => str.push_str("const "),
+                Token::KeywordStatic => str.push_str("static "),
+                Token::KeywordFunction => str.push_str("fn "),
+                Token::KeywordStruct => str.push_str("struct "),
+                Token::KeywordNamespace => str.push_str("namespace "),
+                Token::KeywordInline => str.push_str("inline "),
+                Token::KeywordIf => str.push_str("if "),
+                Token::KeywordElse => str.push_str("else "),
+                Token::KeywordBreak => str.push_str("break"),
+                Token::KeywordContinue => str.push_str("continue"),
+                Token::KeywordNull => str.push_str("null"),
+                Token::KeywordReturn => str.push_str("return "),
+                Token::KeywordAs => str.push_str(" as "),
+                Token::Hint => str.push_str("#"),
+                Token::Comma => str.push_str(", "),
+                Token::Dot => str.push_str("."),
+                Token::LParen => str.push_str("("),
+                Token::RParen => str.push_str(")"),
+                Token::Colon => str.push_str(":"),
+                Token::LogicLess => str.push_str("<"),
+                Token::LogicLessEqual => str.push_str("<="),
+                Token::BinaryShiftL => str.push_str("<<"),
+                Token::LogicGreater => str.push_str(">"),
+                Token::LogicGreaterEqual => str.push_str(">="),
+                Token::BinaryShiftR => str.push_str(">>"),
+                Token::LogicNot => str.push_str("!"),
+                Token::Equal => str.push_str("="),
+                Token::LogicEqual => str.push_str("=="),
+                Token::Plus => str.push_str("+"),
+                Token::Minus => str.push_str("-"),
+                Token::Multiply => str.push_str("*"),
+                Token::Divide => str.push_str("/"),
+                Token::Modulo => str.push_str("%"),
+                Token::BinaryAnd => str.push_str("&"),
+                Token::LogicAnd => str.push_str("&&"),
+                Token::BinaryOr => str.push_str("|"),
+                Token::LogicOr => str.push_str("||"),
+                Token::DoubleColon => str.push_str("::"),
+                Token::SemiColon => str.push_str(";\n"),
+                Token::LSquareBrace => str.push_str("["),
+                Token::RSquareBrace => str.push_str("]"),
+                Token::LBrace => str.push_str(" {\n"),
+                Token::RBrace => str.push_str("\n}\n"),
+                _ => {
+                    // Fallback for debug
+                    str.push_str(&format!(" {:?} ", token_data.token));
                 }
             }
         }
+        let _ = file.write(str.as_bytes());
     }
 }
+pub fn lex_stream(
+    reader: &mut dyn BufRead,
+    tokens: &mut Vec<TokenData>,
+    symbol_table: &mut LexerSymbolTable,
+) -> LexerResult<()> {
+    const CAP: usize = 1024;
+    let mut buf = Box::new([0; CAP]);
 
-fn unescape_string(lex: &mut logos::Lexer<Token>) -> Box<str> {
-    let slice = lex.slice();
-    let content = &slice[1..slice.len() - 1];
-    unescape_content(content, true).into_boxed_str()
-}
-fn unescape_char(lex: &mut logos::Lexer<Token>) -> Result<char, ()> {
-    let slice = lex.slice();
-    let content = &slice[1..slice.len() - 1];
-    let unescaped = unescape_content(content, false);
+    let mut global_offset = 0;
+    let mut buf_write_start = 0;
+    let mut input_buffer = String::with_capacity(2 * CAP);
+    loop {
+        let n_read = reader
+            .read(&mut buf[buf_write_start..])
+            .map_err(LexerResultError::IoError)?;
 
-    let mut chars = unescaped.chars();
-    if let (Some(c), None) = (chars.next(), chars.next()) {
-        Ok(c)
-    } else {
-        Err(())
-    }
-}
-fn unhex_num(lex: &mut logos::Lexer<Token>) -> i128 {
-    let s = lex.slice().replace('_', "");
-    let (is_neg, s_without_sign) = if let Some(stripped) = s.strip_prefix('-') {
-        (true, stripped)
-    } else {
-        (false, s.as_str())
-    };
-    let (radix, digits) = if let Some(stripped) = s_without_sign.strip_prefix("0x") {
-        (16, stripped)
-    } else if let Some(stripped) = s_without_sign.strip_prefix("0b") {
-        (2, stripped)
-    } else if let Some(stripped) = s_without_sign.strip_prefix("0o") {
-        (8, stripped)
-    } else {
-        (10, s_without_sign)
-    };
-    let abs_val = u128::from_str_radix(digits, radix).unwrap();
-    if is_neg {
-        (abs_val as i128).wrapping_neg()
-    } else {
-        abs_val as i128
-    }
-}
-fn undecimal_num(lex: &mut logos::Lexer<Token>) -> f64 {
-    let slice = lex.slice();
-    if let Ok(x) = slice.parse::<f64>() {
-        return x;
-    }
-    panic!("Unparsable decimal! {}", slice);
-}
+        if n_read == 0 {
+            while !input_buffer.is_empty() {
+                let len_before = input_buffer.len();
+                process_chunk(&mut input_buffer, true, tokens, symbol_table, global_offset)?;
+                let len_after = input_buffer.len();
+                let consumed = len_before - len_after;
+                global_offset += consumed;
 
-fn unescape_content(content: &str, is_string: bool) -> String {
-    let mut unescaped = String::with_capacity(content.len());
-    let mut chars = content.chars().peekable();
-
-    while let Some(c) = chars.next() {
-        if c != '\\' {
-            unescaped.push(c);
-            if !is_string {
-                break; // For char literals, only process first character
+                if consumed == 0 {
+                    if !input_buffer.is_empty() {
+                        println!("Final/Residual token: {}", input_buffer);
+                    }
+                    break;
+                }
             }
-            continue;
+            break;
         }
 
-        let next_char = match chars.next() {
-            Some(n) => n,
-            None => {
-                unescaped.push('\\');
-                break;
+        let total_bytes_in_buffer = buf_write_start + n_read;
+
+        let valid_len = match std::str::from_utf8(&buf[..total_bytes_in_buffer]) {
+            Ok(_) => total_bytes_in_buffer,
+            Err(e) => {
+                if let Some(_) = e.error_len() {
+                    return Err(LexerResultError::UnexpectedEOF(
+                        "Invalid UTF-8 encoding encountered".to_string(),
+                    ));
+                }
+                e.valid_up_to()
             }
         };
 
-        match next_char {
-            'n' => unescaped.push('\n'),
-            'v' => unescaped.push('\x11'),
-            'f' => unescaped.push('\x12'),
-            't' => unescaped.push('\t'),
-            'r' => unescaped.push('\r'),
-            '\\' => unescaped.push('\\'),
-            '"' => unescaped.push('"'),
-            '\'' => unescaped.push('\''),
-            'x' => handle_hex_escape(&mut chars, &mut unescaped),
-            '0'..='7' => handle_octal_escape(next_char, &mut chars, &mut unescaped),
-            'u' => handle_unicode_escape(&mut chars, &mut unescaped),
-            _ => {
-                unescaped.push('\\');
-                unescaped.push(next_char);
+        let valid_str = unsafe { std::str::from_utf8_unchecked(&buf[..valid_len]) };
+        input_buffer.push_str(valid_str);
+
+        loop {
+            let len_before_process = input_buffer.len();
+            process_chunk(
+                &mut input_buffer,
+                false,
+                tokens,
+                symbol_table,
+                global_offset,
+            )?;
+            let len_after_process = input_buffer.len();
+            let consumed_bytes = len_before_process - len_after_process;
+            global_offset += consumed_bytes;
+
+            if consumed_bytes == 0 {
+                break;
             }
         }
 
-        if !is_string {
-            break; // For char literals, only process first escape sequence
+        let leftovers = total_bytes_in_buffer - valid_len;
+        if leftovers > 0 {
+            buf.copy_within(valid_len..total_bytes_in_buffer, 0);
         }
+        buf_write_start = leftovers;
     }
-
-    unescaped
+    Ok(())
 }
 
-fn handle_hex_escape(chars: &mut std::iter::Peekable<std::str::Chars>, unescaped: &mut String) {
-    let mut hex = String::with_capacity(2);
-    for _ in 0..2 {
-        match chars.peek() {
-            Some(&c) if c.is_ascii_hexdigit() => {
-                hex.push(c);
+fn process_chunk(
+    input: &mut String,
+    is_eof: bool,
+    tokens: &mut Vec<TokenData>,
+    symbols: &mut LexerSymbolTable,
+    _global_offset: usize,
+) -> LexerResult<()> {
+    let readonly_input = input.trim_start();
+    if readonly_input.is_empty() {
+        *input = String::new();
+        return Ok(());
+    }
+
+    let mut last_consumed_byte_index = 0;
+    let mut chars = readonly_input.char_indices().peekable();
+
+    while let Some((idx, char)) = chars.next() {
+        if char.is_whitespace() {
+            continue;
+        }
+        if char.is_alphabetic() || char == '_' {
+            let mut name_end = 0;
+            while let Some((idx, char)) = chars.peek() {
+                if !(char.is_alphabetic() || char.is_digit(10) || *char == '_') {
+                    name_end = *idx;
+                    break;
+                }
                 chars.next();
             }
-            _ => break,
-        }
-    }
+            if name_end == 0 && is_eof {
+                name_end = readonly_input.len();
+            }
+            if name_end != 0 {
+                identifier_token(&readonly_input[..name_end], 0..name_end, tokens, symbols);
+                last_consumed_byte_index = name_end;
+                break;
+            } else {
+                break;
+            }
+        } else if char.is_digit(10) {
+            let mut number_end = 0;
+            if let Some(&(_pk_idx, pk_char)) = chars.peek() {
+                if matches!(pk_char, 'x' | 'X' | 'b' | 'B' | 'o' | 'O') {
+                    chars.next();
+                }
+            } else if !is_eof {
+                break;
+            }
 
-    if hex.len() == 2
-        && let Ok(byte) = u8::from_str_radix(&hex, 16)
-    {
-        unescaped.push(byte as char);
-        return;
-    }
-    unescaped.push_str("\\x");
-    unescaped.push_str(&hex);
-}
-fn handle_octal_escape(
-    first_digit: char,
-    chars: &mut std::iter::Peekable<std::str::Chars>,
-    unescaped: &mut String,
-) {
-    let mut octal = String::with_capacity(3);
-    octal.push(first_digit);
-
-    for _ in 0..2 {
-        match chars.peek() {
-            Some(&c) if ('0'..='7').contains(&c) => {
-                octal.push(c);
+            while let Some((idx, char)) = chars.peek() {
+                if !(char.is_digit(16) || *char == '_' || *char == '.') {
+                    number_end = *idx;
+                    break;
+                }
                 chars.next();
             }
-            _ => break,
-        }
-    }
-
-    if let Ok(byte) = u8::from_str_radix(&octal, 8) {
-        unescaped.push(byte as char);
-    } else {
-        unescaped.push('\\');
-        unescaped.push_str(&octal);
-    }
-}
-fn handle_unicode_escape(chars: &mut std::iter::Peekable<std::str::Chars>, unescaped: &mut String) {
-    match chars.next() {
-        Some('{') => {}
-        _ => {
-            unescaped.push_str("\\u");
-            return;
-        }
-    }
-
-    let mut hex = String::new();
-    while let Some(&c) = chars.peek() {
-        if c == '}' {
-            chars.next();
-            break;
-        }
-        if c.is_ascii_hexdigit() {
-            hex.push(c);
-            chars.next();
+            if number_end == 0 && is_eof {
+                number_end = readonly_input.len();
+            }
+            if number_end != 0 {
+                number_token(&readonly_input[..number_end], 0..number_end, tokens)?;
+                last_consumed_byte_index = number_end;
+                break;
+            } else {
+                break;
+            }
+        } else if char == '/' {
+            let pk = chars.peek();
+            if pk.is_none() {
+                if is_eof {
+                    tokens.push(TokenData {
+                        token: Token::Divide,
+                        span: 0..char.len_utf8(),
+                    });
+                    last_consumed_byte_index = char.len_utf8();
+                }
+                break;
+            }
+            let pk = pk.unwrap();
+            match pk.1 {
+                '*' => {
+                    chars.next();
+                    let mut multi_line_comment_end = 0;
+                    let mut current_char = (idx, char);
+                    while let Some((idx, char)) = chars.peek() {
+                        if *char == '/' {
+                            if current_char.1 == '*' {
+                                multi_line_comment_end = *idx + 1;
+                                break;
+                            }
+                        }
+                        current_char = chars.next().unwrap();
+                    }
+                    if multi_line_comment_end != 0 {
+                        last_consumed_byte_index = multi_line_comment_end;
+                        break;
+                    } else if is_eof {
+                        last_consumed_byte_index = readonly_input.len();
+                        break;
+                    } else {
+                        break;
+                    }
+                }
+                '/' => {
+                    chars.next();
+                    let mut single_line_comment_end = 0;
+                    while let Some((idx, char)) = chars.peek() {
+                        if *char == '\n' {
+                            single_line_comment_end = *idx + 1;
+                            break;
+                        }
+                        chars.next();
+                    }
+                    if single_line_comment_end != 0 {
+                        last_consumed_byte_index = single_line_comment_end;
+                        break;
+                    } else if is_eof {
+                        last_consumed_byte_index = readonly_input.len();
+                        break;
+                    } else {
+                        break;
+                    }
+                }
+                _ => {
+                    tokens.push(TokenData {
+                        token: Token::Divide,
+                        span: 0..char.len_utf8(),
+                    });
+                    last_consumed_byte_index = char.len_utf8();
+                    break;
+                }
+            }
+        } else if char == '"' {
+            let mut string_end = 0;
+            let mut current_char = (idx, char);
+            while let Some((idx, char)) = chars.peek() {
+                if *char == '"' {
+                    if current_char.1 != '\\' {
+                        string_end = *idx + 1;
+                        break;
+                    }
+                }
+                current_char = chars.next().unwrap();
+            }
+            if string_end == 0 && is_eof {
+                return Err(LexerResultError::UnclosedString(0..readonly_input.len()));
+            }
+            if string_end != 0 {
+                string_token(
+                    &readonly_input[1..string_end - 1],
+                    1..string_end - 1,
+                    tokens,
+                    symbols,
+                );
+                last_consumed_byte_index = string_end;
+                break;
+            } else {
+                break;
+            }
+        } else if char == '\'' {
+            let mut char_end = 0;
+            let mut current_char = (idx, char);
+            while let Some((idx, char)) = chars.peek() {
+                if *char == '\'' {
+                    if current_char.1 != '\\' {
+                        char_end = *idx + 1;
+                        break;
+                    }
+                }
+                if current_char.1 == '\\' {
+                    current_char = chars.next().unwrap();
+                    current_char.1 = '\0';
+                } else {
+                    current_char = chars.next().unwrap();
+                }
+            }
+            if char_end == 0 && is_eof {
+                return Err(LexerResultError::UnclosedChar(0..readonly_input.len()));
+            }
+            if char_end != 0 {
+                char_token(
+                    &readonly_input[1..char_end - 1],
+                    1..char_end - 1,
+                    tokens,
+                    symbols,
+                )?;
+                last_consumed_byte_index = char_end;
+                break;
+            } else {
+                break;
+            }
         } else {
-            break;
+            let t = tokens.len();
+            match char {
+                '#' => push_single(Token::Hint, 0, char.len_utf8(), tokens),
+                '{' => push_single(Token::LBrace, 0, char.len_utf8(), tokens),
+                '}' => push_single(Token::RBrace, 0, char.len_utf8(), tokens),
+                '[' => push_single(Token::LSquareBrace, 0, char.len_utf8(), tokens),
+                ']' => push_single(Token::RSquareBrace, 0, char.len_utf8(), tokens),
+                '(' => push_single(Token::LParen, 0, char.len_utf8(), tokens),
+                ')' => push_single(Token::RParen, 0, char.len_utf8(), tokens),
+                ';' => push_single(Token::SemiColon, 0, char.len_utf8(), tokens),
+                '.' => push_single(Token::Dot, 0, char.len_utf8(), tokens),
+                ',' => push_single(Token::Comma, 0, char.len_utf8(), tokens),
+                '+' => push_single(Token::Plus, 0, char.len_utf8(), tokens),
+                '-' => push_single(Token::Minus, 0, char.len_utf8(), tokens),
+                '*' => push_single(Token::Multiply, 0, char.len_utf8(), tokens),
+                '%' => push_single(Token::Modulo, 0, char.len_utf8(), tokens),
+                '^' => push_single(Token::BinaryXor, 0, char.len_utf8(), tokens),
+                _ => {}
+            };
+            if tokens.len() != t {
+                last_consumed_byte_index = char.len_utf8();
+                break;
+            }
+            if let Some(&(_pk_idx, pk_char)) = chars.peek() {
+                match (char, pk_char) {
+                    (':', ':') => {
+                        push_single(Token::DoubleColon, 0, 2, tokens);
+                        last_consumed_byte_index = 2;
+                    }
+                    (':', _) => {
+                        push_single(Token::Colon, 0, 1, tokens);
+                        last_consumed_byte_index = 1;
+                    }
+                    ('<', '<') => {
+                        push_single(Token::BinaryShiftL, 0, 2, tokens);
+                        last_consumed_byte_index = 2;
+                    }
+                    ('<', '=') => {
+                        push_single(Token::LogicLessEqual, 0, 2, tokens);
+                        last_consumed_byte_index = 2;
+                    }
+                    ('<', _) => {
+                        push_single(Token::LogicLess, 0, 1, tokens);
+                        last_consumed_byte_index = 1;
+                    }
+                    ('>', '>') => {
+                        push_single(Token::BinaryShiftR, 0, 2, tokens);
+                        last_consumed_byte_index = 2;
+                    }
+                    ('>', '=') => {
+                        push_single(Token::LogicGreaterEqual, 0, 2, tokens);
+                        last_consumed_byte_index = 2;
+                    }
+                    ('>', _) => {
+                        push_single(Token::LogicGreater, 0, 1, tokens);
+                        last_consumed_byte_index = 1;
+                    }
+                    ('=', '=') => {
+                        push_single(Token::LogicEqual, 0, 2, tokens);
+                        last_consumed_byte_index = 2;
+                    }
+                    ('=', _) => {
+                        push_single(Token::Equal, 0, 1, tokens);
+                        last_consumed_byte_index = 1;
+                    }
+                    ('!', '=') => {
+                        push_single(Token::LogicNotEqual, 0, 2, tokens);
+                        last_consumed_byte_index = 2;
+                    }
+                    ('!', _) => {
+                        push_single(Token::LogicNot, 0, 1, tokens);
+                        last_consumed_byte_index = 1;
+                    }
+                    ('&', '&') => {
+                        push_single(Token::LogicAnd, 0, 2, tokens);
+                        last_consumed_byte_index = 2;
+                    }
+                    ('&', _) => {
+                        push_single(Token::BinaryAnd, 0, 1, tokens);
+                        last_consumed_byte_index = 1;
+                    }
+                    ('|', '|') => {
+                        push_single(Token::LogicOr, 0, 2, tokens);
+                        last_consumed_byte_index = 2;
+                    }
+                    ('|', _) => {
+                        push_single(Token::BinaryOr, 0, 1, tokens);
+                        last_consumed_byte_index = 1;
+                    }
+                    _ => {
+                        todo!("{:?}", readonly_input);
+                    }
+                }
+            } else if is_eof {
+                match char {
+                    ':' => {
+                        push_single(Token::Colon, 0, 1, tokens);
+                        last_consumed_byte_index = 1;
+                    }
+                    '<' => {
+                        push_single(Token::LogicLess, 0, 1, tokens);
+                        last_consumed_byte_index = 1;
+                    }
+                    '>' => {
+                        push_single(Token::LogicGreater, 0, 1, tokens);
+                        last_consumed_byte_index = 1;
+                    }
+                    '=' => {
+                        push_single(Token::Equal, 0, 1, tokens);
+                        last_consumed_byte_index = 1;
+                    }
+                    '!' => {
+                        push_single(Token::LogicNot, 0, 1, tokens);
+                        last_consumed_byte_index = 1;
+                    }
+                    '&' => {
+                        push_single(Token::BinaryAnd, 0, 1, tokens);
+                        last_consumed_byte_index = 1;
+                    }
+                    '|' => {
+                        push_single(Token::BinaryOr, 0, 1, tokens);
+                        last_consumed_byte_index = 1;
+                    }
+                    _ => {
+                        todo!("{:?}", readonly_input);
+                    }
+                }
+            } else {
+                break;
+            }
+            if last_consumed_byte_index != 0 {
+                break;
+            }
         }
     }
+    let fin = (input.len() - readonly_input.len()) + last_consumed_byte_index;
+    if fin > 0 {
+        input.drain(..fin);
+    }
+    Ok(())
+}
 
-    if let Ok(code) = u32::from_str_radix(&hex, 16)
-        && let Some(c) = std::char::from_u32(code)
-    {
-        unescaped.push(c);
+fn push_single(token: Token, start: usize, len: usize, tokens: &mut Vec<TokenData>) {
+    tokens.push(TokenData {
+        token,
+        span: start..(start + len),
+    });
+}
+pub fn identifier_token(
+    ident_str: &str,
+    span: Span,
+    tokens: &mut Vec<TokenData>,
+    symbols: &mut LexerSymbolTable,
+) {
+    if let Some(token) = get_keyword(ident_str) {
+        tokens.push(TokenData { token, span });
         return;
     }
-    unescaped.push_str("\\u{");
-    unescaped.push_str(&hex);
-    unescaped.push('}');
+    tokens.push(TokenData {
+        token: Token::Name(symbols.get_or_intern(ident_str)),
+        span,
+    });
 }
+pub fn number_token(number_str: &str, span: Span, tokens: &mut Vec<TokenData>) -> LexerResult<()> {
+    if number_str.contains('.') {
+        let val = number_str
+            .parse::<f64>()
+            .map_err(|_| LexerResultError::InvalidNumber(number_str.to_string(), span.clone()))?;
+        tokens.push(TokenData {
+            token: Token::Decimal(val),
+            span,
+        });
+    } else {
+        let s = number_str.replace('_', "");
+        let (is_neg, s_without_sign) = if let Some(stripped) = s.strip_prefix('-') {
+            (true, stripped)
+        } else {
+            (false, s.as_str())
+        };
+        let (radix, digits) = if let Some(stripped) = s_without_sign.strip_prefix("0x") {
+            (16, stripped)
+        } else if let Some(stripped) = s_without_sign.strip_prefix("0b") {
+            (2, stripped)
+        } else if let Some(stripped) = s_without_sign.strip_prefix("0o") {
+            (8, stripped)
+        } else {
+            (10, s_without_sign)
+        };
+        let abs_val = u128::from_str_radix(digits, radix).unwrap();
+        let v = if is_neg {
+            (abs_val as i128).wrapping_neg()
+        } else {
+            abs_val as i128
+        };
+        tokens.push(TokenData {
+            token: Token::Integer(v),
+            span,
+        });
+    }
+    Ok(())
+}
+pub fn string_token(
+    string_str: &str,
+    span: Span,
+    tokens: &mut Vec<TokenData>,
+    symbols: &mut LexerSymbolTable,
+) {
+    fn unescape_content(content: &str, is_string: bool) -> String {
+        fn handle_hex_escape(
+            chars: &mut std::iter::Peekable<std::str::Chars>,
+            unescaped: &mut String,
+        ) {
+            let mut hex = String::with_capacity(2);
+            for _ in 0..2 {
+                match chars.peek() {
+                    Some(&c) if c.is_ascii_hexdigit() => {
+                        hex.push(c);
+                        chars.next();
+                    }
+                    _ => break,
+                }
+            }
 
-pub fn lex_file_with_context(source_path: &str, filename: &str) -> Result<Vec<TokenData>, String> {
-    Lexer::new(source_path)
-        .collect::<Result<Vec<_>, LexingError>>()
-        .map_err(|err| {
-            let full_slice = &source_path[err.span.clone()];
-            let (display_slice, remainder_info) = if full_slice.len() > 60 {
-                (
-                    &full_slice[..60],
-                    format!("\n... and {} more symbols", full_slice.len() - 60),
-                )
+            if hex.len() == 2
+                && let Ok(byte) = u8::from_str_radix(&hex, 16)
+            {
+                unescaped.push(byte as char);
+                return;
+            }
+            unescaped.push_str("\\x");
+            unescaped.push_str(&hex);
+        }
+        fn handle_octal_escape(
+            first_digit: char,
+            chars: &mut std::iter::Peekable<std::str::Chars>,
+            unescaped: &mut String,
+        ) {
+            let mut octal = String::with_capacity(3);
+            octal.push(first_digit);
+
+            for _ in 0..2 {
+                match chars.peek() {
+                    Some(&c) if ('0'..='7').contains(&c) => {
+                        octal.push(c);
+                        chars.next();
+                    }
+                    _ => break,
+                }
+            }
+
+            if let Ok(byte) = u8::from_str_radix(&octal, 8) {
+                unescaped.push(byte as char);
             } else {
-                (full_slice, String::new())
+                unescaped.push('\\');
+                unescaped.push_str(&octal);
+            }
+        }
+        fn handle_unicode_escape(
+            chars: &mut std::iter::Peekable<std::str::Chars>,
+            unescaped: &mut String,
+        ) {
+            match chars.next() {
+                Some('{') => {}
+                _ => {
+                    unescaped.push_str("\\u");
+                    return;
+                }
+            }
+
+            let mut hex = String::new();
+            while let Some(&c) = chars.peek() {
+                if c == '}' {
+                    chars.next();
+                    break;
+                }
+                if c.is_ascii_hexdigit() {
+                    hex.push(c);
+                    chars.next();
+                } else {
+                    break;
+                }
+            }
+
+            if let Ok(code) = u32::from_str_radix(&hex, 16)
+                && let Some(c) = std::char::from_u32(code)
+            {
+                unescaped.push(c);
+                return;
+            }
+            unescaped.push_str("\\u{");
+            unescaped.push_str(&hex);
+            unescaped.push('}');
+        }
+
+        let mut unescaped = String::with_capacity(content.len());
+        let mut chars = content.chars().peekable();
+
+        while let Some(c) = chars.next() {
+            if c != '\\' {
+                unescaped.push(c);
+                if !is_string {
+                    break; // For char literals, only process first character
+                }
+                continue;
+            }
+
+            let next_char = match chars.next() {
+                Some(n) => n,
+                None => {
+                    unescaped.push('\\');
+                    break;
+                }
             };
-            format!(
-                "Lexing error in {}:{}:{} | Span: {:?}\nProblem:\n'{}'{}",
-                filename, err.row, err.col, err.span, display_slice, remainder_info
-            )
-        })
+
+            match next_char {
+                'n' => unescaped.push('\n'),
+                'v' => unescaped.push('\x11'),
+                'f' => unescaped.push('\x12'),
+                't' => unescaped.push('\t'),
+                'r' => unescaped.push('\r'),
+                '\\' => unescaped.push('\\'),
+                '"' => unescaped.push('"'),
+                '\'' => unescaped.push('\''),
+                'x' => handle_hex_escape(&mut chars, &mut unescaped),
+                '0'..='7' => handle_octal_escape(next_char, &mut chars, &mut unescaped),
+                'u' => handle_unicode_escape(&mut chars, &mut unescaped),
+                _ => {
+                    unescaped.push('\\');
+                    unescaped.push(next_char);
+                }
+            }
+
+            if !is_string {
+                break; // For char literals, only process first escape sequence
+            }
+        }
+
+        unescaped
+    }
+    let q = unescape_content(string_str, true);
+    tokens.push(TokenData {
+        span,
+        token: Token::String(symbols.get_or_intern(&q)),
+    });
 }
-pub fn lex_string_with_file_context(
-    source: &str,
-    filename: &str,
-) -> Result<Vec<TokenData>, String> {
-    Lexer::new(source)
-        .collect::<Result<Vec<_>, LexingError>>()
-        .map_err(|err| {
-            let full_slice = &source[err.span.clone()];
-            let (display_slice, remainder_info) = if full_slice.len() > 60 {
-                (
-                    &full_slice[..60],
-                    format!("\n... and {} more symbols", full_slice.len() - 60),
-                )
-            } else {
-                (full_slice, String::new())
-            };
-            format!(
-                "Lexing error in {}:{}:{} | Span: {:?}\nProblem:\n'{}'{}",
-                filename, err.row, err.col, err.span, display_slice, remainder_info
-            )
-        })
+pub fn char_token(
+    content_str: &str,
+    span: Span,
+    tokens: &mut Vec<TokenData>,
+    _symbols: &mut LexerSymbolTable,
+) -> LexerResult<()> {
+    let mut chars = content_str.chars();
+
+    let c = match chars.next() {
+        Some('\\') => match chars.next() {
+            Some('n') => '\n',
+            Some('r') => '\r',
+            Some('t') => '\t',
+            Some('\\') => '\\',
+            Some('0') => '\0',
+            Some('\'') => '\'',
+            Some('"') => '"',
+            Some(other) => other,
+            None => return Err(LexerResultError::UnclosedChar(span)),
+        },
+        Some(c) => c,
+        None => return Err(LexerResultError::UnclosedChar(span)),
+    };
+
+    if chars.next().is_some() {
+        println!("{:?}", content_str);
+        return Err(LexerResultError::InvalidCharLiteral(span));
+    }
+
+    tokens.push(TokenData {
+        span,
+        token: Token::Char(c),
+    });
+
+    Ok(())
+}
+fn get_keyword(ident: &str) -> Option<Token> {
+    match ident {
+        "pub" => Some(Token::KeywordPub),
+        "inline" => Some(Token::KeywordInline),
+        "const" => Some(Token::KeywordConst),
+        "constexpr" => Some(Token::KeywordConstExpr),
+        "extern" => Some(Token::KeywordExtern),
+        "no_return" => Some(Token::KeywordNoReturn),
+        "match" => Some(Token::KeywordMatch),
+        "fn" => Some(Token::KeywordFunction),
+        "let" => Some(Token::KeywordVariableDeclaration),
+        "static" => Some(Token::KeywordStatic),
+        "as" => Some(Token::KeywordAs),
+        "if" => Some(Token::KeywordIf),
+        "else" => Some(Token::KeywordElse),
+        "struct" => Some(Token::KeywordStruct),
+        "enum" => Some(Token::KeywordEnum),
+        "loop" => Some(Token::KeywordLoop),
+        "break" => Some(Token::KeywordBreak),
+        "continue" => Some(Token::KeywordContinue),
+        "return" => Some(Token::KeywordReturn),
+        "this" => Some(Token::KeywordThis),
+        "operator" => Some(Token::KeywordOperator),
+        "namespace" => Some(Token::KeywordNamespace),
+        "true" => Some(Token::KeywordTrue),
+        "false" => Some(Token::KeywordFalse),
+        "null" => Some(Token::KeywordNull),
+        _ => None,
+    }
 }

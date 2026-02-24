@@ -4,7 +4,7 @@ use crate::{
     },
     expression_parser::{Expr, ExpressionParser},
 };
-use rcsharp_lexer::{Token, TokenData};
+use rcsharp_lexer::{LexerSymbolTable, Token, TokenData};
 use std::fmt;
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -80,7 +80,7 @@ impl fmt::Display for ParserError {
     }
 }
 /// (span, (row, column), err)
-pub type ParserResult<T> = Result<T, (Span, (usize, usize), ParserError)>;
+pub type ParserResult<T> = Result<T, (Span, ParserError)>;
 
 pub trait ParserResultExt<T> {
     fn unwrap_error_extended(self, token_data: &[TokenData], path: &str) -> Result<T, String>;
@@ -90,16 +90,16 @@ impl<T> ParserResultExt<T> for ParserResult<T> {
     fn unwrap_error_extended(self, token_data: &[TokenData], path: &str) -> Result<T, String> {
         match self {
             Ok(v) => Ok(v),
-            Err((span, (row, column), err)) => {
+            Err((span, err)) => {
                 let valid_end = span.end.min(token_data.len());
                 let valid_start = span.start.min(valid_end);
                 let tokens: Vec<_> = token_data[valid_start..valid_end]
                     .iter()
                     .map(|x| &x.token)
                     .collect();
-
+                //{row}:{column}
                 Err(format!(
-                    "Parser error with tokens:\n{:?}\n{} at {path}:{row}:{column}",
+                    "Parser error with tokens:\n{:?}\n{} at {path}:",
                     tokens, err
                 ))
             }
@@ -285,13 +285,15 @@ impl ParserType {
 
 pub struct GeneralParser<'a> {
     tokens: &'a [TokenData],
+    symbol_table: &'a LexerSymbolTable,
     cursor: usize,
     len: usize,
 }
 impl<'a> GeneralParser<'a> {
-    pub fn new(tokens: &'a [TokenData]) -> Self {
+    pub fn new(tokens: &'a [TokenData], symbol_table: &'a LexerSymbolTable) -> Self {
         Self {
             tokens,
+            symbol_table,
             cursor: 0,
             len: tokens.len(),
         }
@@ -308,8 +310,6 @@ impl<'a> GeneralParser<'a> {
             static DUMMY_EOF: TokenData = TokenData {
                 token: Token::DummyToken,
                 span: 0..0,
-                col: 0,
-                row: 0,
             };
             &DUMMY_EOF
         }
@@ -322,8 +322,6 @@ impl<'a> GeneralParser<'a> {
             static DUMMY_EOF: TokenData = TokenData {
                 token: Token::DummyToken,
                 span: 0..0,
-                col: 0,
-                row: 0,
             };
             &DUMMY_EOF
         }
@@ -357,7 +355,6 @@ impl<'a> GeneralParser<'a> {
         } else {
             Err((
                 self.peek_span(),
-                (token_data.row as usize, token_data.col as usize),
                 ParserError::UnexpectedToken {
                     expected: format!("{:?}", expected),
                     found: format!("{:?}", token_data.token),
@@ -370,17 +367,13 @@ impl<'a> GeneralParser<'a> {
         let token_data = self.peek();
         match &token_data.token {
             Token::Name(name) => {
-                let s = name.to_string();
+                let s = self.symbol_table.get(name).to_string();
                 self.cursor += 1;
                 Ok(s)
             }
             _ => {
                 let found = format!("{:?}", token_data.token);
-                Err((
-                    self.peek_span(),
-                    (token_data.row as usize, token_data.col as usize),
-                    ParserError::ExpectedIdentifier { found },
-                ))
+                Err((self.peek_span(), ParserError::ExpectedIdentifier { found }))
             }
         }
     }
@@ -421,10 +414,8 @@ impl<'a> GeneralParser<'a> {
                 attributes.push(self.parse_attribute()?);
             } else {
                 if !attributes.is_empty() {
-                    let t = self.peek();
                     return Err((
                         start_span,
-                        (t.row as usize, t.col as usize),
                         ParserError::OrphanedAttributes(attributes.len()),
                     ));
                 }
@@ -444,7 +435,6 @@ impl<'a> GeneralParser<'a> {
                 if !attributes.is_empty() {
                     return Err((
                         start_span,
-                        (token_data.row as usize, token_data.col as usize),
                         ParserError::AttributeError(
                             "Attributes are not allowed on namespaces".into(),
                         ),
@@ -463,14 +453,12 @@ impl<'a> GeneralParser<'a> {
                 if !attributes.is_empty() {
                     return Err((
                         start_span,
-                        (token_data.row as usize, token_data.col as usize),
                         ParserError::OrphanedAttributes(attributes.len()),
                     ));
                 }
                 let t = self.peek();
                 Err((
                     self.peek_span(),
-                    (token_data.row as usize, token_data.col as usize),
                     ParserError::UnexpectedTopLevelToken {
                         found: format!("{:?}", t.token),
                     },
@@ -484,7 +472,6 @@ impl<'a> GeneralParser<'a> {
         modifier: &str,
         attributes: Vec<Attribute>,
     ) -> ParserResult<StmtData> {
-        let token_data = self.peek().clone();
         self.advance();
 
         let mut item = self.parse_toplevel_item()?;
@@ -518,7 +505,6 @@ impl<'a> GeneralParser<'a> {
             }
             _ => Err((
                 item.span,
-                (token_data.row as usize, token_data.col as usize),
                 ParserError::InvalidModifier {
                     modifier: modifier.into(),
                     applicable_to: "functions, structs, or enums".into(),
@@ -565,7 +551,6 @@ impl<'a> GeneralParser<'a> {
                 _ => {
                     return Err((
                         self.peek_span(),
-                        (t.row as usize, t.col as usize),
                         ParserError::UnexpectedToken {
                             expected: ", or >".into(),
                             found: format!("{:?}", t.token),
@@ -865,10 +850,9 @@ impl<'a> GeneralParser<'a> {
                 let t = self.peek();
                 Err((
                     self.peek_span(),
-                    (t.row as usize, t.col as usize),
                     ParserError::UnexpectedToken {
                         expected: "Statement".into(),
-                        found: format!("{:?} at {}:{}", t.token, t.row, t.col),
+                        found: format!("{:?} at {}:{}", t.token, 0, 0),
                     },
                 ))
             }
@@ -965,7 +949,7 @@ impl<'a> GeneralParser<'a> {
         } else {
             &[]
         };
-        let mut ep = ExpressionParser::new(remaining);
+        let mut ep = ExpressionParser::new(remaining, self.symbol_table);
         let pt = ep.parse_type()?;
         self.cursor += ep.cursor();
         Ok(pt)
@@ -977,7 +961,7 @@ impl<'a> GeneralParser<'a> {
         } else {
             &[]
         };
-        let mut expr_parser = ExpressionParser::new(remaining);
+        let mut expr_parser = ExpressionParser::new(remaining, self.symbol_table);
         let expr = expr_parser.parse_expression()?;
         self.cursor += expr_parser.cursor();
         Ok(expr)

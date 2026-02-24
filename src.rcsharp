@@ -1,6 +1,5 @@
 #include("./src_base_structs.rcsharp")
-
- fn basic_functions() {
+fn basic_functions() {
     console::AllocConsole();
     tests::run();
     window::start();
