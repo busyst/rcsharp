@@ -6,35 +6,35 @@ return 0;
 
 }
 namespace process {
-#[DllImport("kernel32.dll")] KeywordNoReturn fn ExitProcess(code:i32):void;
+#[DllImport("kernel32.dll")]no_return fn ExitProcess(code:i32):void;
 #[DllImport("kernel32.dll")]fn GetModuleFileNameA(hModule:&i8, lpFilename:&i8, nSize:u32):u32;
 fn get_executable_path():string::String {
 const size:u32=260;
-let string:string::String=string::with_size(size as i32);
-const len:u32=GetModuleFileNameA(null, string.data, string.len as u32);
-string.len=len as i32;
+let string:string::String=string::with_size(sizeas i32);
+const len:u32=GetModuleFileNameA(null , string.data, string.lenas u32);
+string.len=lenas i32;
 return string;
 
 }
 fn get_executable_env_path():string::String {
 let string:string::String=get_executable_path();
-let index:i32=string.len as i32-1;
- KeywordLoop  {
+let index:i32=string.lenas i32-1;
+loop  {
 if string.data[index]== Char('\\') ||index<0 {
-break;
+break ;
 
 }
 index=index-1;
 
 }
-string.len=(index+1) as i32;
+string.len=(index+1)as i32;
 return string;
 
 }
- KeywordPub  KeywordNoReturn fn throw(exception:&i8):void {
+pub no_return fn throw(exception:&i8):void {
 const len:i32=string_utils::c_str_len(exception);
 console::AllocConsole();
-const stdout_handle:&i8=console::GetStdHandle(-11 as i32);
+const stdout_handle:&i8=console::GetStdHandle(-11as i32);
 console::writeln("Exception: ", 11);
 console::writeln(exception, len);
 ExitProcess(-1);
@@ -56,7 +56,7 @@ lpData:&void, cbData:u32, cbOverhead:u8, iRegionIndex:u8, wFlags:u16, Block_hMem
 #[DllImport("kernel32.dll")]fn HeapUnlock(hHeap:&i32):i32;
 fn malloc(size:i64):&void {
 const ptr:&void=HeapAlloc(GetProcessHeap(), 0, size);
-if ptr==null {
+if ptr==null  {
 process::throw("Out of memory");
 
 }
@@ -64,12 +64,12 @@ return ptr;
 
 }
 fn realloc(ptr:&void, size:i64):&void {
-if ptr==null {
+if ptr==null  {
 return malloc(size);
 
 }
 const new_ptr:&void=HeapReAlloc(GetProcessHeap(), 0, ptr, size);
-if new_ptr==null {
+if new_ptr==null  {
 process::throw("Realloc failed");
 
 }
@@ -77,7 +77,7 @@ return new_ptr;
 
 }
 fn free(ptr:&void):void {
-if ptr LogicNotEqual null {
+if ptr!=null  {
 HeapFree(GetProcessHeap(), 0, ptr);
 
 }
@@ -85,9 +85,9 @@ HeapFree(GetProcessHeap(), 0, ptr);
 }
 fn copy(src:&i8, dest:&i8, len:i64) {
 let i:i64=0;
- KeywordLoop  {
+loop  {
 if i>=len {
-break;
+break ;
 
 }
 dest[i]=src[i];
@@ -98,9 +98,9 @@ i=i+1;
 }
 fn compare(left:&i8, right:&i8, len:i64):i32 {
 let i:i64=0;
- KeywordLoop  {
+loop  {
 if i>=len {
-break;
+break ;
 
 }
 if left[i]<right[i] {
@@ -119,9 +119,9 @@ return 0;
 }
 fn fill(val:i8, dest:&i8, len:i64) {
 let i:i64=0;
- KeywordLoop  {
+loop  {
 if i>=len {
-break;
+break ;
 
 }
 dest[i]=val;
@@ -136,9 +136,9 @@ fill(0, dest, len);
 }
 fn default_fill<T>(val:T, dest:&T, len:i64) {
 let i:i64=0;
- KeywordLoop  {
+loop  {
 if i>=len {
-break;
+break ;
 
 }
 dest[i]=val;
@@ -151,18 +151,18 @@ fn get_total_allocated_memory_external():i64 {
 const hHeap:&i32=GetProcessHeap();
 let total_size:i64=0;
 let entry:PROCESS_HEAP_ENTRY;
-entry.lpData=null;
+entry.lpData=null ;
 if HeapLock(hHeap)==0 {
 process::throw("Failed to lock heap for walking.");
 
 }
- KeywordLoop  {
+loop  {
 if HeapWalk(hHeap, &entry)==0 {
-break;
+break ;
 
 }
-if (entry.wFlags&4) LogicNotEqual 0 {
-total_size=total_size+(entry.cbData as i64);
+if (entry.wFlags&4)!=0 {
+total_size=total_size+(entry.cbDataas i64);
 
 }
 
@@ -182,22 +182,22 @@ data:T, next_node:&ListNode<T>,
 }
 fn new<T>():List<T> {
 let list:List<T>;
-list.head=null;
-list.foot=null;
-list.length=0 as u32;
+list.head=null ;
+list.foot=null ;
+list.length=0as u32;
 return list;
 
 }
 fn new_node<T>(list:&ListNode<T>) {
-list.next_node=null;
-list.data=0 as i32;
+list.next_node=null ;
+list.data=0as i32;
 
 }
 fn extend<T>(list:&List<T>, data:T) {
-let node_to_add:&ListNode<T>=mem::malloc(size_of::<ListNode<T>>()) as &ListNode<T>;
+let node_to_add:&ListNode<T>=mem::malloc(size_of::<ListNode<T>>())as &ListNode<T>;
 new_node::<T>(node_to_add);
 node_to_add.data=data;
-if list.head==null {
+if list.head==null  {
 list.head=node_to_add;
 list.foot=node_to_add;
 
@@ -207,18 +207,18 @@ list.foot.next_node=node_to_add;
 list.foot=node_to_add;
 
 }
-list.length=list.length+1 as u32;
+list.length=list.length+1as u32;
 
 }
 fn walk<T>(list:&List<T>):u32 {
-let l:u32=0 as u32;
+let l:u32=0as u32;
 let ptr:&ListNode<T>=list.head;
- KeywordLoop  {
-if (ptr==null) {
-break;
+loop  {
+if (ptr==null ) {
+break ;
 
 }
-l=l+1 as u32;
+l=l+1as u32;
 ptr=ptr.next_node;
 
 }
@@ -227,18 +227,18 @@ return l;
 }
 fn free<T>(list:&List<T>) {
 let current:&ListNode<T>=list.head;
- KeywordLoop  {
-if (current==null) {
-break;
+loop  {
+if (current==null ) {
+break ;
 
 }
 let next:&ListNode<T>=current.next_node;
-mem::free(current as &void);
+mem::free(currentas &void);
 current=next;
 
 }
-list.head=null;
-list.foot=null;
+list.head=null ;
+list.foot=null ;
 list.length=0;
 
 }
@@ -250,7 +250,7 @@ array:&T, length:u32, capacity:u32,
 }
 fn new<T>():Vec<T> {
 let vec:Vec<T>;
-vec.array=null;
+vec.array=null ;
 vec.length=0;
 vec.capacity=0;
 return vec;
@@ -259,24 +259,24 @@ return vec;
 #[ExtentionOf(Vec)]fn push<T>(vec:&Vec<T>, data:T) {
 if vec.length>=vec.capacity {
 let new_capacity:u32=4;
-if vec.capacity LogicNotEqual 0 as u32 {
-new_capacity=vec.capacity*2 as u32;
+if vec.capacity!=0as u32 {
+new_capacity=vec.capacity*2as u32;
 
 }
-const new_size_bytes:i64=size_of::<T>()*new_capacity as i64;
-vec.array=mem::realloc(vec.array as &void, new_size_bytes) as &T;
+const new_size_bytes:i64=size_of::<T>()*new_capacityas i64;
+vec.array=mem::realloc(vec.arrayas &void, new_size_bytes)as &T;
 vec.capacity=new_capacity;
 
 }
 vec.array[vec.length]=data;
-vec.length=vec.length+1 as u32;
+vec.length=vec.length+1as u32;
 
 }
 #[ExtentionOf(Vec)]fn push_bulk<T>(vec:&Vec<T>, data:&T, data_len:i32) {
 let index:i32=0;
- KeywordLoop  {
+loop  {
 if index>=data_len {
-break;
+break ;
 
 }
 push::<T>(vec, data[index]);
@@ -291,9 +291,9 @@ process::throw("Vector index out of bounds");
 
 }
 let i:u32=index;
- KeywordLoop  {
+loop  {
 if i>=vec.length-1 {
-break;
+break ;
 
 }
 vec.array[i]=vec.array[i+1];
@@ -304,11 +304,11 @@ vec.length=vec.length-1;
 
 }
 #[ExtentionOf(Vec)]fn free<T>(vec:&Vec<T>) {
-if vec.array LogicNotEqual null {
-mem::free(vec.array as &void);
+if vec.array!=null  {
+mem::free(vec.arrayas &void);
 
 }
-vec.array=null;
+vec.array=null ;
 vec.length=0;
 vec.capacity=0;
 
@@ -321,7 +321,7 @@ namespace console {
 #[DllImport("kernel32.dll")]fn FreeConsole():i32;
 #[DllImport("kernel32.dll")]fn WriteConsoleA(hConsoleOutput:&i8, lpBuffer:&i8, nNumberOfCharsToWrite:i32, lpNumberOfCharsWritten:&i32, lpReserved:&i8):i32;
 fn get_stdout():&i8 {
-let stdout_handle:&i8=GetStdHandle(-11 as i32);
+let stdout_handle:&i8=GetStdHandle(-11as i32);
 if (stdout_handle==bitcast::<&i8>(-1)) {
 process::throw("stdout handle was invalid");
 
@@ -335,8 +335,8 @@ return ;
 
 }
 let chars_written:i32;
-WriteConsoleA(get_stdout(), buffer, len, &chars_written, null);
-if len LogicNotEqual chars_written {
+WriteConsoleA(get_stdout(), buffer, len, &chars_written, null );
+if len!=chars_written {
 process::ExitProcess(-2);
 
 }
@@ -344,8 +344,8 @@ process::ExitProcess(-2);
 }
 fn write_string(str:&string::String) {
 let chars_written:i32;
-WriteConsoleA(get_stdout(), str.data, str.len, &chars_written, null);
-if str.len LogicNotEqual chars_written {
+WriteConsoleA(get_stdout(), str.data, str.len, &chars_written, null );
+if str.len!=chars_written {
 process::ExitProcess(-2);
 
 }
@@ -355,7 +355,7 @@ fn writeln(buffer:&i8, len:i32) {
 write(buffer, len);
 let cw:i32;
 let nl:i8=10;
-WriteConsoleA(get_stdout(), &nl, 1, &cw, null);
+WriteConsoleA(get_stdout(), &nl, 1, &cw, null );
 
 }
 fn print_char(n:i8) {
@@ -365,12 +365,12 @@ write(&b, 1);
 }
 fn println_i64(n:i64) {
 if n>=0 {
-println_u64(n as u64);
+println_u64(nas u64);
 
 }
 else  {
 print_char( Char('-') );
-println_u64(-n as u64);
+println_u64(-nas u64);
 
 }
 
@@ -385,19 +385,19 @@ return ;
 
 }
 let mut_n:u64=n;
- KeywordLoop  {
-buffer[i]=(mut_n%10) as i8+ Char('0') ;
+loop  {
+buffer[i]=(mut_n%10)as i8+ Char('0') ;
 mut_n=mut_n/10;
 i=i-1;
 if mut_n==0 {
-break;
+break ;
 
 }
 
 }
 buffer[21]= Char('\n') ;
 const start_ptr:&i8=&buffer[i+1];
-const len:i32=21 as i32-i;
+const len:i32=21as i32-i;
 write(start_ptr, len);
 
 }
@@ -411,9 +411,9 @@ mut_n=-mut_n;
 }
 let rounder:f64=0.5;
 let i:i32=0;
- KeywordLoop  {
+loop  {
 if i>=PRECISION {
-break;
+break ;
 
 }
 rounder=rounder/10;
@@ -421,8 +421,8 @@ i=i+1;
 
 }
 mut_n=mut_n+rounder;
-const integer_part:u64=mut_n as u64;
-let fractional_part:f64=mut_n-(integer_part as f64);
+const integer_part:u64=mut_nas u64;
+let fractional_part:f64=mut_n-(integer_partas f64);
 if integer_part==0 {
 print_char( Char('0') );
 
@@ -431,32 +431,32 @@ else  {
 let buffer:&i8=stalloc::<i8>(21);
 let i:i32=20;
 let temp_int:u64=integer_part;
- KeywordLoop  {
-buffer[i]=(temp_int%10) as i8+ Char('0') ;
+loop  {
+buffer[i]=(temp_int%10)as i8+ Char('0') ;
 temp_int=temp_int/10;
 i=i-1;
 if temp_int==0 {
-break;
+break ;
 
 }
 
 }
 let start_ptr:&i8=&buffer[i+1];
-let len:i32=20 as i32-i;
+let len:i32=20as i32-i;
 write(start_ptr, len);
 
 }
 print_char( Char('.') );
 let i:i32=0;
- KeywordLoop  {
+loop  {
 if i>=PRECISION {
-break;
+break ;
 
 }
 fractional_part=fractional_part*10;
-let digit:u64=fractional_part as u64;
-print_char(digit as i8+ Char('0') );
-fractional_part=fractional_part-(digit as f64);
+let digit:u64=fractional_partas u64;
+print_char(digitas i8+ Char('0') );
+fractional_part=fractional_part-(digitas f64);
 i=i+1;
 
 }
@@ -472,15 +472,15 @@ data:&i8, len:i32,
 fn from_c_string(c_string:&i8):String {
 let x:String;
 x.len=string_utils::c_str_len(c_string);
-x.data=mem::malloc(size_of::<i8>()*(x.len+1) as i64) as &i8;
-mem::copy(c_string, x.data, x.len as i64);
+x.data=mem::malloc(size_of::<i8>()*(x.len+1)as i64)as &i8;
+mem::copy(c_string, x.data, x.lenas i64);
 x.data[x.len]=0;
 return x;
 
 }
 fn empty():String {
 let x:String;
-x.data=null;
+x.data=null ;
 x.len=0;
 return x;
 
@@ -488,16 +488,16 @@ return x;
 fn with_size(size:i32):String {
 let x:String;
 x.len=size;
-x.data=mem::malloc(size_of::<i8>()*(size+1) as i64) as &i8;
-mem::zero_fill(x.data, (size+1) as i64);
+x.data=mem::malloc(size_of::<i8>()*(size+1)as i64)as &i8;
+mem::zero_fill(x.data, (size+1)as i64);
 return x;
 
 }
 #[ExtentionOf(String)]fn clone(src:&String):String {
 let x:String;
 x.len=src.len;
-x.data=mem::malloc(size_of::<i8>()*(x.len+1) as i64) as &i8;
-mem::copy(src.data, x.data, x.len as i64);
+x.data=mem::malloc(size_of::<i8>()*(x.len+1)as i64)as &i8;
+mem::copy(src.data, x.data, x.lenas i64);
 x.data[x.len]=0;
 return x;
 
@@ -505,9 +505,9 @@ return x;
 #[ExtentionOf(String)]fn concat_with_c_string(src_string:&String, c_string:&i8):String {
 const c_string_len:i32=string_utils::c_str_len(c_string);
 const new_len:i32=c_string_len+src_string.len;
-const combined:&i8=mem::malloc(size_of::<i8>()*(new_len+1) as i64) as &i8;
-mem::copy(src_string.data, combined, src_string.len as i64);
-mem::copy(c_string, (combined+src_string.len as i64), c_string_len as i64);
+const combined:&i8=mem::malloc(size_of::<i8>()*(new_len+1)as i64)as &i8;
+mem::copy(src_string.data, combined, src_string.lenas i64);
+mem::copy(c_string, (combined+src_string.lenas i64), c_string_lenas i64);
 combined[new_len]=0;
 let str:String;
 str.data=combined;
@@ -516,71 +516,71 @@ return str;
 
 }
 #[ExtentionOf(String)]fn equal(first:&String, second:&String):bool {
-if first.len LogicNotEqual second.len {
-return  KeywordFalse ;
+if first.len!=second.len {
+return false ;
 
 }
-return mem::compare(first.data, second.data, first.len as i64)==0;
+return mem::compare(first.data, second.data, first.lenas i64)==0;
 
 }
 #[ExtentionOf(String)]fn free(str:&String) {
-mem::free(str.data as &void);
+mem::free(str.dataas &void);
 str.len=0;
 
 }
 #[ExtentionOf(String)]inline fn as_c_string_stalloc(string:&String, stallocd_buffer:&i8) {
-mem::copy(string.data, stallocd_buffer, string.len as i64);
+mem::copy(string.data, stallocd_buffer, string.lenas i64);
 stallocd_buffer[string.len]=0;
 
 }
 
 }
 namespace char_utils {
- KeywordPub fn is_alnum(c:i8):bool {
+pub fn is_alnum(c:i8):bool {
 return (c>= Char('a') &&c<= Char('z') )||(c>= Char('A') &&c<= Char('Z') )||(c>= Char('0') &&c<= Char('9') );
 
 }
- KeywordPub fn is_alpha(c:i8):bool {
+pub fn is_alpha(c:i8):bool {
 return (c>= Char('a') &&c<= Char('z') )||(c>= Char('A') &&c<= Char('Z') );
 
 }
- KeywordPub fn is_cntrl(c:i8):bool {
+pub fn is_cntrl(c:i8):bool {
 return (c>=0&&c<=31)||c==127;
 
 }
- KeywordPub fn is_digit(c:i8):bool {
+pub fn is_digit(c:i8):bool {
 return c>= Char('0') &&c<= Char('9') ;
 
 }
- KeywordPub fn is_graph(c:i8):bool {
+pub fn is_graph(c:i8):bool {
 return c>=33&&c<=126;
 
 }
- KeywordPub fn is_lower(c:i8):bool {
+pub fn is_lower(c:i8):bool {
 return c>= Char('a') &&c<= Char('z') ;
 
 }
- KeywordPub fn is_print(c:i8):bool {
+pub fn is_print(c:i8):bool {
 return c>=32&&c<=126;
 
 }
- KeywordPub fn is_punct(c:i8):bool {
+pub fn is_punct(c:i8):bool {
 return is_graph(c)&&!is_alnum(c);
 
 }
- KeywordPub fn is_space(c:i8):bool {
+pub fn is_space(c:i8):bool {
 return c== Char(' ') ||c== Char('\t') ||c== Char('\n') ||c== Char('v') ||c== Char('f') ||c== Char('\r') ;
 
 }
- KeywordPub fn is_upper(c:i8):bool {
+pub fn is_upper(c:i8):bool {
 return c>= Char('A') &&c<= Char('Z') ;
 
 }
- KeywordPub fn is_xdigit(c:i8):bool {
+pub fn is_xdigit(c:i8):bool {
 return (c>= Char('0') &&c<= Char('9') )||(c>= Char('a') &&c<= Char('f') )||(c>= Char('A') &&c<= Char('F') );
 
 }
- KeywordPub fn to_lower(c:i8):i8 {
+pub fn to_lower(c:i8):i8 {
 if is_upper(c) {
 return c+( Char('a') - Char('A') );
 
@@ -588,7 +588,7 @@ return c+( Char('a') - Char('A') );
 return c;
 
 }
- KeywordPub fn to_upper(c:i8):i8 {
+pub fn to_upper(c:i8):i8 {
 if is_lower(c) {
 return c-( Char('a') - Char('A') );
 
@@ -599,12 +599,12 @@ return c;
 
 }
 namespace string_utils {
- KeywordPub fn c_str_copy(dest:&i8, src:&i8):&i8 {
+pub fn c_str_copy(dest:&i8, src:&i8):&i8 {
 let i:i32=0;
- KeywordLoop  {
+loop  {
 dest[i]=src[i];
 if src[i]==0 {
-break;
+break ;
 
 }
 i=i+1;
@@ -613,24 +613,24 @@ i=i+1;
 return dest;
 
 }
- KeywordPub fn c_str_n_copy(dest:&i8, src:&i8, n:i32):&i8 {
+pub fn c_str_n_copy(dest:&i8, src:&i8, n:i32):&i8 {
 let i:i32=0;
- KeywordLoop  {
+loop  {
 if i>=n {
-break;
+break ;
 
 }
 dest[i]=src[i];
 if src[i]==0 {
-break;
+break ;
 
 }
 i=i+1;
 
 }
- KeywordLoop  {
+loop  {
 if i>=n {
-break;
+break ;
 
 }
 dest[i]=0;
@@ -640,22 +640,22 @@ i=i+1;
 return dest;
 
 }
- KeywordPub fn insert(src1:&i8, src2:&i8, index:i32):&i8 {
+pub fn insert(src1:&i8, src2:&i8, index:i32):&i8 {
 const len1:i32=c_str_len(src1);
 const len2:i32=c_str_len(src2);
-const output:&i8=mem::malloc((len1+len2+1) as i64) as &i8;
-mem::copy(src1, output, index as i64);
-mem::copy(src2, (output+index), len2 as i64);
-mem::copy((src1+index), (output+index+len2), (len1-index) as i64);
+const output:&i8=mem::malloc((len1+len2+1)as i64)as &i8;
+mem::copy(src1, output, indexas i64);
+mem::copy(src2, (output+index), len2as i64);
+mem::copy((src1+index), (output+index+len2), (len1-index)as i64);
 output[len1+len2]=0;
 return output;
 
 }
- KeywordPub fn c_str_len(str:&i8):i32 {
+pub fn c_str_len(str:&i8):i32 {
 let len:i32=0;
- KeywordLoop  {
+loop  {
 if str[len]==0 {
-break;
+break ;
 
 }
 len=len+1;
@@ -667,13 +667,13 @@ return len;
 
 }
 namespace stdlib {
- KeywordPub fn atoi(str:&i8):i32 {
+pub fn atoi(str:&i8):i32 {
 let res:i32=0;
 let sign:i32=1;
 let i:i32=0;
- KeywordLoop  {
+loop  {
 if !char_utils::is_space(str[i]) {
-break;
+break ;
 
 }
 i=i+1;
@@ -688,23 +688,23 @@ else if str[i]== Char('+')  {
 i=i+1;
 
 }
- KeywordLoop  {
+loop  {
 if !char_utils::is_digit(str[i]) {
-break;
+break ;
 
 }
-res=res*10+(str[i]- Char('0') ) as i32;
+res=res*10+(str[i]- Char('0') )as i32;
 i=i+1;
 
 }
 return res*sign;
 
 }
- KeywordPub fn str_to_l(str:&i8, endptr:&&i8, base:i32):i64 {
+pub fn str_to_l(str:&i8, endptr:&&i8, base:i32):i64 {
 let i:i32=0;
- KeywordLoop  {
+loop  {
 if !char_utils::is_space(str[i]) {
-break;
+break ;
 
 }
 i=i+1;
@@ -745,43 +745,43 @@ i=i+2;
 }
 let result:i64=0;
 let digit_val:i32;
- KeywordLoop  {
+loop  {
 const c:i8=str[i];
 if char_utils::is_digit(c) {
-digit_val=(c- Char('0') ) as i32;
+digit_val=(c- Char('0') )as i32;
 
 }
 else if char_utils::is_alpha(c) {
-digit_val=(char_utils::to_lower(c)- Char('a') +10) as i32;
+digit_val=(char_utils::to_lower(c)- Char('a') +10)as i32;
 
 }
 else  {
-break;
+break ;
 
 }
 if digit_val>=b {
-break;
+break ;
 
 }
-result=result*b as i64+digit_val as i64;
+result=result*bas i64+digit_valas i64;
 i=i+1;
 
 }
-if endptr LogicNotEqual null {
-*endptr=str+i as i64;
+if endptr!=null  {
+*endptr=str+ias i64;
 
 }
 return result*sign;
 
 }
 static rand_seed:u32;
- KeywordPub fn srand(seed:u32) {
+pub fn srand(seed:u32) {
 rand_seed=seed;
 
 }
- KeywordPub fn rand():i32 {
+pub fn rand():i32 {
 rand_seed=(rand_seed*1103515245+12345);
-return ((rand_seed/65536)%32768) as i32;
+return ((rand_seed/65536)%32768)as i32;
 
 }
 
@@ -798,21 +798,21 @@ fn write_to_file(path:&i8, content:&i8, content_len:u32):i32 {
 const CREATE_ALWAYS:u32=2;
 const GENERIC_WRITE:u32=1073741824;
 const FILE_ATTRIBUTE_NORMAL:u32=128;
-const hFile:&void=CreateFileA(path, GENERIC_WRITE, 0, null, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, null);
+const hFile:&void=CreateFileA(path, GENERIC_WRITE, 0, null , CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, null );
 if hFile==bitcast::<&void>(-1) {
 return 0;
 
 }
 let bytes_written:u32=0;
-const success:i32=WriteFile(hFile, content, content_len, &bytes_written, null);
+const success:i32=WriteFile(hFile, content, content_len, &bytes_written, null );
 CloseHandle(hFile);
-return (success LogicNotEqual 0&&bytes_written==content_len) as i32;
+return (success!=0&&bytes_written==content_len)as i32;
 
 }
 fn read_full_file_as_string(path:&i8):string::String {
 const GENERIC_READ:u32=2147483648;
 const OPEN_EXISTING:u32=3;
-const hFile:&void=CreateFileA(path, GENERIC_READ, 1, null, OPEN_EXISTING, 128, null);
+const hFile:&void=CreateFileA(path, GENERIC_READ, 1, null , OPEN_EXISTING, 128, null );
 if hFile==bitcast::<&void>(-1) {
 process::throw(string_utils::insert("File not found: ", path, 16));
 
@@ -823,22 +823,22 @@ CloseHandle(hFile);
 return string::empty();
 
 }
-let buffer:string::String=string::with_size(file_size as i32);
+let buffer:string::String=string::with_size(file_sizeas i32);
 let bytes_read:u32=0;
-const success:i32=ReadFile(hFile, buffer.data, file_size as u32, &bytes_read, null);
+const success:i32=ReadFile(hFile, buffer.data, file_sizeas u32, &bytes_read, null );
 CloseHandle(hFile);
 if success==0 {
 string::free(&buffer);
 process::throw("File read failed");
 
 }
-buffer.len=file_size as i32;
+buffer.len=file_sizeas i32;
 buffer.data[buffer.len]=0;
 return buffer;
 
 }
 fn create_file(path:&i8):i32 {
-const hFile:&void=CreateFileA(path, 1073741824, 0, null, 1, 128, null);
+const hFile:&void=CreateFileA(path, 1073741824, 0, null , 1, 128, null );
 if hFile==bitcast::<&void>(-1) {
 return 0;
 
@@ -854,7 +854,7 @@ return DeleteFileA(path);
 fn file_exists(path:&i8):bool {
 const INVALID_FILE_ATTRIBUTES:u32=4294967295;
 const attributes:u32=GetFileAttributesA(path);
-return attributes LogicNotEqual INVALID_FILE_ATTRIBUTES;
+return attributes!=INVALID_FILE_ATTRIBUTES;
 
 }
 
@@ -880,19 +880,19 @@ console::println_i64(delta);
 fn mem_test() {
 console::write("mem_test: ", 10);
 const size:i64=16;
-const buffer1:&i8=mem::malloc(size) as &i8;
+const buffer1:&i8=mem::malloc(size)as &i8;
 if buffer1==bitcast::<&i8>(0) {
 process::throw("mem_test: malloc failed");
 
 }
 mem::fill( Char('X') , buffer1, size);
 let i:i64=0;
- KeywordLoop  {
+loop  {
 if i>=size {
-break;
+break ;
 
 }
-if buffer1[i] LogicNotEqual  Char('X')  {
+if buffer1[i]!= Char('X')  {
 process::throw("mem_test: fill verification failed");
 
 }
@@ -901,50 +901,50 @@ i=i+1;
 }
 mem::zero_fill(buffer1, size);
 let i:i64=0;
- KeywordLoop  {
+loop  {
 if i>=size {
-break;
+break ;
 
 }
-if buffer1[i] LogicNotEqual 0 {
+if buffer1[i]!=0 {
 process::throw("mem_test: zero_fill verification failed");
 
 }
 i=i+1;
 
 }
-const buffer2:&i8=mem::malloc(size) as &i8;
-if buffer2==null {
+const buffer2:&i8=mem::malloc(size)as &i8;
+if buffer2==null  {
 process::throw("mem_test: malloc for copy failed");
 
 }
 mem::fill( Char('Y') , buffer2, size);
 mem::copy(buffer2, buffer1, size);
 i=0;
- KeywordLoop  {
+loop  {
 if i>=size {
-break;
+break ;
 
 }
-if buffer1[i] LogicNotEqual  Char('Y')  {
+if buffer1[i]!= Char('Y')  {
 process::throw("mem_test: copy verification failed");
 
 }
 i=i+1;
 
 }
-mem::free(buffer1 as &void);
-mem::free(buffer2 as &void);
+mem::free(buffer1as &void);
+mem::free(buffer2as &void);
 console::writeln("OK", 2);
 
 }
 fn string_utils_test() {
 console::write("string_utils_test: ", 19);
-if string_utils::c_str_len("test") LogicNotEqual 4 {
+if string_utils::c_str_len("test")!=4 {
 process::throw("string_utils_test: c_str_len failed");
 
 }
-if string_utils::c_str_len("") LogicNotEqual 0 {
+if string_utils::c_str_len("")!=0 {
 process::throw("string_utils_test: c_str_len empty failed");
 
 }
@@ -963,19 +963,19 @@ process::throw("char_utils: is_xdigit failed");
 const inserted:&i8=string_utils::insert("ac", "b", 1);
 const expected:&i8="abc";
 let i:i32=0;
- KeywordLoop  {
+loop  {
 if inserted[i]==0&&expected[i]==0 {
-break;
+break ;
 
 }
-if inserted[i] LogicNotEqual expected[i] {
+if inserted[i]!=expected[i] {
 process::throw("string_utils_test: insert failed");
 
 }
 i=i+1;
 
 }
-mem::free(inserted as &void);
+mem::free(insertedas &void);
 console::writeln("OK", 2);
 
 }
@@ -984,7 +984,7 @@ console::write("string_test: ", 13);
 let s1:string::String=string::from_c_string("hello");
 let s2:string::String=string::from_c_string("hello");
 let s3:string::String=string::from_c_string("world");
-if s1.len LogicNotEqual 5 {
+if s1.len!=5 {
 process::throw("string_test: from_c_string length failed");
 
 }
@@ -998,7 +998,7 @@ process::throw("string_test: equal negative case failed");
 }
 let s4:string::String=string::concat_with_c_string(&s1, " world");
 let s5:string::String=string::from_c_string("hello world");
-if s4.len LogicNotEqual 11 {
+if s4.len!=11 {
 process::throw("string_test: concat length failed");
 
 }
@@ -1017,7 +1017,7 @@ console::writeln("OK", 2);
 fn vector_test() {
 console::write("vector_test: ", 13);
 let v:vector::Vec<i8>=vector::new::<i8>();
-if v.length LogicNotEqual 0||v.capacity LogicNotEqual 0 {
+if v.length!=0||v.capacity!=0 {
 process::throw("vector_test: new failed");
 
 }
@@ -1025,35 +1025,35 @@ vector::push::<i8>(&v, 10);
 vector::push::<i8>(&v, 20);
 vector::push::<i8>(&v, 30);
 vector::push::<i8>(&v, 40);
-if v.length LogicNotEqual 4||v.capacity LogicNotEqual 4 {
+if v.length!=4||v.capacity!=4 {
 process::throw("vector_test: initial push failed");
 
 }
-if v.array[0] LogicNotEqual 10||v.array[3] LogicNotEqual 40 {
+if v.array[0]!=10||v.array[3]!=40 {
 process::throw("vector_test: initial content failed");
 
 }
 vector::push::<i8>(&v, 50);
-if v.length LogicNotEqual 5||v.capacity LogicNotEqual 8 {
+if v.length!=5||v.capacity!=8 {
 process::throw("vector_test: realloc failed");
 
 }
-if v.array[4] LogicNotEqual 50||v.array[0] LogicNotEqual 10 {
+if v.array[4]!=50||v.array[0]!=10 {
 process::throw("vector_test: realloc content failed");
 
 }
 const data_to_push:&i8="AB";
 vector::push_bulk::<i8>(&v, data_to_push, 2);
-if v.length LogicNotEqual 7 {
+if v.length!=7 {
 process::throw("vector_test: push_bulk length failed");
 
 }
-if v.array[5] LogicNotEqual  Char('A') ||v.array[6] LogicNotEqual  Char('B')  {
+if v.array[5]!= Char('A') ||v.array[6]!= Char('B')  {
 process::throw("vector_test: push_bulk content failed");
 
 }
 vector::free::<i8>(&v);
-if v.length LogicNotEqual 0||v.capacity LogicNotEqual 0||v.array LogicNotEqual null {
+if v.length!=0||v.capacity!=0||v.array!=null  {
 process::throw("vector_test: free failed");
 
 }
@@ -1063,42 +1063,42 @@ console::writeln("OK", 2);
 fn list_test() {
 console::write("list_test: ", 11);
 let l:list::List<i32>=list::new::<i32>();
-if l.length LogicNotEqual 0||l.head LogicNotEqual null {
+if l.length!=0||l.head!=null  {
 process::throw("list_test: new failed");
 
 }
 list::extend::<i32>(&l, 100);
 list::extend::<i32>(&l, 200);
 list::extend::<i32>(&l, 300);
-if l.length LogicNotEqual 3 {
+if l.length!=3 {
 process::throw("list_test: length incorrect after extend");
 
 }
-if list::walk::<i32>(&l) LogicNotEqual 3 {
+if list::walk::<i32>(&l)!=3 {
 process::throw("list_test: walk length incorrect");
 
 }
 let current:&list::ListNode<i32>=l.head;
-if current.data LogicNotEqual 100 {
+if current.data!=100 {
 process::throw("list_test: data mismatch for node 1");
 
 }
 current=current.next_node;
-if current.data LogicNotEqual 200 {
+if current.data!=200 {
 process::throw("list_test: data mismatch for node 2");
 
 }
 current=current.next_node;
-if current.data LogicNotEqual 300 {
+if current.data!=300 {
 process::throw("list_test: data mismatch for node 3");
 
 }
-if current LogicNotEqual l.foot {
+if current!=l.foot {
 process::throw("list_test: foot pointer mismatch");
 
 }
 list::free::<i32>(&l);
-if l.length LogicNotEqual 0||l.head LogicNotEqual null {
+if l.length!=0||l.head!=null  {
 process::throw("list_test: free failed");
 
 }
@@ -1121,7 +1121,7 @@ if env_path.len>=full_path.len {
 process::throw("process_test: env path is not shorter than full path");
 
 }
-if env_path.data[env_path.len-1] LogicNotEqual  Char('\\')  {
+if env_path.data[env_path.len-1]!= Char('\\')  {
 process::throw("process_test: env path does not end with a backslash");
 
 }
@@ -1155,12 +1155,12 @@ console::write("fs_test: ", 9);
 let data:string::String=string::from_c_string("The quick brown fox jumps over crazy lost dog.");
 let env_path:string::String=process::get_executable_env_path();
 let new_file_path:string::String=string::concat_with_c_string(&env_path, "test.txt");
-const c_string:&i8=stalloc::<i8>((new_file_path.len+1) as i64);
+const c_string:&i8=stalloc::<i8>((new_file_path.len+1)as i64);
 string::as_c_string_stalloc(&new_file_path, c_string);
 fs::create_file(c_string);
 fs::delete_file(c_string);
 fs::create_file(c_string);
-fs::write_to_file(c_string, data.data, data.len as u32);
+fs::write_to_file(c_string, data.data, data.lenas u32);
 let read:string::String=fs::read_full_file_as_string(c_string);
 if !string::equal(&data, &read) {
 process::throw("Filesystem test failed, data mismatch");
@@ -1175,9 +1175,9 @@ console::writeln("OK", 2);
 
 }
 fn consume_while(file:&string::String, iterator:&i32, condition:&fn (i8):bool) {
- KeywordLoop  {
+loop  {
 if *iterator>=file.len {
-break;
+break ;
 
 }
 const char:i8=file.data[*iterator];
@@ -1186,7 +1186,7 @@ if (*condition)(char) {
 
 }
 else  {
-break;
+break ;
 
 }
 
@@ -1194,7 +1194,7 @@ break;
 
 }
 fn not_new_line(c:i8):bool {
-return c LogicNotEqual  Char('\n') ;
+return c!= Char('\n') ;
 
 }
 fn valid_name_token(c:i8):bool {
@@ -1205,7 +1205,7 @@ fn is_valid_number_token(c:i8):bool {
 return char_utils::is_digit(c)||char_utils::is_xdigit(c)||c== Char('_') ;
 
 }
- KeywordEnum LexerTokens {
+enum LexerTokens {
 String
 }
 fn funny() {
@@ -1222,15 +1222,15 @@ let next_char:i8;
 let index:i32;
 let data:vector::Vec<string::String>=vector::new::<string::String>();
 let tokens:vector::Vec<LexerTokens>=vector::new::<LexerTokens>();
- KeywordLoop  {
+loop  {
 if iterator>=file.len {
-break;
+break ;
 
 }
 char=file.data[iterator];
 if (char== Char(' ') ||char== Char('\t') ||char== Char('\r') ||char== Char('\n') ) {
 iterator=iterator+1;
-continue;
+continue ;
 
 }
 if (iterator+1)<file.len {
@@ -1243,7 +1243,7 @@ next_char=0;
 }
 if char== Char('/') &&next_char== Char('/')  {
 consume_while(&file, &iterator, &not_new_line);
-continue;
+continue ;
 
 }
 if char_utils::is_digit(char) {
@@ -1254,194 +1254,194 @@ iterator=iterator+2;
 }
 consume_while(&file, &iterator, &is_valid_number_token);
 let temp_string:string::String=string::with_size(iterator-index);
-mem::copy(file.data+index, temp_string.data, temp_string.len as i64);
+mem::copy(file.data+index, temp_string.data, temp_string.lenas i64);
 vector::push::<string::String>(&data, temp_string);
-continue;
+continue ;
 
 }
 if char_utils::is_alpha(char)||char== Char('_')  {
 index=iterator;
 consume_while(&file, &iterator, &valid_name_token);
 let temp_string:string::String=string::with_size(iterator-index);
-mem::copy(file.data+index, temp_string.data, temp_string.len as i64);
+mem::copy(file.data+index, temp_string.data, temp_string.lenas i64);
 vector::push::<string::String>(&data, temp_string);
-continue;
+continue ;
 
 }
 if char== Char('"')  {
 index=iterator;
- KeywordLoop  {
+loop  {
 iterator=iterator+1;
 if iterator>=file.len {
-break;
+break ;
 
 }
 if file.data[iterator]== Char('"')  {
 iterator=iterator+1;
-break;
+break ;
 
 }
 
 }
 let temp_string:string::String=string::with_size(iterator-index);
-mem::copy(file.data+index, temp_string.data, temp_string.len as i64);
+mem::copy(file.data+index, temp_string.data, temp_string.lenas i64);
 vector::push::<string::String>(&data, temp_string);
-continue;
+continue ;
 
 }
 if char== Char('\'')  {
 iterator=iterator+1;
-continue;
+continue ;
 
 }
 if char== Char('(')  {
 iterator=iterator+1;
-continue;
+continue ;
 
 }
 if char== Char(')')  {
 iterator=iterator+1;
-continue;
+continue ;
 
 }
 if char== Char('{')  {
 iterator=iterator+1;
-continue;
+continue ;
 
 }
 if char== Char('}')  {
 iterator=iterator+1;
-continue;
+continue ;
 
 }
 if char== Char('[')  {
 iterator=iterator+1;
-continue;
+continue ;
 
 }
 if char== Char(']')  {
 iterator=iterator+1;
-continue;
+continue ;
 
 }
 if char== Char('=')  {
 if next_char== Char('=')  {
 iterator=iterator+2;
-continue;
+continue ;
 
 }
 iterator=iterator+1;
-continue;
+continue ;
 
 }
 if char== Char(':')  {
 if next_char== Char(':')  {
 iterator=iterator+2;
-continue;
+continue ;
 
 }
 iterator=iterator+1;
-continue;
+continue ;
 
 }
 if char== Char('|')  {
 if next_char== Char('|')  {
 iterator=iterator+2;
-continue;
+continue ;
 
 }
 iterator=iterator+1;
-continue;
+continue ;
 
 }
 if char== Char('&')  {
 if next_char== Char('&')  {
 iterator=iterator+2;
-continue;
+continue ;
 
 }
 iterator=iterator+1;
-continue;
+continue ;
 
 }
 if char== Char('>')  {
 if next_char== Char('=')  {
 iterator=iterator+2;
-continue;
+continue ;
 
 }
 iterator=iterator+1;
-continue;
+continue ;
 
 }
 if char== Char('<')  {
 if next_char== Char('=')  {
 iterator=iterator+2;
-continue;
+continue ;
 
 }
 iterator=iterator+1;
-continue;
+continue ;
 
 }
 if char== Char('#')  {
 iterator=iterator+1;
-continue;
+continue ;
 
 }
 if char== Char(';')  {
 iterator=iterator+1;
-continue;
+continue ;
 
 }
 if char== Char('.')  {
 iterator=iterator+1;
-continue;
+continue ;
 
 }
 if char== Char(',')  {
 iterator=iterator+1;
-continue;
+continue ;
 
 }
 if char== Char('+')  {
 iterator=iterator+1;
-continue;
+continue ;
 
 }
 if char== Char('-')  {
 iterator=iterator+1;
-continue;
+continue ;
 
 }
 if char== Char('*')  {
 iterator=iterator+1;
-continue;
+continue ;
 
 }
 if char== Char('/')  {
 iterator=iterator+1;
-continue;
+continue ;
 
 }
 if char== Char('%')  {
 iterator=iterator+1;
-continue;
+continue ;
 
 }
 if char== Char('!')  {
 iterator=iterator+1;
-continue;
+continue ;
 
 }
 if char== Char('~')  {
 iterator=iterator+1;
-continue;
+continue ;
 
 }
 if char== Char('\\')  {
 iterator=iterator+1;
-continue;
+continue ;
 
 }
 console::print_char(char);
@@ -1450,9 +1450,9 @@ iterator=iterator+1;
 
 }
 let i:u32=0;
- KeywordLoop  {
+loop  {
 if i>=data.length {
-break;
+break ;
 
 }
 string::free(&data.array[i]);
@@ -1466,22 +1466,22 @@ string::free(&file);
 
 }
 namespace window {
- KeywordEnum WM:u32 {
+enum WM:u32 {
 NULL=0, CREATE=1, DESTROY=2, MOVE=3, SIZE=5, ACTIVATE=6, SETFOCUS=7, KILLFOCUS=8, ENABLE=10, SETREDRAW=11, SETTEXT=12, GETTEXT=13, GETTEXTLENGTH=14, PAINT=15, CLOSE=16, QUERYENDSESSION=17, QUERYOPEN=19, ENDSESSION=22, QUIT=18, ERASEBKGND=20, SYSCOLORCHANGE=21, SHOWWINDOW=24, WININICHANGE=26, SETTINGCHANGE=26, DEVMODECHANGE=27, ACTIVATEAPP=28, FONTCHANGE=29, TIMECHANGE=30, CANCELMODE=31, SETCURSOR=32, MOUSEACTIVATE=33, CHILDACTIVATE=34, QUEUESYNC=35, GETMINMAXINFO=36, PAINTICON=38, ICONERASEBKGND=39, NEXTDLGCTL=40, SPOOLERSTATUS=42, DRAWITEM=43, MEASUREITEM=44, DELETEITEM=45, VKEYTOITEM=46, CHARTOITEM=47, SETFONT=48, GETFONT=49, SETHOTKEY=50, GETHOTKEY=51, QUERYDRAGICON=55, COMPAREITEM=57, GETOBJECT=61, COMPACTING=65, COMMNOTIFY=68, WINDOWPOSCHANGING=70, WINDOWPOSCHANGED=71, POWER=72, COPYDATA=74, CANCELJOURNAL=75, NOTIFY=78, INPUTLANGCHANGEREQUEST=80, INPUTLANGCHANGE=81, TCARD=82, HELP=83, USERCHANGED=84, NOTIFYFORMAT=85, CONTEXTMENU=123, STYLECHANGING=124, STYLECHANGED=125, DISPLAYCHANGE=126, GETICON=127, SETICON=128, NCCREATE=129, NCDESTROY=130, NCCALCSIZE=131, NCHITTEST=132, NCPAINT=133, NCACTIVATE=134, GETDLGCODE=135, SYNCPAINT=136, NCMOUSEMOVE=160, NCLBUTTONDOWN=161, NCLBUTTONUP=162, NCLBUTTONDBLCLK=163, NCRBUTTONDOWN=164, NCRBUTTONUP=165, NCRBUTTONDBLCLK=166, NCMBUTTONDOWN=167, NCMBUTTONUP=168, NCMBUTTONDBLCLK=169, NCXBUTTONDOWN=171, NCXBUTTONUP=172, NCXBUTTONDBLCLK=173, INPUT_DEVICE_CHANGE=254, INPUT=255, KEYFIRST=256, KEYDOWN=256, KEYUP=257, CHAR=258, DEADCHAR=259, SYSKEYDOWN=260, SYSKEYUP=261, SYSCHAR=262, SYSDEADCHAR=263, UNICHAR=265, KEYLAST=265, INITDIALOG=272, COMMAND=273, SYSCOMMAND=274, TIMER=275, HSCROLL=276, VSCROLL=277, INITMENU=278, INITMENUPOPUP=279, MENUSELECT=287, MENUCHAR=288, ENTERIDLE=289, MENURBUTTONUP=290, MENUDRAG=291, MENUGETOBJECT=292, UNINITMENUPOPUP=293, MENUCOMMAND=294, CHANGEUISTATE=295, UPDATEUISTATE=296, QUERYUISTATE=297, CTLCOLORMSGBOX=306, CTLCOLOREDIT=307, CTLCOLORLISTBOX=308, CTLCOLORBTN=309, CTLCOLORDLG=310, CTLCOLORSCROLLBAR=311, CTLCOLORSTATIC=312, MOUSEFIRST=512, MOUSEMOVE=512, LBUTTONDOWN=513, LBUTTONUP=514, LBUTTONDBLCLK=515, RBUTTONDOWN=516, RBUTTONUP=517, RBUTTONDBLCLK=518, MBUTTONDOWN=519, MBUTTONUP=520, MBUTTONDBLCLK=521, MOUSEWHEEL=522, XBUTTONDOWN=523, XBUTTONUP=524, XBUTTONDBLCLK=525, MOUSEHWHEEL=526, MOUSELAST=526, PARENTNOTIFY=528, ENTERMENULOOP=529, EXITMENULOOP=530, NEXTMENU=531, SIZING=532, CAPTURECHANGED=533, MOVING=534, POWERBROADCAST=536, DEVICECHANGE=537, MDICREATE=544, MDIDESTROY=545, MDIACTIVATE=546, MDIRESTORE=547, MDINEXT=548, MDIMAXIMIZE=549, MDITILE=550, MDICASCADE=551, MDIICONARRANGE=552, MDIGETACTIVE=553, MDISETMENU=560, ENTERSIZEMOVE=561, EXITSIZEMOVE=562, DROPFILES=563, MDIREFRESHMENU=564, DPICHANGED=736, THEMECHANGED=794, CLIPBOARDUPDATE=797, USER=1024, APP=32768, 
 }
- KeywordEnum CS:u32 {
+enum CS:u32 {
 VREDRAW=1, HREDRAW=2, DBLCLKS=8, OWNDC=32, CLASSDC=64, PARENTDC=128, NOCLOSE=512, SAVEBITS=2048, BYTEALIGNCLIENT=4096, BYTEALIGNWINDOW=8192, GLOBALCLASS=16384, IME=65536, DROPSHADOW=131072, 
 }
- KeywordEnum WS:u32 {
+enum WS:u32 {
 OVERLAPPED=0, POPUP=2147483648, CHILD=1073741824, MINIMIZE=536870912, VISIBLE=268435456, DISABLED=134217728, CLIPSIBLINGS=67108864, CLIPCHILDREN=33554432, MAXIMIZE=16777216, CAPTION=12582912, BORDER=8388608, DLGFRAME=4194304, VSCROLL=2097152, HSCROLL=1048576, SYSMENU=524288, THICKFRAME=262144, GROUP=131072, TABSTOP=65536, MINIMIZEBOX=131072, MAXIMIZEBOX=65536, TILED=0, ICONIC=536870912, SIZEBOX=262144, TILEDWINDOW=0|12582912|524288|262144|131072|65536, OVERLAPPEDWINDOW=0|12582912|524288|262144|131072|65536, POPUPWINDOW=2147483648|8388608|524288, CHILDWINDOW=1073741824, 
 }
- KeywordEnum WS_EX:u32 {
+enum WS_EX:u32 {
 DLGMODALFRAME=1, NOPARENTNOTIFY=4, TOPMOST=8, ACCEPTFILES=16, TRANSPARENT=32, MDICHILD=64, TOOLWINDOW=128, WINDOWEDGE=256, CLIENTEDGE=512, CONTEXTHELP=1024, RIGHT=4096, LEFT=0, RTLREADING=8192, LTRREADING=0, LEFTSCROLLBAR=16384, RIGHTSCROLLBAR=0, CONTROLPARENT=65536, STATICEDGE=131072, APPWINDOW=262144, LAYERED=524288, NOINHERITLAYOUT=1048576, NOREDIRECTIONBITMAP=2097152, LAYOUTRTL=4194304, COMPOSITED=33554432, NOACTIVATE=134217728, OVERLAPPEDWINDOW=256|512, PALETTEWINDOW=256|128|8, 
 }
- KeywordEnum SW:i32 {
+enum SW:i32 {
 HIDE=0, SHOWNORMAL=1, NORMAL=1, SHOWMINIMIZED=2, SHOWMAXIMIZED=3, MAXIMIZE=3, SHOWNOACTIVATE=4, SHOW=5, MINIMIZE=6, SHOWMINNOACTIVE=7, SHOWNA=8, RESTORE=9, SHOWDEFAULT=10, FORCEMINIMIZE=11, MAX=11, 
 }
- KeywordEnum SYS_COLOR:i32 {
+enum SYS_COLOR:i32 {
 SCROLLBAR=0, BACKGROUND=1, DESKTOP=1, ACTIVECAPTION=2, INACTIVECAPTION=3, MENU=4, WINDOW=5, WINDOWFRAME=6, MENUTEXT=7, WINDOWTEXT=8, CAPTIONTEXT=9, ACTIVEBORDER=10, INACTIVEBORDER=11, APPWORKSPACE=12, HIGHLIGHT=13, HIGHLIGHTTEXT=14, BTNFACE=15, THREEDFACE=15, BTNSHADOW=16, THREEDSHADOW=16, GRAYTEXT=17, BTNTEXT=18, INACTIVECAPTIONTEXT=19, BTNHIGHLIGHT=20, THREEDHIGHLIGHT=20, BTNHILIGHT=20, THREEDHILIGHT=20, THREEDDKSHADOW=21, THREEDLIGHT=22, INFOTEXT=23, INFOBK=24, HOTLIGHT=26, GRADIENTACTIVECAPTION=27, GRADIENTINACTIVECAPTION=28, MENUHILIGHT=29, MENUBAR=30, 
 }
 #[DllImport("user32.dll")]fn RegisterClassA(lpWndClass:&WNDCLASSEXA):u16;
@@ -1548,7 +1548,7 @@ PostQuitMessage(0);
 return 0;
 
 }
-console::print_char(wParam as i8);
+console::print_char(wParamas i8);
 
 }
 if uMsg==WM::KILLFOCUS {
@@ -1573,7 +1573,7 @@ if uMsg==WM::PAINT {
 let ps:PAINTSTRUCT;
 const hdc:&void=BeginPaint(hWnd, &ps);
 const hStoredImage:&void=GetWindowLongPtrA(hWnd, -21);
-if hStoredImage LogicNotEqual null {
+if hStoredImage!=null  {
 draw_bitmap(hdc, hStoredImage, 0, 0);
 
 }
@@ -1584,7 +1584,7 @@ return 0;
 return DefWindowProcA(hWnd, uMsg, wParam, lParam);
 
 }
- KeywordEnum StartError:i32 {
+enum StartError:i32 {
 Ok=0, GetModuleHandleFailed=1, RegisterClassFailed=2, CreateWindowFailed=3
 }
 fn load_bitmap_from_file(path:&i8):&void {
@@ -1592,39 +1592,39 @@ if !fs::file_exists(path) {
 process::throw("File not found! While loading Bitmap");
 
 }
-return LoadImageA(null, path, 0, 0, 0, 16);
+return LoadImageA(null , path, 0, 0, 0, 16);
 
 }
 fn get_bitmap_dimensions(hBitmap:&void, width:&i32, height:&i32) {
 let bm:BITMAP;
-GetObjectA(hBitmap, size_of::<BITMAP>() as i32, &bm);
+GetObjectA(hBitmap, size_of::<BITMAP>()as i32, &bm);
 *width=bm.bmWidth;
 *height=bm.bmHeight;
 
 }
 fn draw_bitmap(hdc:&void, hBitmap:&void, x:i32, y:i32) {
-if hBitmap==null {
+if hBitmap==null  {
 return ;
 
 }
 const hMemDC:&void=CreateCompatibleDC(hdc);
 const hOldBitmap:&void=SelectObject(hMemDC, hBitmap);
 let bm:BITMAP;
-GetObjectA(hBitmap, size_of::<BITMAP>() as i32, &bm);
+GetObjectA(hBitmap, size_of::<BITMAP>()as i32, &bm);
 BitBlt(hdc, x, y, bm.bmWidth, bm.bmHeight, hMemDC, 0, 0, 13369376);
 SelectObject(hMemDC, hOldBitmap);
 DeleteDC(hMemDC);
 
 }
 fn draw_bitmap_stretched(hdc:&void, hBitmap:&void, x:i32, y:i32, width:i32, height:i32) {
-if hBitmap==null {
+if hBitmap==null  {
 return ;
 
 }
 const hMemDC:&void=CreateCompatibleDC(hdc);
 const hOldBitmap:&void=SelectObject(hMemDC, hBitmap);
 let bm:BITMAP;
-GetObjectA(hBitmap, size_of::<BITMAP>() as i32, &bm);
+GetObjectA(hBitmap, size_of::<BITMAP>()as i32, &bm);
 SetStretchBltMode(hdc, 3);
 StretchBlt(hdc, x, y, width, height, hMemDC, 0, 0, bm.bmWidth, bm.bmHeight, 13369376);
 SelectObject(hMemDC, hOldBitmap);
@@ -1632,12 +1632,12 @@ DeleteDC(hMemDC);
 
 }
 inline fn is_null(p:&void):bool {
-return p==null;
+return p==null ;
 
 }
 fn start() {
 const CW_USEDEFAULT:i32=2147483648;
-const hInstance:&void=GetModuleHandleA(null);
+const hInstance:&void=GetModuleHandleA(null );
 if is_null(hInstance) {
 process::throw("Window error: StartError::GetModuleHandleFailed");
 
@@ -1650,27 +1650,27 @@ wc.lpfnWndProc=ptr_of(WindowProc);
 wc.cbClsExtra=0;
 wc.cbWndExtra=0;
 wc.hInstance=hInstance;
-wc.hIcon=null;
-wc.hCursor=null;
-wc.hbrBackground=bitcast::<&void>((SYS_COLOR::WINDOW+1) as usize);
-wc.lpszMenuName=null;
+wc.hIcon=null ;
+wc.hCursor=null ;
+wc.hbrBackground=bitcast::<&void>((SYS_COLOR::WINDOW+1)as usize);
+wc.lpszMenuName=null ;
 wc.lpszClassName=className;
-wc.hIconSm=null;
+wc.hIconSm=null ;
 if RegisterClassExA(&wc)==0 {
 process::throw("Window error: StartError::RegisterClassFailed");
 
 }
 const windowTitle:&i8="Hello, World!";
-const hWnd:&void=CreateWindowExA(0, className, windowTitle, WS::TILEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 800, 600, null, null, hInstance, null);
+const hWnd:&void=CreateWindowExA(0, className, windowTitle, WS::TILEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 800, 600, null , null , hInstance, null );
 if is_null(hWnd) {
 process::throw("Window error: StartError::CreateWindowFailed");
 
 }
 ShowWindow(hWnd, SW::SHOW);
 let msg:MSG;
- KeywordLoop  {
-if GetMessageA(&msg, null, 0, 0)<=0 {
-break;
+loop  {
+if GetMessageA(&msg, null , 0, 0)<=0 {
+break ;
 
 }
 TranslateMessage(&msg);
@@ -1680,13 +1680,13 @@ DispatchMessageA(&msg);
 
 }
 fn start_image_window(imagePath:&i8) {
-const hInstance:&void=GetModuleHandleA(null);
+const hInstance:&void=GetModuleHandleA(null );
 if is_null(hInstance) {
 process::throw("Window error: StartError::GetModuleHandleFailed");
 
 }
 const local_hImage:&void=load_bitmap_from_file(imagePath);
-if local_hImage==null {
+if local_hImage==null  {
 process::throw("Failed to load image. not valid .BMP file");
 
 }
@@ -1701,17 +1701,17 @@ wc.lpfnWndProc=ptr_of(WindowProc);
 wc.cbClsExtra=0;
 wc.cbWndExtra=0;
 wc.hInstance=hInstance;
-wc.hIcon=null;
-wc.hCursor=null;
-wc.hbrBackground=bitcast::<&void>((SYS_COLOR::WINDOW+1) as usize);
-wc.lpszMenuName=null;
+wc.hIcon=null ;
+wc.hCursor=null ;
+wc.hbrBackground=bitcast::<&void>((SYS_COLOR::WINDOW+1)as usize);
+wc.lpszMenuName=null ;
 wc.lpszClassName=className;
-wc.hIconSm=null;
+wc.hIconSm=null ;
 if RegisterClassExA(&wc)==0 {
 process::throw("Window error: StartError::RegisterClassFailed");
 
 }
-const hWnd:&void=CreateWindowExA(WS_EX::TOPMOST, className, "ImageWindow", WS::POPUP|WS::VISIBLE, 100, 100, imgW, imgH, null, null, hInstance, null);
+const hWnd:&void=CreateWindowExA(WS_EX::TOPMOST, className, "ImageWindow", WS::POPUP|WS::VISIBLE, 100, 100, imgW, imgH, null , null , hInstance, null );
 if is_null(hWnd) {
 process::throw("Window error: StartError::CreateWindowFailed");
 
@@ -1722,9 +1722,9 @@ let rect:RECT;
 GetClientRect(hWnd, &rect);
 InvalidateRect(hWnd, &rect, 1);
 let msg:MSG;
- KeywordLoop  {
-if GetMessageA(&msg, null, 0, 0)<=0 {
-break;
+loop  {
+if GetMessageA(&msg, null , 0, 0)<=0 {
+break ;
 
 }
 TranslateMessage(&msg);

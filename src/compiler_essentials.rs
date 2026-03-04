@@ -39,7 +39,10 @@ impl ToString for LLVMVal {
             LLVMVal::VariableName(name) => format!("%{}", name),
             LLVMVal::Global(name) => format!("@{}", name),
             LLVMVal::ConstantInteger(val) => format!("{}", val),
-            LLVMVal::ConstantDecimal(val) => format!("0x{:X}", val.to_bits()),
+            LLVMVal::ConstantDecimal(val) => {
+                let f32_precision_val = *val as f32 as f64;
+                format!("0x{:016X}", f32_precision_val.to_bits())
+            }
             LLVMVal::ConstantBoolean(val) => format!("{}", val),
             LLVMVal::Void => format!("void"),
             LLVMVal::Null => format!("null"),
@@ -514,6 +517,16 @@ impl CompilerType {
                     .map(|(_, ty)| ty.with_substituted_generics(&sub_map, symbols).unwrap());
 
                 Self::compute_struct_layout(concretized_fields, symbols)
+            }
+            Self::ConstantArray(count, y) => {
+                let mut x = y.calculate_layout(symbols);
+                if x.align > 0 {
+                    let padding = (x.align - (x.size % x.align)) % x.align;
+                    x.size = (x.size + padding) * (*count as u32);
+                } else {
+                    x.size *= *count as u32;
+                }
+                x
             }
             _ => panic!("Cannot calculate layout for {:?}", self),
         }

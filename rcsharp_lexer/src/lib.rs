@@ -56,7 +56,7 @@ pub enum Token {
     KeywordNoReturn,
     KeywordMatch,
     KeywordFunction,
-    KeywordVariableDeclaration,
+    KeywordLet,
     KeywordStatic,
     KeywordAs,
     KeywordIf,
@@ -81,7 +81,33 @@ pub enum Token {
     String(Symbol),
     Char(char),
 }
-
+const KEYWORDS_TO_TOKENS: &[(&'static str, Token)] = &[
+    ("pub", Token::KeywordPub),
+    ("inline", Token::KeywordInline),
+    ("const", Token::KeywordConst),
+    ("constexpr", Token::KeywordConstExpr),
+    ("extern", Token::KeywordExtern),
+    ("no_return", Token::KeywordNoReturn),
+    ("match", Token::KeywordMatch),
+    ("fn", Token::KeywordFunction),
+    ("let", Token::KeywordLet),
+    ("static", Token::KeywordStatic),
+    ("as", Token::KeywordAs),
+    ("if", Token::KeywordIf),
+    ("else", Token::KeywordElse),
+    ("struct", Token::KeywordStruct),
+    ("enum", Token::KeywordEnum),
+    ("loop", Token::KeywordLoop),
+    ("break", Token::KeywordBreak),
+    ("continue", Token::KeywordContinue),
+    ("return", Token::KeywordReturn),
+    ("this", Token::KeywordThis),
+    ("operator", Token::KeywordOperator),
+    ("namespace", Token::KeywordNamespace),
+    ("true", Token::KeywordTrue),
+    ("false", Token::KeywordFalse),
+    ("null", Token::KeywordNull),
+];
 const ALLOWED_FILE_SIZE: u64 = 1024 * 1024 * 16; // 16 MB
 #[derive(Debug)]
 pub enum LexerResultError {
@@ -145,8 +171,6 @@ pub fn lex_file(
     let file = File::open(path).map_err(|_| LexerResultError::FileNotFound(path.to_string()))?;
     let file_size = metadata_check(path, &file)?;
 
-    println!("File: {} Size: {}", path, file_size);
-
     let mut reader: Box<dyn BufRead> = if file_size < ALLOWED_FILE_SIZE {
         let mut content = String::new();
         let mut f = file;
@@ -190,20 +214,6 @@ fn debug_lex_emit(tokens: &Vec<TokenData>, symbol_table: &LexerSymbolTable) {
                 }
                 Token::Integer(val) => str.push_str(&val.to_string()),
                 Token::Decimal(val) => str.push_str(&val.to_string()),
-                Token::KeywordVariableDeclaration => str.push_str("let "),
-                Token::KeywordConst => str.push_str("const "),
-                Token::KeywordStatic => str.push_str("static "),
-                Token::KeywordFunction => str.push_str("fn "),
-                Token::KeywordStruct => str.push_str("struct "),
-                Token::KeywordNamespace => str.push_str("namespace "),
-                Token::KeywordInline => str.push_str("inline "),
-                Token::KeywordIf => str.push_str("if "),
-                Token::KeywordElse => str.push_str("else "),
-                Token::KeywordBreak => str.push_str("break"),
-                Token::KeywordContinue => str.push_str("continue"),
-                Token::KeywordNull => str.push_str("null"),
-                Token::KeywordReturn => str.push_str("return "),
-                Token::KeywordAs => str.push_str(" as "),
                 Token::Hint => str.push_str("#"),
                 Token::Comma => str.push_str(", "),
                 Token::Dot => str.push_str("."),
@@ -219,6 +229,7 @@ fn debug_lex_emit(tokens: &Vec<TokenData>, symbol_table: &LexerSymbolTable) {
                 Token::LogicNot => str.push_str("!"),
                 Token::Equal => str.push_str("="),
                 Token::LogicEqual => str.push_str("=="),
+                Token::LogicNotEqual => str.push_str("!="),
                 Token::Plus => str.push_str("+"),
                 Token::Minus => str.push_str("-"),
                 Token::Multiply => str.push_str("*"),
@@ -235,7 +246,14 @@ fn debug_lex_emit(tokens: &Vec<TokenData>, symbol_table: &LexerSymbolTable) {
                 Token::LBrace => str.push_str(" {\n"),
                 Token::RBrace => str.push_str("\n}\n"),
                 _ => {
-                    // Fallback for debug
+                    if let Some(d) = KEYWORDS_TO_TOKENS
+                        .iter()
+                        .find(|x| x.1 == token_data.token)
+                        .map(|x| x.0)
+                    {
+                        str.push_str(&format!("{} ", d));
+                        continue;
+                    }
                     str.push_str(&format!(" {:?} ", token_data.token));
                 }
             }
@@ -248,7 +266,7 @@ pub fn lex_stream(
     tokens: &mut Vec<TokenData>,
     symbol_table: &mut LexerSymbolTable,
 ) -> LexerResult<()> {
-    const CAP: usize = 1024;
+    const CAP: usize = 256;
     let mut buf = Box::new([0; CAP]);
 
     let mut global_offset = 0;
@@ -387,6 +405,42 @@ fn process_chunk(
             } else {
                 break;
             }
+        } else if char == '-' {
+            if let Some(&(_pk_idx, pk_char)) = chars.peek() {
+                if pk_char.is_digit(10) {
+                    let mut number_end = 0;
+                    if let Some(&(_pk_idx, pk_char)) = chars.peek() {
+                        if matches!(pk_char, 'x' | 'X' | 'b' | 'B' | 'o' | 'O') {
+                            chars.next();
+                        }
+                    } else if !is_eof {
+                        break;
+                    }
+
+                    while let Some((idx, char)) = chars.peek() {
+                        if !(char.is_digit(16) || *char == '_' || *char == '.') {
+                            number_end = *idx;
+                            break;
+                        }
+                        chars.next();
+                    }
+                    if number_end == 0 && is_eof {
+                        number_end = readonly_input.len();
+                    }
+                    if number_end != 0 {
+                        number_token(&readonly_input[..number_end], 0..number_end, tokens)?;
+                        last_consumed_byte_index = number_end;
+                        break;
+                    } else {
+                        break;
+                    }
+                }
+            } else if !is_eof {
+                break;
+            }
+            push_single(Token::Minus, 0, char.len_utf8(), tokens);
+            last_consumed_byte_index = char.len_utf8();
+            break;
         } else if char == '/' {
             let pk = chars.peek();
             if pk.is_none() {
@@ -883,7 +937,6 @@ pub fn char_token(
     };
 
     if chars.next().is_some() {
-        println!("{:?}", content_str);
         return Err(LexerResultError::InvalidCharLiteral(span));
     }
 
@@ -895,32 +948,8 @@ pub fn char_token(
     Ok(())
 }
 fn get_keyword(ident: &str) -> Option<Token> {
-    match ident {
-        "pub" => Some(Token::KeywordPub),
-        "inline" => Some(Token::KeywordInline),
-        "const" => Some(Token::KeywordConst),
-        "constexpr" => Some(Token::KeywordConstExpr),
-        "extern" => Some(Token::KeywordExtern),
-        "no_return" => Some(Token::KeywordNoReturn),
-        "match" => Some(Token::KeywordMatch),
-        "fn" => Some(Token::KeywordFunction),
-        "let" => Some(Token::KeywordVariableDeclaration),
-        "static" => Some(Token::KeywordStatic),
-        "as" => Some(Token::KeywordAs),
-        "if" => Some(Token::KeywordIf),
-        "else" => Some(Token::KeywordElse),
-        "struct" => Some(Token::KeywordStruct),
-        "enum" => Some(Token::KeywordEnum),
-        "loop" => Some(Token::KeywordLoop),
-        "break" => Some(Token::KeywordBreak),
-        "continue" => Some(Token::KeywordContinue),
-        "return" => Some(Token::KeywordReturn),
-        "this" => Some(Token::KeywordThis),
-        "operator" => Some(Token::KeywordOperator),
-        "namespace" => Some(Token::KeywordNamespace),
-        "true" => Some(Token::KeywordTrue),
-        "false" => Some(Token::KeywordFalse),
-        "null" => Some(Token::KeywordNull),
-        _ => None,
-    }
+    KEYWORDS_TO_TOKENS
+        .iter()
+        .find(|x| x.0 == ident)
+        .map(|x| x.1.clone())
 }

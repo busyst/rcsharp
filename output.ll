@@ -167,7 +167,7 @@ entry:
 	%tmp4 = load i8, i8* %tmp3
 	%tmp5 = sext i8 %tmp4 to i64
 	call void @console.println_i64(i64 %tmp5)
-	call void @console.println_f64(double 0x40DEADDD3B80D02E)
+	call void @console.println_f64(double 0x40DEADDD40000000)
 	call void @console.println_i64(i64 31415)
 	call void @console.println_i64(i64 4674364628954828846)
 	%tmp6 = add i64 4674364628954828846, 123123123123
@@ -3057,10 +3057,9 @@ loop_body1_exit:
 	%tmp15 = load i32, i32* %v0
 	%tmp16 = add i32 %tmp15, 1
 	%tmp17 = getelementptr inbounds i8, i8* %tmp0, i32 %tmp16
-	%tmp18 = trunc i64 21 to i32
-	%tmp19 = load i32, i32* %v0
-	%tmp20 = sub i32 %tmp18, %tmp19
-	call void @console.write(i8* %tmp17, i32 %tmp20)
+	%tmp18 = load i32, i32* %v0
+	%tmp19 = sub i32 21, %tmp18
+	call void @console.write(i8* %tmp17, i32 %tmp19)
 	br label %func_exit
 func_exit:
 	ret void
@@ -3096,12 +3095,12 @@ entry:
 	%v9 = alloca i32; var: i
 	%v10 = alloca i64; var: digit
 	store double %n, double* %v0
-	%tmp0 = fcmp olt double %n, 0x0
+	%tmp0 = fcmp olt double %n, 0x0000000000000000
 	br i1 %tmp0, label %then0, label %endif0
 then0:
 	call void @console.print_char(i8 45)
 	%tmp1 = load double, double* %v0
-	%tmp2 = fsub double 0x0, %tmp1
+	%tmp2 = fsub double 0x0000000000000000, %tmp1
 	store double %tmp2, double* %v0
 	br label %endif0
 endif0:
@@ -3172,43 +3171,42 @@ loop_body4_exit:
 	%tmp34 = add i32 %tmp33, 1
 	%tmp35 = getelementptr inbounds i8, i8* %tmp32, i32 %tmp34
 	store i8* %tmp35, i8** %v7
-	%tmp36 = trunc i64 20 to i32
-	%tmp37 = load i32, i32* %v5
-	%tmp38 = sub i32 %tmp36, %tmp37
-	store i32 %tmp38, i32* %v8
-	%tmp39 = load i8*, i8** %v7
-	%tmp40 = load i32, i32* %v8
-	call void @console.write(i8* %tmp39, i32 %tmp40)
+	%tmp36 = load i32, i32* %v5
+	%tmp37 = sub i32 20, %tmp36
+	store i32 %tmp37, i32* %v8
+	%tmp38 = load i8*, i8** %v7
+	%tmp39 = load i32, i32* %v8
+	call void @console.write(i8* %tmp38, i32 %tmp39)
 	br label %endif3
 endif3:
 	call void @console.print_char(i8 46)
 	store i32 0, i32* %v9
 	br label %loop_body6
 loop_body6:
-	%tmp41 = load i32, i32* %v9
-	%tmp42 = icmp sge i32 %tmp41, 6
-	br i1 %tmp42, label %then7, label %endif7
+	%tmp40 = load i32, i32* %v9
+	%tmp41 = icmp sge i32 %tmp40, 6
+	br i1 %tmp41, label %then7, label %endif7
 then7:
 	br label %loop_body6_exit
 endif7:
-	%tmp43 = load double, double* %v3
-	%tmp44 = fmul double %tmp43, 0x4024000000000000
-	store double %tmp44, double* %v3
-	%tmp45 = load double, double* %v3
-	%tmp46 = fptoui double %tmp45 to i64
-	store i64 %tmp46, i64* %v10
-	%tmp47 = load i64, i64* %v10
-	%tmp48 = trunc i64 %tmp47 to i8
-	%tmp49 = add i8 %tmp48, 48
-	call void @console.print_char(i8 %tmp49)
-	%tmp50 = load double, double* %v3
-	%tmp51 = load i64, i64* %v10
-	%tmp52 = uitofp i64 %tmp51 to double
-	%tmp53 = fsub double %tmp50, %tmp52
-	store double %tmp53, double* %v3
-	%tmp54 = load i32, i32* %v9
-	%tmp55 = add i32 %tmp54, 1
-	store i32 %tmp55, i32* %v9
+	%tmp42 = load double, double* %v3
+	%tmp43 = fmul double %tmp42, 0x4024000000000000
+	store double %tmp43, double* %v3
+	%tmp44 = load double, double* %v3
+	%tmp45 = fptoui double %tmp44 to i64
+	store i64 %tmp45, i64* %v10
+	%tmp46 = load i64, i64* %v10
+	%tmp47 = trunc i64 %tmp46 to i8
+	%tmp48 = add i8 %tmp47, 48
+	call void @console.print_char(i8 %tmp48)
+	%tmp49 = load double, double* %v3
+	%tmp50 = load i64, i64* %v10
+	%tmp51 = uitofp i64 %tmp50 to double
+	%tmp52 = fsub double %tmp49, %tmp51
+	store double %tmp52, double* %v3
+	%tmp53 = load i32, i32* %v9
+	%tmp54 = add i32 %tmp53, 1
+	store i32 %tmp54, i32* %v9
 	br label %loop_body6
 loop_body6_exit:
 	call void @console.print_char(i8 10)

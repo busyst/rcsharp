@@ -785,7 +785,7 @@ impl<'a> GeneralParser<'a> {
 
         match self.peek().token {
             Token::KeywordConst => self.parse_const_let_statement(start),
-            Token::KeywordVariableDeclaration => self.parse_let_statement(start),
+            Token::KeywordLet => self.parse_let_statement(start),
             Token::KeywordStatic => self.parse_static_let_statement(start),
             Token::KeywordIf => self.parse_if_statement(start),
             Token::KeywordLoop => {

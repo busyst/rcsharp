@@ -350,7 +350,7 @@ impl<'a> ExpressionCompiler<'a> {
         if matches!(op, BinaryOp::And | BinaryOp::Or) {
             return self.compile_short_circuit_op(lhs, *op, rhs);
         }
-        let left = self.compile_rvalue(lhs, Expected::Anything)?;
+        let left = self.compile_rvalue(lhs, expected)?;
         let Ok(ltype) = left.try_get_type().cloned() else {
             return Err(CompilerError::Generic(
                 "Left side of binary operation is not value".into(),
