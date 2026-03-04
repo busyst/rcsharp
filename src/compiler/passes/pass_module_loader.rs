@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use rcsharp_lexer::{lex_file, LexerSymbolTable};
 use rcsharp_parser::{
     expression_parser::Expr,
@@ -23,11 +25,26 @@ impl<'a> CompilerPass<'a> for ModuleLoaderPass {
     ) -> CompileResult<Self::Output> {
         let mut stmt_vec = vec![];
 
-        let mut to_runn_throu = vec![input.to_string()];
+        let main_file = Path::new(input);
+        if !main_file.exists() {
+            return Err(CompilerError::Generic("Main file was not found".to_string()).into());
+        }
+
+        let mut to_runn_throu = vec![std::path::absolute(main_file)
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_string()];
+
         let mut runned_throu = vec![];
+        let mut visited = std::collections::HashSet::new();
         let mut offset = 0;
         let mut symbol = LexerSymbolTable::new();
         while let Some(path) = to_runn_throu.pop() {
+            if !visited.insert(path.clone()) {
+                continue;
+            }
+
             let file_data = std::fs::read_to_string(&path).unwrap();
             ctx.source_manager
                 .add_file(&path, file_data.clone(), offset);
@@ -61,11 +78,30 @@ impl<'a> CompilerPass<'a> for ModuleLoaderPass {
                         )
                             .into());
                     };
-                    to_runn_throu.push(include_path.to_string());
+
+                    let base_dir = Path::new(&path).parent().unwrap_or_else(|| Path::new(""));
+                    let file = base_dir.join(include_path);
+
+                    if !file.exists() {
+                        return Err(CompilerError::Generic(format!(
+                            "File {} was not found",
+                            include_path
+                        ))
+                        .into());
+                    }
+
+                    to_runn_throu.push(
+                        std::path::absolute(&file)
+                            .unwrap()
+                            .to_str()
+                            .unwrap()
+                            .to_string(),
+                    );
                 }
             }
             runned_throu.push((path, lexed));
         }
+
         for (_path, tokens) in runned_throu.iter() {
             let mut parse = match GeneralParser::new(tokens, &symbol).parse_all() {
                 Ok(parse) => parse,
@@ -78,7 +114,7 @@ impl<'a> CompilerPass<'a> for ModuleLoaderPass {
                         .map(|x| &x.content)
                         .unwrap();
                     for x in symbol.strings.iter().enumerate() {
-                        println!("{:000}|{}", x.0, x.1)
+                        println!("{:000}|{}", x.0, x.1);
                     }
                     return Err(CompilerError::Generic(format!(
                         "Parsing error {}\nAt {} {}",
