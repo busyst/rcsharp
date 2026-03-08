@@ -16,7 +16,7 @@ use crate::{
         CompileResult, CompileResultExt, CompilerError, CompilerType, LLVMOutputHandler, LLVMVal,
         Scope, Variable,
     },
-    expression_compiler::{compile_expression_v2, Expected},
+    expression_compiler::{compile_expression_v2, CompiledValue, Expected, ExpressionCompiler},
 };
 
 #[derive(Default)]
@@ -442,7 +442,7 @@ impl LLVMGenPass {
             self.compile_statement(
                 &StmtData {
                     stmt: x,
-                    span: Span::empty(),
+                    span: Span::ZERO,
                 },
                 builder,
                 ctx,
@@ -593,7 +593,7 @@ impl LLVMGenPass {
             ctx,
             builder,
         )?;
-        let Ok(cond_val_type) = cond_result.try_get_type() else {
+        let Some(cond_val_type) = cond_result.get_type() else {
             return Err(
                 CompilerError::Generic("Right side of if condition is not value".into()).into(),
             );
@@ -718,7 +718,7 @@ impl LLVMGenPass {
                 if !result.equal_type(&return_type) {
                     return Err(CompilerError::TypeMismatch {
                         expected: return_type,
-                        found: result.try_get_type().unwrap().clone(),
+                        found: result.get_type().unwrap().clone(),
                     }
                     .into());
                 }
@@ -793,12 +793,13 @@ impl LLVMGenPass {
             ctx,
             builder,
         )?;
-        let Ok(result_type) = result.try_get_type() else {
-            return Err(
-                CompilerError::Generic("Right side of const let is not a value".into()).into(),
-            );
-        };
-        if *result_type != *variable.compiler_type() {
+        if !result.equal_type(&variable.compiler_type()) {
+            let Some(result_type) = result.get_type() else {
+                return Err(CompilerError::Generic(
+                    "Right side of const let is not a value".into(),
+                )
+                .into());
+            };
             return Err((
                 self.span,
                 CompilerError::TypeMismatch {
@@ -807,6 +808,64 @@ impl LLVMGenPass {
                 },
             )
                 .into());
+        }
+        if result
+            .get_type()
+            .map(|x| !x.as_primitive().is_some() && !x.is_pointer())
+            .unwrap_or(false)
+        {
+            if let CompiledValue::StructValue { fields, val_type } = result {
+                let CompilerType::Struct(x) = val_type else {
+                    let CompilerType::GenericStructInstance(tid, y) = val_type else {
+                        todo!();
+                    };
+                    let mut type_map = HashMap::new();
+                    let q = ctx
+                        .symbols
+                        .get_type_by_id(tid)
+                        .generic_implementations
+                        .borrow();
+                    for (idx, x) in ctx
+                        .symbols
+                        .get_type_by_id(tid)
+                        .generic_params
+                        .iter()
+                        .enumerate()
+                    {
+                        type_map.insert(x.clone(), (q[y][idx]).clone());
+                    }
+                    drop(q);
+                    self.cgctx.scope.define(name.clone(), variable, id);
+                    let f = ctx.symbols.get_type_by_id(tid).fields.clone();
+                    for (x, expr) in f.iter().zip(fields.iter()) {
+                        let q =
+                            x.1.with_substituted_generics(&type_map, &ctx.symbols)?
+                                .llvm_representation(&ctx.symbols)
+                                .unwrap();
+                        let mut ec = ExpressionCompiler::new(&mut self.cgctx, builder, ctx);
+                        let l = ec.compile_lvalue(
+                            &Expr::MemberAccess(Box::new(Expr::Name(name.clone())), x.0.clone()),
+                            false,
+                            true,
+                        )?;
+                        ec.emit_store(expr, &l.location, &q);
+                    }
+                    return Ok(());
+                };
+                self.cgctx.scope.define(name.clone(), variable, id);
+                let f = ctx.symbols.get_type_by_id(x).fields.clone();
+                for (x, expr) in f.iter().zip(fields.iter()) {
+                    let q = x.1.llvm_representation(&ctx.symbols).unwrap();
+                    let mut ec = ExpressionCompiler::new(&mut self.cgctx, builder, ctx);
+                    let l = ec.compile_lvalue(
+                        &Expr::MemberAccess(Box::new(Expr::Name(name.clone())), x.0.clone()),
+                        false,
+                        true,
+                    )?;
+                    ec.emit_store(expr, &l.location, &q);
+                }
+                return Ok(());
+            }
         }
         if is_const {
             variable.set_constant_value(Some(result.get_llvm_rep().clone()));
@@ -849,7 +908,7 @@ impl LLVMGenPass {
             self.compile_statement(
                 &StmtData {
                     stmt: x,
-                    span: Span::empty(),
+                    span: Span::ZERO,
                 },
                 builder,
                 ctx,
@@ -875,7 +934,7 @@ impl LLVMGenPass {
             self.compile_statement(
                 &StmtData {
                     stmt: x,
-                    span: Span::empty(),
+                    span: Span::ZERO,
                 },
                 builder,
                 ctx,

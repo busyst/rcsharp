@@ -17,7 +17,7 @@ use rcsharp_parser::{
         BOOL_TYPE, CHAR_TYPE, DEFAULT_DECIMAL_TYPE, DEFAULT_INTEGER_TYPE, POINTER_SIZED_TYPE,
         PRIMITIVE_TYPES_INFO,
     },
-    expression_parser::{BinaryOp, Expr, UnaryOp},
+    expression_parser::{expr_to_type_path, BinaryOp, Expr, UnaryOp},
     parser::{ParserType, Span, Stmt, StmtData},
 };
 
@@ -39,6 +39,10 @@ pub enum CompiledValue {
     },
     GenericFunction {
         internal_id: usize,
+    },
+    StructValue {
+        fields: Box<[LLVMVal]>,
+        val_type: CompilerType,
     },
     Type(CompilerType),
     NoReturn {
@@ -62,16 +66,16 @@ impl CompiledValue {
         }
         None
     }
-    pub fn try_get_type(&self) -> CompileResult<&CompilerType> {
+    pub fn get_type(&self) -> Option<&CompilerType> {
         match self {
             Self::Value {
                 val_type: ptype, ..
-            } => Ok(ptype),
-            Self::NoReturn { .. } => {
-                Err(CompilerError::Generic("Expression yields no value".into()).into())
-            }
-            Self::Type(compiler_type) => Ok(compiler_type),
-            _ => Err(CompilerError::Generic(format!("Cannot get type of {:?}", self)).into()),
+            } => Some(ptype),
+            Self::StructValue {
+                fields: _,
+                val_type,
+            } => Some(val_type),
+            _ => None,
         }
     }
     pub fn try_get_llvm_rep(&self) -> CompileResult<&LLVMVal> {
@@ -123,12 +127,15 @@ impl CompiledValue {
             Self::Value {
                 val_type: ptype, ..
             } => ptype == other,
+            Self::StructValue {
+                val_type: ptype, ..
+            } => ptype == other,
             _ => false,
         }
     }
 }
 impl<'a> ExpressionCompiler<'a> {
-    fn new(
+    pub fn new(
         ctx: &'a mut CodeGenContext,
         output: &'a mut LLVMOutputHandler,
         compctx: &'a mut CompilerContext,
@@ -150,6 +157,90 @@ impl<'a> ExpressionCompiler<'a> {
             }
             Expr::NameWithGenerics(name, generics) => {
                 self.compile_name_with_generics_rvalue(name, generics, expected)
+            }
+            Expr::StructInit(name_struct, inits) => {
+                let fqn = expr_to_type_path(name_struct);
+                let Some(id) = self
+                    .symbols()
+                    .get_type_id_by_path(&ContextPathEnd::from_full_path(&fqn))
+                    .or_else(|| {
+                        self.symbols()
+                            .get_type_id_by_path(&ContextPathEnd::from_context_path(
+                                self.ctx.current_function_path.clone(),
+                                &fqn,
+                            ))
+                    })
+                else {
+                    todo!()
+                };
+                let mut t = None;
+                let r#type = self.symbols().get_type_by_id(id);
+                let fields = if r#type.is_generic() {
+                    let Expr::NameWithGenerics(_x, gen) = &**name_struct else {
+                        unimplemented!()
+                    };
+                    let mut map = HashMap::new();
+                    let mut v = vec![];
+                    for (ind, prm) in r#type.generic_params.iter().enumerate() {
+                        map.insert(
+                            prm.clone(),
+                            CompilerType::from_parser_type(
+                                &gen[ind],
+                                self.symbols(),
+                                &self.ctx.current_function_path,
+                            )?,
+                        );
+                        v.push(CompilerType::from_parser_type(
+                            &gen[ind],
+                            self.symbols(),
+                            &self.ctx.current_function_path,
+                        )?);
+                    }
+                    let q = r#type.get_implementation_index(&v);
+                    t = q;
+                    r#type
+                        .fields
+                        .iter()
+                        .map(|x| {
+                            x.1.with_substituted_generics(&map, self.symbols())
+                                .map(|y| (x.0.clone(), y))
+                        })
+                        .collect::<CompileResult<Box<_>>>()?
+                } else {
+                    r#type.fields.clone()
+                };
+                if fields.len() != inits.len() {
+                    let f: Vec<_> = fields
+                        .iter()
+                        .filter(|x| !inits.iter().any(|y| x.0 == y.0))
+                        .collect();
+                    println!("Missing fields: {:#?}", f);
+                    todo!()
+                }
+                let inits = inits.clone();
+
+                let mut vec = Vec::with_capacity(fields.len());
+                vec.resize(fields.len(), LLVMVal::Null);
+                for init_expr in inits.iter() {
+                    let defined_field = fields
+                        .iter()
+                        .position(|provided_init| provided_init.0 == init_expr.0)
+                        .expect("Field should exist due to previous length and presence checks");
+                    let def_type = &fields[defined_field];
+                    let compiled_field =
+                        self.compile_rvalue(&init_expr.1, Expected::Type(&def_type.1))?;
+                    vec[defined_field] = compiled_field.get_llvm_rep().clone();
+                }
+                if let Some(x) = t {
+                    return Ok(CompiledValue::StructValue {
+                        fields: vec.into_boxed_slice(),
+                        val_type: CompilerType::GenericStructInstance(id, x),
+                    });
+                }
+                Ok(CompiledValue::StructValue {
+                    fields: vec.into_boxed_slice(),
+                    val_type: CompilerType::Struct(id),
+                })
             }
             Expr::Integer(num_str) => self.compile_integer_literal(*num_str, expected),
             Expr::Decimal(num_str) => self.compile_decimal_literal(*num_str, expected),
@@ -351,7 +442,7 @@ impl<'a> ExpressionCompiler<'a> {
             return self.compile_short_circuit_op(lhs, *op, rhs);
         }
         let left = self.compile_rvalue(lhs, expected)?;
-        let Ok(ltype) = left.try_get_type().cloned() else {
+        let Some(ltype) = left.get_type().cloned() else {
             return Err(CompilerError::Generic(
                 "Left side of binary operation is not value".into(),
             )
@@ -359,7 +450,7 @@ impl<'a> ExpressionCompiler<'a> {
         };
 
         let right = self.compile_rvalue(rhs, Expected::Type(&ltype))?;
-        let Ok(rtype) = right.try_get_type().cloned() else {
+        let Some(rtype) = right.get_type().cloned() else {
             return Err(CompilerError::Generic(
                 "Right side of binary operation is not value".into(),
             )
@@ -451,7 +542,7 @@ impl<'a> ExpressionCompiler<'a> {
         rhs: &Expr,
     ) -> CompileResult<CompiledValue> {
         let left = self.compile_rvalue(lhs, Expected::Type(&CompilerType::Primitive(BOOL_TYPE)))?;
-        let Ok(ltype) = left.try_get_type() else {
+        let Some(ltype) = left.get_type() else {
             return Err(CompilerError::Generic(
                 "Left side of binary operation is not value".into(),
             )
@@ -502,7 +593,7 @@ impl<'a> ExpressionCompiler<'a> {
         self.ctx.current_block_name = label_eval_rhs;
         let right =
             self.compile_rvalue(rhs, Expected::Type(&CompilerType::Primitive(BOOL_TYPE)))?;
-        let Ok(rtype) = right.try_get_type() else {
+        let Some(rtype) = right.get_type() else {
             return Err(CompilerError::Generic(
                 "Right side of binary operation is not value".into(),
             )
@@ -717,7 +808,7 @@ impl<'a> ExpressionCompiler<'a> {
     ) -> CompileResult<CompiledValue> {
         let left_ptr = self.compile_lvalue(lhs, true, false)?;
         let right_val = self.compile_rvalue(rhs, Expected::Type(&left_ptr.value_type))?;
-        let Ok(rtype) = right_val.try_get_type() else {
+        let Some(rtype) = right_val.get_type() else {
             return Err(CompilerError::Generic(
                 "Right side of binary operation is not value".into(),
             )
@@ -855,7 +946,7 @@ impl<'a> ExpressionCompiler<'a> {
         for (i, ..) in required_arguments.iter().enumerate() {
             let argument_rvalue =
                 self.compile_rvalue(&given_args[i], Expected::Type(&required_arguments[i]))?;
-            let Ok(argument_type) = argument_rvalue.try_get_type() else {
+            let Some(argument_type) = argument_rvalue.get_type() else {
                 return Err(CompilerError::Generic("Argument is not a value".into()).into());
             };
             if *argument_type != required_arguments[i] {
@@ -926,7 +1017,7 @@ impl<'a> ExpressionCompiler<'a> {
         let mut prepared_args = vec![];
         for (idx, expr) in given_args.iter().enumerate() {
             let argument_rvalue = self.compile_rvalue(expr, Expected::Type(&func_args[idx].1))?;
-            let Ok(argument_type) = argument_rvalue.try_get_type() else {
+            let Some(argument_type) = argument_rvalue.get_type() else {
                 return Err(CompilerError::Generic("Argument is not a value".into()).into());
             };
             if argument_type != &func_args[idx].1 {
@@ -955,7 +1046,7 @@ impl<'a> ExpressionCompiler<'a> {
         for arg in prepared_args {
             code_gen_ctx.scope.define(arg.0, arg.1, 0);
         }
-        let mut gen = LLVMGenPass::new(code_gen_ctx, Span::empty());
+        let mut gen = LLVMGenPass::new(code_gen_ctx, Span::ZERO);
         for x in body {
             gen.compile_statement(x, self.output, self.compctx)
                 .extend(&format!(
@@ -1008,7 +1099,7 @@ impl<'a> ExpressionCompiler<'a> {
         match op {
             UnaryOp::Deref => {
                 let value_rval = self.compile_rvalue(operand_expr, expected)?;
-                let Ok(value_type) = value_rval.try_get_type() else {
+                let Some(value_type) = value_rval.get_type() else {
                     return Err(CompilerError::Generic(
                         "Right side of unary operation is not value".into(),
                     )
@@ -1038,7 +1129,7 @@ impl<'a> ExpressionCompiler<'a> {
             }
             UnaryOp::Negate => {
                 let value_rval = self.compile_rvalue(operand_expr, expected)?;
-                let Ok(value_type) = value_rval.try_get_type() else {
+                let Some(value_type) = value_rval.get_type() else {
                     return Err(CompilerError::Generic(
                         "Right side of unary operation is not value".into(),
                     )
@@ -1084,7 +1175,7 @@ impl<'a> ExpressionCompiler<'a> {
                     operand_expr,
                     Expected::Type(&CompilerType::Primitive(BOOL_TYPE)),
                 )?;
-                let Ok(value_type) = value_rval.try_get_type() else {
+                let Some(value_type) = value_rval.get_type() else {
                     return Err(CompilerError::Generic(
                         "Right side of unary operation is not value".into(),
                     )
@@ -1188,7 +1279,7 @@ impl<'a> ExpressionCompiler<'a> {
         )?;
         target_type.substitute_global_aliases(self.symbols())?;
         let value_rval = self.compile_rvalue(expr, expected)?;
-        let Ok(value_type) = value_rval.try_get_type() else {
+        let Some(value_type) = value_rval.get_type() else {
             return Err(CompilerError::Generic("Argument is not a value".into()).into());
         };
         if *value_type == target_type {
@@ -1395,7 +1486,7 @@ impl<'a> ExpressionCompiler<'a> {
 
         let (base_ptr_repr, mut struct_type) = if obj_lvalue.value_type.is_pointer() {
             let obj_rvalue = self.compile_rvalue(obj, Expected::Anything)?;
-            let Ok(obj_type) = obj_rvalue.try_get_type() else {
+            let Some(obj_type) = obj_rvalue.get_type() else {
                 return Err(CompilerError::Generic(
                     "Object in member access is not a value".into(),
                 )
@@ -1486,7 +1577,7 @@ impl<'a> ExpressionCompiler<'a> {
                 index_expr,
                 Expected::Type(&CompilerType::Primitive(DEFAULT_INTEGER_TYPE)),
             )?;
-            let Ok(index_type) = index_val.try_get_type() else {
+            let Some(index_type) = index_val.get_type() else {
                 return Err(CompilerError::Generic("Index is not a value".into()).into());
             };
             if let Some(x) = index_val.as_literal_number() {
@@ -1521,7 +1612,7 @@ impl<'a> ExpressionCompiler<'a> {
         }
 
         let array_rval = self.compile_rvalue(array_expr, Expected::Anything)?;
-        let Ok(array_type) = array_rval.try_get_type() else {
+        let Some(array_type) = array_rval.get_type() else {
             return Err(CompilerError::Generic("Array is not a value".into()).into());
         };
         let Some(base_type) = array_type.as_pointer() else {
@@ -1536,7 +1627,7 @@ impl<'a> ExpressionCompiler<'a> {
             index_expr,
             Expected::Type(&CompilerType::Primitive(POINTER_SIZED_TYPE)),
         )?;
-        let Ok(index_type) = index_val.try_get_type() else {
+        let Some(index_type) = index_val.get_type() else {
             return Err(CompilerError::Generic("Index is not a value".into()).into());
         };
         if !index_type.is_integer() {
@@ -1595,7 +1686,7 @@ impl<'a> ExpressionCompiler<'a> {
         _modify_content: bool,
     ) -> CompileResult<CompiledLValue> {
         let pointer_rval = self.compile_rvalue(operand, Expected::Anything)?;
-        let Ok(pointer_type) = pointer_rval.try_get_type() else {
+        let Some(pointer_type) = pointer_rval.get_type() else {
             return Err(
                 CompilerError::Generic("Dereferenced operand is not a value".into()).into(),
             );
@@ -1621,7 +1712,7 @@ impl<'a> ExpressionCompiler<'a> {
         value: &CompiledValue,
         to_type: &CompilerType,
     ) -> CompileResult<CompiledValue> {
-        let Ok(value_type) = value.try_get_type() else {
+        let Some(value_type) = value.get_type() else {
             return Err(CompilerError::Generic("Casting value is not a type".into()).into());
         };
         if *value_type == *to_type {
@@ -1994,7 +2085,7 @@ pub fn constant_expression_optimizer_base(expr: &Expr) -> Option<Expr> {
             if opt_l.is_none() && opt_r.is_none() {
                 if matches!(**lhs, Expr::Integer(..))
                     && !matches!(**rhs, Expr::Integer(..))
-                    && op.symetrical()
+                    && op.is_symmetric()
                 {
                     return Some(Expr::BinaryOp(rhs.clone(), *op, lhs.clone()));
                 }

@@ -5,7 +5,6 @@ pub mod compiler;
 pub mod compiler_essentials;
 pub mod compiler_functions;
 pub mod expression_compiler;
-pub mod tests;
 fn main() -> Result<(), ()> {
     let full_path = std::env::args()
         .nth(1)

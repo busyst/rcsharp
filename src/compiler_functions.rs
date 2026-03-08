@@ -54,7 +54,7 @@ fn stalloc_impl(
 
     let int_type = CompilerType::Primitive(DEFAULT_INTEGER_TYPE);
     let count_val = compiler.compile_rvalue(&given_args[0], Expected::Type(&int_type))?;
-    let Ok(count_type) = count_val.try_get_type() else {
+    let Some(count_type) = count_val.get_type() else {
         return Err(CompilerError::Generic("stalloc(arg) arg is not a value".into()).into());
     };
     if !count_type.is_integer() {
@@ -101,7 +101,7 @@ fn stalloc_generic_impl(
     }
     let int_type = CompilerType::Primitive(DEFAULT_INTEGER_TYPE);
     let count_val = compiler.compile_rvalue(&given_args[0], Expected::Type(&int_type))?;
-    let Ok(count_type) = count_val.try_get_type() else {
+    let Some(count_type) = count_val.get_type() else {
         return Err(CompilerError::Generic("stalloc<T>(arg) arg is not a value".into()).into());
     };
     if !count_type.is_integer() {
@@ -145,7 +145,7 @@ fn size_of_impl(
         .into());
     }
     let value = compiler.compile_rvalue(&given_args[0], Expected::Anything)?;
-    let Ok(value_type) = value.try_get_type() else {
+    let Some(value_type) = value.get_type() else {
         return Err(CompilerError::Generic("size_of(Type) Type is not a type".into()).into());
     };
     let size = value_type.calculate_layout(compiler.symbols()).size;
@@ -245,7 +245,7 @@ fn align_of_impl(
         .into());
     }
     let value = compiler.compile_rvalue(&given_args[0], Expected::Anything)?;
-    let Ok(value_type) = value.try_get_type() else {
+    let Some(value_type) = value.get_type() else {
         return Err(CompilerError::Generic("align_of(Type) is not a type".into()).into());
     };
     let size = value_type.calculate_layout(compiler.symbols()).align;
@@ -324,7 +324,7 @@ fn bitcast_generic_impl(
         .into());
     }
     let source_val = compiler.compile_rvalue(&given_args[0], Expected::Anything)?;
-    let Ok(source_type) = source_val.try_get_type() else {
+    let Some(source_type) = source_val.get_type() else {
         return Err(CompilerError::Generic("bitcast source is not a value".into()).into());
     };
     let target_type = CompilerType::from_parser_type(
@@ -486,7 +486,8 @@ fn asm_impl(
                                 (
                                     rvalue.get_llvm_rep().to_string(),
                                     rvalue
-                                        .try_get_type()?
+                                        .get_type()
+                                        .unwrap()
                                         .llvm_representation(compiler.symbols())?,
                                 )
                             }

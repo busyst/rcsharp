@@ -81,33 +81,33 @@ pub enum Token {
     String(Symbol),
     Char(char),
 }
-const KEYWORDS_TO_TOKENS: &[(&'static str, Token)] = &[
-    ("pub", Token::KeywordPub),
-    ("inline", Token::KeywordInline),
-    ("const", Token::KeywordConst),
-    ("constexpr", Token::KeywordConstExpr),
-    ("extern", Token::KeywordExtern),
-    ("no_return", Token::KeywordNoReturn),
-    ("match", Token::KeywordMatch),
-    ("fn", Token::KeywordFunction),
-    ("let", Token::KeywordLet),
-    ("static", Token::KeywordStatic),
-    ("as", Token::KeywordAs),
-    ("if", Token::KeywordIf),
-    ("else", Token::KeywordElse),
-    ("struct", Token::KeywordStruct),
-    ("enum", Token::KeywordEnum),
-    ("loop", Token::KeywordLoop),
-    ("break", Token::KeywordBreak),
-    ("continue", Token::KeywordContinue),
-    ("return", Token::KeywordReturn),
-    ("this", Token::KeywordThis),
-    ("operator", Token::KeywordOperator),
-    ("namespace", Token::KeywordNamespace),
-    ("true", Token::KeywordTrue),
-    ("false", Token::KeywordFalse),
-    ("null", Token::KeywordNull),
-];
+const KEYWORDS_TO_TOKENS: phf::Map<&'static str, Token> = phf::phf_map!(
+    "pub"       => Token::KeywordPub,
+    "inline"    => Token::KeywordInline,
+    "const"     => Token::KeywordConst,
+    "constexpr" => Token::KeywordConstExpr,
+    "extern"    => Token::KeywordExtern,
+    "no_return"  => Token::KeywordNoReturn,
+    "match"     => Token::KeywordMatch,
+    "fn"        => Token::KeywordFunction,
+    "let"       => Token::KeywordLet,
+    "static"    => Token::KeywordStatic,
+    "as"        => Token::KeywordAs,
+    "if"        => Token::KeywordIf,
+    "else"      => Token::KeywordElse,
+    "struct"    => Token::KeywordStruct,
+    "enum"      => Token::KeywordEnum,
+    "loop"      => Token::KeywordLoop,
+    "break"     => Token::KeywordBreak,
+    "continue"  => Token::KeywordContinue,
+    "return"    => Token::KeywordReturn,
+    "this"      => Token::KeywordThis,
+    "operator"  => Token::KeywordOperator,
+    "namespace" => Token::KeywordNamespace,
+    "true"      => Token::KeywordTrue,
+    "false"     => Token::KeywordFalse,
+    "null"      => Token::KeywordNull,
+);
 const ALLOWED_FILE_SIZE: u64 = 1024 * 1024 * 16; // 16 MB
 #[derive(Debug)]
 pub enum LexerResultError {
@@ -143,14 +143,10 @@ impl LexerSymbolTable {
     }
 
     pub fn get_or_intern(&mut self, s: &str) -> Symbol {
-        if let Some(&idx) = self.indices.get(s) {
-            Symbol(idx)
-        } else {
-            let idx = self.strings.len();
+        Symbol(*self.indices.entry(s.to_string()).or_insert_with(|| {
             self.strings.push(s.to_string());
-            self.indices.insert(s.to_string(), idx);
-            Symbol(idx)
-        }
+            self.strings.len() - 1
+        }))
     }
     pub fn get(&self, s: &Symbol) -> &str {
         &self.strings[s.0]
@@ -182,7 +178,7 @@ pub fn lex_file(
     };
 
     lex_stream(&mut reader, tokens, symbol_table)?;
-    debug_lex_emit(tokens, symbol_table);
+    //debug_lex_emit(tokens, symbol_table);
     Ok(())
 }
 pub fn lex_text(
@@ -247,8 +243,8 @@ fn debug_lex_emit(tokens: &Vec<TokenData>, symbol_table: &LexerSymbolTable) {
                 Token::RBrace => str.push_str("\n}\n"),
                 _ => {
                     if let Some(d) = KEYWORDS_TO_TOKENS
-                        .iter()
-                        .find(|x| x.1 == token_data.token)
+                        .entries()
+                        .find(|x| *x.1 == token_data.token)
                         .map(|x| x.0)
                     {
                         str.push_str(&format!("{} ", d));
@@ -883,8 +879,8 @@ pub fn string_token(
 
             match next_char {
                 'n' => unescaped.push('\n'),
-                'v' => unescaped.push('\x11'),
-                'f' => unescaped.push('\x12'),
+                'v' => unescaped.push('\x0B'),
+                'f' => unescaped.push('\x0C'),
                 't' => unescaped.push('\t'),
                 'r' => unescaped.push('\r'),
                 '\\' => unescaped.push('\\'),
@@ -948,8 +944,5 @@ pub fn char_token(
     Ok(())
 }
 fn get_keyword(ident: &str) -> Option<Token> {
-    KEYWORDS_TO_TOKENS
-        .iter()
-        .find(|x| x.0 == ident)
-        .map(|x| x.1.clone())
+    KEYWORDS_TO_TOKENS.get(ident).cloned()
 }

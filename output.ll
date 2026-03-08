@@ -234,28 +234,28 @@ endif2:
 	store i32 0, i32* %v0
 	store i32 0, i32* %v1
 	call void @window.get_bitmap_dimensions(i8* %tmp3, i32* %v0, i32* %v1)
-	%tmp5 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v2, i32 0, i32 0
-	store i32 80, i32* %tmp5
-	%tmp6 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v2, i32 0, i32 1
-	%tmp7 = or i32 2, 1
-	store i32 %tmp7, i32* %tmp6
-	%tmp8 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v2, i32 0, i32 2
-	store i64 (i8*, i32, i64, i64)* @window.WindowProc, i64 (i8*, i32, i64, i64)** %tmp8
-	%tmp9 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v2, i32 0, i32 3
-	store i32 0, i32* %tmp9
-	%tmp10 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v2, i32 0, i32 4
-	store i32 0, i32* %tmp10
-	%tmp11 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v2, i32 0, i32 5
-	store i8* %tmp0, i8** %tmp11
-	%tmp12 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v2, i32 0, i32 6
-	store i8* null, i8** %tmp12
-	%tmp13 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v2, i32 0, i32 7
-	store i8* null, i8** %tmp13
-	%tmp14 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v2, i32 0, i32 8
-	%tmp15 = add i32 5, 1
-	%tmp16 = sext i32 %tmp15 to i64
-	%tmp17 = inttoptr i64 %tmp16 to i8*
-	store i8* %tmp17, i8** %tmp14
+	%tmp5 = or i32 2, 1
+	%tmp6 = add i32 5, 1
+	%tmp7 = sext i32 %tmp6 to i64
+	%tmp8 = inttoptr i64 %tmp7 to i8*
+	%tmp9 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v2, i32 0, i32 0
+	store i32 80, i32* %tmp9
+	%tmp10 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v2, i32 0, i32 1
+	store i32 %tmp5, i32* %tmp10
+	%tmp11 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v2, i32 0, i32 2
+	store i64 (i8*, i32, i64, i64)* @window.WindowProc, i64 (i8*, i32, i64, i64)** %tmp11
+	%tmp12 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v2, i32 0, i32 3
+	store i32 0, i32* %tmp12
+	%tmp13 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v2, i32 0, i32 4
+	store i32 0, i32* %tmp13
+	%tmp14 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v2, i32 0, i32 5
+	store i8* %tmp0, i8** %tmp14
+	%tmp15 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v2, i32 0, i32 6
+	store i8* null, i8** %tmp15
+	%tmp16 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v2, i32 0, i32 7
+	store i8* null, i8** %tmp16
+	%tmp17 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v2, i32 0, i32 8
+	store i8* %tmp8, i8** %tmp17
 	%tmp18 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v2, i32 0, i32 9
 	store i8* null, i8** %tmp18
 	%tmp19 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v2, i32 0, i32 10
@@ -323,28 +323,28 @@ then1:
 	call void @process.throw(i8* @.str.0)
 	br label %endif1
 endif1:
-	%tmp3 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v0, i32 0, i32 0
-	store i32 80, i32* %tmp3
-	%tmp4 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v0, i32 0, i32 1
-	%tmp5 = or i32 2, 1
-	store i32 %tmp5, i32* %tmp4
-	%tmp6 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v0, i32 0, i32 2
-	store i64 (i8*, i32, i64, i64)* @window.WindowProc, i64 (i8*, i32, i64, i64)** %tmp6
-	%tmp7 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v0, i32 0, i32 3
-	store i32 0, i32* %tmp7
-	%tmp8 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v0, i32 0, i32 4
-	store i32 0, i32* %tmp8
-	%tmp9 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v0, i32 0, i32 5
-	store i8* %tmp0, i8** %tmp9
-	%tmp10 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v0, i32 0, i32 6
-	store i8* null, i8** %tmp10
-	%tmp11 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v0, i32 0, i32 7
-	store i8* null, i8** %tmp11
-	%tmp12 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v0, i32 0, i32 8
-	%tmp13 = add i32 5, 1
-	%tmp14 = sext i32 %tmp13 to i64
-	%tmp15 = inttoptr i64 %tmp14 to i8*
-	store i8* %tmp15, i8** %tmp12
+	%tmp3 = or i32 2, 1
+	%tmp4 = add i32 5, 1
+	%tmp5 = sext i32 %tmp4 to i64
+	%tmp6 = inttoptr i64 %tmp5 to i8*
+	%tmp7 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v0, i32 0, i32 0
+	store i32 80, i32* %tmp7
+	%tmp8 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v0, i32 0, i32 1
+	store i32 %tmp3, i32* %tmp8
+	%tmp9 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v0, i32 0, i32 2
+	store i64 (i8*, i32, i64, i64)* @window.WindowProc, i64 (i8*, i32, i64, i64)** %tmp9
+	%tmp10 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v0, i32 0, i32 3
+	store i32 0, i32* %tmp10
+	%tmp11 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v0, i32 0, i32 4
+	store i32 0, i32* %tmp11
+	%tmp12 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v0, i32 0, i32 5
+	store i8* %tmp0, i8** %tmp12
+	%tmp13 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v0, i32 0, i32 6
+	store i8* null, i8** %tmp13
+	%tmp14 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v0, i32 0, i32 7
+	store i8* null, i8** %tmp14
+	%tmp15 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v0, i32 0, i32 8
+	store i8* %tmp6, i8** %tmp15
 	%tmp16 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v0, i32 0, i32 9
 	store i8* null, i8** %tmp16
 	%tmp17 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v0, i32 0, i32 10
@@ -2114,14 +2114,14 @@ func_exit:
 define %struct.string.String @string.with_size(i32 %size){
 entry:
 	%v0 = alloca %struct.string.String; var: x
-	%tmp0 = getelementptr inbounds %struct.string.String, %struct.string.String* %v0, i32 0, i32 1
-	store i32 %size, i32* %tmp0
-	%tmp1 = getelementptr inbounds %struct.string.String, %struct.string.String* %v0, i32 0, i32 0
-	%tmp2 = add i32 %size, 1
-	%tmp3 = sext i32 %tmp2 to i64
-	%tmp4 = mul i64 1, %tmp3
-	%tmp5 = call i8* @mem.malloc(i64 %tmp4)
-	store i8* %tmp5, i8** %tmp1
+	%tmp0 = add i32 %size, 1
+	%tmp1 = sext i32 %tmp0 to i64
+	%tmp2 = mul i64 1, %tmp1
+	%tmp3 = call i8* @mem.malloc(i64 %tmp2)
+	%tmp4 = getelementptr inbounds %struct.string.String, %struct.string.String* %v0, i32 0, i32 0
+	store i8* %tmp3, i8** %tmp4
+	%tmp5 = getelementptr inbounds %struct.string.String, %struct.string.String* %v0, i32 0, i32 1
+	store i32 %size, i32* %tmp5
 	%tmp6 = getelementptr inbounds %struct.string.String, %struct.string.String* %v0, i32 0, i32 0
 	%tmp7 = load i8*, i8** %tmp6
 	%tmp8 = add i32 %size, 1
@@ -2136,35 +2136,29 @@ func_exit:
 define %struct.string.String @string.from_c_string(i8* %c_string){
 entry:
 	%v0 = alloca %struct.string.String; var: x
-	%tmp0 = getelementptr inbounds %struct.string.String, %struct.string.String* %v0, i32 0, i32 1
-	%tmp1 = call i32 @string_utils.c_str_len(i8* %c_string)
-	store i32 %tmp1, i32* %tmp0
-	%tmp2 = getelementptr inbounds %struct.string.String, %struct.string.String* %v0, i32 0, i32 0
-	%tmp3 = getelementptr inbounds %struct.string.String, %struct.string.String* %v0, i32 0, i32 1
-	%tmp4 = load i32, i32* %tmp3
-	%tmp5 = add i32 %tmp4, 1
-	%tmp6 = sext i32 %tmp5 to i64
-	%tmp7 = mul i64 1, %tmp6
-	%tmp8 = call i8* @mem.malloc(i64 %tmp7)
-	store i8* %tmp8, i8** %tmp2
-	%tmp9 = getelementptr inbounds %struct.string.String, %struct.string.String* %v0, i32 0, i32 0
-	%tmp10 = load i8*, i8** %tmp9
-	%tmp11 = getelementptr inbounds %struct.string.String, %struct.string.String* %v0, i32 0, i32 1
-	%tmp12 = load i32, i32* %tmp11
-	%tmp13 = sext i32 %tmp12 to i64
-	call void @mem.copy(i8* %c_string, i8* %tmp10, i64 %tmp13)
-	%tmp14 = getelementptr inbounds %struct.string.String, %struct.string.String* %v0, i32 0, i32 0
-	%tmp15 = getelementptr inbounds %struct.string.String, %struct.string.String* %v0, i32 0, i32 0
-	%tmp16 = load i8*, i8** %tmp15
-	%tmp17 = getelementptr inbounds %struct.string.String, %struct.string.String* %v0, i32 0, i32 1
-	%tmp18 = load i32, i32* %tmp17
-	%tmp19 = getelementptr inbounds i8, i8* %tmp16, i32 %tmp18
-	store i8 0, i8* %tmp19
-	%tmp20 = load %struct.string.String, %struct.string.String* %v0
+	%tmp0 = call i32 @string_utils.c_str_len(i8* %c_string)
+	%tmp1 = add i32 %tmp0, 1
+	%tmp2 = sext i32 %tmp1 to i64
+	%tmp3 = mul i64 1, %tmp2
+	%tmp4 = call i8* @mem.malloc(i64 %tmp3)
+	%tmp5 = getelementptr inbounds %struct.string.String, %struct.string.String* %v0, i32 0, i32 0
+	store i8* %tmp4, i8** %tmp5
+	%tmp6 = getelementptr inbounds %struct.string.String, %struct.string.String* %v0, i32 0, i32 1
+	store i32 %tmp0, i32* %tmp6
+	%tmp7 = getelementptr inbounds %struct.string.String, %struct.string.String* %v0, i32 0, i32 0
+	%tmp8 = load i8*, i8** %tmp7
+	%tmp9 = sext i32 %tmp0 to i64
+	call void @mem.copy(i8* %c_string, i8* %tmp8, i64 %tmp9)
+	%tmp10 = getelementptr inbounds %struct.string.String, %struct.string.String* %v0, i32 0, i32 0
+	%tmp11 = getelementptr inbounds %struct.string.String, %struct.string.String* %v0, i32 0, i32 0
+	%tmp12 = load i8*, i8** %tmp11
+	%tmp13 = getelementptr inbounds i8, i8* %tmp12, i32 %tmp0
+	store i8 0, i8* %tmp13
+	%tmp14 = load %struct.string.String, %struct.string.String* %v0
 	br label %func_exit
 func_exit:
 ; Variable x is out.
-	ret %struct.string.String %tmp20
+	ret %struct.string.String %tmp14
 }
 define void @string.free(%struct.string.String* %str){
 entry:
@@ -2253,38 +2247,34 @@ func_exit:
 define %struct.string.String @string.clone(%struct.string.String* %src){
 entry:
 	%v0 = alloca %struct.string.String; var: x
-	%tmp0 = getelementptr inbounds %struct.string.String, %struct.string.String* %v0, i32 0, i32 1
-	%tmp1 = getelementptr inbounds %struct.string.String, %struct.string.String* %src, i32 0, i32 1
-	%tmp2 = load i32, i32* %tmp1
-	store i32 %tmp2, i32* %tmp0
-	%tmp3 = getelementptr inbounds %struct.string.String, %struct.string.String* %v0, i32 0, i32 0
-	%tmp4 = getelementptr inbounds %struct.string.String, %struct.string.String* %v0, i32 0, i32 1
-	%tmp5 = load i32, i32* %tmp4
-	%tmp6 = add i32 %tmp5, 1
-	%tmp7 = sext i32 %tmp6 to i64
-	%tmp8 = mul i64 1, %tmp7
-	%tmp9 = call i8* @mem.malloc(i64 %tmp8)
-	store i8* %tmp9, i8** %tmp3
+	%tmp0 = getelementptr inbounds %struct.string.String, %struct.string.String* %src, i32 0, i32 1
+	%tmp1 = load i32, i32* %tmp0
+	%tmp2 = getelementptr inbounds %struct.string.String, %struct.string.String* %src, i32 0, i32 1
+	%tmp3 = load i32, i32* %tmp2
+	%tmp4 = add i32 %tmp1, 1
+	%tmp5 = sext i32 %tmp4 to i64
+	%tmp6 = mul i64 1, %tmp5
+	%tmp7 = call i8* @mem.malloc(i64 %tmp6)
+	%tmp8 = getelementptr inbounds %struct.string.String, %struct.string.String* %v0, i32 0, i32 0
+	store i8* %tmp7, i8** %tmp8
+	%tmp9 = getelementptr inbounds %struct.string.String, %struct.string.String* %v0, i32 0, i32 1
+	store i32 %tmp3, i32* %tmp9
 	%tmp10 = getelementptr inbounds %struct.string.String, %struct.string.String* %src, i32 0, i32 0
 	%tmp11 = load i8*, i8** %tmp10
 	%tmp12 = getelementptr inbounds %struct.string.String, %struct.string.String* %v0, i32 0, i32 0
 	%tmp13 = load i8*, i8** %tmp12
-	%tmp14 = getelementptr inbounds %struct.string.String, %struct.string.String* %v0, i32 0, i32 1
-	%tmp15 = load i32, i32* %tmp14
-	%tmp16 = sext i32 %tmp15 to i64
-	call void @mem.copy(i8* %tmp11, i8* %tmp13, i64 %tmp16)
-	%tmp17 = getelementptr inbounds %struct.string.String, %struct.string.String* %v0, i32 0, i32 0
-	%tmp18 = getelementptr inbounds %struct.string.String, %struct.string.String* %v0, i32 0, i32 0
-	%tmp19 = load i8*, i8** %tmp18
-	%tmp20 = getelementptr inbounds %struct.string.String, %struct.string.String* %v0, i32 0, i32 1
-	%tmp21 = load i32, i32* %tmp20
-	%tmp22 = getelementptr inbounds i8, i8* %tmp19, i32 %tmp21
-	store i8 0, i8* %tmp22
-	%tmp23 = load %struct.string.String, %struct.string.String* %v0
+	%tmp14 = sext i32 %tmp1 to i64
+	call void @mem.copy(i8* %tmp11, i8* %tmp13, i64 %tmp14)
+	%tmp15 = getelementptr inbounds %struct.string.String, %struct.string.String* %v0, i32 0, i32 0
+	%tmp16 = getelementptr inbounds %struct.string.String, %struct.string.String* %v0, i32 0, i32 0
+	%tmp17 = load i8*, i8** %tmp16
+	%tmp18 = getelementptr inbounds i8, i8* %tmp17, i32 %tmp1
+	store i8 0, i8* %tmp18
+	%tmp19 = load %struct.string.String, %struct.string.String* %v0
 	br label %func_exit
 func_exit:
 ; Variable x is out.
-	ret %struct.string.String %tmp23
+	ret %struct.string.String %tmp19
 }
 define i64 @stdlib.str_to_l(i8* %str, i8** %endptr, i32 %base){
 entry:

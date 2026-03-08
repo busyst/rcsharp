@@ -7,19 +7,19 @@ use crate::{
 use rcsharp_lexer::{LexerSymbolTable, Token, TokenData};
 use std::fmt;
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Span {
     pub start: usize,
     pub end: usize,
 }
 impl Span {
-    pub fn new(start: usize, end: usize) -> Self {
+    pub const ZERO: Self = Self { start: 0, end: 0 };
+    #[inline]
+    pub const fn new(start: usize, end: usize) -> Self {
         Self { start, end }
     }
-    pub fn empty() -> Self {
-        Self { start: 0, end: 0 }
-    }
 }
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum ParserError {
     UnexpectedToken {
@@ -42,17 +42,16 @@ pub enum ParserError {
     },
     OrphanedAttributes(usize),
 }
-
 impl fmt::Display for ParserError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::UnexpectedToken { expected, found } => {
-                write!(f, "Expected token '{}', but found '{}'.", expected, found)
+                write!(f, "Expected '{expected}', but found '{found}'.")
             }
             Self::UnexpectedTopLevelToken { found } => write!(
                 f,
-                "Unexpected token '{}'. Only functions, structs, enums, namespaces, and hints are allowed at the top level.",
-                found
+                "Unexpected token '{found}'. \
+                 Only functions, structs, enums, namespaces, and hints are allowed at the top level."
             ),
             Self::InvalidModifier {
                 modifier,
@@ -60,21 +59,19 @@ impl fmt::Display for ParserError {
             } => {
                 write!(
                     f,
-                    "Modifier '{}' is only applicable to {}.",
-                    modifier, applicable_to
+                    "Modifier '{modifier}' is only applicable to {applicable_to}."
                 )
             }
-            Self::AttributeError(msg) => write!(f, "Attribute error: {}", msg),
-            Self::ExpressionError(msg) => write!(f, "Expression parsing error: {}", msg),
-            Self::TypeError(msg) => write!(f, "Type parsing error: {}", msg),
+            Self::AttributeError(msg) => write!(f, "Attribute error: {msg}"),
+            Self::ExpressionError(msg) => write!(f, "Expression parsing error: {msg}"),
+            Self::TypeError(msg) => write!(f, "Type parsing error: {msg}"),
             Self::ExpectedIdentifier { found } => {
-                write!(f, "Expected Identifier, found '{}'.", found)
+                write!(f, "Expected identifier, found '{found}'.")
             }
-            Self::Generic(msg) => write!(f, "{}", msg),
+            Self::Generic(msg) => f.write_str(msg),
             Self::OrphanedAttributes(count) => write!(
                 f,
-                "Found {} attribute(s) but no valid item followed them.",
-                count
+                "Found {count} attribute(s) but no valid item followed them."
             ),
         }
     }
@@ -83,24 +80,19 @@ impl fmt::Display for ParserError {
 pub type ParserResult<T> = Result<T, (Span, ParserError)>;
 
 pub trait ParserResultExt<T> {
-    fn unwrap_error_extended(self, token_data: &[TokenData], path: &str) -> Result<T, String>;
+    fn into_display_error(self, token_data: &[TokenData], path: &str) -> Result<T, String>;
 }
 
 impl<T> ParserResultExt<T> for ParserResult<T> {
-    fn unwrap_error_extended(self, token_data: &[TokenData], path: &str) -> Result<T, String> {
+    fn into_display_error(self, token_data: &[TokenData], path: &str) -> Result<T, String> {
         match self {
             Ok(v) => Ok(v),
             Err((span, err)) => {
-                let valid_end = span.end.min(token_data.len());
-                let valid_start = span.start.min(valid_end);
-                let tokens: Vec<_> = token_data[valid_start..valid_end]
-                    .iter()
-                    .map(|x| &x.token)
-                    .collect();
-                //{row}:{column}
+                let end = span.end.min(token_data.len());
+                let start = span.start.min(end);
+                let tokens: Vec<_> = token_data[start..end].iter().map(|td| &td.token).collect();
                 Err(format!(
-                    "Parser error with tokens:\n{:?}\n{} at {path}:",
-                    tokens, err
+                    "Parser error at {path}:\n  {err}\n  tokens: {tokens:?}"
                 ))
             }
         }
@@ -115,19 +107,18 @@ pub struct Attribute {
 }
 
 impl Attribute {
+    #[inline]
     pub fn name_equals(&self, to: &str) -> bool {
         &*self.name == to
     }
 
     pub fn one_argument(&self) -> Option<&Expr> {
-        if self.arguments.len() == 1 {
-            Some(&self.arguments[0])
-        } else {
-            None
+        match self.arguments.as_ref() {
+            [arg] => Some(arg),
+            _ => None,
         }
     }
 }
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParsedStruct {
     pub path: Box<str>,
@@ -210,14 +201,13 @@ impl Stmt {
         }
     }
 
-    pub fn dummy_data(self) -> StmtData {
+    pub fn with_dummy_span(self) -> StmtData {
         StmtData {
             stmt: self,
-            span: Span { start: 0, end: 0 },
+            span: Span::ZERO,
         }
     }
 }
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct StmtData {
     pub stmt: Stmt,
@@ -235,15 +225,16 @@ pub enum ParserType {
 }
 impl PartialEq for ParserType {
     fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
+        let lhs = self.peel_namespace();
+        let rhs = other.peel_namespace();
+        match (lhs, rhs) {
             (Self::Named(l), Self::Named(r)) => l == r,
             (Self::Pointer(l), Self::Pointer(r)) => l == r,
             (Self::Function(lr, la), Self::Function(rr, ra)) => lr == rr && la == ra,
-            (Self::NamespaceLink(ls, lt), Self::NamespaceLink(rs, rt)) => ls == rs && lt == rt,
             (Self::Generic(ls, lt), Self::Generic(rs, rt)) => ls == rs && lt == rt,
-
-            (Self::NamespaceLink(_, l), r) => r.eq(l),
-            (l, Self::NamespaceLink(_, r)) => l.eq(r),
+            (Self::ConstantSizeArray(lt, ls), Self::ConstantSizeArray(rt, rs)) => {
+                lt == rt && ls == rs
+            }
             _ => false,
         }
     }
@@ -281,13 +272,51 @@ impl ParserType {
         }
         None
     }
+    fn peel_namespace(&self) -> &Self {
+        match self {
+            Self::NamespaceLink(_, inner) => inner.peel_namespace(),
+            other => other,
+        }
+    }
 }
-
+impl fmt::Display for ParserType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Named(n) => f.write_str(n),
+            Self::Pointer(inner) => write!(f, "*{inner}"),
+            Self::NamespaceLink(ns, inner) => write!(f, "{ns}::{inner}"),
+            Self::Generic(name, args) => {
+                write!(f, "{name}<")?;
+                for (i, a) in args.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{a}")?;
+                }
+                f.write_str(">")
+            }
+            Self::Function(ret, params) => {
+                write!(f, "fn(")?;
+                for (i, p) in params.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{p}")?;
+                }
+                write!(f, ") -> {ret}")
+            }
+            Self::ConstantSizeArray(elem, n) => write!(f, "[{elem}; {n}]"),
+        }
+    }
+}
+static DUMMY_EOF: TokenData = TokenData {
+    token: Token::DummyToken,
+    span: 0..0,
+};
 pub struct GeneralParser<'a> {
     tokens: &'a [TokenData],
     symbol_table: &'a LexerSymbolTable,
     cursor: usize,
-    len: usize,
 }
 impl<'a> GeneralParser<'a> {
     pub fn new(tokens: &'a [TokenData], symbol_table: &'a LexerSymbolTable) -> Self {
@@ -295,139 +324,126 @@ impl<'a> GeneralParser<'a> {
             tokens,
             symbol_table,
             cursor: 0,
-            len: tokens.len(),
         }
     }
-    #[inline(always)]
+    #[inline]
     pub fn is_at_end(&self) -> bool {
-        self.cursor >= self.len
+        self.cursor >= self.tokens.len()
     }
-    #[inline(always)]
+    #[inline]
     fn peek(&self) -> &TokenData {
-        if self.cursor < self.len {
-            unsafe { self.tokens.get_unchecked(self.cursor) }
-        } else {
-            static DUMMY_EOF: TokenData = TokenData {
-                token: Token::DummyToken,
-                span: 0..0,
-            };
-            &DUMMY_EOF
-        }
+        self.tokens.get(self.cursor).unwrap_or(&DUMMY_EOF)
     }
-    #[inline(always)]
+    #[inline]
     fn peek_offset(&self, offset: usize) -> &TokenData {
-        if self.cursor + offset < self.len {
-            unsafe { self.tokens.get_unchecked(self.cursor + offset) }
-        } else {
-            static DUMMY_EOF: TokenData = TokenData {
-                token: Token::DummyToken,
-                span: 0..0,
-            };
-            &DUMMY_EOF
-        }
+        self.tokens.get(self.cursor + offset).unwrap_or(&DUMMY_EOF)
     }
-    #[inline(always)]
+    #[inline]
     fn peek_span(&self) -> Span {
-        if self.cursor < self.len {
-            let t = unsafe { self.tokens.get_unchecked(self.cursor) };
-            Span::new(t.span.start, t.span.end)
-        } else if self.len > 0 {
-            let last = unsafe { self.tokens.get_unchecked(self.len - 1) };
-            Span::new(last.span.end, last.span.end)
-        } else {
-            Span::new(0, 0)
+        match self.tokens.get(self.cursor) {
+            Some(t) => Span::new(t.span.start, t.span.end),
+            None => self
+                .tokens
+                .last()
+                .map(|t| Span::new(t.span.end, t.span.end))
+                .unwrap_or(Span::ZERO),
         }
     }
-    #[inline(always)]
+    #[inline]
     fn advance(&mut self) -> &TokenData {
-        if self.cursor < self.len {
-            self.cursor += 1;
-            unsafe { self.tokens.get_unchecked(self.cursor - 1) }
-        } else {
-            self.peek()
+        match self.tokens.get(self.cursor) {
+            Some(t) => {
+                self.cursor += 1;
+                t
+            }
+            None => &DUMMY_EOF,
         }
     }
-    #[inline(always)]
+    #[inline]
     fn consume(&mut self, expected: &Token) -> ParserResult<&TokenData> {
-        let token_data = self.peek();
-        if &token_data.token == expected {
+        if &self.peek().token == expected {
             Ok(self.advance())
         } else {
             Err((
                 self.peek_span(),
                 ParserError::UnexpectedToken {
-                    expected: format!("{:?}", expected),
-                    found: format!("{:?}", token_data.token),
+                    expected: format!("{expected:?}"),
+                    found: format!("{:?}", self.peek().token),
                 },
             ))
         }
     }
+
     #[inline]
     fn consume_name(&mut self) -> ParserResult<String> {
-        let token_data = self.peek();
-        match &token_data.token {
-            Token::Name(name) => {
-                let s = self.symbol_table.get(name).to_string();
+        match &self.peek().token {
+            Token::Name(sym) => {
+                let name = self.symbol_table.get(sym).to_string();
                 self.cursor += 1;
-                Ok(s)
+                Ok(name)
             }
-            _ => {
-                let found = format!("{:?}", token_data.token);
-                Err((self.peek_span(), ParserError::ExpectedIdentifier { found }))
-            }
+            _ => Err((
+                self.peek_span(),
+                ParserError::ExpectedIdentifier {
+                    found: format!("{:?}", self.peek().token),
+                },
+            )),
         }
     }
+
     pub fn parse_all(&mut self) -> ParserResult<Vec<StmtData>> {
-        let mut statements = Vec::with_capacity(self.len / 4);
+        let mut stmts = Vec::with_capacity(self.tokens.len() / 4);
         while !self.is_at_end() {
-            statements.push(self.parse_toplevel_item()?);
+            stmts.push(self.parse_toplevel_item()?);
         }
-        Ok(statements)
+        Ok(stmts)
     }
 
     pub fn parse_compiler_only(&mut self) -> ParserResult<Vec<(Span, Attribute)>> {
-        let mut a = vec![];
+        let mut hints = vec![];
         while !self.is_at_end() {
-            if self.peek().token == Token::Hint {
-                if self.peek_offset(1).token != Token::LSquareBrace {
-                    let StmtData {
-                        span,
-                        stmt: Stmt::CompilerHint(x),
-                    } = self.parse_hint_stmt()?
-                    else {
-                        unreachable!();
-                    };
-                    a.push((span, x));
-                }
+            let is_bare_hint = self.peek().token == Token::Hint
+                && self.peek_offset(1).token != Token::LSquareBrace;
+
+            if is_bare_hint {
+                let StmtData {
+                    span,
+                    stmt: Stmt::CompilerHint(attr),
+                } = self.parse_hint_stmt()?
+                else {
+                    unreachable!("parse_hint_stmt always returns CompilerHint");
+                };
+                hints.push((span, attr));
+            } else {
+                self.advance();
             }
-            self.advance();
         }
-        return Ok(a);
+        Ok(hints)
     }
     fn parse_toplevel_item(&mut self) -> ParserResult<StmtData> {
         let mut attributes = Vec::new();
         let mut start_span = self.peek_span();
 
-        while self.peek().token == Token::Hint {
-            let next_token = self.peek_offset(1);
-            if next_token.token == Token::LSquareBrace {
-                attributes.push(self.parse_attribute()?);
-            } else {
-                if !attributes.is_empty() {
-                    return Err((
-                        start_span,
-                        ParserError::OrphanedAttributes(attributes.len()),
-                    ));
-                }
-                return self.parse_hint_stmt();
-            }
+        while self.peek().token == Token::Hint && self.peek_offset(1).token == Token::LSquareBrace {
+            attributes.push(self.parse_attribute()?);
         }
+
+        if self.peek().token == Token::Hint && !attributes.is_empty() {
+            return Err((
+                start_span,
+                ParserError::OrphanedAttributes(attributes.len()),
+            ));
+        }
+
+        if self.peek().token == Token::Hint {
+            return self.parse_hint_stmt();
+        }
+
         if let Some(first) = attributes.first() {
             start_span = first.span;
         }
 
-        let token_data = self.peek().clone();
-        match &token_data.token {
+        match self.peek().token.clone() {
             Token::KeywordFunction => self.parse_function(attributes, start_span),
             Token::KeywordStruct => self.parse_struct(attributes, start_span),
             Token::KeywordEnum => self.parse_enum(attributes, start_span),
@@ -442,7 +458,6 @@ impl<'a> GeneralParser<'a> {
                 }
                 self.parse_namespace()
             }
-
             Token::KeywordInline => self.parse_with_modifier("inline", attributes),
             Token::KeywordConstExpr => self.parse_with_modifier("constexpr", attributes),
             Token::KeywordPub => self.parse_with_modifier("public", attributes),
@@ -456,11 +471,10 @@ impl<'a> GeneralParser<'a> {
                         ParserError::OrphanedAttributes(attributes.len()),
                     ));
                 }
-                let t = self.peek();
                 Err((
                     self.peek_span(),
                     ParserError::UnexpectedTopLevelToken {
-                        found: format!("{:?}", t.token),
+                        found: format!("{:?}", self.peek().token),
                     },
                 ))
             }
@@ -473,77 +487,45 @@ impl<'a> GeneralParser<'a> {
         attributes: Vec<Attribute>,
     ) -> ParserResult<StmtData> {
         self.advance();
-
         let mut item = self.parse_toplevel_item()?;
-        match &mut item.stmt {
-            Stmt::Function(func) => {
-                Self::inject_modifier_and_attrs(
-                    &mut func.prefixes,
-                    &mut func.attributes,
-                    modifier,
-                    attributes,
-                );
-                Ok(item)
-            }
-            Stmt::Struct(strct) => {
-                Self::inject_modifier_and_attrs(
-                    &mut strct.prefixes,
-                    &mut strct.attributes,
-                    modifier,
-                    attributes,
-                );
-                Ok(item)
-            }
-            Stmt::Enum(enm) => {
-                Self::inject_modifier_and_attrs(
-                    &mut enm.prefixes,
-                    &mut enm.attributes,
-                    modifier,
-                    attributes,
-                );
-                Ok(item)
-            }
-            _ => Err((
-                item.span,
-                ParserError::InvalidModifier {
-                    modifier: modifier.into(),
-                    applicable_to: "functions, structs, or enums".into(),
-                },
-            )),
-        }
-    }
-    fn inject_modifier_and_attrs(
-        prefixes: &mut Box<[String]>,
-        attrs: &mut Box<[Attribute]>,
-        modifier: &str,
-        new_attrs: Vec<Attribute>,
-    ) {
-        let mut p = Vec::with_capacity(prefixes.len() + 1);
-        p.extend_from_slice(prefixes);
-        p.push(modifier.to_string());
-        *prefixes = p.into_boxed_slice();
 
-        if !new_attrs.is_empty() {
-            let mut combined = new_attrs;
-            combined.extend_from_slice(attrs);
-            *attrs = combined.into_boxed_slice();
+        macro_rules! inject {
+            ($node:expr) => {{
+                Self::prepend_modifier(&mut $node.prefixes, modifier);
+                Self::prepend_attributes(&mut $node.attributes, attributes);
+            }};
         }
+
+        match &mut item.stmt {
+            Stmt::Function(f) => inject!(f),
+            Stmt::Struct(s) => inject!(s),
+            Stmt::Enum(e) => inject!(e),
+            _ => {
+                return Err((
+                    item.span,
+                    ParserError::InvalidModifier {
+                        modifier: modifier.into(),
+                        applicable_to: "functions, structs, or enums".into(),
+                    },
+                ));
+            }
+        }
+        Ok(item)
     }
     fn parse_generic_params(&mut self) -> ParserResult<Vec<String>> {
         if self.peek().token != Token::LogicLess {
             return Ok(Vec::new());
         }
-        self.advance();
+        self.advance(); // <
 
-        let mut generic_types = Vec::new();
+        let mut params = Vec::new();
         loop {
             if self.peek().token == Token::LogicGreater {
                 self.advance();
                 break;
             }
-            generic_types.push(self.consume_name()?);
-            let t = self.peek();
-            match t.token {
+            params.push(self.consume_name()?);
+            match self.peek().token {
                 Token::Comma => {
                     self.advance();
                 }
@@ -552,14 +534,14 @@ impl<'a> GeneralParser<'a> {
                     return Err((
                         self.peek_span(),
                         ParserError::UnexpectedToken {
-                            expected: ", or >".into(),
-                            found: format!("{:?}", t.token),
+                            expected: "',' or '>'".into(),
+                            found: format!("{:?}", self.peek().token),
                         },
                     ));
                 }
             }
         }
-        Ok(generic_types)
+        Ok(params)
     }
     fn parse_attribute(&mut self) -> ParserResult<Attribute> {
         let start = self.cursor;
@@ -575,38 +557,41 @@ impl<'a> GeneralParser<'a> {
             span: Span::new(start, self.cursor),
         })
     }
+
     fn parse_hint_stmt(&mut self) -> ParserResult<StmtData> {
         let start = self.cursor;
         self.advance(); // #
         let name = self.consume_name()?;
         let args = self.parse_arg_list_parens()?;
+        let span = Span::new(start, self.cursor);
 
         Ok(StmtData {
             stmt: Stmt::CompilerHint(Attribute {
                 name: name.into_boxed_str(),
                 arguments: args.into_boxed_slice(),
-                span: Span::new(start, self.cursor),
+                span,
             }),
-            span: Span::new(start, self.cursor),
+            span,
         })
     }
+
     fn parse_arg_list_parens(&mut self) -> ParserResult<Vec<Expr>> {
         let mut args = Vec::new();
-        if self.peek().token == Token::LParen {
-            self.advance();
-            while self.peek().token != Token::RParen && !self.is_at_end() {
-                args.push(self.parse_expression()?);
-                if self.peek().token == Token::Comma {
-                    self.advance();
-                } else {
-                    break;
-                }
-            }
-            self.consume(&Token::RParen)?;
+        if self.peek().token != Token::LParen {
+            return Ok(args);
         }
+        self.advance(); // (
+        while self.peek().token != Token::RParen && !self.is_at_end() {
+            args.push(self.parse_expression()?);
+            if self.peek().token == Token::Comma {
+                self.advance();
+            } else {
+                break;
+            }
+        }
+        self.consume(&Token::RParen)?;
         Ok(args)
     }
-
     fn parse_function(
         &mut self,
         attributes: Vec<Attribute>,
@@ -903,7 +888,6 @@ impl<'a> GeneralParser<'a> {
         let name = self.consume_name()?;
         self.consume(&Token::Colon)?;
         let var_type = self.parse_type()?;
-
         let initializer = if self.peek().token == Token::Equal {
             self.advance();
             Some(self.parse_expression()?)
@@ -942,31 +926,29 @@ impl<'a> GeneralParser<'a> {
             span: Span::new(start, self.cursor),
         })
     }
-    #[inline(always)]
+    #[inline]
     fn parse_type(&mut self) -> ParserResult<ParserType> {
-        let remaining = if self.cursor < self.len {
-            &self.tokens[self.cursor..]
-        } else {
-            &[]
-        };
-        let mut ep = ExpressionParser::new(remaining, self.symbol_table);
+        let mut ep = ExpressionParser::new(self.remaining_tokens(), self.symbol_table);
         let pt = ep.parse_type()?;
         self.cursor += ep.cursor();
         Ok(pt)
     }
-    #[inline(always)]
+
+    #[inline]
     fn parse_expression(&mut self) -> ParserResult<Expr> {
-        let remaining = if self.cursor < self.len {
+        let mut ep = ExpressionParser::new(self.remaining_tokens(), self.symbol_table);
+        let expr = ep.parse_expression()?;
+        self.cursor += ep.cursor();
+        Ok(expr)
+    }
+    #[inline]
+    fn remaining_tokens(&self) -> &'a [TokenData] {
+        if self.cursor < self.tokens.len() {
             &self.tokens[self.cursor..]
         } else {
             &[]
-        };
-        let mut expr_parser = ExpressionParser::new(remaining, self.symbol_table);
-        let expr = expr_parser.parse_expression()?;
-        self.cursor += expr_parser.cursor();
-        Ok(expr)
+        }
     }
-
     fn parse_block_body(&mut self) -> ParserResult<Box<[StmtData]>> {
         self.consume(&Token::LBrace)?;
         let mut stmts = Vec::new();
@@ -979,5 +961,64 @@ impl<'a> GeneralParser<'a> {
         }
         self.consume(&Token::RBrace)?;
         Ok(stmts.into_boxed_slice())
+    }
+    fn prepend_modifier(prefixes: &mut Box<[String]>, modifier: &str) {
+        let mut v = Vec::with_capacity(prefixes.len() + 1);
+        v.push(modifier.to_string());
+        v.extend_from_slice(prefixes);
+        *prefixes = v.into_boxed_slice();
+    }
+
+    fn prepend_attributes(attrs: &mut Box<[Attribute]>, mut new_attrs: Vec<Attribute>) {
+        if new_attrs.is_empty() {
+            return;
+        }
+        new_attrs.extend_from_slice(attrs);
+        *attrs = new_attrs.into_boxed_slice();
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parser_type_namespace_link_transparent() {
+        let plain = ParserType::Named("i32".into());
+        let linked =
+            ParserType::NamespaceLink("ns".into(), Box::new(ParserType::Named("i32".into())));
+        assert_eq!(plain, linked);
+        assert_eq!(linked, plain);
+    }
+
+    #[test]
+    fn parser_type_display() {
+        let t = ParserType::Pointer(Box::new(ParserType::Named("i32".into())));
+        assert_eq!(t.to_string(), "*i32");
+
+        let arr = ParserType::ConstantSizeArray(Box::new(ParserType::Named("u8".into())), 16);
+        assert_eq!(arr.to_string(), "[u8; 16]");
+    }
+
+    #[test]
+    fn attribute_one_argument() {
+        let zero_args = Attribute {
+            name: "test".into(),
+            arguments: Box::new([]),
+            span: Span::ZERO,
+        };
+        assert!(zero_args.one_argument().is_none());
+    }
+
+    #[test]
+    fn recursive_statement_count_leaf() {
+        assert_eq!(Stmt::Break.recursive_statement_count(), 1);
+        assert_eq!(Stmt::CompilerDud.recursive_statement_count(), 1);
+    }
+
+    #[test]
+    fn prepend_modifier_ordering() {
+        let mut prefixes: Box<[String]> = vec!["pub".into()].into_boxed_slice();
+        GeneralParser::prepend_modifier(&mut prefixes, "inline");
+        assert_eq!(&*prefixes, &["inline".to_string(), "pub".to_string()]);
     }
 }

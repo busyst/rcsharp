@@ -1,25 +1,25 @@
 use crate::parser::ParserType;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Layout {
     pub size: u32,
     pub align: u32,
 }
 impl Layout {
-    pub const fn is_valid(&self) -> bool {
-        !(self.align == u32::MAX || self.size == u32::MAX)
-    }
+    pub const INVALID: Self = Self {
+        size: u32::MAX,
+        align: u32::MAX,
+    };
+
     pub const fn new(size: u32, align: u32) -> Self {
         Self { size, align }
     }
-    pub const fn new_not_valid() -> Self {
-        Self {
-            size: u32::MAX,
-            align: u32::MAX,
-        }
+    #[inline]
+    pub const fn is_valid(self) -> bool {
+        self.size != u32::MAX && self.align != u32::MAX
     }
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PrimitiveKind {
     Void,
     Bool,
@@ -27,7 +27,7 @@ pub enum PrimitiveKind {
     UnsignedInt,
     Decimal,
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PrimitiveInfo {
     pub name: &'static str,
     pub layout: Layout,
@@ -36,133 +36,78 @@ pub struct PrimitiveInfo {
 }
 
 impl PrimitiveInfo {
-    pub fn is_integer(&self) -> bool {
+    #[inline]
+    pub fn is_void(self) -> bool {
+        self.kind == PrimitiveKind::Void
+    }
+    #[inline]
+    pub fn is_bool(self) -> bool {
+        self.kind == PrimitiveKind::Bool
+    }
+    #[inline]
+    pub fn is_signed_integer(self) -> bool {
+        self.kind == PrimitiveKind::SignedInt
+    }
+    #[inline]
+    pub fn is_unsigned_integer(self) -> bool {
+        self.kind == PrimitiveKind::UnsignedInt
+    }
+    #[inline]
+    pub fn is_decimal(self) -> bool {
+        self.kind == PrimitiveKind::Decimal
+    }
+    #[inline]
+    pub fn is_integer(self) -> bool {
         matches!(
             self.kind,
             PrimitiveKind::SignedInt | PrimitiveKind::UnsignedInt
         )
     }
-
-    pub fn is_signed_integer(&self) -> bool {
-        matches!(self.kind, PrimitiveKind::SignedInt)
-    }
-
-    pub fn is_unsigned_integer(&self) -> bool {
-        matches!(self.kind, PrimitiveKind::UnsignedInt)
-    }
-    pub fn is_bool(&self) -> bool {
-        matches!(self.kind, PrimitiveKind::Bool)
-    }
-
-    pub fn is_decimal(&self) -> bool {
-        matches!(self.kind, PrimitiveKind::Decimal)
-    }
-    pub fn is_dropable(&self) -> bool {
+    #[inline]
+    pub const fn is_droppable(self) -> bool {
         false
     }
 }
-
-pub const PRIMITIVE_TYPES_INFO: &[PrimitiveInfo] = &[
-    PrimitiveInfo {
-        name: "void",
-        layout: Layout::new(0, 1),
-        llvm_name: "void",
-        kind: PrimitiveKind::Void,
-    },
-    PrimitiveInfo {
-        name: "bool",
-        layout: Layout::new(1, 1),
-        llvm_name: "i1",
-        kind: PrimitiveKind::Bool,
-    },
-    // SInts
-    PrimitiveInfo {
-        name: "i8",
-        layout: Layout::new(1, 1),
-        llvm_name: "i8",
-        kind: PrimitiveKind::SignedInt,
-    },
-    PrimitiveInfo {
-        name: "i16",
-        layout: Layout::new(2, 2),
-        llvm_name: "i16",
-        kind: PrimitiveKind::SignedInt,
-    },
-    PrimitiveInfo {
-        name: "i32",
-        layout: Layout::new(4, 4),
-        llvm_name: "i32",
-        kind: PrimitiveKind::SignedInt,
-    },
-    PrimitiveInfo {
-        name: "i64",
-        layout: Layout::new(8, 8),
-        llvm_name: "i64",
-        kind: PrimitiveKind::SignedInt,
-    },
-    // UInts
-    PrimitiveInfo {
-        name: "u8",
-        layout: Layout::new(1, 1),
-        llvm_name: "i8",
-        kind: PrimitiveKind::UnsignedInt,
-    },
-    PrimitiveInfo {
-        name: "u16",
-        layout: Layout::new(2, 2),
-        llvm_name: "i16",
-        kind: PrimitiveKind::UnsignedInt,
-    },
-    PrimitiveInfo {
-        name: "u32",
-        layout: Layout::new(4, 4),
-        llvm_name: "i32",
-        kind: PrimitiveKind::UnsignedInt,
-    },
-    PrimitiveInfo {
-        name: "u64",
-        layout: Layout::new(8, 8),
-        llvm_name: "i64",
-        kind: PrimitiveKind::UnsignedInt,
-    },
-    // Decimal
-    PrimitiveInfo {
-        name: "f16",
-        layout: Layout::new(2, 2),
-        llvm_name: "half",
-        kind: PrimitiveKind::Decimal,
-    },
-    PrimitiveInfo {
-        name: "f32",
-        layout: Layout::new(4, 4),
-        llvm_name: "float",
-        kind: PrimitiveKind::Decimal,
-    },
-    PrimitiveInfo {
-        name: "f64",
-        layout: Layout::new(8, 8),
-        llvm_name: "double",
-        kind: PrimitiveKind::Decimal,
-    },
-    PrimitiveInfo {
-        name: "isize",
-        layout: Layout::new(8, 8),
-        llvm_name: "i64",
-        kind: PrimitiveKind::SignedInt,
-    },
-    PrimitiveInfo {
-        name: "usize",
-        layout: Layout::new(8, 8),
-        llvm_name: "i64",
-        kind: PrimitiveKind::UnsignedInt,
-    },
-];
-
-impl Into<ParserType> for &'static PrimitiveInfo {
-    fn into(self) -> ParserType {
-        ParserType::Named(self.name.to_string())
+impl std::fmt::Display for PrimitiveInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.name)
     }
 }
+impl From<&'static PrimitiveInfo> for ParserType {
+    fn from(info: &'static PrimitiveInfo) -> Self {
+        ParserType::Named(info.name.to_string())
+    }
+}
+macro_rules! prim {
+    ($name:literal, $size:literal, $align:literal, $llvm:literal, $kind:expr) => {
+        PrimitiveInfo {
+            name: $name,
+            layout: Layout::new($size, $align),
+            llvm_name: $llvm,
+            kind: $kind,
+        }
+    };
+}
+pub const PRIMITIVE_TYPES_INFO: &[PrimitiveInfo] = &[
+    prim!("void", 0, 1, "void", PrimitiveKind::Void),
+    prim!("bool", 1, 1, "i1", PrimitiveKind::Bool),
+    // SInts
+    prim!("i8", 1, 1, "i8", PrimitiveKind::SignedInt),
+    prim!("i16", 2, 2, "i16", PrimitiveKind::SignedInt),
+    prim!("i32", 4, 4, "i32", PrimitiveKind::SignedInt),
+    prim!("i64", 8, 8, "i64", PrimitiveKind::SignedInt),
+    prim!("isize", 8, 8, "i64", PrimitiveKind::SignedInt),
+    // UInts
+    prim!("u8", 1, 1, "i8", PrimitiveKind::UnsignedInt),
+    prim!("u16", 2, 2, "i16", PrimitiveKind::UnsignedInt),
+    prim!("u32", 4, 4, "i32", PrimitiveKind::UnsignedInt),
+    prim!("u64", 8, 8, "i64", PrimitiveKind::UnsignedInt),
+    prim!("usize", 8, 8, "i64", PrimitiveKind::UnsignedInt),
+    // Decimal
+    prim!("f16", 2, 2, "half", PrimitiveKind::Decimal),
+    prim!("f32", 4, 4, "float", PrimitiveKind::Decimal),
+    prim!("f64", 8, 8, "double", PrimitiveKind::Decimal),
+];
 
 pub const VOID_TYPE: &PrimitiveInfo = &PRIMITIVE_TYPES_INFO[0];
 pub const BOOL_TYPE: &PrimitiveInfo = &PRIMITIVE_TYPES_INFO[1];
@@ -173,9 +118,48 @@ pub const DEFAULT_INTEGER_TYPE: &PrimitiveInfo = &PRIMITIVE_TYPES_INFO[5];
 pub const DEFAULT_DECIMAL_TYPE: &PrimitiveInfo = &PRIMITIVE_TYPES_INFO[12];
 
 pub const POINTER_SIZED_TYPE: &PrimitiveInfo = &PRIMITIVE_TYPES_INFO[14];
+
 pub fn find_primitive_type(name: &str) -> Option<&'static PrimitiveInfo> {
-    PRIMITIVE_TYPES_INFO.iter().find(|x| x.name == name)
+    PRIMITIVE_TYPES_INFO.iter().find(|p| p.name == name)
 }
-pub fn find_primitive_type_position(name: &str) -> Option<usize> {
-    PRIMITIVE_TYPES_INFO.iter().position(|x| x.name == name)
+pub fn find_primitive_type_index(name: &str) -> Option<usize> {
+    PRIMITIVE_TYPES_INFO.iter().position(|p| p.name == name)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn all_layouts_valid() {
+        for p in PRIMITIVE_TYPES_INFO {
+            if p.kind != PrimitiveKind::Void {
+                assert!(p.layout.is_valid(), "{} has invalid layout", p.name);
+            }
+        }
+    }
+
+    #[test]
+    fn names_are_unique() {
+        let mut names: Vec<_> = PRIMITIVE_TYPES_INFO.iter().map(|p| p.name).collect();
+        names.dedup();
+        assert_eq!(
+            names.len(),
+            PRIMITIVE_TYPES_INFO.len(),
+            "duplicate primitive names"
+        );
+    }
+
+    #[test]
+    fn layout_invalid_sentinel() {
+        assert!(!Layout::INVALID.is_valid());
+    }
+
+    #[test]
+    fn integer_classification() {
+        assert!(find_primitive_type("i32").unwrap().is_integer());
+        assert!(find_primitive_type("u32").unwrap().is_integer());
+        assert!(!find_primitive_type("f32").unwrap().is_integer());
+        assert!(!find_primitive_type("bool").unwrap().is_integer());
+    }
 }

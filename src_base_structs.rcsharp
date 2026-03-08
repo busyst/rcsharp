@@ -444,33 +444,39 @@ namespace string{
     }
     // USE ONLY WITH NULL TERMINATED STRINGS (from_c_string("...");)
     fn from_c_string(c_string: &i8) : String{
-        let x: String;
-        x.len = string_utils::c_str_len(c_string);
-        x.data = mem::malloc(size_of::<i8>() * (x.len + 1) as i64) as &i8; 
-        mem::copy(c_string, x.data, x.len as i64);
-        x.data[x.len] = 0;
+        const len: i32 = string_utils::c_str_len(c_string);
+        let x: String = String::{
+            len: len,
+            data: mem::malloc(size_of::<i8>() * (len + 1) as i64) as &i8
+        };
+        mem::copy(c_string, x.data, len as i64);
+        x.data[len] = 0;
         return x;
     }
     fn empty() : String {
-        let x: String;
-        x.data = null;
-        x.len = 0;
+        let x: String = String::{
+            data: null,
+            len: 0
+        };
         return x;
     }
-    fn with_size(size: i32) : String {
-        let x: String;
-        x.len = size;
-        x.data = mem::malloc(size_of::<i8>() * (size + 1) as i64) as &i8;
+    fn with_size(size: i32) : String{
+        let x: String = String::{
+            len: size,
+            data: mem::malloc(size_of::<i8>() * (size + 1) as i64) as &i8,
+        };
         mem::zero_fill(x.data, (size + 1) as i64);
         return x;
     }
     #[ExtentionOf(String)]
     fn clone(src: &String) : String {
-        let x: String;
-        x.len = src.len;
-        x.data = mem::malloc(size_of::<i8>() * (x.len + 1) as i64) as &i8;
-        mem::copy(src.data, x.data, x.len as i64);
-        x.data[x.len] = 0;
+        const len: i32 = src.len;
+        let x: String = String::{
+            len: src.len,
+            data: mem::malloc(size_of::<i8>() * (len + 1) as i64) as &i8
+        };
+        mem::copy(src.data, x.data, len as i64);
+        x.data[len] = 0;
         return x;
     }
     #[ExtentionOf(String)]
@@ -484,9 +490,10 @@ namespace string{
         mem::copy(c_string, (combined + src_string.len as i64), c_string_len as i64);
         combined[new_len] = 0;
 
-        let str: String;
-        str.data = combined;
-        str.len = new_len;
+        let str: String = String::{
+            data: combined,
+            len: new_len
+        };
         return str;
     }
     #[ExtentionOf(String)]
@@ -1776,19 +1783,20 @@ namespace window{
         if is_null(hInstance) { process::throw("Window error: StartError::GetModuleHandleFailed"); }
 
         const className: &i8 = "MyWindowClass";
-        let wc: WNDCLASSEXA;
-        wc.cbSize = size_of::<WNDCLASSEXA>();
-        wc.style = CS::HREDRAW | CS::VREDRAW;
-        wc.lpfnWndProc = ptr_of(WindowProc);
-        wc.cbClsExtra = 0;
-        wc.cbWndExtra = 0;
-        wc.hInstance = hInstance;
-        wc.hIcon = null;
-        wc.hCursor = null;
-        wc.hbrBackground = bitcast::<&void>((SYS_COLOR::WINDOW + 1) as usize);
-        wc.lpszMenuName = null;
-        wc.lpszClassName = className;
-        wc.hIconSm = null;
+        let wc: WNDCLASSEXA = WNDCLASSEXA::{
+            cbSize: size_of::<WNDCLASSEXA>(),
+            style: CS::HREDRAW | CS::VREDRAW,
+            lpfnWndProc: ptr_of(WindowProc),
+            cbClsExtra: 0,
+            cbWndExtra: 0,
+            hInstance: hInstance,
+            hIcon: null,
+            hCursor: null,
+            hbrBackground: bitcast::<&void>((SYS_COLOR::WINDOW + 1) as usize),
+            lpszMenuName: null,
+            lpszClassName: className,
+            hIconSm: null
+        };
 
         if RegisterClassExA(&wc) == 0 { process::throw("Window error: StartError::RegisterClassFailed"); }
 
@@ -1834,19 +1842,20 @@ namespace window{
         get_bitmap_dimensions(local_hImage, &imgW, &imgH);
 
         const className: &i8 = "BorderlessImageClass";
-        let wc: WNDCLASSEXA;
-        wc.cbSize = size_of::<WNDCLASSEXA>();
-        wc.style = CS::HREDRAW | CS::VREDRAW;
-        wc.lpfnWndProc = ptr_of(WindowProc);
-        wc.cbClsExtra = 0;
-        wc.cbWndExtra = 0;
-        wc.hInstance = hInstance;
-        wc.hIcon = null;
-        wc.hCursor = null;
-        wc.hbrBackground = bitcast::<&void>((SYS_COLOR::WINDOW + 1) as usize);
-        wc.lpszMenuName = null;
-        wc.lpszClassName = className;
-        wc.hIconSm = null;
+        let wc: WNDCLASSEXA = WNDCLASSEXA::{
+            cbSize: size_of::<WNDCLASSEXA>(),
+            style: CS::HREDRAW | CS::VREDRAW,
+            lpfnWndProc: ptr_of(WindowProc),
+            cbClsExtra: 0,
+            cbWndExtra: 0,
+            hInstance: hInstance,
+            hIcon: null,
+            hCursor: null,
+            hbrBackground: bitcast::<&void>((SYS_COLOR::WINDOW + 1) as usize),
+            lpszMenuName: null,
+            lpszClassName: className,
+            hIconSm: null
+        };
 
         if RegisterClassExA(&wc) == 0 { process::throw("Window error: StartError::RegisterClassFailed"); }
         

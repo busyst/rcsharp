@@ -1,9 +1,12 @@
-use core::fmt;
-use std::{cell::Cell, fmt::Write};
+use std::fmt::Write;
 
 use rcsharp_lexer::{LexerSymbolTable, Token, TokenData};
 
 use crate::parser::{ParserError, ParserResult, ParserType, Span};
+static DUMMY_EOF: TokenData = TokenData {
+    token: Token::DummyToken,
+    span: 0..0,
+};
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     Decimal(f64),
@@ -28,47 +31,52 @@ pub enum Expr {
 
     Array(Box<[Expr]>),
 
+    StructInit(Box<Expr>, Box<[(String, Expr)]>),
+
     Boolean(bool),
     NullPtr,
 }
 impl Expr {
     pub fn debug_emit(&self) -> String {
-        self.debug_emit_int(0)
+        self.debug_emit_inner(0)
     }
-    fn debug_emit_int(&self, d: u8) -> String {
-        let ob = match d % 3 {
-            0 => "(",
-            1 => "[",
-            2 => "{",
-            _ => unreachable!(),
-        };
-        let cb = match d % 3 {
-            0 => ")",
-            1 => "]",
-            2 => "}",
-            _ => unreachable!(),
+
+    fn debug_emit_inner(&self, depth: u8) -> String {
+        let (open, close) = match depth % 3 {
+            0 => ("(", ")"),
+            1 => ("[", "]"),
+            _ => ("{", "}"),
         };
         match self {
-            Self::Name(n) => n.to_string(),
+            Self::Name(n) => n.clone(),
             Self::Integer(n) => n.to_string(),
-            Self::Call(x, y) => format!(
-                "CALL|[{}]({})|",
-                x.debug_emit_int(d),
-                y.iter()
-                    .map(|x| x.debug_emit_int(1))
+            Self::Call(callee, args) => {
+                let args_str = args
+                    .iter()
+                    .map(|a| a.debug_emit_inner(1))
                     .collect::<Vec<_>>()
-                    .join(", ")
-            ),
-            Self::MemberAccess(x, y) => format!("{}.{}", x.debug_emit_int(d), y),
-            Self::StaticAccess(x, y) => format!("{}::{}", x.debug_emit_int(d), y),
-            Self::Index(x, y) => format!("{}[{}]", x.debug_emit_int(d), y.debug_emit_int(d)),
+                    .join(", ");
+                format!("CALL|[{}]({})|", callee.debug_emit_inner(depth), args_str)
+            }
+            Self::MemberAccess(base, member) => {
+                format!("{}.{member}", base.debug_emit_inner(depth))
+            }
+            Self::StaticAccess(base, member) => {
+                format!("{}::{member}", base.debug_emit_inner(depth))
+            }
+            Self::Index(base, idx) => {
+                format!(
+                    "{}[{}]",
+                    base.debug_emit_inner(depth),
+                    idx.debug_emit_inner(depth)
+                )
+            }
             Self::BinaryOp(l, op, r) => format!(
-                "{ob}{} {:?} {}{cb}",
-                l.debug_emit_int(d + 1),
-                op,
-                r.debug_emit_int(d + 1)
+                "{open}{} {op:?} {}{close}",
+                l.debug_emit_inner(depth + 1),
+                r.debug_emit_inner(depth + 1),
             ),
-            _ => format!("{:?}", self),
+            _ => format!("{self:?}"),
         }
     }
 }
@@ -94,18 +102,18 @@ pub enum BinaryOp {
     ShiftRight,
 }
 impl BinaryOp {
-    pub fn symetrical(&self) -> bool {
+    pub fn is_symmetric(self) -> bool {
         matches!(
             self,
-            BinaryOp::Add
-                | BinaryOp::Multiply
-                | BinaryOp::BitAnd
-                | BinaryOp::BitOr
-                | BinaryOp::BitXor
-                | BinaryOp::And
-                | BinaryOp::Or
-                | BinaryOp::Equals
-                | BinaryOp::NotEqual
+            Self::Add
+                | Self::Multiply
+                | Self::BitAnd
+                | Self::BitOr
+                | Self::BitXor
+                | Self::And
+                | Self::Or
+                | Self::Equals
+                | Self::NotEqual
         )
     }
 }
@@ -116,8 +124,8 @@ pub enum UnaryOp {
     Deref,
     Pointer,
 }
-#[inline(always)]
-fn get_precedence(token: &Token) -> u8 {
+#[inline]
+fn precedence(token: &Token) -> u8 {
     match token {
         Token::Equal => 1,
         Token::LogicOr => 2,
@@ -139,130 +147,123 @@ fn get_precedence(token: &Token) -> u8 {
         _ => 0,
     }
 }
+const PREFIX_PRECEDENCE: u8 = 13;
 
 pub struct ExpressionParser<'a> {
     tokens: &'a [TokenData],
     symbol_table: &'a LexerSymbolTable,
-    cursor: Cell<usize>,
-    len: usize,
+    cursor: usize,
     pending_gt: bool,
 }
+
 impl<'a> ExpressionParser<'a> {
     pub fn new(tokens: &'a [TokenData], symbol_table: &'a LexerSymbolTable) -> Self {
         Self {
             tokens,
             symbol_table,
-            cursor: Cell::new(0),
-            len: tokens.len(),
+            cursor: 0,
             pending_gt: false,
         }
     }
-    #[inline(always)]
+    #[inline]
     pub fn is_at_end(&self) -> bool {
-        self.cursor.get() >= self.len
+        self.cursor >= self.tokens.len()
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn cursor(&self) -> usize {
-        self.cursor.get()
+        self.cursor
     }
-    #[inline(always)]
+    #[inline]
     fn peek(&self) -> &TokenData {
-        if self.cursor.get() < self.len {
-            unsafe { self.tokens.get_unchecked(self.cursor.get()) }
-        } else {
-            static DUMMY_EOF: TokenData = TokenData {
-                token: Token::DummyToken,
-                span: 0..0,
-            };
-            &DUMMY_EOF
-        }
+        self.tokens.get(self.cursor).unwrap_or(&DUMMY_EOF)
     }
-    #[inline(always)]
+
+    #[inline]
     fn peek_span(&self) -> Span {
-        if self.cursor.get() < self.len {
-            let t = unsafe { self.tokens.get_unchecked(self.cursor.get()) };
-            Span::new(t.span.start, t.span.end)
-        } else if self.len > 0 {
-            let last = unsafe { self.tokens.get_unchecked(self.len - 1) };
-            Span::new(last.span.end, last.span.end)
-        } else {
-            Span::new(0, 0)
+        match self.tokens.get(self.cursor) {
+            Some(t) => Span::new(t.span.start, t.span.end),
+            None => self
+                .tokens
+                .last()
+                .map(|t| Span::new(t.span.end, t.span.end))
+                .unwrap_or(Span::ZERO),
         }
     }
-    #[inline(always)]
-    fn advance(&self) -> &TokenData {
-        if self.cursor.get() < self.len {
-            self.cursor.set(self.cursor.get() + 1);
-            unsafe { self.tokens.get_unchecked(self.cursor.get() - 1) }
-        } else {
-            self.peek()
+
+    #[inline]
+    fn advance(&mut self) -> &TokenData {
+        match self.tokens.get(self.cursor) {
+            Some(t) => {
+                self.cursor += 1;
+                t
+            }
+            None => &DUMMY_EOF,
         }
     }
-    #[inline(always)]
+    #[inline]
     fn consume(&mut self, expected: &Token) -> ParserResult<&TokenData> {
-        let token_data = self.peek();
-        if &token_data.token == expected {
+        if &self.peek().token == expected {
             Ok(self.advance())
         } else {
             Err((
                 self.peek_span(),
                 ParserError::UnexpectedToken {
-                    expected: format!("{:?}", expected),
-                    found: format!("{:?}", token_data.token),
+                    expected: format!("{expected:?}"),
+                    found: format!("{:?}", self.peek().token),
                 },
             ))
         }
     }
+
     #[inline]
     fn consume_name(&mut self) -> ParserResult<String> {
-        let token_data = self.peek();
-        match &token_data.token {
+        match &self.peek().token {
             Token::Name(sym) => {
-                let s = self.symbol_table.get(sym).to_string();
-                self.cursor.set(self.cursor.get() + 1);
-                Ok(s)
+                let name = self.symbol_table.get(sym).to_string();
+                self.cursor += 1;
+                Ok(name)
             }
-            _ => {
-                let found = format!("{:?}", token_data.token);
-                Err((self.peek_span(), ParserError::ExpectedIdentifier { found }))
-            }
+            _ => Err((
+                self.peek_span(),
+                ParserError::ExpectedIdentifier {
+                    found: format!("{:?}", self.peek().token),
+                },
+            )),
         }
     }
     pub fn parse_expression(&mut self) -> ParserResult<Expr> {
-        self.parse_expression_with_precedence(0)
+        self.parse_with_precedence(0)
     }
 
-    fn parse_expression_with_precedence(&mut self, min_precedence: u8) -> ParserResult<Expr> {
+    fn parse_with_precedence(&mut self, min_precedence: u8) -> ParserResult<Expr> {
         let mut left = self.parse_prefix()?;
         loop {
-            let token_data = self.peek();
-            let precedence = get_precedence(&token_data.token);
-            if precedence <= min_precedence {
+            if precedence(&self.peek().token) <= min_precedence {
                 break;
             }
-
             left = self.parse_infix(left)?;
         }
-
         Ok(left)
     }
 
     fn parse_prefix(&mut self) -> ParserResult<Expr> {
-        let token_data = self.advance();
-        match &token_data.token {
-            Token::Integer(val) => Ok(Expr::Integer(*val)),
-            Token::Char(val) => Ok(Expr::Integer(*val as i128)),
-            Token::Decimal(val) => Ok(Expr::Decimal(*val)),
-            Token::String(sym) => Ok(Expr::StringConst(self.symbol_table.get(sym).to_string())),
-            Token::Name(sym) => Ok(Expr::Name(self.symbol_table.get(sym).to_string())),
+        let span = self.peek_span();
+        let token = self.advance().token.clone();
+
+        match token {
+            Token::Integer(v) => Ok(Expr::Integer(v)),
+            Token::Char(c) => Ok(Expr::Integer(c as i128)),
+            Token::Decimal(v) => Ok(Expr::Decimal(v)),
+            Token::String(sym) => Ok(Expr::StringConst(self.symbol_table.get(&sym).to_string())),
+            Token::Name(sym) => Ok(Expr::Name(self.symbol_table.get(&sym).to_string())),
 
             Token::KeywordTrue => Ok(Expr::Boolean(true)),
             Token::KeywordFalse => Ok(Expr::Boolean(false)),
             Token::KeywordNull => Ok(Expr::NullPtr),
 
             Token::LParen => {
-                let expr = self.parse_expression_with_precedence(0)?;
+                let expr = self.parse_with_precedence(0)?;
                 self.consume(&Token::RParen)?;
                 Ok(expr)
             }
@@ -271,6 +272,8 @@ impl<'a> ExpressionParser<'a> {
             Token::LogicNot => self.parse_unary(UnaryOp::Not),
             Token::Multiply => self.parse_unary(UnaryOp::Deref),
             Token::BinaryAnd => self.parse_unary(UnaryOp::Pointer),
+
+            // `&&expr` → `&(&expr)` — double-reference shorthand.
             Token::LogicAnd => {
                 let inner = self.parse_prefix()?;
                 Ok(Expr::UnaryOp(
@@ -278,42 +281,40 @@ impl<'a> ExpressionParser<'a> {
                     Box::new(Expr::UnaryOp(UnaryOp::Pointer, Box::new(inner))),
                 ))
             }
-            Token::LSquareBrace => {
-                // tmt = [...]
-                let mut args = Vec::new();
-                if self.peek().token != Token::RSquareBrace {
-                    loop {
-                        args.push(self.parse_expression()?);
-                        if self.peek().token == Token::Comma {
-                            self.advance();
-                        } else {
-                            break;
-                        }
-                    }
-                }
-                self.consume(&Token::RSquareBrace)?;
-                Ok(Expr::Array(args.into_boxed_slice()))
-            }
-            _ => {
-                let t = token_data.clone();
-                Err((
-                    Span::new(t.span.start, t.span.end),
-                    ParserError::UnexpectedToken {
-                        expected: "expression".to_string(),
-                        found: format!("{:?}", t.token),
-                    },
-                ))
-            }
+
+            Token::LSquareBrace => self.parse_array_literal(),
+
+            _ => Err((
+                span,
+                ParserError::UnexpectedToken {
+                    expected: "expression".into(),
+                    found: format!("{token:?}"),
+                },
+            )),
         }
     }
     fn parse_unary(&mut self, op: UnaryOp) -> ParserResult<Expr> {
-        const PREFIX_PRECEDENCE: u8 = 13;
-        let right = self.parse_expression_with_precedence(PREFIX_PRECEDENCE)?;
-        Ok(Expr::UnaryOp(op, Box::new(right)))
+        let operand = self.parse_with_precedence(PREFIX_PRECEDENCE)?;
+        Ok(Expr::UnaryOp(op, Box::new(operand)))
+    }
+
+    fn parse_array_literal(&mut self) -> ParserResult<Expr> {
+        let mut elements = Vec::new();
+        if self.peek().token != Token::RSquareBrace {
+            loop {
+                elements.push(self.parse_expression()?);
+                if self.peek().token == Token::Comma {
+                    self.advance();
+                } else {
+                    break;
+                }
+            }
+        }
+        self.consume(&Token::RSquareBrace)?;
+        Ok(Expr::Array(elements.into_boxed_slice()))
     }
     fn parse_infix(&mut self, left: Expr) -> ParserResult<Expr> {
-        let token_kind = &self.peek().token;
-        match token_kind {
+        match &self.peek().token {
             Token::Plus
             | Token::Minus
             | Token::Multiply
@@ -335,30 +336,283 @@ impl<'a> ExpressionParser<'a> {
             | Token::Equal => self.parse_binary(left),
 
             Token::LParen => self.parse_call(left),
-
             Token::LSquareBrace => self.parse_index(left),
-
             Token::Dot => self.parse_member_access(left),
             Token::DoubleColon => self.parse_static_access_or_generic_call(left),
-
             Token::KeywordAs => self.parse_cast(left),
-            _ => {
-                let t = self.peek();
-                Err((
-                    self.peek_span(),
-                    ParserError::UnexpectedToken {
-                        expected: "infix operator".to_string(),
-                        found: format!("{:?}", t.token),
-                    },
-                ))
-            }
+
+            _ => Err((
+                self.peek_span(),
+                ParserError::UnexpectedToken {
+                    expected: "infix operator".into(),
+                    found: format!("{:?}", self.peek().token),
+                },
+            )),
         }
     }
     fn parse_binary(&mut self, left: Expr) -> ParserResult<Expr> {
-        let op_token = self.advance().clone();
-        let precedence = get_precedence(&op_token.token);
+        let op_token = self.advance().token.clone();
+        let prec = precedence(&op_token);
 
-        let op = match op_token.token {
+        // Assignment is right-associative.
+        if op_token == Token::Equal {
+            let right = self.parse_with_precedence(prec - 1)?;
+            return Ok(Expr::Assign(Box::new(left), Box::new(right)));
+        }
+
+        let op = Self::token_to_binary_op(&op_token)
+            .expect("token filtered by parse_infix to be a binary operator");
+
+        let right = self.parse_with_precedence(prec)?;
+        Ok(Expr::BinaryOp(Box::new(left), op, Box::new(right)))
+    }
+    fn parse_call(&mut self, callee: Expr) -> ParserResult<Expr> {
+        self.advance(); // (
+        let args = self.parse_comma_separated_exprs(&Token::RParen)?;
+        self.consume(&Token::RParen)?;
+        Ok(Expr::Call(Box::new(callee), args.into_boxed_slice()))
+    }
+
+    fn parse_index(&mut self, left: Expr) -> ParserResult<Expr> {
+        self.consume(&Token::LSquareBrace)?;
+        let idx = self.parse_with_precedence(0)?;
+        self.consume(&Token::RSquareBrace)?;
+        Ok(Expr::Index(Box::new(left), Box::new(idx)))
+    }
+
+    fn parse_member_access(&mut self, left: Expr) -> ParserResult<Expr> {
+        self.consume(&Token::Dot)?;
+        Ok(Expr::MemberAccess(Box::new(left), self.consume_name()?))
+    }
+
+    fn parse_cast(&mut self, left: Expr) -> ParserResult<Expr> {
+        self.consume(&Token::KeywordAs)?;
+        Ok(Expr::Cast(Box::new(left), self.parse_type()?))
+    }
+
+    fn parse_static_access_or_generic_call(&mut self, left: Expr) -> ParserResult<Expr> {
+        self.advance(); // ::
+        if self.peek().token == Token::LogicLess {
+            return self.parse_generic_args_for_call(left);
+        }
+        if self.peek().token == Token::LBrace {
+            return self.parse_struct_init(left);
+        }
+        Ok(Expr::StaticAccess(Box::new(left), self.consume_name()?))
+    }
+    fn parse_struct_init(&mut self, left: Expr) -> ParserResult<Expr> {
+        self.advance(); // {
+        let mut fields = Vec::with_capacity(4);
+        while self.peek().token != Token::RBrace && !self.is_at_end() {
+            let field_name = self.consume_name()?;
+            self.consume(&Token::Colon)?;
+            let field_type = self.parse_expression()?;
+            fields.push((field_name, field_type));
+
+            if self.peek().token == Token::Comma {
+                self.advance();
+            } else {
+                break;
+            }
+        }
+        self.consume(&Token::RBrace)?;
+        Ok(Expr::StructInit(Box::new(left), fields.into_boxed_slice()))
+    }
+    fn parse_generic_args_for_call(&mut self, callee: Expr) -> ParserResult<Expr> {
+        self.consume(&Token::LogicLess)?;
+        let generic_types = self.parse_generic_type_list()?;
+
+        match &self.peek().token {
+            Token::SemiColon => {
+                let path = expr_to_type_path(&callee);
+                Ok(Expr::Type(ParserType::Generic(
+                    path,
+                    generic_types.into_boxed_slice(),
+                )))
+            }
+            Token::LParen => {
+                self.advance(); // (
+                let args = self.parse_comma_separated_exprs(&Token::RParen)?;
+                self.consume(&Token::RParen)?;
+                Ok(Expr::CallGeneric(
+                    Box::new(callee),
+                    args.into_boxed_slice(),
+                    generic_types.into_boxed_slice(),
+                ))
+            }
+            _ => {
+                if self.peek().token == Token::LBrace {
+                    self.advance(); // {
+                    let mut fields = Vec::with_capacity(4);
+                    while self.peek().token != Token::RBrace && !self.is_at_end() {
+                        let field_name = self.consume_name()?;
+                        self.consume(&Token::Colon)?;
+                        let field_type = self.parse_expression()?;
+                        fields.push((field_name, field_type));
+
+                        if self.peek().token == Token::Comma {
+                            self.advance();
+                        } else {
+                            break;
+                        }
+                    }
+                    self.consume(&Token::RBrace)?;
+                    Ok(Expr::StructInit(
+                        Box::new(Expr::NameWithGenerics(
+                            Box::new(callee),
+                            generic_types.into_boxed_slice(),
+                        )),
+                        fields.into_boxed_slice(),
+                    ))
+                } else {
+                    Ok(Expr::NameWithGenerics(
+                        Box::new(callee),
+                        generic_types.into_boxed_slice(),
+                    ))
+                }
+            }
+        }
+    }
+    pub fn parse_type(&mut self) -> ParserResult<ParserType> {
+        // Count leading `&` / `&&` pointer sigils.
+        let mut pointer_depth: u32 = 0;
+        loop {
+            match self.peek().token {
+                Token::BinaryAnd => {
+                    pointer_depth += 1;
+                    self.advance();
+                }
+                Token::LogicAnd => {
+                    pointer_depth += 2;
+                    self.advance();
+                }
+                _ => break,
+            }
+        }
+
+        let mut ty = match self.peek().token {
+            Token::KeywordFunction => self.parse_function_type()?,
+            Token::LSquareBrace => self.parse_array_type()?,
+            _ => self.parse_named_or_generic_type()?,
+        };
+
+        for _ in 0..pointer_depth {
+            ty = ParserType::Pointer(Box::new(ty));
+        }
+        Ok(ty)
+    }
+
+    fn parse_function_type(&mut self) -> ParserResult<ParserType> {
+        self.advance(); // fn
+        self.consume(&Token::LParen)?;
+
+        let mut params = Vec::with_capacity(4);
+        if self.peek().token != Token::RParen {
+            loop {
+                params.push(self.parse_type()?);
+                if self.peek().token == Token::RParen {
+                    break;
+                }
+                self.consume(&Token::Comma)?;
+            }
+        }
+        self.consume(&Token::RParen)?;
+        self.consume(&Token::Colon)?;
+        let return_type = self.parse_type()?;
+        Ok(ParserType::Function(
+            Box::new(return_type),
+            params.into_boxed_slice(),
+        ))
+    }
+
+    fn parse_array_type(&mut self) -> ParserResult<ParserType> {
+        self.advance(); // [
+        let elem_type = self.parse_type()?;
+        self.consume(&Token::SemiColon)?;
+
+        let size = match &self.advance().token {
+            Token::Integer(n) => *n,
+            _ => {
+                return Err((
+                    self.peek_span(),
+                    ParserError::TypeError("expected integer constant for array size".into()),
+                ));
+            }
+        };
+        self.consume(&Token::RSquareBrace)?;
+        Ok(ParserType::ConstantSizeArray(Box::new(elem_type), size))
+    }
+
+    fn parse_named_or_generic_type(&mut self) -> ParserResult<ParserType> {
+        let name = self.consume_name()?;
+
+        match &self.peek().token {
+            Token::DoubleColon => {
+                self.advance();
+                let inner = self.parse_type()?;
+                Ok(ParserType::NamespaceLink(name, Box::new(inner)))
+            }
+            Token::LogicLess => {
+                self.advance(); // <
+                let args = self.parse_generic_type_list()?;
+                Ok(ParserType::Generic(name, args.into_boxed_slice()))
+            }
+            _ => Ok(ParserType::Named(name)),
+        }
+    }
+    fn parse_comma_separated_exprs(&mut self, terminator: &Token) -> ParserResult<Vec<Expr>> {
+        let mut items = Vec::new();
+        if &self.peek().token == terminator {
+            return Ok(items);
+        }
+        loop {
+            items.push(self.parse_expression()?);
+            if self.peek().token == Token::Comma {
+                self.advance();
+            } else {
+                break;
+            }
+        }
+        Ok(items)
+    }
+    fn consume_closing_gt(&mut self) -> bool {
+        match self.peek().token {
+            Token::LogicGreater => {
+                self.advance();
+                true
+            }
+            Token::BinaryShiftR => {
+                // `>>` shared between two nested generic lists: consume only half.
+                if self.pending_gt {
+                    self.pending_gt = false;
+                    self.advance();
+                } else {
+                    self.pending_gt = true;
+                }
+                true
+            }
+            _ => false,
+        }
+    }
+    fn parse_generic_type_list(&mut self) -> ParserResult<Vec<ParserType>> {
+        let mut types = Vec::new();
+        loop {
+            if self.consume_closing_gt() {
+                break;
+            }
+            types.push(self.parse_type()?);
+            match self.peek().token {
+                Token::Comma => {
+                    self.advance();
+                }
+                Token::LogicGreater | Token::BinaryShiftR => {}
+                _ => break,
+            }
+        }
+        Ok(types)
+    }
+    fn token_to_binary_op(token: &Token) -> Option<BinaryOp> {
+        Some(match token {
             Token::Plus => BinaryOp::Add,
             Token::Minus => BinaryOp::Subtract,
             Token::Multiply => BinaryOp::Multiply,
@@ -377,230 +631,23 @@ impl<'a> ExpressionParser<'a> {
             Token::BinaryXor => BinaryOp::BitXor,
             Token::BinaryShiftL => BinaryOp::ShiftLeft,
             Token::BinaryShiftR => BinaryOp::ShiftRight,
-
-            Token::Equal => {
-                let right = self.parse_expression_with_precedence(precedence)?;
-                return Ok(Expr::Assign(Box::new(left), Box::new(right)));
-            }
-            _ => unreachable!("Filtered in parse_infix"),
-        };
-
-        let right = self.parse_expression_with_precedence(precedence)?;
-        Ok(Expr::BinaryOp(Box::new(left), op, Box::new(right)))
-    }
-
-    fn parse_call(&mut self, callee: Expr) -> ParserResult<Expr> {
-        self.advance();
-        let mut args = Vec::new();
-        if self.peek().token != Token::RParen {
-            loop {
-                args.push(self.parse_expression()?);
-                if self.peek().token == Token::Comma {
-                    self.advance();
-                } else {
-                    break;
-                }
-            }
-        }
-        self.consume(&Token::RParen)?;
-        Ok(Expr::Call(Box::new(callee), args.into_boxed_slice()))
-    }
-    fn parse_static_access_or_generic_call(&mut self, left: Expr) -> ParserResult<Expr> {
-        self.advance(); // consume ::
-        if self.peek().token == Token::LogicLess {
-            return self.parse_generic_args_for_call(left);
-        }
-        let member_name = self.consume_name()?;
-        Ok(Expr::StaticAccess(Box::new(left), member_name))
-    }
-
-    fn parse_generic_args_for_call(&mut self, callee: Expr) -> ParserResult<Expr> {
-        self.consume(&Token::LogicLess)?;
-        let mut generic_types = Vec::with_capacity(2);
-
-        loop {
-            if self.peek().token == Token::BinaryShiftR {
-                if self.pending_gt {
-                    self.pending_gt = false;
-                    self.advance();
-                } else {
-                    self.pending_gt = true;
-                }
-                break;
-            }
-            if self.peek().token == Token::LogicGreater {
-                self.advance();
-                break;
-            }
-
-            generic_types.push(self.parse_type()?);
-
-            match self.peek().token {
-                Token::Comma => {
-                    self.advance();
-                }
-                Token::LogicGreater | Token::BinaryShiftR => {}
-                _ => break, // unexpected, loop will likely terminate or fail in next check
-            }
-        }
-
-        let next_token = &self.peek().token;
-
-        if next_token == &Token::SemiColon {
-            let path_str = expr_to_type_path(&callee);
-            return Ok(Expr::Type(ParserType::Generic(
-                path_str,
-                generic_types.into_boxed_slice(),
-            )));
-        }
-
-        if next_token == &Token::LParen {
-            self.advance(); // consume LParen
-            let mut args = Vec::new();
-            if self.peek().token != Token::RParen {
-                loop {
-                    args.push(self.parse_expression()?);
-                    if self.peek().token == Token::Comma {
-                        self.advance();
-                    } else {
-                        break;
-                    }
-                }
-            }
-            self.consume(&Token::RParen)?;
-            return Ok(Expr::CallGeneric(
-                Box::new(callee),
-                args.into_boxed_slice(),
-                generic_types.into_boxed_slice(),
-            ));
-        }
-
-        Ok(Expr::NameWithGenerics(
-            Box::new(callee),
-            generic_types.into_boxed_slice(),
-        ))
-    }
-    fn parse_index(&mut self, left: Expr) -> ParserResult<Expr> {
-        self.consume(&Token::LSquareBrace)?;
-        let index_expr = self.parse_expression_with_precedence(0)?;
-        self.consume(&Token::RSquareBrace)?;
-        Ok(Expr::Index(Box::new(left), Box::new(index_expr)))
-    }
-    fn parse_member_access(&mut self, left: Expr) -> ParserResult<Expr> {
-        self.consume(&Token::Dot)?;
-        let member_name = self.consume_name()?;
-        Ok(Expr::MemberAccess(Box::new(left), member_name))
-    }
-
-    fn parse_cast(&mut self, left: Expr) -> ParserResult<Expr> {
-        self.consume(&Token::KeywordAs)?;
-        Ok(Expr::Cast(Box::new(left), self.parse_type()?))
-    }
-    pub fn parse_type(&mut self) -> ParserResult<ParserType> {
-        let mut pointer_depth = 0;
-        loop {
-            match self.peek().token {
-                Token::BinaryAnd => {
-                    pointer_depth += 1;
-                    self.advance();
-                }
-                Token::LogicAnd => {
-                    pointer_depth += 2;
-                    self.advance();
-                }
-                _ => break,
-            }
-        }
-
-        let mut t = if self.peek().token == Token::KeywordFunction {
-            self.advance();
-            self.consume(&Token::LParen)?;
-
-            let mut arguments = Vec::with_capacity(4);
-            if self.peek().token != Token::RParen {
-                loop {
-                    arguments.push(self.parse_type()?);
-                    if self.peek().token == Token::RParen {
-                        break;
-                    }
-                    self.consume(&Token::Comma)?;
-                }
-            }
-            self.consume(&Token::RParen)?;
-            self.consume(&Token::Colon)?;
-            let return_type = Box::new(self.parse_type()?);
-            ParserType::Function(return_type, arguments.into_boxed_slice())
-        } else if self.peek().token == Token::LSquareBrace {
-            self.advance();
-            let t = self.parse_type()?;
-            self.consume(&Token::SemiColon)?;
-            let n = if let TokenData {
-                token: Token::Integer(x),
-                ..
-            } = self.advance()
-            {
-                x.clone()
-            } else {
-                todo!()
-            };
-            self.consume(&Token::RSquareBrace)?;
-            ParserType::ConstantSizeArray(Box::new(t), n)
-        } else {
-            let link_or_name = self.consume_name()?;
-            let next = &self.peek().token;
-
-            if next == &Token::DoubleColon {
-                self.advance();
-                ParserType::NamespaceLink(link_or_name, Box::new(self.parse_type()?))
-            } else if next == &Token::LogicLess {
-                self.advance(); // Consume <
-                let mut generic_types = Vec::new();
-                loop {
-                    if self.peek().token == Token::BinaryShiftR {
-                        if self.pending_gt {
-                            self.pending_gt = false;
-                            self.advance();
-                        } else {
-                            self.pending_gt = true;
-                        }
-                        break;
-                    }
-                    if self.peek().token == Token::LogicGreater {
-                        self.advance();
-                        break;
-                    }
-
-                    generic_types.push(self.parse_type()?);
-
-                    if self.peek().token == Token::Comma {
-                        self.advance();
-                    }
-                }
-                ParserType::Generic(link_or_name, generic_types.into_boxed_slice())
-            } else {
-                ParserType::Named(link_or_name)
-            }
-        };
-
-        for _ in 0..pointer_depth {
-            t = ParserType::Pointer(Box::new(t));
-        }
-
-        Ok(t)
+            _ => return None,
+        })
     }
 }
-fn expr_to_type_path(callee: &Expr) -> String {
-    let mut s = String::new();
-    let _ = write_expr_path(&mut s, callee);
-    s
+pub fn expr_to_type_path(expr: &Expr) -> String {
+    let mut buf = String::new();
+    write_expr_path(&mut buf, expr);
+    buf
 }
-fn write_expr_path(w: &mut String, expr: &Expr) -> fmt::Result {
+fn write_expr_path(w: &mut String, expr: &Expr) {
     match expr {
-        Expr::Name(x) => w.write_str(x),
+        Expr::Name(n) => w.push_str(n),
+        Expr::NameWithGenerics(n, ..) => write_expr_path(w, n),
         Expr::StaticAccess(base, member) => {
-            write_expr_path(w, base)?;
-            write!(w, ".{}", member)
+            write_expr_path(w, base);
+            let _ = write!(w, ".{member}");
         }
-        _ => w.write_str("<?>"),
+        _ => w.push_str("<?>"),
     }
 }

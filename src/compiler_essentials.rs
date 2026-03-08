@@ -1163,7 +1163,7 @@ impl Scope {
              .0
             .compiler_type()
             .as_primitive()
-            .map(|x| !x.is_dropable())
+            .map(|x| !x.is_droppable())
             .unwrap_or(false)
         {
             return;

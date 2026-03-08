@@ -113,9 +113,6 @@ impl<'a> CompilerPass<'a> for ModuleLoaderPass {
                         .find(|x| x.path == *_path)
                         .map(|x| &x.content)
                         .unwrap();
-                    for x in symbol.strings.iter().enumerate() {
-                        println!("{:000}|{}", x.0, x.1);
-                    }
                     return Err(CompilerError::Generic(format!(
                         "Parsing error {}\nAt {} {}",
                         err.1,

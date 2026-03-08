@@ -20,9 +20,10 @@ fn of_fn() : &fn() : &fn() : void{
 namespace test{
     struct QPair<T, U> { first: T, second: U }
     fn geg() : QPair<i64, i64>{
-        let temp: QPair<i64, i64>;
-        temp.first = 1337;
-        temp.second = 1226;
+        let temp: QPair<i64, i64> = QPair::<i64, i64>::{
+            first: 1337,
+            second: 1226,
+        };
         temp.first = temp.first - temp.second;
         return temp;
     }
