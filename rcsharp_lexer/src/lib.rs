@@ -120,6 +120,7 @@ pub enum LexerResultError {
     UnclosedChar(Span),
     InvalidNumber(String, Span),
     InvalidCharLiteral(Span),
+    UnexpectedCharacter(Span),
 }
 pub type LexerResult<T> = Result<T, LexerResultError>;
 
@@ -340,13 +341,14 @@ fn process_chunk(
     is_eof: bool,
     tokens: &mut Vec<TokenData>,
     symbols: &mut LexerSymbolTable,
-    _global_offset: usize,
+    global_offset: usize,
 ) -> LexerResult<()> {
     let readonly_input = input.trim_start();
     if readonly_input.is_empty() {
         *input = String::new();
         return Ok(());
     }
+    let base_offset = global_offset + (input.len() - readonly_input.len());
 
     let mut last_consumed_byte_index = 0;
     let mut chars = readonly_input.char_indices().peekable();
@@ -368,7 +370,12 @@ fn process_chunk(
                 name_end = readonly_input.len();
             }
             if name_end != 0 {
-                identifier_token(&readonly_input[..name_end], 0..name_end, tokens, symbols);
+                identifier_token(
+                    &readonly_input[..name_end],
+                    base_offset..(base_offset + name_end), // was 0..name_end
+                    tokens,
+                    symbols,
+                );
                 last_consumed_byte_index = name_end;
                 break;
             } else {
@@ -395,7 +402,11 @@ fn process_chunk(
                 number_end = readonly_input.len();
             }
             if number_end != 0 {
-                number_token(&readonly_input[..number_end], 0..number_end, tokens)?;
+                number_token(
+                    &readonly_input[..number_end],
+                    base_offset..(base_offset + number_end),
+                    tokens,
+                )?;
                 last_consumed_byte_index = number_end;
                 break;
             } else {
@@ -434,7 +445,7 @@ fn process_chunk(
             } else if !is_eof {
                 break;
             }
-            push_single(Token::Minus, 0, char.len_utf8(), tokens);
+            push_single(Token::Minus, base_offset + idx, 0, char.len_utf8(), tokens);
             last_consumed_byte_index = char.len_utf8();
             break;
         } else if char == '/' {
@@ -516,12 +527,14 @@ fn process_chunk(
                 current_char = chars.next().unwrap();
             }
             if string_end == 0 && is_eof {
-                return Err(LexerResultError::UnclosedString(0..readonly_input.len()));
+                return Err(LexerResultError::UnclosedString(
+                    base_offset..(base_offset + readonly_input.len()),
+                ));
             }
             if string_end != 0 {
                 string_token(
                     &readonly_input[1..string_end - 1],
-                    1..string_end - 1,
+                    (base_offset + 1)..(base_offset + string_end - 1),
                     tokens,
                     symbols,
                 );
@@ -553,7 +566,7 @@ fn process_chunk(
             if char_end != 0 {
                 char_token(
                     &readonly_input[1..char_end - 1],
-                    1..char_end - 1,
+                    (base_offset + 1)..(base_offset + char_end - 1),
                     tokens,
                     symbols,
                 )?;
@@ -565,21 +578,51 @@ fn process_chunk(
         } else {
             let t = tokens.len();
             match char {
-                '#' => push_single(Token::Hint, 0, char.len_utf8(), tokens),
-                '{' => push_single(Token::LBrace, 0, char.len_utf8(), tokens),
-                '}' => push_single(Token::RBrace, 0, char.len_utf8(), tokens),
-                '[' => push_single(Token::LSquareBrace, 0, char.len_utf8(), tokens),
-                ']' => push_single(Token::RSquareBrace, 0, char.len_utf8(), tokens),
-                '(' => push_single(Token::LParen, 0, char.len_utf8(), tokens),
-                ')' => push_single(Token::RParen, 0, char.len_utf8(), tokens),
-                ';' => push_single(Token::SemiColon, 0, char.len_utf8(), tokens),
-                '.' => push_single(Token::Dot, 0, char.len_utf8(), tokens),
-                ',' => push_single(Token::Comma, 0, char.len_utf8(), tokens),
-                '+' => push_single(Token::Plus, 0, char.len_utf8(), tokens),
-                '-' => push_single(Token::Minus, 0, char.len_utf8(), tokens),
-                '*' => push_single(Token::Multiply, 0, char.len_utf8(), tokens),
-                '%' => push_single(Token::Modulo, 0, char.len_utf8(), tokens),
-                '^' => push_single(Token::BinaryXor, 0, char.len_utf8(), tokens),
+                '#' => push_single(Token::Hint, base_offset + idx, 0, char.len_utf8(), tokens),
+                '{' => push_single(Token::LBrace, base_offset + idx, 0, char.len_utf8(), tokens),
+                '}' => push_single(Token::RBrace, base_offset + idx, 0, char.len_utf8(), tokens),
+                '[' => push_single(
+                    Token::LSquareBrace,
+                    base_offset + idx,
+                    0,
+                    char.len_utf8(),
+                    tokens,
+                ),
+                ']' => push_single(
+                    Token::RSquareBrace,
+                    base_offset + idx,
+                    0,
+                    char.len_utf8(),
+                    tokens,
+                ),
+                '(' => push_single(Token::LParen, base_offset + idx, 0, char.len_utf8(), tokens),
+                ')' => push_single(Token::RParen, base_offset + idx, 0, char.len_utf8(), tokens),
+                ';' => push_single(
+                    Token::SemiColon,
+                    base_offset + idx,
+                    0,
+                    char.len_utf8(),
+                    tokens,
+                ),
+                '.' => push_single(Token::Dot, base_offset + idx, 0, char.len_utf8(), tokens),
+                ',' => push_single(Token::Comma, base_offset + idx, 0, char.len_utf8(), tokens),
+                '+' => push_single(Token::Plus, base_offset + idx, 0, char.len_utf8(), tokens),
+                '-' => push_single(Token::Minus, base_offset + idx, 0, char.len_utf8(), tokens),
+                '*' => push_single(
+                    Token::Multiply,
+                    base_offset + idx,
+                    0,
+                    char.len_utf8(),
+                    tokens,
+                ),
+                '%' => push_single(Token::Modulo, base_offset + idx, 0, char.len_utf8(), tokens),
+                '^' => push_single(
+                    Token::BinaryXor,
+                    base_offset + idx,
+                    0,
+                    char.len_utf8(),
+                    tokens,
+                ),
                 _ => {}
             };
             if tokens.len() != t {
@@ -589,101 +632,103 @@ fn process_chunk(
             if let Some(&(_pk_idx, pk_char)) = chars.peek() {
                 match (char, pk_char) {
                     (':', ':') => {
-                        push_single(Token::DoubleColon, 0, 2, tokens);
+                        push_single(Token::DoubleColon, base_offset + idx, 0, 2, tokens);
                         last_consumed_byte_index = 2;
                     }
                     (':', _) => {
-                        push_single(Token::Colon, 0, 1, tokens);
+                        push_single(Token::Colon, base_offset + idx, 0, 1, tokens);
                         last_consumed_byte_index = 1;
                     }
                     ('<', '<') => {
-                        push_single(Token::BinaryShiftL, 0, 2, tokens);
+                        push_single(Token::BinaryShiftL, base_offset + idx, 0, 2, tokens);
                         last_consumed_byte_index = 2;
                     }
                     ('<', '=') => {
-                        push_single(Token::LogicLessEqual, 0, 2, tokens);
+                        push_single(Token::LogicLessEqual, base_offset + idx, 0, 2, tokens);
                         last_consumed_byte_index = 2;
                     }
                     ('<', _) => {
-                        push_single(Token::LogicLess, 0, 1, tokens);
+                        push_single(Token::LogicLess, base_offset + idx, 0, 1, tokens);
                         last_consumed_byte_index = 1;
                     }
                     ('>', '>') => {
-                        push_single(Token::BinaryShiftR, 0, 2, tokens);
+                        push_single(Token::BinaryShiftR, base_offset + idx, 0, 2, tokens);
                         last_consumed_byte_index = 2;
                     }
                     ('>', '=') => {
-                        push_single(Token::LogicGreaterEqual, 0, 2, tokens);
+                        push_single(Token::LogicGreaterEqual, base_offset + idx, 0, 2, tokens);
                         last_consumed_byte_index = 2;
                     }
                     ('>', _) => {
-                        push_single(Token::LogicGreater, 0, 1, tokens);
+                        push_single(Token::LogicGreater, base_offset + idx, 0, 1, tokens);
                         last_consumed_byte_index = 1;
                     }
                     ('=', '=') => {
-                        push_single(Token::LogicEqual, 0, 2, tokens);
+                        push_single(Token::LogicEqual, base_offset + idx, 0, 2, tokens);
                         last_consumed_byte_index = 2;
                     }
                     ('=', _) => {
-                        push_single(Token::Equal, 0, 1, tokens);
+                        push_single(Token::Equal, base_offset + idx, 0, 1, tokens);
                         last_consumed_byte_index = 1;
                     }
                     ('!', '=') => {
-                        push_single(Token::LogicNotEqual, 0, 2, tokens);
+                        push_single(Token::LogicNotEqual, base_offset + idx, 0, 2, tokens);
                         last_consumed_byte_index = 2;
                     }
                     ('!', _) => {
-                        push_single(Token::LogicNot, 0, 1, tokens);
+                        push_single(Token::LogicNot, base_offset + idx, 0, 1, tokens);
                         last_consumed_byte_index = 1;
                     }
                     ('&', '&') => {
-                        push_single(Token::LogicAnd, 0, 2, tokens);
+                        push_single(Token::LogicAnd, base_offset + idx, 0, 2, tokens);
                         last_consumed_byte_index = 2;
                     }
                     ('&', _) => {
-                        push_single(Token::BinaryAnd, 0, 1, tokens);
+                        push_single(Token::BinaryAnd, base_offset + idx, 0, 1, tokens);
                         last_consumed_byte_index = 1;
                     }
                     ('|', '|') => {
-                        push_single(Token::LogicOr, 0, 2, tokens);
+                        push_single(Token::LogicOr, base_offset + idx, 0, 2, tokens);
                         last_consumed_byte_index = 2;
                     }
                     ('|', _) => {
-                        push_single(Token::BinaryOr, 0, 1, tokens);
+                        push_single(Token::BinaryOr, base_offset + idx, 0, 1, tokens);
                         last_consumed_byte_index = 1;
                     }
                     _ => {
-                        todo!("{:?}", readonly_input);
+                        return Err(LexerResultError::UnexpectedCharacter(
+                            base_offset + idx..base_offset + idx + 1,
+                        ));
                     }
                 }
             } else if is_eof {
                 match char {
                     ':' => {
-                        push_single(Token::Colon, 0, 1, tokens);
+                        push_single(Token::Colon, base_offset + idx, 0, 1, tokens);
                         last_consumed_byte_index = 1;
                     }
                     '<' => {
-                        push_single(Token::LogicLess, 0, 1, tokens);
+                        push_single(Token::LogicLess, base_offset + idx, 0, 1, tokens);
                         last_consumed_byte_index = 1;
                     }
                     '>' => {
-                        push_single(Token::LogicGreater, 0, 1, tokens);
+                        push_single(Token::LogicGreater, base_offset + idx, 0, 1, tokens);
                         last_consumed_byte_index = 1;
                     }
                     '=' => {
-                        push_single(Token::Equal, 0, 1, tokens);
+                        push_single(Token::Equal, base_offset + idx, 0, 1, tokens);
                         last_consumed_byte_index = 1;
                     }
                     '!' => {
-                        push_single(Token::LogicNot, 0, 1, tokens);
+                        push_single(Token::LogicNot, base_offset + idx, 0, 1, tokens);
                         last_consumed_byte_index = 1;
                     }
                     '&' => {
-                        push_single(Token::BinaryAnd, 0, 1, tokens);
+                        push_single(Token::BinaryAnd, base_offset + idx, 0, 1, tokens);
                         last_consumed_byte_index = 1;
                     }
                     '|' => {
-                        push_single(Token::BinaryOr, 0, 1, tokens);
+                        push_single(Token::BinaryOr, base_offset + idx, 0, 1, tokens);
                         last_consumed_byte_index = 1;
                     }
                     _ => {
@@ -705,10 +750,10 @@ fn process_chunk(
     Ok(())
 }
 
-fn push_single(token: Token, start: usize, len: usize, tokens: &mut Vec<TokenData>) {
+fn push_single(token: Token, offset: usize, start: usize, len: usize, tokens: &mut Vec<TokenData>) {
     tokens.push(TokenData {
         token,
-        span: start..(start + len),
+        span: (offset + start)..(offset + start + len),
     });
 }
 pub fn identifier_token(

@@ -52,7 +52,9 @@ impl<'a> CompilerPass<'a> for ModuleLoaderPass {
             let mut lexed = vec![];
             match lex_file(&path, &mut lexed, &mut symbol) {
                 Ok(()) => {}
-                Err(err) => panic!("{:?}", err),
+                Err(err) => {
+                    return Err(CompilerError::LexerError(path, err).into());
+                }
             };
             let q = match rcsharp_parser::parser::GeneralParser::new(&lexed, &symbol)
                 .parse_compiler_only()

@@ -1,4 +1,5 @@
 use ordered_hash_map::OrderedHashMap;
+use rcsharp_lexer::LexerResultError;
 use rcsharp_parser::{
     compiler_primitives::{Layout, PrimitiveInfo, PrimitiveKind, POINTER_SIZED_TYPE, VOID_TYPE},
     expression_parser::BinaryOp,
@@ -1255,6 +1256,7 @@ pub enum CompilerError {
     },
     OpTypeMismatch(BinaryOp, String, String),
     ArgumentCountMismatch(String),
+    LexerError(String, rcsharp_lexer::LexerResultError),
 }
 impl CompilerError {
     pub fn extend(&self, extention_message: &str) -> CompilerError {
@@ -1275,6 +1277,32 @@ impl std::fmt::Display for CompilerError {
             Self::SymbolNotFound(sym) => write!(f, "Symbol not found: {}", sym),
             Self::ArgumentCountMismatch(msg) => write!(f, "Argument mismatch: {}", msg),
             Self::InvalidExpression(msg) => write!(f, "Invalid expression: {}", msg),
+            Self::LexerError(path, error) => {
+                writeln!(f, "Lexer error during compilation:")?;
+                let file = std::fs::read_to_string(path).unwrap();
+
+                match error {
+                    LexerResultError::UnexpectedCharacter(range) => {
+                        let c = &file[..range.start];
+                        let row = c.chars().filter(|x| *x == '\n').count();
+                        let col = c
+                            .char_indices()
+                            .filter(|x| x.1 == '\n')
+                            .last()
+                            .map(|x| range.start - x.0)
+                            .unwrap_or(range.start);
+                        return writeln!(
+                            f,
+                            "Unexpected character:{:?} at {}:{}:{}",
+                            &file[range.clone()],
+                            path,
+                            row + 1,
+                            col
+                        );
+                    }
+                    _ => unimplemented!("{:?}", error),
+                }
+            }
         }
     }
 }
