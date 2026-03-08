@@ -61,11 +61,7 @@ impl<'a> CompilerPass<'a> for ModuleLoaderPass {
             {
                 Ok(x) => x,
                 Err(err) => {
-                    return Err(CompilerError::Generic(format!(
-                        "Parsing error {}\nAt {}::",
-                        err.1, path
-                    ))
-                    .into());
+                    return Err(CompilerError::ParserError(path, err).into());
                 }
             };
             for (span, attr) in q.iter() {
@@ -104,24 +100,11 @@ impl<'a> CompilerPass<'a> for ModuleLoaderPass {
             runned_throu.push((path, lexed));
         }
 
-        for (_path, tokens) in runned_throu.iter() {
+        for (path, tokens) in runned_throu.iter() {
             let mut parse = match GeneralParser::new(tokens, &symbol).parse_all() {
                 Ok(parse) => parse,
                 Err(err) => {
-                    let rc = ctx
-                        .source_manager
-                        .files
-                        .iter()
-                        .find(|x| x.path == *_path)
-                        .map(|x| &x.content)
-                        .unwrap();
-                    return Err(CompilerError::Generic(format!(
-                        "Parsing error {}\nAt {} {}",
-                        err.1,
-                        _path,
-                        &rc[err.0.start..err.0.end]
-                    ))
-                    .into());
+                    return Err(CompilerError::ParserError(path.to_string(), err).into());
                 }
             };
             stmt_vec.append(&mut parse);

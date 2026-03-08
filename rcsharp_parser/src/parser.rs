@@ -7,24 +7,14 @@ use crate::{
 use rcsharp_lexer::{LexerSymbolTable, Token, TokenData};
 use std::fmt;
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Span {
-    pub start: usize,
-    pub end: usize,
-}
-impl Span {
-    pub const ZERO: Self = Self { start: 0, end: 0 };
-    #[inline]
-    pub const fn new(start: usize, end: usize) -> Self {
-        Self { start, end }
-    }
-}
+pub type Span = std::ops::Range<usize>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ParserError {
+    ExpectedSemicolon,
     UnexpectedToken {
         expected: String,
-        found: String,
+        found: Token,
     },
     UnexpectedTopLevelToken {
         found: String,
@@ -37,68 +27,12 @@ pub enum ParserError {
     ExpressionError(String),
     TypeError(String),
     Generic(String),
-    ExpectedIdentifier {
-        found: String,
-    },
-    OrphanedAttributes(usize),
+    ExpectedIdentifier,
+    OrphanedAttributes,
+    UnclosedBlock,
 }
-impl fmt::Display for ParserError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::UnexpectedToken { expected, found } => {
-                write!(f, "Expected '{expected}', but found '{found}'.")
-            }
-            Self::UnexpectedTopLevelToken { found } => write!(
-                f,
-                "Unexpected token '{found}'. \
-                 Only functions, structs, enums, namespaces, and hints are allowed at the top level."
-            ),
-            Self::InvalidModifier {
-                modifier,
-                applicable_to,
-            } => {
-                write!(
-                    f,
-                    "Modifier '{modifier}' is only applicable to {applicable_to}."
-                )
-            }
-            Self::AttributeError(msg) => write!(f, "Attribute error: {msg}"),
-            Self::ExpressionError(msg) => write!(f, "Expression parsing error: {msg}"),
-            Self::TypeError(msg) => write!(f, "Type parsing error: {msg}"),
-            Self::ExpectedIdentifier { found } => {
-                write!(f, "Expected identifier, found '{found}'.")
-            }
-            Self::Generic(msg) => f.write_str(msg),
-            Self::OrphanedAttributes(count) => write!(
-                f,
-                "Found {count} attribute(s) but no valid item followed them."
-            ),
-        }
-    }
-}
-/// (span, (row, column), err)
+/// (span, (start, end), err)
 pub type ParserResult<T> = Result<T, (Span, ParserError)>;
-
-pub trait ParserResultExt<T> {
-    fn into_display_error(self, token_data: &[TokenData], path: &str) -> Result<T, String>;
-}
-
-impl<T> ParserResultExt<T> for ParserResult<T> {
-    fn into_display_error(self, token_data: &[TokenData], path: &str) -> Result<T, String> {
-        match self {
-            Ok(v) => Ok(v),
-            Err((span, err)) => {
-                let end = span.end.min(token_data.len());
-                let start = span.start.min(end);
-                let tokens: Vec<_> = token_data[start..end].iter().map(|td| &td.token).collect();
-                Err(format!(
-                    "Parser error at {path}:\n  {err}\n  tokens: {tokens:?}"
-                ))
-            }
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct Attribute {
     pub name: Box<str>,
@@ -204,7 +138,7 @@ impl Stmt {
     pub fn with_dummy_span(self) -> StmtData {
         StmtData {
             stmt: self,
-            span: Span::ZERO,
+            span: 0..0,
         }
     }
 }
@@ -339,17 +273,6 @@ impl<'a> GeneralParser<'a> {
         self.tokens.get(self.cursor + offset).unwrap_or(&DUMMY_EOF)
     }
     #[inline]
-    fn peek_span(&self) -> Span {
-        match self.tokens.get(self.cursor) {
-            Some(t) => Span::new(t.span.start, t.span.end),
-            None => self
-                .tokens
-                .last()
-                .map(|t| Span::new(t.span.end, t.span.end))
-                .unwrap_or(Span::ZERO),
-        }
-    }
-    #[inline]
     fn advance(&mut self) -> &TokenData {
         match self.tokens.get(self.cursor) {
             Some(t) => {
@@ -365,10 +288,14 @@ impl<'a> GeneralParser<'a> {
             Ok(self.advance())
         } else {
             Err((
-                self.peek_span(),
-                ParserError::UnexpectedToken {
-                    expected: format!("{expected:?}"),
-                    found: format!("{:?}", self.peek().token),
+                self.cursor..self.cursor + 1,
+                if *expected == Token::SemiColon {
+                    ParserError::ExpectedSemicolon
+                } else {
+                    ParserError::UnexpectedToken {
+                        expected: format!("{expected:?}"),
+                        found: self.peek().token.clone(),
+                    }
                 },
             ))
         }
@@ -383,10 +310,8 @@ impl<'a> GeneralParser<'a> {
                 Ok(name)
             }
             _ => Err((
-                self.peek_span(),
-                ParserError::ExpectedIdentifier {
-                    found: format!("{:?}", self.peek().token),
-                },
+                self.cursor..self.cursor + 1,
+                ParserError::ExpectedIdentifier,
             )),
         }
     }
@@ -422,7 +347,7 @@ impl<'a> GeneralParser<'a> {
     }
     fn parse_toplevel_item(&mut self) -> ParserResult<StmtData> {
         let mut attributes = Vec::new();
-        let mut start_span = self.peek_span();
+        let mut start_span = self.cursor..self.cursor + 1;
 
         while self.peek().token == Token::Hint && self.peek_offset(1).token == Token::LSquareBrace {
             attributes.push(self.parse_attribute()?);
@@ -431,7 +356,8 @@ impl<'a> GeneralParser<'a> {
         if self.peek().token == Token::Hint && !attributes.is_empty() {
             return Err((
                 start_span,
-                ParserError::OrphanedAttributes(attributes.len()),
+                // FIX 1: Pass attribute names into the error.
+                ParserError::OrphanedAttributes,
             ));
         }
 
@@ -440,7 +366,7 @@ impl<'a> GeneralParser<'a> {
         }
 
         if let Some(first) = attributes.first() {
-            start_span = first.span;
+            start_span = first.span.clone();
         }
 
         match self.peek().token.clone() {
@@ -466,13 +392,10 @@ impl<'a> GeneralParser<'a> {
             Token::KeywordStatic => self.parse_static_let_statement(start_span.start),
             _ => {
                 if !attributes.is_empty() {
-                    return Err((
-                        start_span,
-                        ParserError::OrphanedAttributes(attributes.len()),
-                    ));
+                    return Err((start_span, ParserError::OrphanedAttributes));
                 }
                 Err((
-                    self.peek_span(),
+                    self.cursor..self.cursor + 1,
                     ParserError::UnexpectedTopLevelToken {
                         found: format!("{:?}", self.peek().token),
                     },
@@ -532,10 +455,10 @@ impl<'a> GeneralParser<'a> {
                 Token::LogicGreater => {}
                 _ => {
                     return Err((
-                        self.peek_span(),
+                        self.cursor..self.cursor + 1,
                         ParserError::UnexpectedToken {
                             expected: "',' or '>'".into(),
-                            found: format!("{:?}", self.peek().token),
+                            found: self.peek().token.clone(),
                         },
                     ));
                 }
@@ -554,7 +477,7 @@ impl<'a> GeneralParser<'a> {
         Ok(Attribute {
             name: name.into_boxed_str(),
             arguments: args.into_boxed_slice(),
-            span: Span::new(start, self.cursor),
+            span: start..self.cursor,
         })
     }
 
@@ -563,13 +486,13 @@ impl<'a> GeneralParser<'a> {
         self.advance(); // #
         let name = self.consume_name()?;
         let args = self.parse_arg_list_parens()?;
-        let span = Span::new(start, self.cursor);
+        let span = start..self.cursor;
 
         Ok(StmtData {
             stmt: Stmt::CompilerHint(Attribute {
                 name: name.into_boxed_str(),
                 arguments: args.into_boxed_slice(),
-                span,
+                span: span.clone(),
             }),
             span,
         })
@@ -638,7 +561,7 @@ impl<'a> GeneralParser<'a> {
                     prefixes: Box::new([]),
                     generic_params: generic_types.into_boxed_slice(),
                 }),
-                span: Span::new(start, self.cursor),
+                span: start..self.cursor,
             });
         }
 
@@ -655,7 +578,7 @@ impl<'a> GeneralParser<'a> {
                 prefixes: Box::new([]),
                 generic_params: generic_types.into_boxed_slice(),
             }),
-            span: Span::new(start, self.cursor),
+            span: start..self.cursor,
         })
     }
     fn parse_struct(
@@ -693,7 +616,7 @@ impl<'a> GeneralParser<'a> {
                 generic_params: generic_types.into_boxed_slice(),
                 prefixes: Box::new([]),
             }),
-            span: Span::new(start, self.cursor),
+            span: start..self.cursor,
         })
     }
     fn parse_namespace(&mut self) -> ParserResult<StmtData> {
@@ -711,7 +634,7 @@ impl<'a> GeneralParser<'a> {
         self.consume(&Token::RBrace)?;
         Ok(StmtData {
             stmt: Stmt::Namespace(name, body.into_boxed_slice()),
-            span: Span::new(start, self.cursor),
+            span: start..self.cursor,
         })
     }
     fn parse_enum(
@@ -761,7 +684,7 @@ impl<'a> GeneralParser<'a> {
                 enum_type: enum_base_type,
                 prefixes: Box::new([]),
             }),
-            span: Span::new(start, self.cursor),
+            span: start..self.cursor,
         })
     }
 
@@ -778,7 +701,7 @@ impl<'a> GeneralParser<'a> {
                 let body = self.parse_block_body()?;
                 Ok(StmtData {
                     stmt: Stmt::Loop(body),
-                    span: Span::new(start, self.cursor),
+                    span: start..self.cursor,
                 })
             }
             Token::KeywordReturn => {
@@ -791,7 +714,7 @@ impl<'a> GeneralParser<'a> {
                 self.consume(&Token::SemiColon)?;
                 Ok(StmtData {
                     stmt: Stmt::Return(expr),
-                    span: Span::new(start, self.cursor),
+                    span: start..self.cursor,
                 })
             }
             Token::KeywordBreak => {
@@ -799,7 +722,7 @@ impl<'a> GeneralParser<'a> {
                 self.consume(&Token::SemiColon)?;
                 Ok(StmtData {
                     stmt: Stmt::Break,
-                    span: Span::new(start, self.cursor),
+                    span: start..self.cursor,
                 })
             }
             Token::KeywordContinue => {
@@ -807,7 +730,7 @@ impl<'a> GeneralParser<'a> {
                 self.consume(&Token::SemiColon)?;
                 Ok(StmtData {
                     stmt: Stmt::Continue,
-                    span: Span::new(start, self.cursor),
+                    span: start..self.cursor,
                 })
             }
             Token::LBrace => {
@@ -823,30 +746,27 @@ impl<'a> GeneralParser<'a> {
                 if q.is_empty() {
                     return Ok(StmtData {
                         stmt: Stmt::CompilerDud,
-                        span: Span::new(start, self.cursor),
+                        span: start..self.cursor,
                     });
                 }
                 return Ok(StmtData {
                     stmt: Stmt::Block(q.into()),
-                    span: Span::new(start, self.cursor),
+                    span: start..self.cursor,
                 });
             }
-            Token::RBrace | Token::SemiColon => {
-                let t = self.peek();
-                Err((
-                    self.peek_span(),
-                    ParserError::UnexpectedToken {
-                        expected: "Statement".into(),
-                        found: format!("{:?} at {}:{}", t.token, 0, 0),
-                    },
-                ))
-            }
+            Token::RBrace | Token::SemiColon => Err((
+                self.cursor..self.cursor + 1,
+                ParserError::UnexpectedToken {
+                    expected: "Statement".into(),
+                    found: self.peek().token.clone(),
+                },
+            )),
             _ => {
                 let expr = self.parse_expression()?;
                 self.consume(&Token::SemiColon)?;
                 Ok(StmtData {
                     stmt: Stmt::Expr(expr),
-                    span: Span::new(start, self.cursor),
+                    span: start..self.cursor,
                 })
             }
         }
@@ -861,7 +781,7 @@ impl<'a> GeneralParser<'a> {
         self.consume(&Token::SemiColon)?;
         Ok(StmtData {
             stmt: Stmt::ConstLet(name, var_type, initializer),
-            span: Span::new(start, self.cursor),
+            span: start..self.cursor,
         })
     }
     fn parse_static_let_statement(&mut self, start: usize) -> ParserResult<StmtData> {
@@ -880,7 +800,7 @@ impl<'a> GeneralParser<'a> {
         self.consume(&Token::SemiColon)?;
         Ok(StmtData {
             stmt: Stmt::Static(name, var_type, initializer),
-            span: Span::new(start, self.cursor),
+            span: start..self.cursor,
         })
     }
     fn parse_let_statement(&mut self, start: usize) -> ParserResult<StmtData> {
@@ -898,7 +818,7 @@ impl<'a> GeneralParser<'a> {
         self.consume(&Token::SemiColon)?;
         Ok(StmtData {
             stmt: Stmt::Let(name, var_type, initializer),
-            span: Span::new(start, self.cursor),
+            span: start..self.cursor,
         })
     }
 
@@ -923,13 +843,19 @@ impl<'a> GeneralParser<'a> {
 
         Ok(StmtData {
             stmt: Stmt::If(condition, then_body, else_branch),
-            span: Span::new(start, self.cursor),
+            span: start..self.cursor,
         })
     }
     #[inline]
     fn parse_type(&mut self) -> ParserResult<ParserType> {
         let mut ep = ExpressionParser::new(self.remaining_tokens(), self.symbol_table);
-        let pt = ep.parse_type()?;
+        let pt = match ep.parse_type() {
+            Ok(x) => x,
+            Err(mut x) => {
+                x.0 = self.cursor + x.0.start..self.cursor + x.0.end;
+                return Err(x);
+            }
+        };
         self.cursor += ep.cursor();
         Ok(pt)
     }
@@ -937,7 +863,13 @@ impl<'a> GeneralParser<'a> {
     #[inline]
     fn parse_expression(&mut self) -> ParserResult<Expr> {
         let mut ep = ExpressionParser::new(self.remaining_tokens(), self.symbol_table);
-        let expr = ep.parse_expression()?;
+        let expr = match ep.parse_expression() {
+            Ok(x) => x,
+            Err(mut x) => {
+                x.0 = self.cursor + x.0.start..self.cursor + x.0.end;
+                return Err(x);
+            }
+        };
         self.cursor += ep.cursor();
         Ok(expr)
     }
@@ -1004,7 +936,7 @@ mod tests {
         let zero_args = Attribute {
             name: "test".into(),
             arguments: Box::new([]),
-            span: Span::ZERO,
+            span: 0..0,
         };
         assert!(zero_args.one_argument().is_none());
     }

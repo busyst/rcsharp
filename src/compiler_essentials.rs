@@ -1,5 +1,5 @@
 use ordered_hash_map::OrderedHashMap;
-use rcsharp_lexer::LexerResultError;
+use rcsharp_lexer::{lex_text, LexerResultError};
 use rcsharp_parser::{
     compiler_primitives::{Layout, PrimitiveInfo, PrimitiveKind, POINTER_SIZED_TYPE, VOID_TYPE},
     expression_parser::BinaryOp,
@@ -1257,6 +1257,7 @@ pub enum CompilerError {
     OpTypeMismatch(BinaryOp, String, String),
     ArgumentCountMismatch(String),
     LexerError(String, rcsharp_lexer::LexerResultError),
+    ParserError(String, (Span, rcsharp_parser::parser::ParserError)),
 }
 impl CompilerError {
     pub fn extend(&self, extention_message: &str) -> CompilerError {
@@ -1293,13 +1294,108 @@ impl std::fmt::Display for CompilerError {
                             .unwrap_or(range.start);
                         return writeln!(
                             f,
-                            "Unexpected character:{:?} at {}:{}:{}",
+                            "Unexpected character:{:?}\n\rat {}:{}:{}",
                             &file[range.clone()],
                             path,
                             row + 1,
                             col
                         );
                     }
+                    _ => unimplemented!("{:?}", error),
+                }
+            }
+            Self::ParserError(path, (range, error)) => {
+                writeln!(f, "Lexer error during compilation:")?;
+                println!("{:?}|{:?}", range, error);
+                let file = std::fs::read_to_string(path).unwrap();
+                let mut tokens = vec![];
+                let mut symbol_table = rcsharp_lexer::LexerSymbolTable::new();
+                lex_text(&file, &mut tokens, &mut symbol_table).unwrap();
+                let token_span = &tokens[range.start..range.end];
+                match error {
+                    rcsharp_parser::parser::ParserError::OrphanedAttributes => {
+                        let src_start = token_span.first().map(|x| x.span.start).unwrap_or(0);
+                        let src_end = token_span.last().map(|x| x.span.end).unwrap_or(0);
+                        let c = &file[..src_start];
+                        let row = c.chars().filter(|x| *x == '\n').count();
+                        let col = c
+                            .char_indices()
+                            .filter(|x| x.1 == '\n')
+                            .last()
+                            .map(|x| src_start - x.0)
+                            .unwrap_or(src_start);
+                        return writeln!(
+                            f,
+                            "Orphaned attr:{:?}\n\rat {}:{}:{}",
+                            &file[src_start..src_end],
+                            path,
+                            row + 1,
+                            col
+                        );
+                    }
+                    rcsharp_parser::parser::ParserError::ExpectedIdentifier => {
+                        let src_start = token_span.first().map(|x| x.span.start).unwrap_or(0);
+                        let src_end = token_span.last().map(|x| x.span.end).unwrap_or(0);
+                        let c = &file[..src_start];
+                        let row = c.chars().filter(|x| *x == '\n').count();
+                        let col = c
+                            .char_indices()
+                            .filter(|x| x.1 == '\n')
+                            .last()
+                            .map(|x| src_start - x.0)
+                            .unwrap_or(src_start);
+                        return writeln!(
+                            f,
+                            "Expected name but found:{:?}\n\rat {}:{}:{}",
+                            &file[src_start..src_end],
+                            path,
+                            row + 1,
+                            col
+                        );
+                    }
+                    rcsharp_parser::parser::ParserError::UnexpectedToken { expected, found } => {
+                        let src_start = token_span.first().map(|x| x.span.start).unwrap_or(0);
+                        let src_end = token_span.last().map(|x| x.span.end).unwrap_or(0);
+                        let c = &file[..src_start];
+                        let row = c.chars().filter(|x| *x == '\n').count();
+                        let col = c
+                            .char_indices()
+                            .filter(|x| x.1 == '\n')
+                            .last()
+                            .map(|x| src_start - x.0)
+                            .unwrap_or(src_start);
+                        return writeln!(
+                            f,
+                            "Expected {} but found:{:?} (is {:?})\n\rat {}:{}:{}",
+                            expected,
+                            found,
+                            &file[src_start..src_end],
+                            path,
+                            row + 1,
+                            col
+                        );
+                    }
+                    rcsharp_parser::parser::ParserError::ExpectedSemicolon => {
+                        let src_start = token_span.first().map(|x| x.span.start).unwrap_or(0);
+                        let src_end = token_span.last().map(|x| x.span.end).unwrap_or(0);
+                        let c = &file[..src_start];
+                        let row = c.chars().filter(|x| *x == '\n').count();
+                        let col = c
+                            .char_indices()
+                            .filter(|x| x.1 == '\n')
+                            .last()
+                            .map(|x| src_start - x.0)
+                            .unwrap_or(src_start);
+                        return writeln!(
+                            f,
+                            "Expected ';' but found:{:?}\n\rat {}:{}:{}",
+                            &file[src_start..src_end],
+                            path,
+                            row + 1,
+                            col
+                        );
+                    }
+
                     _ => unimplemented!("{:?}", error),
                 }
             }

@@ -1046,7 +1046,7 @@ impl<'a> ExpressionCompiler<'a> {
         for arg in prepared_args {
             code_gen_ctx.scope.define(arg.0, arg.1, 0);
         }
-        let mut gen = LLVMGenPass::new(code_gen_ctx, Span::ZERO);
+        let mut gen = LLVMGenPass::new(code_gen_ctx, 0..0);
         for x in body {
             gen.compile_statement(x, self.output, self.compctx)
                 .extend(&format!(

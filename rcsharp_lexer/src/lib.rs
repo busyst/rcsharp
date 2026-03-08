@@ -1,4 +1,4 @@
-pub type Span = core::ops::Range<usize>;
+pub type Span = std::ops::Range<usize>;
 use std::{
     collections::HashMap,
     fs::File,
@@ -126,11 +126,6 @@ pub type LexerResult<T> = Result<T, LexerResultError>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Symbol(usize);
-impl ToString for Symbol {
-    fn to_string(&self) -> String {
-        format!("SYMBOL: {}", self.0)
-    }
-}
 pub struct LexerSymbolTable {
     pub strings: Vec<String>,
     indices: HashMap<String, usize>,
@@ -189,9 +184,10 @@ pub fn lex_text(
 ) -> LexerResult<()> {
     let mut reader = Box::new(Cursor::new(content));
     lex_stream(&mut reader, tokens, symbol_table)?;
-    debug_lex_emit(tokens, symbol_table);
+    //debug_lex_emit(tokens, symbol_table);
     Ok(())
 }
+#[allow(dead_code)]
 fn debug_lex_emit(tokens: &Vec<TokenData>, symbol_table: &LexerSymbolTable) {
     // Just for debug safety, panic less often
     if let Ok(mut file) = std::fs::OpenOptions::new()

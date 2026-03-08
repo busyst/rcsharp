@@ -2,7 +2,7 @@ use std::fmt::Write;
 
 use rcsharp_lexer::{LexerSymbolTable, Token, TokenData};
 
-use crate::parser::{ParserError, ParserResult, ParserType, Span};
+use crate::parser::{ParserError, ParserResult, ParserType};
 static DUMMY_EOF: TokenData = TokenData {
     token: Token::DummyToken,
     span: 0..0,
@@ -180,18 +180,6 @@ impl<'a> ExpressionParser<'a> {
     }
 
     #[inline]
-    fn peek_span(&self) -> Span {
-        match self.tokens.get(self.cursor) {
-            Some(t) => Span::new(t.span.start, t.span.end),
-            None => self
-                .tokens
-                .last()
-                .map(|t| Span::new(t.span.end, t.span.end))
-                .unwrap_or(Span::ZERO),
-        }
-    }
-
-    #[inline]
     fn advance(&mut self) -> &TokenData {
         match self.tokens.get(self.cursor) {
             Some(t) => {
@@ -207,10 +195,14 @@ impl<'a> ExpressionParser<'a> {
             Ok(self.advance())
         } else {
             Err((
-                self.peek_span(),
-                ParserError::UnexpectedToken {
-                    expected: format!("{expected:?}"),
-                    found: format!("{:?}", self.peek().token),
+                self.cursor..self.cursor + 1,
+                if *expected == Token::SemiColon {
+                    ParserError::ExpectedSemicolon
+                } else {
+                    ParserError::UnexpectedToken {
+                        expected: format!("{expected:?}"),
+                        found: self.peek().token.clone(),
+                    }
                 },
             ))
         }
@@ -225,10 +217,8 @@ impl<'a> ExpressionParser<'a> {
                 Ok(name)
             }
             _ => Err((
-                self.peek_span(),
-                ParserError::ExpectedIdentifier {
-                    found: format!("{:?}", self.peek().token),
-                },
+                self.cursor..self.cursor + 1,
+                ParserError::ExpectedIdentifier,
             )),
         }
     }
@@ -248,7 +238,7 @@ impl<'a> ExpressionParser<'a> {
     }
 
     fn parse_prefix(&mut self) -> ParserResult<Expr> {
-        let span = self.peek_span();
+        let span = self.cursor..self.cursor + 1;
         let token = self.advance().token.clone();
 
         match token {
@@ -288,7 +278,7 @@ impl<'a> ExpressionParser<'a> {
                 span,
                 ParserError::UnexpectedToken {
                     expected: "expression".into(),
-                    found: format!("{token:?}"),
+                    found: token,
                 },
             )),
         }
@@ -342,10 +332,10 @@ impl<'a> ExpressionParser<'a> {
             Token::KeywordAs => self.parse_cast(left),
 
             _ => Err((
-                self.peek_span(),
+                self.cursor..self.cursor + 1,
                 ParserError::UnexpectedToken {
                     expected: "infix operator".into(),
-                    found: format!("{:?}", self.peek().token),
+                    found: self.peek().token.clone(),
                 },
             )),
         }
@@ -534,7 +524,7 @@ impl<'a> ExpressionParser<'a> {
             Token::Integer(n) => *n,
             _ => {
                 return Err((
-                    self.peek_span(),
+                    self.cursor..self.cursor + 1,
                     ParserError::TypeError("expected integer constant for array size".into()),
                 ));
             }

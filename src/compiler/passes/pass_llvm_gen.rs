@@ -439,14 +439,7 @@ impl LLVMGenPass {
         }
         let x = self.cgctx.scope.pop_layer(&mut ctx.symbols);
         for x in x {
-            self.compile_statement(
-                &StmtData {
-                    stmt: x,
-                    span: Span::ZERO,
-                },
-                builder,
-                ctx,
-            )?;
+            self.compile_statement(&x.with_dummy_span(), builder, ctx)?;
         }
         if return_type.is_void() {
             builder.emit_ret_void();
@@ -483,7 +476,7 @@ impl LLVMGenPass {
         builder: &mut LLVMOutputHandler,
         ctx: &mut CompilerContext,
     ) -> CompileResult<bool> {
-        self.span = statement.span;
+        self.span = statement.span.clone();
         match &statement.stmt {
             Stmt::Debug(comment) => {
                 builder.emit_comment(&comment);
@@ -503,7 +496,7 @@ impl LLVMGenPass {
             Stmt::Expr(x) => Ok(compile_expression_v2(
                 x,
                 Expected::NoReturn,
-                self.span,
+                self.span.clone(),
                 &mut self.cgctx,
                 ctx,
                 builder,
@@ -517,7 +510,7 @@ impl LLVMGenPass {
                 )
                 .extend_set_span_if_none(
                     &format!("During declaration of constant {}", name),
-                    self.span,
+                    self.span.clone(),
                 )?;
                 Ok(false)
             }
@@ -525,7 +518,7 @@ impl LLVMGenPass {
                 self.compile_var_decl((name, var_type, z, false, true), builder, ctx)
                     .extend_set_span_if_none(
                         &format!("During declaration of static variable {}", name),
-                        self.span,
+                        self.span.clone(),
                     )?;
                 Ok(false)
             }
@@ -533,7 +526,7 @@ impl LLVMGenPass {
                 self.compile_var_decl((name, var_type, z, false, false), builder, ctx)
                     .extend_set_span_if_none(
                         &format!("During declaration of variable {}", name),
-                        self.span,
+                        self.span.clone(),
                     )?;
                 Ok(false)
             }
@@ -549,7 +542,7 @@ impl LLVMGenPass {
                 }
                 None => {
                     return Err((
-                        self.span,
+                        self.span.clone(),
                         CompilerError::Generic("Tried to continue without loop".to_string()),
                     )
                         .into())
@@ -562,7 +555,7 @@ impl LLVMGenPass {
                 }
                 None => {
                     return Err((
-                        self.span,
+                        self.span.clone(),
                         CompilerError::Generic("Tried to break without loop".to_string()),
                     )
                         .into())
@@ -588,7 +581,7 @@ impl LLVMGenPass {
         let cond_result = compile_expression_v2(
             expr,
             Expected::Type(&bool_type),
-            self.span,
+            self.span.clone(),
             &mut self.cgctx,
             ctx,
             builder,
@@ -600,7 +593,7 @@ impl LLVMGenPass {
         };
         if *cond_val_type != bool_type {
             return Err((
-                self.span,
+                self.span.clone(),
                 CompilerError::InvalidExpression(format!(
                     "'{:?}' must result in bool, instead resulted in {:?}",
                     expr.debug_emit(),
@@ -649,7 +642,7 @@ impl LLVMGenPass {
                 self.compile_statement(
                     &StmtData {
                         stmt: x,
-                        span: self.span,
+                        span: self.span.clone(),
                     },
                     builder,
                     ctx,
@@ -679,7 +672,7 @@ impl LLVMGenPass {
                 self.compile_statement(
                     &StmtData {
                         stmt: x,
-                        span: self.span,
+                        span: self.span.clone(),
                     },
                     builder,
                     ctx,
@@ -710,7 +703,7 @@ impl LLVMGenPass {
                 let result = compile_expression_v2(
                     expr,
                     Expected::Type(&return_type),
-                    self.span,
+                    self.span.clone(),
                     &mut self.cgctx,
                     ctx,
                     builder,
@@ -733,7 +726,7 @@ impl LLVMGenPass {
             }
             (true, false) => {
                 return Err((
-                    self.span,
+                    self.span.clone(),
                     CompilerError::Generic(format!(
                         "Function {} does not return anything, but got expression:{}",
                         self.cgctx.current_function_path.to_string(),
@@ -744,7 +737,7 @@ impl LLVMGenPass {
             }
             (false, true) => {
                 return Err((
-                    self.span,
+                    self.span.clone(),
                     CompilerError::Generic(
                         "Cannot return without a value from a non-void function.".to_string(),
                     ),
@@ -788,7 +781,7 @@ impl LLVMGenPass {
         let result = compile_expression_v2(
             expression,
             Expected::Type(&variable.compiler_type()),
-            self.span,
+            self.span.clone(),
             &mut self.cgctx,
             ctx,
             builder,
@@ -801,7 +794,7 @@ impl LLVMGenPass {
                 .into());
             };
             return Err((
-                self.span,
+                self.span.clone(),
                 CompilerError::TypeMismatch {
                     expected: variable.compiler_type().clone(),
                     found: result_type.clone(),
@@ -905,14 +898,7 @@ impl LLVMGenPass {
         self.cgctx.current_block_name = format!("loop_body{}_exit", lc);
         let x = self.cgctx.scope.pop_layer(&mut ctx.symbols);
         for x in x {
-            self.compile_statement(
-                &StmtData {
-                    stmt: x,
-                    span: Span::ZERO,
-                },
-                builder,
-                ctx,
-            )?;
+            self.compile_statement(&x.with_dummy_span(), builder, ctx)?;
         }
         Ok(())
     }
@@ -931,14 +917,7 @@ impl LLVMGenPass {
 
         let x = self.cgctx.scope.pop_layer(&mut ctx.symbols);
         for x in x {
-            self.compile_statement(
-                &StmtData {
-                    stmt: x,
-                    span: Span::ZERO,
-                },
-                builder,
-                ctx,
-            )?;
+            self.compile_statement(&x.with_dummy_span(), builder, ctx)?;
         }
         Ok(())
     }
