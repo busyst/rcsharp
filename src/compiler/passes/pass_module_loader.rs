@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::{collections::HashMap, path::Path};
 
 use rcsharp_lexer::{lex_file, LexerSymbolTable};
 use rcsharp_parser::{
@@ -7,7 +7,10 @@ use rcsharp_parser::{
 };
 
 use crate::{
-    compiler::{context::CompilerContext, passes::traits::CompilerPass},
+    compiler::{
+        context::{CompilerContext, FileID},
+        passes::traits::CompilerPass,
+    },
     compiler_essentials::{CompileResult, CompilerError},
 };
 
@@ -16,15 +19,13 @@ pub struct ModuleLoaderPass {}
 impl<'a> CompilerPass<'a> for ModuleLoaderPass {
     type Input = &'a str;
 
-    type Output = Vec<StmtData>;
+    type Output = HashMap<FileID, Vec<StmtData>>;
 
     fn run(
         &mut self,
         input: Self::Input,
         ctx: &mut CompilerContext,
     ) -> CompileResult<Self::Output> {
-        let mut stmt_vec = vec![];
-
         let main_file = Path::new(input);
         if !main_file.exists() {
             return Err(CompilerError::Generic("Main file was not found".to_string()).into());
@@ -70,9 +71,7 @@ impl<'a> CompilerPass<'a> for ModuleLoaderPass {
                     let Some(Expr::StringConst(include_path)) = include_path_expr else {
                         return Err((
                             span.clone(),
-                            CompilerError::InvalidExpression(
-                                "Include requires a string argument".into(),
-                            ),
+                            CompilerError::Generic("Include requires a string argument".into()),
                         )
                             .into());
                     };
@@ -100,14 +99,18 @@ impl<'a> CompilerPass<'a> for ModuleLoaderPass {
             runned_throu.push((path, lexed));
         }
 
+        let mut stmt_vec = HashMap::new();
         for (path, tokens) in runned_throu.iter() {
-            let mut parse = match GeneralParser::new(tokens, &symbol).parse_all() {
+            let parsed = match GeneralParser::new(tokens, &symbol).parse_all() {
                 Ok(parse) => parse,
                 Err(err) => {
                     return Err(CompilerError::ParserError(path.to_string(), err).into());
                 }
             };
-            stmt_vec.append(&mut parse);
+            match stmt_vec.insert(ctx.source_manager.get_file_handle(&path), parsed) {
+                Some(x) => panic!("{:?}", x),
+                None => {}
+            }
         }
         Ok(stmt_vec)
     }

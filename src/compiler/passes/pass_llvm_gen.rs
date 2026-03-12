@@ -13,8 +13,7 @@ use crate::{
         structs::{ContextPath, ContextPathEnd},
     },
     compiler_essentials::{
-        CompileResult, CompileResultExt, CompilerError, CompilerType, LLVMOutputHandler, LLVMVal,
-        Scope, Variable,
+        CompileResult, CompilerError, CompilerType, LLVMOutputHandler, LLVMVal, Scope, Variable,
     },
     expression_compiler::{compile_expression_v2, CompiledValue, Expected, ExpressionCompiler},
 };
@@ -361,7 +360,7 @@ impl LLVMGenPass {
                 body,
             )
         };
-        self.compile_function_base(
+        match self.compile_function_base(
             path,
             &full_function_name,
             return_type,
@@ -369,7 +368,13 @@ impl LLVMGenPass {
             &body,
             builder,
             ctx,
-        )?;
+        ) {
+            Ok(_) => {}
+            Err(mut err) => {
+                err.function_id = function_id;
+                return Err(err);
+            }
+        }
         Ok(())
     }
     fn compile_function_base(
@@ -423,11 +428,13 @@ impl LLVMGenPass {
         }
         let fx = body.clone();
         for stmt in fx.iter() {
-            self.compile_statement(stmt, builder, ctx).extend(&format!(
-                "During compilation of function '{}':namespace('{}')",
-                full_function_name,
-                self.cgctx.current_function_path.to_string()
-            ))?;
+            match self.compile_statement(stmt, builder, ctx) {
+                Ok(_) => {}
+                Err(mut x) => {
+                    x.call_stack.push((0..0, full_function_name.to_string()));
+                    return Err(x);
+                }
+            }
         }
         if return_type.is_void() {
             builder.emit_unconditional_jump_to(&self.cgctx.return_label_name);
@@ -482,57 +489,47 @@ impl LLVMGenPass {
                 builder.emit_comment(&comment);
                 Ok(false)
             }
-            Stmt::If(x, y, z) => Ok(self
-                .compile_if_statement(x, y, z, builder, ctx)
-                .extend(&format!("During compilation of if statement"))?),
+            Stmt::If(x, y, z) => Ok(self.compile_if_statement(x, y, z, builder, ctx)?),
             Stmt::Block(x) => {
-                self.compile_block(x, builder, ctx)
-                    .extend(&format!("During compilation of block"))?;
+                self.compile_block(x, builder, ctx)?;
                 Ok(false)
             }
-            Stmt::Return(x) => Ok(self
-                .compile_return(x, builder, ctx)
-                .extend(&format!("During compilation of return statement"))?),
-            Stmt::Expr(x) => Ok(compile_expression_v2(
+            Stmt::Return(x) => Ok(self.compile_return(x, builder, ctx)?),
+            Stmt::Expr(x) => match compile_expression_v2(
                 x,
                 Expected::NoReturn,
                 self.span.clone(),
                 &mut self.cgctx,
                 ctx,
                 builder,
-            )?
-            .is_program_halt()),
+            ) {
+                Ok(val) => {
+                    return Ok(val.is_program_halt());
+                }
+                Err(mut x) => {
+                    x.call_stack
+                        .push((self.span.clone(), "expression".to_string()));
+                    return Err(x);
+                }
+            },
             Stmt::ConstLet(name, var_type, z) => {
                 self.compile_var_decl(
                     (name, var_type, &Some(z.clone()), true, false),
                     builder,
                     ctx,
-                )
-                .extend_set_span_if_none(
-                    &format!("During declaration of constant {}", name),
-                    self.span.clone(),
                 )?;
                 Ok(false)
             }
             Stmt::Static(name, var_type, z) => {
-                self.compile_var_decl((name, var_type, z, false, true), builder, ctx)
-                    .extend_set_span_if_none(
-                        &format!("During declaration of static variable {}", name),
-                        self.span.clone(),
-                    )?;
+                self.compile_var_decl((name, var_type, z, false, true), builder, ctx)?;
                 Ok(false)
             }
             Stmt::Let(name, var_type, z) => {
-                self.compile_var_decl((name, var_type, z, false, false), builder, ctx)
-                    .extend_set_span_if_none(
-                        &format!("During declaration of variable {}", name),
-                        self.span.clone(),
-                    )?;
+                self.compile_var_decl((name, var_type, z, false, false), builder, ctx)?;
                 Ok(false)
             }
             Stmt::Loop(inside) => {
-                self.compile_loop(inside, builder, ctx)
-                    .extend(&format!("Inside loop"))?;
+                self.compile_loop(inside, builder, ctx)?;
                 Ok(false)
             }
             Stmt::Continue => match self.cgctx.scope.current_loop_tag() {
@@ -594,7 +591,7 @@ impl LLVMGenPass {
         if *cond_val_type != bool_type {
             return Err((
                 self.span.clone(),
-                CompilerError::InvalidExpression(format!(
+                CompilerError::Generic(format!(
                     "'{:?}' must result in bool, instead resulted in {:?}",
                     expr.debug_emit(),
                     cond_val_type
@@ -709,11 +706,7 @@ impl LLVMGenPass {
                     builder,
                 )?;
                 if !result.equal_type(&return_type) {
-                    return Err(CompilerError::TypeMismatch {
-                        expected: return_type,
-                        found: result.get_type().unwrap().clone(),
-                    }
-                    .into());
+                    return Err(CompilerError::Generic(format!("TypeMismatch")).into());
                 }
                 self.cgctx.pending_returns.push((
                     result.get_llvm_rep().to_string(),
@@ -787,7 +780,7 @@ impl LLVMGenPass {
             builder,
         )?;
         if !result.equal_type(&variable.compiler_type()) {
-            let Some(result_type) = result.get_type() else {
+            let Some(_result_type) = result.get_type() else {
                 return Err(CompilerError::Generic(
                     "Right side of const let is not a value".into(),
                 )
@@ -795,10 +788,7 @@ impl LLVMGenPass {
             };
             return Err((
                 self.span.clone(),
-                CompilerError::TypeMismatch {
-                    expected: variable.compiler_type().clone(),
-                    found: result_type.clone(),
-                },
+                CompilerError::Generic(format!("Type missmatch")),
             )
                 .into());
         }

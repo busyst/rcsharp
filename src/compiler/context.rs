@@ -26,8 +26,11 @@ pub struct SourceManager {
     pub files: Vec<SourceFile>,
     pub total_len: usize,
 }
-
+pub type FileID = usize;
 impl SourceManager {
+    pub fn get_file_handle(&self, path: &str) -> FileID {
+        self.files.iter().position(|x| x.path == path).unwrap() + 1
+    }
     pub fn add_file(&mut self, path: &str, content: String, start_offset: usize) {
         let len = content.len();
         let end_offset = start_offset + len;

@@ -1,17 +1,6 @@
-use ordered_hash_map::OrderedHashMap;
-use rcsharp_lexer::{lex_text, LexerResultError};
-use rcsharp_parser::{
-    compiler_primitives::{Layout, PrimitiveInfo, PrimitiveKind, POINTER_SIZED_TYPE, VOID_TYPE},
-    expression_parser::BinaryOp,
-    parser::{Attribute, ParserType, Span, Stmt, StmtData},
-};
-use std::{
-    cell::{Cell, RefCell},
-    collections::HashMap,
-};
-
 use crate::{
     compiler::{
+        context::FileID,
         passes::pass_llvm_gen::CodeGenContext,
         structs::{
             ContextPath, ContextPathDictionary, ContextPathDictionaryIter,
@@ -19,6 +8,16 @@ use crate::{
         },
     },
     expression_compiler::CompiledValue,
+};
+use ordered_hash_map::OrderedHashMap;
+use rcsharp_lexer::{lex_text, LexerError, Span};
+use rcsharp_parser::{
+    compiler_primitives::{Layout, PrimitiveInfo, PrimitiveKind, POINTER_SIZED_TYPE, VOID_TYPE},
+    parser::{Attribute, ParserType, Stmt, StmtData},
+};
+use std::{
+    cell::{Cell, RefCell},
+    collections::HashMap,
 };
 #[derive(Debug, Clone, PartialEq)]
 pub enum LLVMVal {
@@ -580,6 +579,7 @@ pub struct Enum {
     pub fields: Box<[(String, LLVMVal)]>,
     pub flags: Cell<u8>,
     pub attributes: Box<[Attribute]>,
+    pub file_id: FileID,
 }
 impl Enum {
     pub fn new(
@@ -594,6 +594,7 @@ impl Enum {
             fields,
             attributes: attribs,
             flags: Cell::new(0),
+            file_id: 0,
         }
     }
 }
@@ -632,6 +633,7 @@ pub struct Struct {
     attributes: Box<[Attribute]>,
     flags: Cell<u8>,
     cached_layout: RefCell<Option<Layout>>,
+    pub file_id: FileID,
 }
 
 impl Struct {
@@ -654,6 +656,7 @@ impl Struct {
             generic_implementations: RefCell::new(vec![]),
             flags: Cell::new(flags.to_byte()),
             cached_layout: RefCell::new(None),
+            file_id: 0,
         }
     }
     pub fn new_placeholder() -> Self {
@@ -665,6 +668,7 @@ impl Struct {
             attributes: Box::new([]),
             flags: Cell::new(0),
             cached_layout: RefCell::new(None),
+            file_id: 0,
         }
     }
 
@@ -808,6 +812,7 @@ pub struct Function {
     pub generic_params: Box<[String]>,
     pub generic_implementations: RefCell<Vec<Box<[CompilerType]>>>,
     pub usage_count: Cell<usize>,
+    pub file_id: FileID,
 }
 impl Function {
     pub fn new(
@@ -829,6 +834,7 @@ impl Function {
             generic_params,
             generic_implementations: RefCell::new(vec![]),
             usage_count: Cell::new(0),
+            file_id: 0,
         }
     }
     pub fn get_flags(&self) -> FunctionFlags {
@@ -1192,22 +1198,18 @@ pub type CompileResult<T> = Result<T, CompilerErrorWrapper>;
 pub struct CompilerErrorWrapper {
     pub error: CompilerError,
     pub span: Option<Span>,
+    pub call_stack: Vec<(Span, String)>,
+    pub function_id: usize,
 }
 
-impl CompilerErrorWrapper {
-    pub fn extend(&mut self, str: &str) {
-        self.error = CompilerError::Generic(format!("{}\n{}", self.error, str))
-    }
-    pub fn extend_first_span(&mut self, str: &str, span: Span) {
-        self.error = CompilerError::Generic(format!("{}\n{}", self.error, str));
-        if self.span.is_none() {
-            self.span = Some(span);
-        }
-    }
-}
 impl From<CompilerError> for CompilerErrorWrapper {
     fn from(error: CompilerError) -> Self {
-        Self { error, span: None }
+        Self {
+            error,
+            span: None,
+            call_stack: vec![],
+            function_id: usize::MAX,
+        }
     }
 }
 
@@ -1216,47 +1218,18 @@ impl From<(Span, CompilerError)> for CompilerErrorWrapper {
         Self {
             error,
             span: Some(span),
+            call_stack: vec![],
+            function_id: usize::MAX,
         }
     }
 }
-pub trait CompileResultExt<T> {
-    fn extend(self, str: &str) -> CompileResult<T>;
-    fn extend_set_span_if_none(self, str: &str, span: Span) -> CompileResult<T>;
-}
-impl<T> CompileResultExt<T> for CompileResult<T> {
-    fn extend(self, str: &str) -> CompileResult<T> {
-        match self {
-            Ok(_) => self,
-            Err(mut x) => {
-                x.extend(str);
-                Err(x)
-            }
-        }
-    }
 
-    fn extend_set_span_if_none(self, str: &str, span: Span) -> CompileResult<T> {
-        match self {
-            Ok(_) => self,
-            Err(mut x) => {
-                x.extend_first_span(str, span);
-                Err(x)
-            }
-        }
-    }
-}
 #[derive(Debug)]
 pub enum CompilerError {
     Generic(String),
+    FunctionCompilation(Box<CompilerError>, usize),
     Io(std::io::Error),
-    InvalidExpression(String),
-    SymbolNotFound(String),
-    TypeMismatch {
-        expected: CompilerType,
-        found: CompilerType,
-    },
-    OpTypeMismatch(BinaryOp, String, String),
-    ArgumentCountMismatch(String),
-    LexerError(String, rcsharp_lexer::LexerResultError),
+    LexerError(String, rcsharp_lexer::LexerError),
     ParserError(String, (Span, rcsharp_parser::parser::ParserError)),
 }
 impl CompilerError {
@@ -1267,23 +1240,16 @@ impl CompilerError {
 impl std::fmt::Display for CompilerError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Generic(msg) => write!(f, "{}", msg),
-            Self::Io(e) => write!(f, "IO Error: {}", e),
-            Self::TypeMismatch { expected, found } => {
-                write!(f, "Expected {:?}, found {:?}", expected, found)
+            Self::Io(io) => io.fmt(f),
+            Self::FunctionCompilation(..) => {
+                todo!()
             }
-            Self::OpTypeMismatch(op, l, r) => {
-                write!(f, "Binary op {:?} incompatible with {} and {}", op, l, r)
-            }
-            Self::SymbolNotFound(sym) => write!(f, "Symbol not found: {}", sym),
-            Self::ArgumentCountMismatch(msg) => write!(f, "Argument mismatch: {}", msg),
-            Self::InvalidExpression(msg) => write!(f, "Invalid expression: {}", msg),
             Self::LexerError(path, error) => {
                 writeln!(f, "Lexer error during compilation:")?;
                 let file = std::fs::read_to_string(path).unwrap();
 
                 match error {
-                    LexerResultError::UnexpectedCharacter(range) => {
+                    LexerError::UnexpectedCharacter(range) => {
                         let c = &file[..range.start];
                         let row = c.chars().filter(|x| *x == '\n').count();
                         let col = c
@@ -1399,6 +1365,8 @@ impl std::fmt::Display for CompilerError {
                     _ => unimplemented!("{:?}", error),
                 }
             }
+
+            Self::Generic(msg) => write!(f, "{}", msg),
         }
     }
 }

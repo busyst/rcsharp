@@ -5,8 +5,8 @@ use crate::{
         structs::{ContextPath, ContextPathEnd},
     },
     compiler_essentials::{
-        CompileResult, CompileResultExt, CompiledLValue, CompilerError, CompilerType,
-        LLVMOutputHandler, LLVMVal, SymbolTable, Variable,
+        CompileResult, CompiledLValue, CompilerError, CompilerType, LLVMOutputHandler, LLVMVal,
+        SymbolTable, Variable,
     },
     compiler_functions::COMPILER_FUNCTIONS,
 };
@@ -490,11 +490,7 @@ impl<'a> ExpressionCompiler<'a> {
             } else {
                 eprintln!("{:?}", left);
                 eprintln!("{:?}", right);
-                return Err(CompilerError::TypeMismatch {
-                    expected: ltype,
-                    found: rtype,
-                }
-                .into());
+                return Err(CompilerError::Generic(format!("Type Missmatch")).into());
             }
         }
         // Boolean math
@@ -549,11 +545,7 @@ impl<'a> ExpressionCompiler<'a> {
             .into());
         };
         if !ltype.is_bool() {
-            return Err(CompilerError::TypeMismatch {
-                expected: CompilerType::Primitive(BOOL_TYPE),
-                found: ltype.clone(),
-            }
-            .into());
+            return Err(CompilerError::Generic(format!("Not Boolean")).into());
         }
         let logic_id = self.ctx.acquire_label_id();
         let result_ptr_reg = self.ctx.acquire_temp_id();
@@ -600,11 +592,7 @@ impl<'a> ExpressionCompiler<'a> {
             .into());
         };
         if !rtype.is_bool() {
-            return Err(CompilerError::TypeMismatch {
-                expected: CompilerType::Primitive(BOOL_TYPE),
-                found: rtype.clone(),
-            }
-            .into());
+            return Err(CompilerError::Generic(format!("Not boolean")).into());
         }
 
         self.emit_store(
@@ -817,11 +805,7 @@ impl<'a> ExpressionCompiler<'a> {
         if left_ptr.value_type != *rtype {
             eprintln!("LEFT TYPE: {:?}", left_ptr.value_type);
             eprintln!("RIGHT TYPE: {:?}", rtype);
-            return Err(CompilerError::InvalidExpression(format!(
-                "Type mismatch in assignment: {:?} and {:?}",
-                left_ptr.value_type, rtype
-            ))
-            .into());
+            return Err(CompilerError::Generic(format!("Type mismatch")).into());
         }
         let type_repr = left_ptr.value_type.llvm_representation(self.symbols())?;
         self.emit_store(
@@ -951,13 +935,7 @@ impl<'a> ExpressionCompiler<'a> {
             };
             if *argument_type != required_arguments[i] {
                 return CompileResult::Err(
-                    CompilerError::InvalidExpression(format!(
-                        "{:?} vs {:?} type missmatch with {}th argument",
-                        argument_type,
-                        &required_arguments[i],
-                        i + 1
-                    ))
-                    .into(),
+                    CompilerError::Generic(format!("Type missmatch")).into(),
                 );
             }
             arg_string.push(format!(
@@ -1021,13 +999,7 @@ impl<'a> ExpressionCompiler<'a> {
                 return Err(CompilerError::Generic("Argument is not a value".into()).into());
             };
             if argument_type != &func_args[idx].1 {
-                return Err(CompilerError::InvalidExpression(format!(
-                    "{:?} vs {:?} type missmatch with {}th argument",
-                    argument_type,
-                    &func_args[idx].1,
-                    idx + 1
-                ))
-                .into());
+                return Err(CompilerError::Generic(format!("Type missmatch")).into());
             }
             let var = Variable::new(argument_type.clone(), true, false);
             var.set_constant_value(Some(argument_rvalue.get_llvm_rep().clone()));
@@ -1048,11 +1020,7 @@ impl<'a> ExpressionCompiler<'a> {
         }
         let mut gen = LLVMGenPass::new(code_gen_ctx, 0..0);
         for x in body {
-            gen.compile_statement(x, self.output, self.compctx)
-                .extend(&format!(
-                    "While compoling inline of {}",
-                    _current_function_path
-                ))?;
+            gen.compile_statement(x, self.output, self.compctx)?;
         }
         if body
             .last()
@@ -1182,9 +1150,9 @@ impl<'a> ExpressionCompiler<'a> {
                     .into());
                 };
                 if !value_type.is_bool() {
-                    return Err(CompilerError::InvalidExpression(
-                        "Logical NOT can only be applied to booleans".to_string(),
-                    )
+                    return Err(CompilerError::Generic(format!(
+                        "Logical NOT can only be applied to booleans"
+                    ))
                     .into());
                 }
                 let temp_id = self.emit_binary_op(
@@ -1415,10 +1383,7 @@ impl<'a> ExpressionCompiler<'a> {
             "Current Path: '{}'",
             self.ctx.current_function_path.to_string()
         );
-        Err(
-            CompilerError::SymbolNotFound(format!("Lvalue '{}' not found", name.to_string()))
-                .into(),
-        )
+        Err(CompilerError::Generic(format!("Lvalue '{}' not found", name.to_string())).into())
     }
     fn compile_name_with_generics_lvalue(
         &mut self,
@@ -1616,7 +1581,7 @@ impl<'a> ExpressionCompiler<'a> {
             return Err(CompilerError::Generic("Array is not a value".into()).into());
         };
         let Some(base_type) = array_type.as_pointer() else {
-            return Err(CompilerError::InvalidExpression(format!(
+            return Err(CompilerError::Generic(format!(
                 "Cannot index non-pointer type {:?}",
                 array_type
             ))
@@ -1631,7 +1596,7 @@ impl<'a> ExpressionCompiler<'a> {
             return Err(CompilerError::Generic("Index is not a value".into()).into());
         };
         if !index_type.is_integer() {
-            return Err(CompilerError::InvalidExpression(format!(
+            return Err(CompilerError::Generic(format!(
                 "Index must be an integer, but it is {:?}",
                 index_type
             ))
@@ -2126,15 +2091,10 @@ pub fn constant_expression_optimizer_base(expr: &Expr) -> Option<Expr> {
 pub fn compile_expression_v2(
     expr: &Expr,
     expected: Expected,
-    span: Span,
+    _span: Span,
     ctx: &mut CodeGenContext,
     compctx: &mut CompilerContext,
     output: &mut LLVMOutputHandler,
 ) -> CompileResult<CompiledValue> {
-    ExpressionCompiler::new(ctx, output, compctx)
-        .compile_rvalue(expr, expected)
-        .map_err(|mut x| {
-            x.extend_first_span(&format!("in expression {}", expr.debug_emit()), span);
-            x
-        })
+    ExpressionCompiler::new(ctx, output, compctx).compile_rvalue(expr, expected)
 }

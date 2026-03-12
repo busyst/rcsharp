@@ -110,7 +110,7 @@ const KEYWORDS_TO_TOKENS: phf::Map<&'static str, Token> = phf::phf_map!(
 );
 const ALLOWED_FILE_SIZE: u64 = 1024 * 1024 * 16; // 16 MB
 #[derive(Debug)]
-pub enum LexerResultError {
+pub enum LexerError {
     FileNotFound(String),
     FileIsDirectory(String),
     IoError(std::io::Error),
@@ -122,7 +122,7 @@ pub enum LexerResultError {
     InvalidCharLiteral(Span),
     UnexpectedCharacter(Span),
 }
-pub type LexerResult<T> = Result<T, LexerResultError>;
+pub type LexerResult<T> = Result<T, LexerError>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Symbol(usize);
@@ -154,20 +154,20 @@ pub fn lex_file(
     symbol_table: &mut LexerSymbolTable,
 ) -> LexerResult<()> {
     fn metadata_check(path: &str, file: &File) -> LexerResult<u64> {
-        let metadata = file.metadata().map_err(LexerResultError::IoError)?;
+        let metadata = file.metadata().map_err(LexerError::IoError)?;
         if metadata.is_dir() {
-            return Err(LexerResultError::FileIsDirectory(path.to_string()));
+            return Err(LexerError::FileIsDirectory(path.to_string()));
         }
         Ok(metadata.len())
     }
-    let file = File::open(path).map_err(|_| LexerResultError::FileNotFound(path.to_string()))?;
+    let file = File::open(path).map_err(|_| LexerError::FileNotFound(path.to_string()))?;
     let file_size = metadata_check(path, &file)?;
 
     let mut reader: Box<dyn BufRead> = if file_size < ALLOWED_FILE_SIZE {
         let mut content = String::new();
         let mut f = file;
         f.read_to_string(&mut content)
-            .map_err(LexerResultError::IoError)?;
+            .map_err(LexerError::IoError)?;
         Box::new(Cursor::new(content))
     } else {
         Box::new(BufReader::new(file))
@@ -268,7 +268,7 @@ pub fn lex_stream(
     loop {
         let n_read = reader
             .read(&mut buf[buf_write_start..])
-            .map_err(LexerResultError::IoError)?;
+            .map_err(LexerError::IoError)?;
 
         if n_read == 0 {
             while !input_buffer.is_empty() {
@@ -294,7 +294,7 @@ pub fn lex_stream(
             Ok(_) => total_bytes_in_buffer,
             Err(e) => {
                 if let Some(_) = e.error_len() {
-                    return Err(LexerResultError::UnexpectedEOF(
+                    return Err(LexerError::UnexpectedEOF(
                         "Invalid UTF-8 encoding encountered".to_string(),
                     ));
                 }
@@ -523,7 +523,7 @@ fn process_chunk(
                 current_char = chars.next().unwrap();
             }
             if string_end == 0 && is_eof {
-                return Err(LexerResultError::UnclosedString(
+                return Err(LexerError::UnclosedString(
                     base_offset..(base_offset + readonly_input.len()),
                 ));
             }
@@ -557,7 +557,7 @@ fn process_chunk(
                 }
             }
             if char_end == 0 && is_eof {
-                return Err(LexerResultError::UnclosedChar(0..readonly_input.len()));
+                return Err(LexerError::UnclosedChar(0..readonly_input.len()));
             }
             if char_end != 0 {
                 char_token(
@@ -692,7 +692,7 @@ fn process_chunk(
                         last_consumed_byte_index = 1;
                     }
                     _ => {
-                        return Err(LexerResultError::UnexpectedCharacter(
+                        return Err(LexerError::UnexpectedCharacter(
                             base_offset + idx..base_offset + idx + 1,
                         ));
                     }
@@ -771,7 +771,7 @@ pub fn number_token(number_str: &str, span: Span, tokens: &mut Vec<TokenData>) -
     if number_str.contains('.') {
         let val = number_str
             .parse::<f64>()
-            .map_err(|_| LexerResultError::InvalidNumber(number_str.to_string(), span.clone()))?;
+            .map_err(|_| LexerError::InvalidNumber(number_str.to_string(), span.clone()))?;
         tokens.push(TokenData {
             token: Token::Decimal(val),
             span,
@@ -967,14 +967,14 @@ pub fn char_token(
             Some('\'') => '\'',
             Some('"') => '"',
             Some(other) => other,
-            None => return Err(LexerResultError::UnclosedChar(span)),
+            None => return Err(LexerError::UnclosedChar(span)),
         },
         Some(c) => c,
-        None => return Err(LexerResultError::UnclosedChar(span)),
+        None => return Err(LexerError::UnclosedChar(span)),
     };
 
     if chars.next().is_some() {
-        return Err(LexerResultError::InvalidCharLiteral(span));
+        return Err(LexerError::InvalidCharLiteral(span));
     }
 
     tokens.push(TokenData {

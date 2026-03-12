@@ -7,7 +7,7 @@ use rcsharp_parser::{
 
 use crate::{
     compiler::{
-        context::{CompilerContext, ErrorSeverity},
+        context::{CompilerContext, ErrorSeverity, FileID},
         passes::traits::CompilerPass,
         structs::{ContextPath, ContextPathEnd},
     },
@@ -21,7 +21,7 @@ use crate::{
 #[derive(Default)]
 pub struct TypeCheckPass {}
 impl<'a> CompilerPass<'a> for TypeCheckPass {
-    type Input = &'a Vec<StmtData>;
+    type Input = &'a HashMap<FileID, Vec<StmtData>>;
 
     type Output = ();
 
@@ -30,43 +30,56 @@ impl<'a> CompilerPass<'a> for TypeCheckPass {
         input: Self::Input,
         ctx: &mut CompilerContext,
     ) -> CompileResult<Self::Output> {
-        let mut worklist = vec![(ContextPath::default(), input.as_slice())];
+        let mut worklist = vec![];
+        for x in input {
+            worklist.push((ContextPath::default(), *x.0, x.1.to_vec()));
+        }
 
-        let mut types = vec![];
-        let mut enums = vec![];
-        let mut static_variables = vec![];
-        let mut functions = vec![];
+        let mut types: Vec<(ContextPath, FileID, rcsharp_parser::parser::ParsedStruct)> = vec![];
+        let mut enums: Vec<(ContextPath, FileID, rcsharp_parser::parser::ParsedEnum)> = vec![];
+        let mut functions: Vec<(ContextPath, FileID, rcsharp_parser::parser::ParsedFunction)> =
+            vec![];
+        let mut static_variables: Vec<(
+            ContextPath,
+            FileID,
+            (String, rcsharp_parser::parser::ParserType, Option<Expr>),
+        )> = vec![];
 
-        while let Some((path, body)) = worklist.pop() {
+        while let Some((path, file_id, body)) = worklist.pop() {
             for x in body {
-                match &x.stmt {
+                match x.stmt {
                     Stmt::Namespace(x, body) => {
-                        let full_path = path.to_extended(x);
-                        worklist.push((full_path, body));
+                        let full_path = path.to_extended(&x);
+                        worklist.push((full_path, file_id.clone(), body.to_vec()));
                     }
                     Stmt::Struct(x) => {
-                        types.push((path.clone(), x));
+                        types.push((path.clone(), file_id.clone(), x));
                     }
                     Stmt::Function(x) => {
-                        functions.push((path.clone(), x));
+                        functions.push((path.clone(), file_id.clone(), x));
                     }
                     Stmt::Enum(x) => {
-                        enums.push((path.clone(), x));
+                        enums.push((path.clone(), file_id.clone(), x));
                     }
                     Stmt::Static(name, var_type, expression) => {
-                        static_variables.push((path.clone(), (name, var_type, expression)));
+                        static_variables.push((
+                            path.clone(),
+                            file_id.clone(),
+                            (name, var_type, expression),
+                        ));
                     }
                     _ => {}
                 }
             }
         }
-        for (type_env_path, parsed_type) in types.iter() {
+        for (type_env_path, file_id, parsed_type) in types.iter() {
             let type_path =
                 ContextPathEnd::from_context_path(type_env_path.clone(), &parsed_type.name);
-            ctx.symbols
-                .insert_type(type_path, Struct::new_placeholder());
+            let mut x = Struct::new_placeholder();
+            x.file_id = *file_id;
+            ctx.symbols.insert_type(type_path, x);
         }
-        for (type_env_path, struct_decl) in types {
+        for (type_env_path, file_id, struct_decl) in types {
             let mut new_alias_types = HashMap::new();
             for prm in &struct_decl.generic_params {
                 new_alias_types.insert(
@@ -86,20 +99,18 @@ impl<'a> CompilerPass<'a> for TypeCheckPass {
                 };
                 compiler_struct_fields.push((name.to_string(), field_type));
             }
-
-            let type_path = ContextPathEnd::from_context_path(type_env_path, &struct_decl.name);
-            ctx.symbols.insert_type(
-                type_path,
-                Struct::new(
-                    ContextPathEnd::default(),
-                    compiler_struct_fields.into_boxed_slice(),
-                    struct_decl.attributes.clone(),
-                    struct_decl.generic_params.clone(),
-                ),
+            let mut x = Struct::new(
+                ContextPathEnd::default(),
+                compiler_struct_fields.into_boxed_slice(),
+                struct_decl.attributes.clone(),
+                struct_decl.generic_params.clone(),
             );
+            x.file_id = file_id;
+            let type_path = ContextPathEnd::from_context_path(type_env_path, &struct_decl.name);
+            ctx.symbols.insert_type(type_path, x);
         }
         ctx.symbols.set_alias_types(HashMap::new());
-        for (enum_env_path, parsed_enum) in enums {
+        for (enum_env_path, file_id, parsed_enum) in enums {
             let backing_type = parsed_enum.enum_type.as_integer().ok_or_else(|| {
                 CompilerError::Generic(
                     format!(
@@ -126,25 +137,23 @@ impl<'a> CompilerPass<'a> for TypeCheckPass {
             }
 
             let enum_path = ContextPathEnd::from_context_path(enum_env_path, &parsed_enum.name);
-
-            ctx.symbols.insert_enum(
-                enum_path,
-                Enum::new(
-                    ContextPathEnd::default(), // Handled by insert
-                    CompilerType::Primitive(backing_type),
-                    compiler_enum_fields.into_boxed_slice(),
-                    parsed_enum.attributes.clone(),
-                ),
+            let mut en = Enum::new(
+                ContextPathEnd::default(), // Handled by insert
+                CompilerType::Primitive(backing_type),
+                compiler_enum_fields.into_boxed_slice(),
+                parsed_enum.attributes.clone(),
             );
+            en.file_id = file_id;
+            ctx.symbols.insert_enum(enum_path, en);
         }
 
-        for (current_path, (name, var_type, _expression)) in static_variables {
-            let t = CompilerType::from_parser_type(var_type, &ctx.symbols, &current_path)?;
-            let full_path = ContextPathEnd::from_context_path(current_path, name);
+        for (current_path, _file_id, (name, var_type, _expression)) in static_variables {
+            let t = CompilerType::from_parser_type(&var_type, &ctx.symbols, &current_path)?;
+            let full_path = ContextPathEnd::from_context_path(current_path, &name);
             ctx.symbols
                 .insert_static_var(full_path, Variable::new(t, false, true))?;
         }
-        for (current_path, parsed_function) in functions {
+        for (current_path, file_id, parsed_function) in functions {
             let return_type = CompilerType::from_parser_type(
                 &parsed_function.return_type,
                 &ctx.symbols,
@@ -161,7 +170,7 @@ impl<'a> CompilerPass<'a> for TypeCheckPass {
             let full_path = ContextPathEnd::from_context_path(current_path, &parsed_function.name);
             let b = type_check_function_body(&parsed_function.body, &return_type, &args, ctx)
                 .unwrap_or(parsed_function.body.clone());
-            let function = Function::new(
+            let mut function = Function::new(
                 ContextPathEnd::default(),
                 args,
                 return_type,
@@ -170,6 +179,7 @@ impl<'a> CompilerPass<'a> for TypeCheckPass {
                 parsed_function.attributes.clone(),
                 parsed_function.generic_params.clone(),
             );
+            function.file_id = file_id;
             let flags = determine_function_flags(&function, &parsed_function.prefixes)?;
             function.set_flags(flags);
             if function.attributes.iter().any(|x| x.name_equals("no_lazy")) {

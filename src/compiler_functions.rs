@@ -308,7 +308,7 @@ fn bitcast_generic_impl(
     _expected: &Expected,
 ) -> CompileResult<CompiledValue> {
     if given_generic.len() != 1 {
-        return Err(CompilerError::ArgumentCountMismatch(format!(
+        return Err(CompilerError::Generic(format!(
             "{} needs exactly 1 generic argument, but got {}",
             "bitcast<T>(value)",
             given_generic.len(),
@@ -316,7 +316,7 @@ fn bitcast_generic_impl(
         .into());
     }
     if given_args.len() != 1 {
-        return Err(CompilerError::ArgumentCountMismatch(format!(
+        return Err(CompilerError::Generic(format!(
             "{} needs exactly 1 argument, but got {}",
             "bitcast<T>(value)",
             given_args.len()

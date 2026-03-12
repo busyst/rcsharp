@@ -1,3 +1,5 @@
+use rcsharp_lexer::{lex_text, LexerSymbolTable};
+
 use crate::{
     compiler::{
         context::{CompilerContext, ErrorSeverity},
@@ -52,19 +54,25 @@ pub fn compile(entry_path: &str) -> CompileResult<(CompilerContext, String)> {
     let llvm_ir = match codegen.run((), &mut ctx) {
         Ok(ir) => ir,
         Err(err) => {
-            let error_msg = if let Some(_span) = err.span {
-                format!(
-                    "Error at {}:{{}}:{{}}\n    Message: {}",
-                    ctx.source_manager.files[0].path, err.error
-                )
-            } else {
-                format!("Error: {}", err.error)
-            };
-            ctx.diagnostics.push((
-                ErrorSeverity::Error,
-                CompilerError::Generic(error_msg.clone()),
-            ));
-            println!("{}", error_msg);
+            let mut message = String::new();
+            message.push_str(&format!("{}\n", err.error));
+            message.push_str("Stack Trace:\n");
+            for (span, name) in &err.call_stack {
+                message.push_str(&format!("At {}:{} {}\n", span.start, span.end, name));
+            }
+            if err.function_id != usize::MAX {
+                let func = ctx.symbols.get_function_by_id(err.function_id);
+                let file_id = func.file_id.clone();
+                let file = &ctx.source_manager.files[file_id - 1];
+                let mut tokens = vec![];
+                let mut symbol_table = LexerSymbolTable::new();
+                lex_text(&file.content, &mut tokens, &mut symbol_table).unwrap();
+                let q = &tokens[err.call_stack.get(0).cloned().unwrap().0];
+                let e = q.first().map(|x| x.span.start).unwrap_or(0);
+                let r = q.last().map(|x| x.span.end).unwrap_or(0);
+                println!("{:?}", &file.content[e..r]);
+            }
+            println!("{}", message);
             return Err(CompilerError::Generic("Codegen failed".into()).into());
         }
     };
