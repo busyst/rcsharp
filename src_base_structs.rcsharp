@@ -231,7 +231,7 @@ namespace list{
                 break;
             }
             let next: &ListNode<T> = current.next_node;
-            mem::free(current as &void); 
+            mem::free(bitcast::<&void>(current)); 
             current = next; 
         }
         list.head = null;
@@ -292,7 +292,7 @@ namespace vector{
     #[ExtentionOf(Vec)]
     fn free<T>(vec: &Vec<T>) {
         if vec.array != null {
-            mem::free(vec.array as &void);
+            mem::free(bitcast::<&void>(vec.array));
         }
         vec.array = null;
         vec.length = 0;
@@ -503,7 +503,7 @@ namespace string{
     }
     #[ExtentionOf(String)]
     fn free(str: &String){
-        mem::free(str.data as &void);
+        mem::free(bitcast::<&void>(str.data));
         str.len = 0;
     }
     // Use data only inside function where it was called, because stack will be "freed" upon leaving function and data will be corrupted
@@ -795,8 +795,8 @@ namespace tests{
             i = i + 1;
         }
 
-        mem::free(buffer1 as &void);
-        mem::free(buffer2 as &void);
+        mem::free(bitcast::<&void>(buffer1));
+        mem::free(bitcast::<&void>(buffer2));
         
         console::writeln("OK", 2);
     }
@@ -818,7 +818,7 @@ namespace tests{
             if inserted[i] != expected[i] { process::throw("string_utils_test: insert failed"); }
             i = i + 1;
         }
-        mem::free(inserted as &void);
+        mem::free(bitcast::<&void>(inserted));
 
         console::writeln("OK", 2);
     }

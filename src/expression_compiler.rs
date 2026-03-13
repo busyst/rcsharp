@@ -94,6 +94,15 @@ impl CompiledValue {
             _ => false,
         }
     }
+    pub fn with_type(self, value_type: CompilerType) -> Self {
+        match self {
+            Self::Value { llvm_repr, .. } => Self::Value {
+                llvm_repr,
+                val_type: value_type,
+            },
+            _ => todo!(),
+        }
+    }
 }
 pub struct ExpressionCompiler<'a> {
     pub ctx: &'a mut CodeGenContext,
@@ -338,7 +347,7 @@ impl<'a> ExpressionCompiler<'a> {
             }
         } else {
         }
-        panic!("{:?}", name);
+        return Err(CompilerError::Generic(format!("{:?}", name)).into());
         /*
 
 
@@ -1792,7 +1801,7 @@ impl<'a> ExpressionCompiler<'a> {
                 to_type.clone(),
             ));
         }
-        panic!("{:?} {:?}", value, to_type)
+        return Err(CompilerError::Generic(format!("()")).into());
     }
     fn compiler_function_calls(
         &mut self,

@@ -1,5 +1,5 @@
 use rcsharp_parser::{
-    compiler_primitives::{BYTE_TYPE, DEFAULT_INTEGER_TYPE},
+    compiler_primitives::{find_primitive_type, BYTE_TYPE, DEFAULT_INTEGER_TYPE, VOID_TYPE},
     expression_parser::Expr,
     parser::ParserType,
 };
@@ -323,16 +323,32 @@ fn bitcast_generic_impl(
         ))
         .into());
     }
-    let source_val = compiler.compile_rvalue(&given_args[0], Expected::Anything)?;
-    let Some(source_type) = source_val.get_type() else {
-        return Err(CompilerError::Generic("bitcast source is not a value".into()).into());
-    };
     let target_type = CompilerType::from_parser_type(
         &given_generic[0],
         compiler.symbols(),
         &compiler.ctx.current_function_path,
     )?;
-
+    let source_val = compiler.compile_rvalue(&given_args[0], Expected::Type(&target_type))?;
+    let Some(source_type) = source_val.get_type() else {
+        return Err(CompilerError::Generic("bitcast source is not a value".into()).into());
+    };
+    if source_type.is_pointer() && target_type.is_pointer() {
+        return Ok(source_val.with_type(target_type));
+    }
+    if source_type == &target_type {
+        return Ok(source_val);
+    } else {
+        let q = CompilerType::Pointer(Box::new(CompilerType::Primitive(
+            find_primitive_type("i8").unwrap(),
+        )));
+        let w = CompilerType::Pointer(Box::new(CompilerType::Primitive(
+            find_primitive_type("u8").unwrap(),
+        )));
+        let e = CompilerType::Pointer(Box::new(CompilerType::Primitive(VOID_TYPE)));
+        if target_type == e && source_val.equal_type(&q) || source_val.equal_type(&w) {
+            return Ok(source_val.with_type(target_type));
+        }
+    }
     if !source_type.is_bitcast_compatible(&target_type, compiler.symbols()) {
         return Err(CompilerError::Generic(format!(
             "bitcast size mismatch: cannot cast from {:?} to {:?}",
