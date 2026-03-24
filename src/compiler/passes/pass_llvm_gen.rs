@@ -1,4 +1,7 @@
-use std::{cell::Cell, collections::HashMap};
+use std::{
+    cell::{Cell, RefCell},
+    collections::HashMap,
+};
 
 use rcsharp_parser::{
     compiler_primitives::BOOL_TYPE,
@@ -9,13 +12,15 @@ use rcsharp_parser::{
 use crate::{
     compiler::{
         context::CompilerContext,
+        expression::{
+            compile_expression, ExpressionCompileResult, ExpressionCompiler, LValueAccess,
+        },
         passes::traits::CompilerPass,
-        structs::{ContextPath, ContextPathEnd},
+        structs::{CompiledValue, ContextPath, ContextPathEnd, Expected, LLVMInstruction},
     },
     compiler_essentials::{
         CompileResult, CompilerError, CompilerType, LLVMOutputHandler, LLVMVal, Scope, Variable,
     },
-    expression_compiler::{compile_expression_v2, CompiledValue, Expected, ExpressionCompiler},
 };
 
 #[derive(Default)]
@@ -44,7 +49,7 @@ impl<'a> CompilerPass<'a> for LLVMGenPass {
         self.emit_types(&mut builder, ctx)?;
         self.emit_external(&mut builder, ctx)?;
         self.emit_debug_info(&mut builder, ctx)?;
-        return Ok(builder.build());
+        return Ok(builder.build(ctx.strings_header.take()));
     }
 }
 impl LLVMGenPass {
@@ -73,7 +78,7 @@ impl LLVMGenPass {
                         .llvm_representation(&ctx.symbols)
                         .map(|x| format!("{} %{}", x, name))
                 })
-                .collect::<CompileResult<Vec<_>>>()?
+                .collect::<ExpressionCompileResult<Vec<_>>>()?
                 .join(", ");
             builder.push_header(&format!(
                 "declare dllimport {} @{}({})\n",
@@ -133,7 +138,7 @@ impl LLVMGenPass {
                 .fields
                 .iter()
                 .map(|(_field_name, field_type)| field_type.llvm_representation(&ctx.symbols))
-                .collect::<CompileResult<Vec<_>>>()?
+                .collect::<ExpressionCompileResult<Vec<_>>>()?
                 .join(", ");
             builder.push_header(&format!(
                 "%struct.{} = type {{ {} }}\n",
@@ -177,7 +182,7 @@ impl LLVMGenPass {
                                 .map(|x| x.llvm_representation(&ctx.symbols))
                                 .flatten()
                         })
-                        .collect::<CompileResult<Vec<_>>>()?
+                        .collect::<ExpressionCompileResult<Vec<_>>>()?
                         .join(", ");
                     builder.push_header(&format!("{} = type {{ {} }}\n", name, fields_string));
                 }
@@ -188,6 +193,7 @@ impl LLVMGenPass {
         }
         Ok(())
     }
+
     fn compile_functions(
         &mut self,
         builder: &mut LLVMOutputHandler,
@@ -197,13 +203,7 @@ impl LLVMGenPass {
             .symbols
             .get_function_id_by_path(&ContextPathEnd::from_path("", "main"))
         else {
-            for f in ctx.symbols.functions_iter() {
-                println!("{}", f.0.to_string());
-            }
-            return Err(CompilerError::Generic(format!(
-                "Function 'main' was not found! Dumped all function names"
-            ))
-            .into());
+            return Err(CompilerError::Generic(format!("Function 'main' was not found!")).into());
         };
         let mut to_do = vec![main];
         let mut done = vec![];
@@ -278,7 +278,7 @@ impl LLVMGenPass {
                                 .with_substituted_generics(&type_map, &ctx.symbols)
                                 .map(|x| (name.clone(), x))
                         })
-                        .collect::<CompileResult<Vec<_>>>()?;
+                        .collect::<ExpressionCompileResult<Vec<_>>>()?;
                     to_do_generics.push((
                         type_map,
                         func.path().clone(),
@@ -349,7 +349,7 @@ impl LLVMGenPass {
                         .with_substituted_generics(&ctx.symbols.alias_types(), &ctx.symbols)
                         .map(|x| (name.clone(), x))
                 })
-                .collect::<CompileResult<Vec<_>>>()?;
+                .collect::<ExpressionCompileResult<Vec<_>>>()?;
 
             let body = function.body.clone();
             (
@@ -386,7 +386,7 @@ impl LLVMGenPass {
         body: &Box<[StmtData]>,
         builder: &mut LLVMOutputHandler,
         ctx: &mut CompilerContext,
-    ) -> CompileResult<()> {
+    ) -> CompileResult<Vec<LLVMInstruction>> {
         let symbols = &ctx.symbols;
         let return_type_llvm = return_type.llvm_representation(symbols)?;
 
@@ -397,10 +397,13 @@ impl LLVMGenPass {
                     .llvm_representation(symbols)
                     .map(|type_str| format!("{} %{}", type_str, name))
             })
-            .collect::<CompileResult<Vec<_>>>()?
+            .collect::<ExpressionCompileResult<Vec<_>>>()?
             .join(", ");
+        let mut instructions = vec![];
         builder.start_function(&return_type_llvm, full_function_name, &args_str);
-        builder.emit_label_intro("entry");
+        instructions.push(LLVMInstruction::Label {
+            name: format!("entry"),
+        });
         self.cgctx.scope = Scope::new();
         self.cgctx.current_function_path = function_path;
         self.cgctx.current_function_return_type = return_type.clone();
@@ -408,7 +411,7 @@ impl LLVMGenPass {
         self.cgctx.temp_counter.set(0);
         self.cgctx.label_counter.set(0);
         self.cgctx.scope.push_layer();
-        self.cgctx.current_block_name = "entry".to_string();
+        self.cgctx.set_current_block_name("entry".to_string());
         self.cgctx.pending_returns = Vec::new();
         self.cgctx.return_label_name = "func_exit".to_string();
 
@@ -428,8 +431,13 @@ impl LLVMGenPass {
         }
         let fx = body.clone();
         for stmt in fx.iter() {
-            match self.compile_statement(stmt, builder, ctx) {
-                Ok(_) => {}
+            match self.compile_statement(stmt, ctx) {
+                Ok((mut x, s)) => {
+                    instructions.append(&mut x);
+                    if s {
+                        break;
+                    }
+                }
                 Err(mut x) => {
                     x.call_stack.push((0..0, full_function_name.to_string()));
                     return Err(x);
@@ -437,19 +445,30 @@ impl LLVMGenPass {
             }
         }
         if return_type.is_void() {
-            builder.emit_unconditional_jump_to(&self.cgctx.return_label_name);
-            builder.emit_label(&self.cgctx.return_label_name);
+            instructions.push(LLVMInstruction::Jump {
+                label: self.cgctx.return_label_name.to_string(),
+            });
+            instructions.push(LLVMInstruction::Label {
+                name: self.cgctx.return_label_name.to_string(),
+            });
         } else if self.cgctx.pending_returns.is_empty() {
-            builder.emit_line_body("unreachable");
+            instructions.push(LLVMInstruction::Unreachable);
         } else {
-            builder.emit_label(&self.cgctx.return_label_name);
+            instructions.push(LLVMInstruction::Label {
+                name: self.cgctx.return_label_name.to_string(),
+            });
         }
         let x = self.cgctx.scope.pop_layer(&mut ctx.symbols);
         for x in x {
-            self.compile_statement(&x.with_dummy_span(), builder, ctx)?;
+            let (mut s_instructions, end_compile) =
+                self.compile_statement(&x.with_dummy_span(), ctx)?;
+            instructions.append(&mut s_instructions);
+            if end_compile {
+                break;
+            };
         }
         if return_type.is_void() {
-            builder.emit_ret_void();
+            instructions.push(LLVMInstruction::ReturnVoid);
         } else {
             if self.cgctx.pending_returns.is_empty() {
             } else {
@@ -458,84 +477,71 @@ impl LLVMGenPass {
                         .cgctx
                         .pending_returns
                         .iter()
-                        .map(|(val, blk)| format!("[ {}, %{} ]", val, blk))
-                        .collect::<Vec<_>>()
-                        .join(", ");
-                    builder.emit_line_body(&format!(
-                        "%final_ret = phi {} {}",
-                        return_type_llvm, phi_ops
-                    ));
-                    builder.emit_line_body(&format!("ret {} %final_ret", return_type_llvm));
+                        .cloned()
+                        .collect::<Vec<_>>();
+                    let utvc = self.cgctx.acquire_temp_id();
+                    instructions.push(LLVMInstruction::Phi {
+                        target_reg: utvc,
+                        result_type: return_type.clone(),
+                        incoming: phi_ops,
+                    });
+                    instructions.push(LLVMInstruction::Return {
+                        return_type: return_type.clone(),
+                        value: LLVMVal::Register(utvc),
+                    });
                 } else {
-                    builder.emit_line_body(&format!(
-                        "ret {} {}",
-                        return_type_llvm, self.cgctx.pending_returns[0].0
-                    ));
+                    instructions.push(LLVMInstruction::Return {
+                        return_type: return_type.clone(),
+                        value: self.cgctx.pending_returns[0].0.clone(),
+                    });
                 }
             }
         }
+        Self::compile_instructions(instructions, ctx, builder)?;
         builder.end_function();
-        Ok(())
+        Ok(vec![])
     }
     pub fn compile_statement(
         &mut self,
         statement: &StmtData,
-        builder: &mut LLVMOutputHandler,
-        ctx: &mut CompilerContext,
-    ) -> CompileResult<bool> {
+        ctx: &CompilerContext,
+    ) -> CompileResult<(Vec<LLVMInstruction>, bool)> {
         self.span = statement.span.clone();
         match &statement.stmt {
-            Stmt::Debug(comment) => {
-                builder.emit_comment(&comment);
-                Ok(false)
-            }
-            Stmt::If(x, y, z) => Ok(self.compile_if_statement(x, y, z, builder, ctx)?),
-            Stmt::Block(x) => {
-                self.compile_block(x, builder, ctx)?;
-                Ok(false)
-            }
-            Stmt::Return(x) => Ok(self.compile_return(x, builder, ctx)?),
-            Stmt::Expr(x) => match compile_expression_v2(
-                x,
-                Expected::NoReturn,
-                self.span.clone(),
-                &mut self.cgctx,
-                ctx,
-                builder,
-            ) {
+            Stmt::Debug(comment) => Ok((vec![LLVMInstruction::Debug(comment.to_string())], false)),
+            Stmt::If(x, y, z) => self.compile_if_statement(x, y, z, ctx),
+            Stmt::Block(x) => self.compile_block(x, ctx),
+            Stmt::Return(x) => self.compile_return(x, ctx),
+            Stmt::Expr(x) => match compile_expression(x, Expected::NoReturn, &self.cgctx, ctx) {
                 Ok(val) => {
-                    return Ok(val.is_program_halt());
+                    return Ok((val.1, val.0.is_program_halt()));
                 }
-                Err(mut x) => {
+                Err(err) => {
+                    let mut x: crate::compiler_essentials::CompilerErrorWrapper = err.into();
                     x.call_stack
-                        .push((self.span.clone(), "expression".to_string()));
+                        .push((statement.span.clone(), format!("expression")));
                     return Err(x);
                 }
             },
             Stmt::ConstLet(name, var_type, z) => {
-                self.compile_var_decl(
-                    (name, var_type, &Some(z.clone()), true, false),
-                    builder,
-                    ctx,
-                )?;
-                Ok(false)
+                self.compile_var_decl((name, var_type, &Some(z.clone()), true, false), ctx)
             }
             Stmt::Static(name, var_type, z) => {
-                self.compile_var_decl((name, var_type, z, false, true), builder, ctx)?;
-                Ok(false)
+                self.compile_var_decl((name, var_type, z, false, true), ctx)
             }
+
             Stmt::Let(name, var_type, z) => {
-                self.compile_var_decl((name, var_type, z, false, false), builder, ctx)?;
-                Ok(false)
+                self.compile_var_decl((name, var_type, z, false, false), ctx)
             }
-            Stmt::Loop(inside) => {
-                self.compile_loop(inside, builder, ctx)?;
-                Ok(false)
-            }
+            Stmt::Loop(inside) => self.compile_loop(inside, ctx),
             Stmt::Continue => match self.cgctx.scope.current_loop_tag() {
                 Some(li) => {
-                    builder.emit_unconditional_jump_to(&format!("loop_body{}", li));
-                    return Ok(false);
+                    return Ok((
+                        vec![LLVMInstruction::Jump {
+                            label: format!("loop_body{}", li),
+                        }],
+                        true,
+                    ));
                 }
                 None => {
                     return Err((
@@ -547,8 +553,12 @@ impl LLVMGenPass {
             },
             Stmt::Break => match self.cgctx.scope.current_loop_tag() {
                 Some(li) => {
-                    builder.emit_unconditional_jump_to(&format!("loop_body{}_exit", li));
-                    return Ok(true);
+                    return Ok((
+                        vec![LLVMInstruction::Jump {
+                            label: format!("loop_body{}_exit", li),
+                        }],
+                        true,
+                    ));
                 }
                 None => {
                     return Err((
@@ -559,7 +569,7 @@ impl LLVMGenPass {
                 }
             },
             Stmt::CompilerHint(..) => panic!(),
-            Stmt::CompilerDud => Ok(false),
+            Stmt::CompilerDud => Ok((Vec::new(), false)),
             _ => unimplemented!("{:?}", statement),
         }
     }
@@ -568,21 +578,15 @@ impl LLVMGenPass {
         expr: &Expr,
         r#then: &[StmtData],
         r#else: &[StmtData],
-        builder: &mut LLVMOutputHandler,
-        ctx: &mut CompilerContext,
-    ) -> CompileResult<bool> {
-        if r#then.is_empty() && r#else.is_empty() {
-            return Ok(false);
-        }
+        ctx: &CompilerContext,
+    ) -> CompileResult<(Vec<LLVMInstruction>, bool)> {
         let bool_type = CompilerType::Primitive(BOOL_TYPE);
-        let cond_result = compile_expression_v2(
-            expr,
-            Expected::Type(&bool_type),
-            self.span.clone(),
-            &mut self.cgctx,
-            ctx,
-            builder,
-        )?;
+        if r#then.is_empty() && r#else.is_empty() {
+            compile_expression(expr, Expected::Type(&bool_type), &self.cgctx, ctx)?;
+            return Ok((Vec::new(), false));
+        }
+        let (cond_result, mut instr) =
+            compile_expression(expr, Expected::Type(&bool_type), &self.cgctx, ctx)?;
         let Some(cond_val_type) = cond_result.get_type() else {
             return Err(
                 CompilerError::Generic("Right side of if condition is not value".into()).into(),
@@ -599,11 +603,6 @@ impl LLVMGenPass {
             )
                 .into());
         }
-        if false {
-            if let LLVMVal::ConstantBoolean(_boolean) = cond_result.get_llvm_rep() {
-                return Ok(false);
-            }
-        }
         let logic_id = self.cgctx.acquire_label_id();
         let then_label = format!("then{}", logic_id);
         let else_label = format!("else{}", logic_id);
@@ -618,62 +617,65 @@ impl LLVMGenPass {
         } else {
             &else_label
         };
-        builder.push_function_body(&format!(
-            "\tbr i1 {}, label %{}, label %{}\n",
-            cond_result.get_llvm_rep().to_string(),
-            target_then,
-            target_else
-        ));
+        instr.push(LLVMInstruction::Branch {
+            condition_val: cond_result.get_llvm_rep().clone(),
+            then_label_name: target_then.to_string(),
+            else_label_name: target_else.to_string(),
+        });
         if !r#then.is_empty() {
-            builder.emit_label(&then_label);
-            self.cgctx.current_block_name = then_label;
+            instr.push(LLVMInstruction::Label {
+                name: then_label.to_string(),
+            });
+            self.cgctx.set_current_block_name(then_label.to_string());
             self.cgctx.scope.push_layer();
             for then_stmt in then {
-                let end_compile = self.compile_statement(then_stmt, builder, ctx)?;
+                let (mut s_instructions, end_compile) = self.compile_statement(then_stmt, ctx)?;
+                instr.append(&mut s_instructions);
                 if end_compile {
                     break;
                 };
             }
-            let exit_stmts = self.cgctx.scope.pop_layer(&mut ctx.symbols);
+            let exit_stmts = self.cgctx.scope.pop_layer(&ctx.symbols);
             for x in exit_stmts {
-                self.compile_statement(
-                    &StmtData {
-                        stmt: x,
-                        span: self.span.clone(),
-                    },
-                    builder,
-                    ctx,
-                )?;
+                let (mut s_instructions, end_compile) =
+                    self.compile_statement(&x.with_dummy_span(), ctx)?;
+                instr.append(&mut s_instructions);
+                if end_compile {
+                    break;
+                };
             }
             if then
                 .last()
                 .map(|x| !matches!(x.stmt, Stmt::Return(..) | Stmt::Break | Stmt::Continue))
                 .unwrap_or(false)
             {
-                builder.emit_unconditional_jump_to(&end_label);
+                instr.push(LLVMInstruction::Jump {
+                    label: end_label.to_string(),
+                });
             }
         }
 
         if !r#else.is_empty() {
-            builder.emit_label(&else_label);
-            self.cgctx.current_block_name = else_label;
+            instr.push(LLVMInstruction::Label {
+                name: else_label.to_string(),
+            });
+            self.cgctx.set_current_block_name(else_label.to_string());
             self.cgctx.scope.push_layer();
             for then_stmt in r#else {
-                let end_compile = self.compile_statement(then_stmt, builder, ctx)?;
+                let (mut s_instructions, end_compile) = self.compile_statement(then_stmt, ctx)?;
+                instr.append(&mut s_instructions);
                 if end_compile {
                     break;
                 };
             }
-            let x = self.cgctx.scope.pop_layer(&mut ctx.symbols);
+            let x = self.cgctx.scope.pop_layer(&ctx.symbols);
             for x in x {
-                self.compile_statement(
-                    &StmtData {
-                        stmt: x,
-                        span: self.span.clone(),
-                    },
-                    builder,
-                    ctx,
-                )?;
+                let (mut s_instructions, end_compile) =
+                    self.compile_statement(&x.with_dummy_span(), ctx)?;
+                instr.append(&mut s_instructions);
+                if end_compile {
+                    break;
+                };
             }
         }
         if r#else
@@ -681,41 +683,44 @@ impl LLVMGenPass {
             .map(|x| !matches!(x.stmt, Stmt::Return(..) | Stmt::Break | Stmt::Continue))
             .unwrap_or(false)
         {
-            builder.emit_unconditional_jump_to(&end_label);
+            instr.push(LLVMInstruction::Jump {
+                label: end_label.to_string(),
+            });
         }
-        builder.emit_label(&end_label);
-        self.cgctx.current_block_name = end_label;
-        Ok(false)
+        instr.push(LLVMInstruction::Label {
+            name: end_label.to_string(),
+        });
+        self.cgctx.set_current_block_name(end_label.to_string());
+        Ok((instr, false))
     }
     fn compile_return(
         &mut self,
         expr: &Option<Expr>,
-        builder: &mut LLVMOutputHandler,
-        ctx: &mut CompilerContext,
-    ) -> CompileResult<bool> {
+        ctx: &CompilerContext,
+    ) -> CompileResult<(Vec<LLVMInstruction>, bool)> {
         let return_type = self.cgctx.current_function_return_type.clone();
         match (expr.is_some(), !return_type.is_void()) {
             (true, true) => {
                 let expr = expr.as_ref().unwrap();
-                let result = compile_expression_v2(
-                    expr,
-                    Expected::Type(&return_type),
-                    self.span.clone(),
-                    &mut self.cgctx,
-                    ctx,
-                    builder,
-                )?;
+                let (result, mut instr) =
+                    compile_expression(expr, Expected::Type(&return_type), &self.cgctx, ctx)?;
                 if !result.equal_type(&return_type) {
                     return Err(CompilerError::Generic(format!("TypeMismatch")).into());
                 }
-                self.cgctx.pending_returns.push((
-                    result.get_llvm_rep().to_string(),
-                    self.cgctx.current_block_name.to_string(),
-                ));
-                builder.emit_unconditional_jump_to(&self.cgctx.return_label_name);
+
+                self.cgctx.push_return(result.get_llvm_rep().clone());
+                instr.push(LLVMInstruction::Jump {
+                    label: self.cgctx.return_label_name.to_string(),
+                });
+                return Ok((instr, true));
             }
             (false, false) => {
-                builder.emit_unconditional_jump_to(&self.cgctx.return_label_name);
+                return Ok((
+                    vec![LLVMInstruction::Jump {
+                        label: self.cgctx.return_label_name.to_string(),
+                    }],
+                    true,
+                ));
             }
             (true, false) => {
                 return Err((
@@ -738,29 +743,26 @@ impl LLVMGenPass {
                     .into());
             }
         }
-        Ok(true)
     }
     fn compile_var_decl(
         &mut self,
         var: (&String, &ParserType, &Option<Expr>, bool, bool),
-        builder: &mut LLVMOutputHandler,
-        ctx: &mut CompilerContext,
-    ) -> CompileResult<()> {
+        ctx: &CompilerContext,
+    ) -> CompileResult<(Vec<LLVMInstruction>, bool)> {
         let (name, p_type, expr, is_const, is_static) = var;
         let var_type = CompilerType::from_parser_type(
             p_type,
             &ctx.symbols,
             &self.cgctx.current_function_path,
         )?;
-        let variable = Variable::new(var_type, is_const, is_static);
+        let variable = Variable::new(var_type.clone(), is_const, is_static);
+        let mut builder = Vec::new();
         let id = if !is_const && !is_static {
             let x = self.cgctx.acquire_var_id();
-            builder.push_function_intro(&format!(
-                "\t{} = alloca {}; var: {}\n",
-                LLVMVal::Variable(x).to_string(),
-                variable.compiler_type().llvm_representation(&ctx.symbols)?,
-                name
-            ));
+            builder.push(LLVMInstruction::AllocateVar {
+                target_reg: x,
+                alloc_type: var_type.clone(),
+            });
             x
         } else {
             0
@@ -768,16 +770,13 @@ impl LLVMGenPass {
 
         let Some(expression) = expr else {
             self.cgctx.scope.define(name.clone(), variable, id);
-            return Ok(());
+            return Ok((builder, false));
         };
-
-        let result = compile_expression_v2(
+        let (result, mut instr) = compile_expression(
             expression,
             Expected::Type(&variable.compiler_type()),
-            self.span.clone(),
-            &mut self.cgctx,
+            &self.cgctx,
             ctx,
-            builder,
         )?;
         if !result.equal_type(&variable.compiler_type()) {
             let Some(_result_type) = result.get_type() else {
@@ -786,12 +785,18 @@ impl LLVMGenPass {
                 )
                 .into());
             };
+            eprintln!("{}", expression.debug_emit());
             return Err((
                 self.span.clone(),
-                CompilerError::Generic(format!("Type missmatch")),
+                CompilerError::Generic(format!(
+                    "Type missmatch {:?} vs {:?}",
+                    result.get_type().unwrap(),
+                    variable.compiler_type()
+                )),
             )
                 .into());
         }
+        builder.append(&mut instr);
         if result
             .get_type()
             .map(|x| !x.as_primitive().is_some() && !x.is_pointer())
@@ -821,104 +826,373 @@ impl LLVMGenPass {
                     self.cgctx.scope.define(name.clone(), variable, id);
                     let f = ctx.symbols.get_type_by_id(tid).fields.clone();
                     for (x, expr) in f.iter().zip(fields.iter()) {
-                        let q =
-                            x.1.with_substituted_generics(&type_map, &ctx.symbols)?
-                                .llvm_representation(&ctx.symbols)
-                                .unwrap();
-                        let mut ec = ExpressionCompiler::new(&mut self.cgctx, builder, ctx);
-                        let l = ec.compile_lvalue(
+                        let ec = ExpressionCompiler::new(&mut self.cgctx, ctx);
+                        let (t, mut instruc) = ec.compile_lvalue(
                             &Expr::MemberAccess(Box::new(Expr::Name(name.clone())), x.0.clone()),
-                            false,
-                            true,
+                            LValueAccess::ModifyContent,
                         )?;
-                        ec.emit_store(expr, &l.location, &q);
+                        instruc.push(LLVMInstruction::Store {
+                            value: expr.clone(),
+                            value_type: t.value_type,
+                            ptr: t.location,
+                        });
+                        builder.append(&mut instruc);
                     }
-                    return Ok(());
+                    return Ok((builder, false));
                 };
                 self.cgctx.scope.define(name.clone(), variable, id);
                 let f = ctx.symbols.get_type_by_id(x).fields.clone();
                 for (x, expr) in f.iter().zip(fields.iter()) {
-                    let q = x.1.llvm_representation(&ctx.symbols).unwrap();
-                    let mut ec = ExpressionCompiler::new(&mut self.cgctx, builder, ctx);
-                    let l = ec.compile_lvalue(
+                    let ec = ExpressionCompiler::new(&mut self.cgctx, ctx);
+                    let (t, mut instruc) = ec.compile_lvalue(
                         &Expr::MemberAccess(Box::new(Expr::Name(name.clone())), x.0.clone()),
-                        false,
-                        true,
+                        LValueAccess::ModifyContent,
                     )?;
-                    ec.emit_store(expr, &l.location, &q);
+                    instruc.push(LLVMInstruction::Store {
+                        value: expr.clone(),
+                        value_type: t.value_type,
+                        ptr: t.location,
+                    });
+                    builder.append(&mut instruc);
                 }
-                return Ok(());
+                return Ok((builder, false));
             }
         }
         if is_const {
             variable.set_constant_value(Some(result.get_llvm_rep().clone()));
             self.cgctx.scope.define(name.clone(), variable, id);
-            return Ok(());
+            return Ok((builder, false));
         }
-        let t = variable.compiler_type().llvm_representation(&ctx.symbols)?;
         self.cgctx.scope.define(name.clone(), variable, id);
-        let ptr_reg = format!("%v{}", id);
-        builder.emit_line_body(&format!(
-            "store {} {}, {}* {}",
-            t,
-            result.get_llvm_rep().to_string(),
-            t,
-            ptr_reg
-        ));
-        Ok(())
+        builder.push(LLVMInstruction::Store {
+            value: result.get_llvm_rep().clone(),
+            value_type: var_type,
+            ptr: LLVMVal::Variable(id),
+        });
+        Ok((builder, false))
     }
     fn compile_loop(
         &mut self,
         inside: &[StmtData],
-        builder: &mut LLVMOutputHandler,
-        ctx: &mut CompilerContext,
-    ) -> CompileResult<()> {
+        ctx: &CompilerContext,
+    ) -> CompileResult<(Vec<LLVMInstruction>, bool)> {
         let lc = self.cgctx.acquire_label_id();
-        builder.emit_unconditional_jump_to(&format!("loop_body{}", lc));
-        builder.emit_label(&format!("loop_body{}", lc));
+        let mut instructions = vec![
+            LLVMInstruction::Jump {
+                label: format!("loop_body{}", lc),
+            },
+            LLVMInstruction::Label {
+                name: format!("loop_body{}", lc),
+            },
+        ];
         self.cgctx.scope.push_layer();
         self.cgctx.scope.set_loop_tag(Some(lc));
-        self.cgctx.current_block_name = format!("loop_body{}", lc);
+        self.cgctx
+            .set_current_block_name(format!("loop_body{}", lc));
+        let mut terminated = false;
         for x in inside {
-            self.compile_statement(x, builder, ctx)?;
+            let (mut instr, brk) = self.compile_statement(x, ctx)?;
+            instructions.append(&mut instr);
+            if brk {
+                terminated = true;
+                break;
+            }
         }
+        if !terminated {
+            instructions.push(LLVMInstruction::Jump {
+                label: format!("loop_body{}", lc),
+            });
+        }
+        instructions.push(LLVMInstruction::Label {
+            name: format!("loop_body{}_exit", lc),
+        });
 
-        builder.emit_unconditional_jump_to(&format!("loop_body{}", lc));
-        builder.emit_label(&format!("loop_body{}_exit", lc));
-        self.cgctx.current_block_name = format!("loop_body{}_exit", lc);
-        let x = self.cgctx.scope.pop_layer(&mut ctx.symbols);
+        self.cgctx
+            .set_current_block_name(format!("loop_body{}_exit", lc));
+        let x = self.cgctx.scope.pop_layer(&ctx.symbols);
         for x in x {
-            self.compile_statement(&x.with_dummy_span(), builder, ctx)?;
+            let (mut instr, brk) = self.compile_statement(&x.with_dummy_span(), ctx)?;
+            instructions.append(&mut instr);
+            if brk {
+                break;
+            }
         }
-        Ok(())
+        Ok((instructions, false))
     }
     fn compile_block(
         &mut self,
         inside: &[StmtData],
-        builder: &mut LLVMOutputHandler,
-        ctx: &mut CompilerContext,
-    ) -> CompileResult<()> {
-        let lc = self.cgctx.acquire_label_id();
+        ctx: &CompilerContext,
+    ) -> CompileResult<(Vec<LLVMInstruction>, bool)> {
+        //let lc = self.cgctx.acquire_label_id();
         self.cgctx.scope.push_layer();
-        self.cgctx.current_block_name = format!("block{}", lc);
+        let mut instructions = Vec::new();
         for x in inside {
-            self.compile_statement(x, builder, ctx)?;
+            let (mut instr, brk) = self.compile_statement(x, ctx)?;
+            instructions.append(&mut instr);
+            if brk {
+                break;
+            }
         }
 
-        let x = self.cgctx.scope.pop_layer(&mut ctx.symbols);
+        let x = self.cgctx.scope.pop_layer(&ctx.symbols);
         for x in x {
-            self.compile_statement(&x.with_dummy_span(), builder, ctx)?;
+            let (mut instr, brk) = self.compile_statement(&x.with_dummy_span(), ctx)?;
+            instructions.append(&mut instr);
+            if brk {
+                break;
+            }
+        }
+        Ok((instructions, false))
+    }
+
+    pub fn compile_instructions(
+        vec: Vec<LLVMInstruction>,
+        ctx: &mut CompilerContext,
+        builder: &mut LLVMOutputHandler,
+    ) -> CompileResult<()> {
+        for x in vec {
+            match x {
+                LLVMInstruction::AllocateVar {
+                    target_reg,
+                    alloc_type,
+                } => {
+                    let alloc_type_llvm = alloc_type.llvm_representation(&ctx.symbols)?;
+                    builder.push_function_intro(&format!(
+                        "\t%v{} = alloca {}\n",
+                        target_reg, alloc_type_llvm,
+                    ));
+                }
+                LLVMInstruction::AllocateStack {
+                    target_reg,
+                    alloc_type,
+                    count_type,
+                    count,
+                } => {
+                    let alloc_type_llvm = alloc_type.llvm_representation(&ctx.symbols)?;
+                    let count_type_llvm = count_type.llvm_representation(&ctx.symbols)?;
+                    builder.push_function_body(&format!(
+                        "\t%tmp{} = alloca {}, {} {}\n",
+                        target_reg,
+                        alloc_type_llvm,
+                        count_type_llvm,
+                        count.to_string()
+                    ));
+                }
+                LLVMInstruction::Cast {
+                    target_reg,
+                    op,
+                    from_type,
+                    from_val,
+                    to_type,
+                } => {
+                    let from_type_llvm = from_type.llvm_representation(&ctx.symbols)?;
+                    let to_type_llvm = to_type.llvm_representation(&ctx.symbols)?;
+                    builder.push_function_body(&format!(
+                        "\t%tmp{} = {} {} {} to {}\n",
+                        target_reg,
+                        op,
+                        from_type_llvm,
+                        from_val.to_string(),
+                        to_type_llvm,
+                    ));
+                }
+                LLVMInstruction::BinaryOp {
+                    target_reg,
+                    op,
+                    op_type,
+                    lhs,
+                    rhs,
+                } => {
+                    let op_type_llvm = if op_type.is_pointer() {
+                        op_type.llvm_representation(&ctx.symbols)?;
+                        "ptr".to_string()
+                    } else {
+                        op_type.llvm_representation(&ctx.symbols)?
+                    };
+                    builder.push_function_body(&format!(
+                        "\t%tmp{} = {} {} {}, {}\n",
+                        target_reg,
+                        op,
+                        op_type_llvm,
+                        lhs.to_string(),
+                        rhs.to_string(),
+                    ));
+                }
+                LLVMInstruction::Load {
+                    target_reg,
+                    ptr,
+                    result_type,
+                } => {
+                    let result_type_llvm = result_type.llvm_representation(&ctx.symbols)?;
+                    builder.push_function_body(&format!(
+                        "\t%tmp{} = load {}, {}* {}\n",
+                        target_reg,
+                        result_type_llvm,
+                        result_type_llvm,
+                        ptr.to_string()
+                    ));
+                }
+                LLVMInstruction::Phi {
+                    target_reg,
+                    result_type,
+                    incoming,
+                } => {
+                    let result_type_llvm = result_type.llvm_representation(&ctx.symbols)?;
+                    builder.push_function_body(&format!(
+                        "\t%tmp{} = phi {} {}\n",
+                        target_reg,
+                        result_type_llvm,
+                        incoming
+                            .iter()
+                            .map(|x| format!("[{}, %{}]", x.0.to_string(), x.1))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ));
+                }
+                LLVMInstruction::GetElementPtr {
+                    target_reg,
+                    base_type,
+                    ptr,
+                    indices,
+                } => {
+                    let base_type_llvm = base_type.llvm_representation(&ctx.symbols)?;
+                    let ind_llvm = indices
+                        .iter()
+                        .map(|x| {
+                            x.1.llvm_representation(&ctx.symbols)
+                                .map(|y| format!("{} {}", y, x.0.to_string()))
+                        })
+                        .collect::<ExpressionCompileResult<Vec<_>>>()?
+                        .join(", ");
+                    builder.push_function_body(&format!(
+                        "\t%tmp{} = getelementptr inbounds {}, {}* {}, {}\n",
+                        target_reg,
+                        base_type_llvm,
+                        base_type_llvm,
+                        ptr.to_string(),
+                        ind_llvm
+                    ));
+                }
+                LLVMInstruction::GetElementPtrExt {
+                    target_reg,
+                    base_type,
+                    result_type,
+                    ptr,
+                    indices,
+                } => {
+                    let base_type_llvm = base_type.llvm_representation(&ctx.symbols)?;
+                    let result_type_llvm = result_type.llvm_representation(&ctx.symbols)?;
+                    let ind_llvm = indices
+                        .iter()
+                        .map(|x| {
+                            x.1.llvm_representation(&ctx.symbols)
+                                .map(|y| format!("{} {}", y, x.0.to_string()))
+                        })
+                        .collect::<ExpressionCompileResult<Vec<_>>>()?
+                        .join(", ");
+                    builder.push_function_body(&format!(
+                        "\t%tmp{} = getelementptr inbounds {}, {}* {}, {}\n",
+                        target_reg,
+                        result_type_llvm,
+                        base_type_llvm,
+                        ptr.to_string(),
+                        ind_llvm
+                    ));
+                }
+                LLVMInstruction::Call {
+                    target_reg,
+                    callee,
+                    args,
+                    result_type,
+                } => {
+                    let args_llvm = args
+                        .iter()
+                        .map(|x| {
+                            x.1.llvm_representation(&ctx.symbols)
+                                .map(|y| format!("{} {}", y, x.0.to_string()))
+                        })
+                        .collect::<ExpressionCompileResult<Vec<_>>>()?
+                        .join(", ");
+                    let result_type_llvm = result_type.llvm_representation(&ctx.symbols)?;
+                    if let Some(target_reg) = target_reg {
+                        builder.push_function_body(&format!(
+                            "\t%tmp{} = call {} {}({})\n",
+                            target_reg,
+                            result_type_llvm,
+                            callee.to_string(),
+                            args_llvm,
+                        ));
+                    } else {
+                        builder.push_function_body(&format!(
+                            "\tcall {} {}({})\n",
+                            result_type_llvm,
+                            callee.to_string(),
+                            args_llvm,
+                        ));
+                    }
+                }
+                LLVMInstruction::Store {
+                    value,
+                    value_type,
+                    ptr,
+                } => {
+                    let result_type_llvm = value_type.llvm_representation(&ctx.symbols)?;
+                    builder.push_function_body(&format!(
+                        "\tstore {} {}, {}* {}\n",
+                        result_type_llvm,
+                        value.to_string(),
+                        result_type_llvm,
+                        ptr.to_string()
+                    ));
+                }
+                LLVMInstruction::Jump { label } => {
+                    builder.push_function_body(&format!("\tbr label %{}\n", label))
+                }
+                LLVMInstruction::Branch {
+                    condition_val,
+                    then_label_name,
+                    else_label_name,
+                } => builder.push_function_body(&format!(
+                    "\tbr i1 {}, label %{}, label %{}\n",
+                    condition_val.to_string(),
+                    then_label_name,
+                    else_label_name
+                )),
+                LLVMInstruction::Label { name } => {
+                    if name == "entry" {
+                        builder.push_function_intro("entry:\n")
+                    } else {
+                        builder.push_function_body(&format!("{}:\n", name))
+                    }
+                }
+                LLVMInstruction::Return { return_type, value } => {
+                    let return_type_llvm = return_type.llvm_representation(&ctx.symbols)?;
+                    builder.push_function_body(&format!(
+                        "\tret {} {}\n",
+                        return_type_llvm,
+                        value.to_string()
+                    ))
+                }
+                LLVMInstruction::ReturnVoid => builder.push_function_body("\tret void\n"),
+                LLVMInstruction::Debug(x) => builder.push_function_body(&format!("; {}\n", x)),
+                LLVMInstruction::Unreachable => builder.push_function_body("\tunreachable\n"),
+                //_ => builder.push_function_body(&format!("\t;{:?} DEBUG\n", x)),
+            }
         }
         Ok(())
     }
 }
+
 #[derive(Default)]
 pub struct CodeGenContext {
     pub scope: Scope,
-    pub current_block_name: String,
-    pub pending_returns: Vec<(String, String)>,
+    pub current_block_name: RefCell<String>,
+    pub pending_returns: Vec<(LLVMVal, String)>,
     pub return_label_name: String,
+
     pub temp_counter: Cell<u32>,
+    pub string_counter: Cell<u32>,
     pub var_counter: Cell<u32>,
     pub label_counter: Cell<u32>,
 
@@ -926,8 +1200,12 @@ pub struct CodeGenContext {
     pub current_function_path: ContextPath,
 }
 impl CodeGenContext {
-    pub fn set_current_block(&mut self, name: String) {
-        self.current_block_name = name;
+    pub fn set_current_block_name(&self, name: String) {
+        self.current_block_name.replace(name);
+    }
+    pub fn push_return(&mut self, val: LLVMVal) {
+        self.pending_returns
+            .push((val, self.current_block_name.borrow().clone()));
     }
     pub fn acquire_temp_id(&self) -> u32 {
         self.temp_counter.replace(self.temp_counter.get() + 1)

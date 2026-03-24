@@ -1,12 +1,11 @@
 use rcsharp_parser::{
-    expression_parser::{Expr, UnaryOp},
+    expression_parser::{BinaryOp, Expr, UnaryOp},
     parser::{Stmt, StmtData},
 };
 
 use crate::{
     compiler::{context::CompilerContext, passes::traits::CompilerPass},
-    compiler_essentials::CompileResult,
-    expression_compiler::constant_expression_optimizer_base,
+    compiler_essentials::{CompileResult, LLVMVal},
 };
 
 #[derive(Default)]
@@ -134,5 +133,203 @@ impl OptimizerPass {
         }
 
         Ok(())
+    }
+}
+
+pub fn constant_expression_optimizer_base(expr: &Expr) -> Option<Expr> {
+    match expr {
+        Expr::Integer(..) | Expr::Boolean(..) | Expr::Decimal(..) => None,
+        Expr::UnaryOp(op, inner) => {
+            if let Some(x) = constant_expression_compiler(expr) {
+                match x {
+                    LLVMVal::ConstantInteger(val) => return Some(Expr::Integer(val)),
+                    LLVMVal::ConstantBoolean(val) => return Some(Expr::Boolean(val)),
+                    LLVMVal::ConstantDecimal(val) => return Some(Expr::Decimal(val)),
+                    _ => {}
+                }
+            }
+            let opt_e = constant_expression_optimizer_base(inner);
+            if let Some(new_inner) = opt_e {
+                Some(Expr::UnaryOp(*op, Box::new(new_inner)))
+            } else {
+                None
+            }
+        }
+        Expr::BinaryOp(lhs, op, rhs) => {
+            if let Some(x) = constant_expression_compiler(expr) {
+                match x {
+                    LLVMVal::ConstantInteger(val) => return Some(Expr::Integer(val)),
+                    LLVMVal::ConstantBoolean(val) => return Some(Expr::Boolean(val)),
+                    LLVMVal::ConstantDecimal(val) => return Some(Expr::Decimal(val)),
+                    _ => {}
+                }
+            }
+            let opt_l = constant_expression_optimizer_base(lhs);
+            let opt_r = constant_expression_optimizer_base(rhs);
+            if opt_l.is_none() && opt_r.is_none() {
+                if matches!(**lhs, Expr::Integer(..))
+                    && !matches!(**rhs, Expr::Integer(..))
+                    && op.is_symmetric()
+                {
+                    return Some(Expr::BinaryOp(rhs.clone(), *op, lhs.clone()));
+                }
+                return None;
+            }
+            let final_l = opt_l.map(Box::new).unwrap_or_else(|| lhs.clone());
+            let final_r = opt_r.map(Box::new).unwrap_or_else(|| rhs.clone());
+            Some(Expr::BinaryOp(final_l, *op, final_r))
+        }
+        Expr::Assign(lhs, rhs) => constant_expression_optimizer_base(rhs)
+            .map(|new_rhs| Expr::Assign(lhs.clone(), Box::new(new_rhs))),
+        Expr::Index(arr, idx) => constant_expression_optimizer_base(idx)
+            .map(|new_idx| Expr::Index(arr.clone(), Box::new(new_idx))),
+        Expr::Call(callee, args) => {
+            let mut changed = false;
+            let new_args = args
+                .iter()
+                .map(|arg| {
+                    if let Some(opt) = constant_expression_optimizer_base(arg) {
+                        changed = true;
+                        opt
+                    } else {
+                        arg.clone()
+                    }
+                })
+                .collect();
+
+            if changed {
+                Some(Expr::Call(callee.clone(), new_args))
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
+}
+pub fn constant_expression_compiler(expr: &Expr) -> Option<LLVMVal> {
+    match expr {
+        Expr::Integer(x) => Some(LLVMVal::ConstantInteger(*x)),
+        Expr::Boolean(b) => Some(LLVMVal::ConstantBoolean(*b)),
+        Expr::Decimal(x) => Some(LLVMVal::ConstantDecimal(*x)),
+        Expr::BinaryOp(lhs, op, rhs) => fold_binary_op(lhs, op, rhs),
+        Expr::UnaryOp(op, rhs) => fold_unary_op(op, rhs),
+        _ => None,
+    }
+}
+fn fold_binary_op(lhs: &Expr, op: &BinaryOp, rhs: &Expr) -> Option<LLVMVal> {
+    let l_val = constant_expression_compiler(lhs)?;
+    let r_val = constant_expression_compiler(rhs)?;
+
+    match (l_val, r_val) {
+        (LLVMVal::ConstantInteger(l), LLVMVal::ConstantInteger(r)) => {
+            let res = match op {
+                BinaryOp::Add => l.wrapping_add(r),
+                BinaryOp::Subtract => l.wrapping_sub(r),
+                BinaryOp::Multiply => l.wrapping_mul(r),
+                BinaryOp::Divide => l.checked_div(r)?,
+                BinaryOp::Modulo => l.checked_rem(r)?,
+                BinaryOp::And | BinaryOp::BitAnd => l & r,
+                BinaryOp::Or | BinaryOp::BitOr => l | r,
+                BinaryOp::BitXor => l ^ r,
+                BinaryOp::ShiftLeft => l.wrapping_shl(r as u32),
+                BinaryOp::ShiftRight => l.wrapping_shr(r as u32),
+                // Comparisons
+                BinaryOp::Equals => return Some(LLVMVal::ConstantBoolean(l == r)),
+                BinaryOp::NotEqual => return Some(LLVMVal::ConstantBoolean(l != r)),
+                BinaryOp::Less => return Some(LLVMVal::ConstantBoolean(l < r)),
+                BinaryOp::LessEqual => return Some(LLVMVal::ConstantBoolean(l <= r)),
+                BinaryOp::Greater => return Some(LLVMVal::ConstantBoolean(l > r)),
+                BinaryOp::GreaterEqual => return Some(LLVMVal::ConstantBoolean(l >= r)),
+            };
+            Some(LLVMVal::ConstantInteger(res))
+        }
+        (LLVMVal::ConstantDecimal(l), LLVMVal::ConstantDecimal(r)) => {
+            let res = match op {
+                BinaryOp::Add => l + r,
+                BinaryOp::Subtract => l - r,
+                BinaryOp::Multiply => l * r,
+                BinaryOp::Divide => l / r,
+                BinaryOp::Modulo => l % r,
+                // Comparisons
+                BinaryOp::Equals => return Some(LLVMVal::ConstantBoolean(l == r)),
+                BinaryOp::NotEqual => return Some(LLVMVal::ConstantBoolean(l != r)),
+                BinaryOp::Less => return Some(LLVMVal::ConstantBoolean(l < r)),
+                BinaryOp::LessEqual => return Some(LLVMVal::ConstantBoolean(l <= r)),
+                BinaryOp::Greater => return Some(LLVMVal::ConstantBoolean(l > r)),
+                BinaryOp::GreaterEqual => return Some(LLVMVal::ConstantBoolean(l >= r)),
+                _ => return None,
+            };
+            Some(LLVMVal::ConstantDecimal(res))
+        }
+        (LLVMVal::ConstantBoolean(l), LLVMVal::ConstantBoolean(r)) => {
+            let res = match op {
+                BinaryOp::And | BinaryOp::BitAnd => l & r,
+                BinaryOp::Or | BinaryOp::BitOr => l | r,
+                BinaryOp::BitXor => l ^ r,
+                // Comparisons
+                BinaryOp::Equals => return Some(LLVMVal::ConstantBoolean(l == r)),
+                BinaryOp::NotEqual => return Some(LLVMVal::ConstantBoolean(l != r)),
+                BinaryOp::Less => return Some(LLVMVal::ConstantBoolean(l < r)),
+                BinaryOp::LessEqual => return Some(LLVMVal::ConstantBoolean(l <= r)),
+                BinaryOp::Greater => return Some(LLVMVal::ConstantBoolean(l > r)),
+                BinaryOp::GreaterEqual => return Some(LLVMVal::ConstantBoolean(l >= r)),
+                _ => return None,
+            };
+            Some(LLVMVal::ConstantBoolean(res))
+        }
+        // Identity
+        (l, r) => {
+            if l == r {
+                match op {
+                    BinaryOp::Subtract | BinaryOp::BitXor => {
+                        return Some(LLVMVal::ConstantInteger(0))
+                    }
+                    BinaryOp::Equals | BinaryOp::GreaterEqual | BinaryOp::LessEqual => {
+                        return Some(LLVMVal::ConstantBoolean(true))
+                    }
+                    BinaryOp::NotEqual | BinaryOp::Less | BinaryOp::Greater => {
+                        return Some(LLVMVal::ConstantBoolean(false))
+                    }
+                    _ => {}
+                }
+            }
+
+            if let LLVMVal::ConstantInteger(v) = r {
+                match op {
+                    BinaryOp::Add
+                    | BinaryOp::Subtract
+                    | BinaryOp::BitOr
+                    | BinaryOp::BitXor
+                    | BinaryOp::ShiftLeft
+                    | BinaryOp::ShiftRight
+                        if v == 0 =>
+                    {
+                        return Some(l)
+                    }
+                    BinaryOp::Multiply if v == 1 => return Some(l),
+                    BinaryOp::Multiply | BinaryOp::BitAnd if v == 0 => return Some(r), // 0
+                    _ => {}
+                }
+            }
+            None
+        }
+    }
+}
+fn fold_unary_op(op: &UnaryOp, rhs: &Expr) -> Option<LLVMVal> {
+    let r_val = constant_expression_compiler(rhs)?;
+    match r_val {
+        LLVMVal::ConstantInteger(r) => match op {
+            UnaryOp::Negate => Some(LLVMVal::ConstantInteger(-r)),
+            _ => None,
+        },
+        LLVMVal::ConstantDecimal(r) => match op {
+            UnaryOp::Negate => Some(LLVMVal::ConstantDecimal(-r)),
+            _ => None,
+        },
+        LLVMVal::ConstantBoolean(r) => match op {
+            UnaryOp::Not => Some(LLVMVal::ConstantBoolean(!r)),
+            _ => None,
+        },
+        _ => None,
     }
 }

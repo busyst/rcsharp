@@ -88,36 +88,36 @@ macro_rules! prim {
         }
     };
 }
-pub const PRIMITIVE_TYPES_INFO: &[PrimitiveInfo] = &[
-    prim!("void", 0, 1, "void", PrimitiveKind::Void),
-    prim!("bool", 1, 1, "i1", PrimitiveKind::Bool),
+const PRIMITIVE_TYPES_INFO: &[PrimitiveInfo] = &[
+    /*0*/ prim!("void", 0, 1, "void", PrimitiveKind::Void),
+    /*1*/ prim!("bool", 1, 1, "i1", PrimitiveKind::Bool),
     // SInts
-    prim!("i8", 1, 1, "i8", PrimitiveKind::SignedInt),
-    prim!("i16", 2, 2, "i16", PrimitiveKind::SignedInt),
-    prim!("i32", 4, 4, "i32", PrimitiveKind::SignedInt),
-    prim!("i64", 8, 8, "i64", PrimitiveKind::SignedInt),
-    prim!("isize", 8, 8, "i64", PrimitiveKind::SignedInt),
+    /*2*/ prim!("i8", 1, 1, "i8", PrimitiveKind::SignedInt),
+    /*3*/ prim!("i16", 2, 2, "i16", PrimitiveKind::SignedInt),
+    /*4*/ prim!("i32", 4, 4, "i32", PrimitiveKind::SignedInt),
+    /*5*/ prim!("i64", 8, 8, "i64", PrimitiveKind::SignedInt),
+    /*6*/ prim!("isize", 8, 8, "i64", PrimitiveKind::SignedInt),
     // UInts
-    prim!("u8", 1, 1, "i8", PrimitiveKind::UnsignedInt),
-    prim!("u16", 2, 2, "i16", PrimitiveKind::UnsignedInt),
-    prim!("u32", 4, 4, "i32", PrimitiveKind::UnsignedInt),
-    prim!("u64", 8, 8, "i64", PrimitiveKind::UnsignedInt),
-    prim!("usize", 8, 8, "i64", PrimitiveKind::UnsignedInt),
+    /*7*/ prim!("u8", 1, 1, "i8", PrimitiveKind::UnsignedInt),
+    /*8*/ prim!("u16", 2, 2, "i16", PrimitiveKind::UnsignedInt),
+    /*9*/ prim!("u32", 4, 4, "i32", PrimitiveKind::UnsignedInt),
+    /*A*/ prim!("u64", 8, 8, "i64", PrimitiveKind::UnsignedInt),
+    /*B*/ prim!("usize", 8, 8, "i64", PrimitiveKind::UnsignedInt),
     // Decimal
-    prim!("f16", 2, 2, "half", PrimitiveKind::Decimal),
-    prim!("f32", 4, 4, "float", PrimitiveKind::Decimal),
-    prim!("f64", 8, 8, "double", PrimitiveKind::Decimal),
+    /*C*/ prim!("f16", 2, 2, "half", PrimitiveKind::Decimal),
+    /*D*/ prim!("f32", 4, 4, "float", PrimitiveKind::Decimal),
+    /*E*/ prim!("f64", 8, 8, "double", PrimitiveKind::Decimal),
 ];
 
 pub const VOID_TYPE: &PrimitiveInfo = &PRIMITIVE_TYPES_INFO[0];
 pub const BOOL_TYPE: &PrimitiveInfo = &PRIMITIVE_TYPES_INFO[1];
-pub const BYTE_TYPE: &PrimitiveInfo = &PRIMITIVE_TYPES_INFO[6];
+pub const BYTE_TYPE: &PrimitiveInfo = &PRIMITIVE_TYPES_INFO[7];
 pub const CHAR_TYPE: &PrimitiveInfo = &PRIMITIVE_TYPES_INFO[2];
 
-pub const DEFAULT_INTEGER_TYPE: &PrimitiveInfo = &PRIMITIVE_TYPES_INFO[5];
-pub const DEFAULT_DECIMAL_TYPE: &PrimitiveInfo = &PRIMITIVE_TYPES_INFO[12];
+pub const DEFAULT_INTEGER_TYPE: &PrimitiveInfo = &PRIMITIVE_TYPES_INFO[4];
+pub const DEFAULT_DECIMAL_TYPE: &PrimitiveInfo = &PRIMITIVE_TYPES_INFO[14];
 
-pub const POINTER_SIZED_TYPE: &PrimitiveInfo = &PRIMITIVE_TYPES_INFO[14];
+pub const POINTER_SIZED_TYPE: &PrimitiveInfo = &PRIMITIVE_TYPES_INFO[11];
 
 pub fn find_primitive_type(name: &str) -> Option<&'static PrimitiveInfo> {
     PRIMITIVE_TYPES_INFO.iter().find(|p| p.name == name)

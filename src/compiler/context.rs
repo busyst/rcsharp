@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{cell::RefCell, path::PathBuf};
 
 use crate::compiler_essentials::{CompilerError, SymbolTable};
 pub enum ErrorSeverity {
@@ -12,6 +12,7 @@ pub struct CompilerContext {
     pub config: CompilerConfig,
     pub source_manager: SourceManager,
     pub diagnostics: Vec<(ErrorSeverity, CompilerError)>,
+    pub strings_header: RefCell<Vec<StringEntry>>,
 }
 #[derive(Default)]
 pub struct CompilerConfig {
@@ -62,4 +63,73 @@ pub struct SourceFile {
     pub start_offset: usize,
     pub end_offset: usize,
     pub line_starts: Vec<usize>,
+}
+impl CompilerContext {
+    pub fn add_to_strings_header_(&self, string: &str) -> usize {
+        let mut strings_header = self.strings_header.borrow_mut();
+        if let Some(id) = strings_header.iter().position(|entry| match entry {
+            StringEntry::Owned(s) => s == &string,
+            StringEntry::Suffix { content, .. } => content == &string,
+        }) {
+            return id;
+        }
+
+        let suffix_match = strings_header.iter().enumerate().find_map(|(idx, entry)| {
+            let (existing_str, actual_parent_idx, base_offset) = match entry {
+                StringEntry::Owned(s) => (s, idx, 0),
+                StringEntry::Suffix {
+                    parent_index,
+                    byte_offset,
+                    content,
+                    ..
+                } => (content, *parent_index, *byte_offset),
+            };
+
+            if existing_str.ends_with(&string) && existing_str.len() > string.len() {
+                let offset_diff = existing_str.len() - string.len();
+                let absolute_offset = base_offset + offset_diff;
+                Some((actual_parent_idx, absolute_offset))
+            } else {
+                None
+            }
+        });
+
+        if let Some((parent_index, byte_offset)) = suffix_match {
+            let len_with_null = string.len() + 1;
+            strings_header.push(StringEntry::Suffix {
+                parent_index,
+                byte_offset,
+                length_with_null: len_with_null,
+                content: string.to_string(),
+            });
+            return strings_header.len() - 1;
+        }
+        strings_header.push(StringEntry::Owned(string.to_string()));
+        let new_index = strings_header.len() - 1;
+        for i in 0..new_index {
+            if let StringEntry::Owned(old_content) = &strings_header[i] {
+                if string.ends_with(old_content) && string.len() > old_content.len() {
+                    let offset = string.len() - old_content.len();
+                    let len_with_null = old_content.len() + 1;
+                    strings_header[i] = StringEntry::Suffix {
+                        parent_index: new_index,
+                        byte_offset: offset,
+                        length_with_null: len_with_null,
+                        content: old_content.clone(),
+                    };
+                }
+            }
+        }
+        new_index
+    }
+}
+#[derive(PartialEq)]
+pub enum StringEntry {
+    Owned(String),
+    Suffix {
+        parent_index: usize,
+        byte_offset: usize,
+        length_with_null: usize,
+        content: String,
+    },
 }

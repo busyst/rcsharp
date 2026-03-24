@@ -4,7 +4,6 @@ use crate::compiler::base::compile_to_file;
 pub mod compiler;
 pub mod compiler_essentials;
 pub mod compiler_functions;
-pub mod expression_compiler;
 fn main() -> Result<(), ()> {
     let full_path = std::env::args()
         .nth(1)

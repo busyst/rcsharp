@@ -1,13 +1,11 @@
-use crate::{
-    compiler::{
-        context::FileID,
-        passes::pass_llvm_gen::CodeGenContext,
-        structs::{
-            ContextPath, ContextPathDictionary, ContextPathDictionaryIter,
-            ContextPathDictionaryIterMut, ContextPathEnd,
-        },
+use crate::compiler::{
+    context::{FileID, StringEntry},
+    expression::ExpressionCompileResult,
+    passes::pass_llvm_gen::CodeGenContext,
+    structs::{
+        CompiledValue, ContextPath, ContextPathDictionary, ContextPathDictionaryIter,
+        ContextPathDictionaryIterMut, ContextPathEnd, LLVMInstruction,
     },
-    expression_compiler::CompiledValue,
 };
 use ordered_hash_map::OrderedHashMap;
 use rcsharp_lexer::{lex_text, LexerError, Span};
@@ -18,6 +16,7 @@ use rcsharp_parser::{
 use std::{
     cell::{Cell, RefCell},
     collections::HashMap,
+    sync::Arc,
 };
 #[derive(Debug, Clone, PartialEq)]
 pub enum LLVMVal {
@@ -114,7 +113,7 @@ impl PartialEq for CompilerType {
 }
 #[allow(unused)]
 impl CompilerType {
-    pub fn llvm_representation(&self, symbols: &SymbolTable) -> CompileResult<String> {
+    pub fn llvm_representation(&self, symbols: &SymbolTable) -> ExpressionCompileResult<String> {
         match self {
             Self::Primitive(info) => Ok(info.llvm_name.to_string()),
             Self::Struct(idx) => Ok(symbols.get_type_by_id(*idx).llvm_representation()),
@@ -131,7 +130,7 @@ impl CompilerType {
                 let params_llvm = args
                     .iter()
                     .map(|param| param.llvm_representation(symbols))
-                    .collect::<CompileResult<Vec<_>>>()?;
+                    .collect::<ExpressionCompileResult<Vec<_>>>()?;
                 Ok(format!("{} ({})", ret_llvm, params_llvm.join(", ")))
             }
             Self::GenericStructInstance(base_id, impl_idx) => {
@@ -146,7 +145,7 @@ impl CompilerType {
                 let arg_reprs = impl_args
                     .iter()
                     .map(|arg| arg.llvm_representation_in_generic(symbols))
-                    .collect::<CompileResult<Vec<_>>>()?;
+                    .collect::<ExpressionCompileResult<Vec<_>>>()?;
 
                 Ok(format!(
                     "%\"{}<{}>\"",
@@ -166,7 +165,7 @@ impl CompilerType {
                 let arg_reprs = impl_args
                     .iter()
                     .map(|arg| arg.llvm_representation_in_generic(symbols))
-                    .collect::<CompileResult<Vec<_>>>()?;
+                    .collect::<ExpressionCompileResult<Vec<_>>>()?;
 
                 Ok(format!(
                     "%\"{}<{}>\"",
@@ -182,7 +181,10 @@ impl CompilerType {
             _ => Err(CompilerError::Generic(format!("Cannot get LLVM repr for {:?}", self)).into()),
         }
     }
-    pub fn llvm_representation_in_generic(&self, symbols: &SymbolTable) -> CompileResult<String> {
+    pub fn llvm_representation_in_generic(
+        &self,
+        symbols: &SymbolTable,
+    ) -> ExpressionCompileResult<String> {
         match self {
             Self::GenericStructInstance(base_id, impl_idx) => {
                 let base_type = symbols.get_type_by_id(*base_id);
@@ -196,7 +198,7 @@ impl CompilerType {
                 let arg_reprs = impl_args
                     .iter()
                     .map(|arg| arg.llvm_representation_in_generic(symbols))
-                    .collect::<CompileResult<Vec<_>>>()?;
+                    .collect::<ExpressionCompileResult<Vec<_>>>()?;
 
                 Ok(format!(
                     "%{}<{}>",
@@ -211,7 +213,7 @@ impl CompilerType {
         given_type: &ParserType,
         symbols: &SymbolTable,
         current_path: &ContextPath,
-    ) -> CompileResult<CompilerType> {
+    ) -> ExpressionCompileResult<CompilerType> {
         if let Some(pt) = given_type.as_primitive_type() {
             return Ok(Self::Primitive(pt));
         }
@@ -224,7 +226,7 @@ impl CompilerType {
             let arg_types = args
                 .iter()
                 .map(|a| Self::from_parser_type(a, symbols, current_path))
-                .collect::<CompileResult<Box<_>>>()?;
+                .collect::<ExpressionCompileResult<Box<_>>>()?;
             return Ok(Self::Function(Box::new(ret_type), arg_types));
         }
         if let ParserType::Named(name) = given_type {
@@ -287,16 +289,16 @@ impl CompilerType {
             }
         }
         if let ParserType::NamespaceLink(link, inner) = given_type {
-            let mut path_builder = vec![link.to_string().into_boxed_str()];
+            let mut path_builder = vec![Arc::from(link.to_string().into_boxed_str())];
             let mut current = &**inner;
             while let ParserType::NamespaceLink(next_segment, next_inner) = current {
-                path_builder.push(next_segment.to_string().into_boxed_str());
+                path_builder.push(Arc::from(next_segment.to_string().into_boxed_str()));
                 current = &**next_inner;
             }
             return Self::resolve_namespaced_type(
                 current,
                 symbols,
-                &ContextPath::new(path_builder.into_boxed_slice()),
+                &ContextPath::new(path_builder),
                 current_path,
             );
         }
@@ -311,7 +313,7 @@ impl CompilerType {
         symbols: &SymbolTable,
         namespace_path: &ContextPath,
         context_path: &ContextPath,
-    ) -> CompileResult<Self> {
+    ) -> ExpressionCompileResult<Self> {
         if let Some((name, args)) = given_type.as_generic() {
             let glob_path = ContextPathEnd::from_context_path(namespace_path.clone(), name);
             let id = symbols
@@ -358,19 +360,22 @@ impl CompilerType {
         &self,
         map: &HashMap<String, CompilerType>,
         symbols: &SymbolTable,
-    ) -> CompileResult<Self> {
+    ) -> ExpressionCompileResult<Self> {
         let mut cloned = self.clone();
         cloned.substitute_generics(map, symbols)?;
         Ok(cloned)
     }
-    pub fn substitute_global_aliases(&mut self, symbols: &SymbolTable) -> CompileResult<()> {
+    pub fn substitute_global_aliases(
+        &mut self,
+        symbols: &SymbolTable,
+    ) -> ExpressionCompileResult<()> {
         self.substitute_generics(symbols.alias_types(), symbols)
     }
     pub fn substitute_generics(
         &mut self,
         map: &HashMap<String, CompilerType>,
         symbols: &SymbolTable,
-    ) -> CompileResult<()> {
+    ) -> ExpressionCompileResult<()> {
         match self {
             Self::Primitive(_) | Self::Struct(_) | Self::GenericStructInstance(_, _) => Ok(()),
             Self::GenericPlaceholder(name) => {
@@ -415,13 +420,22 @@ impl CompilerType {
         }
     }
 
-    pub fn is_same_base_type(&self, type_id: usize) -> bool {
+    pub fn is_same_ground_type_struct(&self, type_id: usize) -> bool {
         match self {
-            Self::Pointer(inner) => inner.is_same_base_type(type_id),
+            Self::Pointer(inner) => inner.is_same_ground_type_struct(type_id),
             Self::Struct(id) => *id == type_id,
             Self::GenericStructInstance(id, _) => *id == type_id,
             Self::GenericStructTemplate(id, _) => *id == type_id,
             _ => false,
+        }
+    }
+    pub fn is_same_base_type(&self, type_id: &CompilerType) -> bool {
+        match self {
+            Self::Pointer(inner) => {
+                inner.is_same_base_type(type_id) || type_id.is_same_base_type(inner)
+            }
+            Self::ConstantArray(_, x) => **x == *type_id,
+            x => *x == *type_id,
         }
     }
     pub fn is_bool(&self) -> bool {
@@ -452,6 +466,13 @@ impl CompilerType {
         self.as_primitive()
             .map(|x| x.kind == PrimitiveKind::Decimal)
             .unwrap_or(false)
+    }
+
+    pub fn is_function(&self) -> bool {
+        match self {
+            Self::Function(..) => true,
+            _ => false,
+        }
     }
     pub fn as_pointer(&self) -> Option<&CompilerType> {
         match self {
@@ -753,6 +774,14 @@ impl Struct {
     pub fn name(&self) -> &str {
         &self.full_path.name()
     }
+
+    pub fn get_field(&self, member: &str) -> Option<(usize, &CompilerType)> {
+        self.fields
+            .iter()
+            .enumerate()
+            .find(|x| x.1 .0 == member)
+            .map(|x| (x.0, &x.1 .1))
+    }
 }
 #[derive(Debug, Clone, Copy, Default)]
 pub struct FunctionFlags {
@@ -913,7 +942,7 @@ impl Function {
         &self,
         impl_index: usize,
         symbols: &SymbolTable,
-    ) -> CompileResult<CompilerType> {
+    ) -> ExpressionCompileResult<CompilerType> {
         assert!(self.is_generic());
         let x = self.get_def_by_implementation_index(impl_index, symbols)?;
         Ok(CompilerType::Function(x.0, x.1))
@@ -922,7 +951,7 @@ impl Function {
         &self,
         impl_idx: usize,
         symbols: &SymbolTable,
-    ) -> CompileResult<(Box<CompilerType>, Box<[CompilerType]>)> {
+    ) -> ExpressionCompileResult<(Box<CompilerType>, Box<[CompilerType]>)> {
         assert!(self.is_generic());
         let impls = self.generic_implementations.borrow();
         let args = &impls[impl_idx];
@@ -935,7 +964,7 @@ impl Function {
             self.args
                 .iter()
                 .map(|(_, ty)| ty.with_substituted_generics(&map, symbols))
-                .collect::<CompileResult<Box<_>>>()?,
+                .collect::<ExpressionCompileResult<Box<_>>>()?,
         ))
     }
     pub fn attribs(&self) -> &[Attribute] {
@@ -1061,26 +1090,29 @@ impl Variable {
         var_id: u32,
         var_name: &str,
         ctx: &CodeGenContext,
-        type_str: &str,
-        output: &mut LLVMOutputHandler,
-    ) -> CompileResult<CompiledValue> {
+        var_type: CompilerType,
+    ) -> ExpressionCompileResult<(CompiledValue, Vec<LLVMInstruction>)> {
         let flags = self.get_flags();
         let temp_id = ctx.acquire_temp_id();
+        let mut instruct = vec![];
+
         if flags.static_storage {
-            output.push_function_body(&format!(
-                "\t%tmp{} = load {}, {}* @{}\n",
-                temp_id, type_str, type_str, var_name
-            ));
+            instruct.push(LLVMInstruction::Load {
+                target_reg: temp_id,
+                ptr: LLVMVal::Global(var_name.to_string()),
+                result_type: var_type,
+            });
         } else {
-            output.push_function_body(&format!(
-                "\t%tmp{} = load {}, {}* %v{}\n",
-                temp_id, type_str, type_str, var_id
-            ));
+            instruct.push(LLVMInstruction::Load {
+                target_reg: temp_id,
+                ptr: LLVMVal::Variable(var_id),
+                result_type: var_type,
+            });
         }
 
-        Ok(CompiledValue::new_value(
-            LLVMVal::Register(temp_id),
-            self.compiler_type.clone(),
+        Ok((
+            CompiledValue::new_value(LLVMVal::Register(temp_id), self.compiler_type.clone()),
+            instruct,
         ))
     }
 }
@@ -1272,7 +1304,6 @@ impl std::fmt::Display for CompilerError {
             }
             Self::ParserError(path, (range, error)) => {
                 writeln!(f, "Lexer error during compilation:")?;
-                println!("{:?}|{:?}", range, error);
                 let file = std::fs::read_to_string(path).unwrap();
                 let mut tokens = vec![];
                 let mut symbol_table = rcsharp_lexer::LexerSymbolTable::new();
@@ -1392,7 +1423,7 @@ impl CompiledLValue {
             function_id: None,
         }
     }
-    pub fn from_function(id: usize, symbols: &SymbolTable) -> CompileResult<Self> {
+    pub fn from_function(id: usize, symbols: &SymbolTable) -> ExpressionCompileResult<Self> {
         let func = symbols.get_function_by_id(id);
         let location = if func.is_generic() {
             LLVMVal::ConstantInteger(id as i128)
@@ -1410,21 +1441,11 @@ impl CompiledLValue {
         })
     }
 }
-#[derive(PartialEq)]
-enum StringEntry {
-    Owned(String),
-    Suffix {
-        parent_index: usize,
-        byte_offset: usize,
-        length_with_null: usize,
-        content: String,
-    },
-}
+
 #[derive(Default)]
 pub struct LLVMOutputHandler {
     header: String,
     global_variables: String,
-    strings_header: Vec<StringEntry>,
     include_header: String,
     main: String,
     footer: String,
@@ -1454,68 +1475,9 @@ impl LLVMOutputHandler {
     pub fn push_footer(&mut self, s: &str) {
         self.footer.push_str(s);
     }
-    pub fn add_to_strings_header(&mut self, string: String) -> usize {
-        if let Some(id) = self.strings_header.iter().position(|entry| match entry {
-            StringEntry::Owned(s) => s == &string,
-            StringEntry::Suffix { content, .. } => content == &string,
-        }) {
-            return id;
-        }
 
-        let suffix_match = self
-            .strings_header
-            .iter()
-            .enumerate()
-            .find_map(|(idx, entry)| {
-                let (existing_str, actual_parent_idx, base_offset) = match entry {
-                    StringEntry::Owned(s) => (s, idx, 0),
-                    StringEntry::Suffix {
-                        parent_index,
-                        byte_offset,
-                        content,
-                        ..
-                    } => (content, *parent_index, *byte_offset),
-                };
-
-                if existing_str.ends_with(&string) && existing_str.len() > string.len() {
-                    let offset_diff = existing_str.len() - string.len();
-                    let absolute_offset = base_offset + offset_diff;
-                    Some((actual_parent_idx, absolute_offset))
-                } else {
-                    None
-                }
-            });
-
-        if let Some((parent_index, byte_offset)) = suffix_match {
-            let len_with_null = string.len() + 1;
-            self.strings_header.push(StringEntry::Suffix {
-                parent_index,
-                byte_offset,
-                length_with_null: len_with_null,
-                content: string,
-            });
-            return self.strings_header.len() - 1;
-        }
-        self.strings_header.push(StringEntry::Owned(string.clone()));
-        let new_index = self.strings_header.len() - 1;
-        for i in 0..new_index {
-            if let StringEntry::Owned(old_content) = &self.strings_header[i] {
-                if string.ends_with(old_content) && string.len() > old_content.len() {
-                    let offset = string.len() - old_content.len();
-                    let len_with_null = old_content.len() + 1;
-                    self.strings_header[i] = StringEntry::Suffix {
-                        parent_index: new_index,
-                        byte_offset: offset,
-                        length_with_null: len_with_null,
-                        content: old_content.clone(),
-                    };
-                }
-            }
-        }
-        new_index
-    }
-    pub fn build(self) -> String {
-        let definitions = self.strings_header.iter().enumerate().map(|(index, entry)| {
+    pub fn build(self, strings_header: Vec<StringEntry>) -> String {
+        let definitions = strings_header.iter().enumerate().map(|(index, entry)| {
             match entry {
                 StringEntry::Owned(s) => {
                     let escaped_val = s.replace("\"", "\\22")
@@ -1529,13 +1491,13 @@ impl LLVMOutputHandler {
                     let mut root_index = *parent_index;
                     let mut total_offset = *byte_offset;
                     let mut loops = 0;
-                    while let StringEntry::Suffix { parent_index: next_p, byte_offset: next_off, .. } = &self.strings_header[root_index] {
+                    while let StringEntry::Suffix { parent_index: next_p, byte_offset: next_off, .. } = &strings_header[root_index] {
                         root_index = *next_p;
                         total_offset += next_off;
                         loops += 1;
                         if loops > 100 { panic!("Circular string dependency detected at index {}", index); }
                     }
-                    let root_len = match &self.strings_header[root_index] {
+                    let root_len = match &strings_header[root_index] {
                         StringEntry::Owned(s) => s.len() + 1,
                         _ => panic!("String dependency chain did not end in Owned at index {}", root_index),
                     };

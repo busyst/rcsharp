@@ -320,7 +320,7 @@ namespace console{
 
     fn get_stdout() : &i8 {
         let stdout_handle: &i8 = GetStdHandle(-11 as i32);
-        if (stdout_handle == bitcast::<&i8>(-1)) {
+        if (stdout_handle == bitcast::<&i8>(-1 as isize)) {
             process::throw("stdout handle was invalid");
         }
         return stdout_handle;
@@ -689,7 +689,7 @@ namespace fs{
         const GENERIC_WRITE: u32 = 0x40000000;
         const FILE_ATTRIBUTE_NORMAL: u32 = 0x80;
         const hFile: &void = CreateFileA(path, GENERIC_WRITE, 0, null, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, null);
-        if hFile == bitcast::<&void>(-1) { return 0; }
+        if hFile == bitcast::<&void>(-1 as isize) { return 0; }
 
         let bytes_written: u32 = 0;
         const success: i32 = WriteFile(hFile, content, content_len, &bytes_written, null);
@@ -702,7 +702,7 @@ namespace fs{
         const OPEN_EXISTING: u32 = 3; 
         const hFile: &void = CreateFileA(path, GENERIC_READ, 1, null, OPEN_EXISTING, 0x80, null); // Shared Read
         
-        if hFile == bitcast::<&void>(-1) {
+        if hFile == bitcast::<&void>(-1 as isize) {
             process::throw(string_utils::insert("File not found: ", path, 16));
         }
 
@@ -727,7 +727,7 @@ namespace fs{
     }
     fn create_file(path: &i8) : i32 {
         const hFile: &void = CreateFileA(path, 0x40000000, 0, null, 1, 0x80, null);
-        if hFile == bitcast::<&void>(-1) { return 0; }
+        if hFile == bitcast::<&void>(-1 as isize) { return 0; }
         CloseHandle(hFile);
         return 1;
     }
@@ -764,7 +764,7 @@ namespace tests{
         
         const size: i64 = 16;
         const buffer1: &i8 = mem::malloc(size) as &i8;
-        if buffer1 == bitcast::<&i8>(0) { process::throw("mem_test: malloc failed"); }
+        if buffer1 == null { process::throw("mem_test: malloc failed"); }
         
         // Test fill
         mem::fill('X', buffer1, size);
@@ -989,7 +989,7 @@ namespace tests{
     fn not_new_line(c:i8) : bool { return c != '\n'; }
     fn valid_name_token(c:i8) : bool { return char_utils::is_alpha(c) || char_utils::is_digit(c) || c == '_'; }
     fn is_valid_number_token(c:i8) : bool { return char_utils::is_digit(c) || char_utils::is_xdigit(c) || c == '_'; }
-    enum LexerTokens{
+    enum LexerTokens : i64{
         String
     }
     // No.

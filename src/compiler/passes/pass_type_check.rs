@@ -8,14 +8,13 @@ use rcsharp_parser::{
 use crate::{
     compiler::{
         context::{CompilerContext, ErrorSeverity, FileID},
-        passes::traits::CompilerPass,
+        passes::{pass_optimizer::constant_expression_compiler, traits::CompilerPass},
         structs::{ContextPath, ContextPathEnd},
     },
     compiler_essentials::{
         CompileResult, CompilerError, CompilerType, Enum, Function, FunctionFlags, LLVMVal, Struct,
         Variable,
     },
-    expression_compiler::constant_expression_compiler,
 };
 
 #[derive(Default)]

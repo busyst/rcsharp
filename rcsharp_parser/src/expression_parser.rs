@@ -58,6 +58,24 @@ impl Expr {
                     .join(", ");
                 format!("CALL|[{}]({})|", callee.debug_emit_inner(depth), args_str)
             }
+            Self::CallGeneric(callee, args, generics) => {
+                let args_str = args
+                    .iter()
+                    .map(|a| a.debug_emit_inner(1))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let x_str = generics
+                    .iter()
+                    .map(|a| format!("{:?}", a))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!(
+                    "CALLGEN{{{}}}|[{}]({})|",
+                    x_str,
+                    callee.debug_emit_inner(depth),
+                    args_str
+                )
+            }
             Self::MemberAccess(base, member) => {
                 format!("{}.{member}", base.debug_emit_inner(depth))
             }

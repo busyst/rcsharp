@@ -1,19 +1,28 @@
 use rcsharp_parser::{
-    compiler_primitives::{find_primitive_type, BYTE_TYPE, DEFAULT_INTEGER_TYPE, VOID_TYPE},
+    compiler_primitives::{find_primitive_type, BYTE_TYPE, POINTER_SIZED_TYPE, VOID_TYPE},
     expression_parser::Expr,
     parser::ParserType,
 };
 
 use crate::{
-    compiler::structs::ContextPathEnd,
-    compiler_essentials::{CompileResult, CompilerError, CompilerType, LLVMVal},
-    expression_compiler::{CompiledValue, Expected, ExpressionCompiler},
+    compiler::{
+        expression::{ExpressionCompileResult, ExpressionCompiler, LValueAccess},
+        structs::{CompiledValue, Expected, LLVMInstruction},
+    },
+    compiler_essentials::{CompilerError, CompilerType, LLVMVal},
 };
 
-pub type CompilerFn =
-    fn(&mut ExpressionCompiler, &[Expr], &Expected) -> CompileResult<CompiledValue>;
-pub type GenericCompilerFn =
-    fn(&mut ExpressionCompiler, &[Expr], &[ParserType], &Expected) -> CompileResult<CompiledValue>;
+pub type CompilerFn = fn(
+    &ExpressionCompiler,
+    &[Expr],
+    &Expected,
+) -> ExpressionCompileResult<(CompiledValue, Vec<LLVMInstruction>)>;
+pub type GenericCompilerFn = fn(
+    &ExpressionCompiler,
+    &[Expr],
+    &[ParserType],
+    &Expected,
+) -> ExpressionCompileResult<(CompiledValue, Vec<LLVMInstruction>)>;
 
 pub const COMPILER_FUNCTIONS: &[(&str, Option<CompilerFn>, Option<GenericCompilerFn>, bool)] = &[
     (
@@ -40,10 +49,10 @@ pub const COMPILER_FUNCTIONS: &[(&str, Option<CompilerFn>, Option<GenericCompile
 ];
 
 fn stalloc_impl(
-    compiler: &mut ExpressionCompiler,
+    compiler: &ExpressionCompiler,
     given_args: &[Expr],
     _expected: &Expected,
-) -> CompileResult<CompiledValue> {
+) -> ExpressionCompileResult<(CompiledValue, Vec<LLVMInstruction>)> {
     if given_args.len() != 1 {
         return Err(CompilerError::Generic(format!(
             "stalloc(count) expects exactly 1 argument, but got {}",
@@ -52,8 +61,9 @@ fn stalloc_impl(
         .into());
     }
 
-    let int_type = CompilerType::Primitive(DEFAULT_INTEGER_TYPE);
-    let count_val = compiler.compile_rvalue(&given_args[0], Expected::Type(&int_type))?;
+    let int_type = CompilerType::Primitive(POINTER_SIZED_TYPE);
+    let (count_val, mut instruct) =
+        compiler.compile_rvalue(&given_args[0], Expected::Type(&int_type))?;
     let Some(count_type) = count_val.get_type() else {
         return Err(CompilerError::Generic("stalloc(arg) arg is not a value".into()).into());
     };
@@ -65,26 +75,27 @@ fn stalloc_impl(
         .into());
     }
 
-    let utvc = compiler.ctx.acquire_temp_id();
-    let count_llvm_type = count_type.llvm_representation(compiler.symbols())?;
-
-    compiler.output.push_function_body(&format!(
-        "\t%tmp{} = alloca i8, {} {}\n",
-        utvc,
-        count_llvm_type,
-        count_val.get_llvm_rep().to_string()
-    ));
-    Ok(CompiledValue::new_value(
-        LLVMVal::Register(utvc),
-        CompilerType::Pointer(Box::new(CompilerType::Primitive(BYTE_TYPE))),
+    let utvc = compiler.ctx().acquire_temp_id();
+    instruct.push(LLVMInstruction::AllocateStack {
+        target_reg: utvc,
+        alloc_type: CompilerType::Primitive(BYTE_TYPE),
+        count: count_val.get_llvm_rep().clone(),
+        count_type: count_type.clone(),
+    });
+    Ok((
+        CompiledValue::new_value(
+            LLVMVal::Register(utvc),
+            CompilerType::Pointer(Box::new(CompilerType::Primitive(BYTE_TYPE))),
+        ),
+        instruct,
     ))
 }
 fn stalloc_generic_impl(
-    compiler: &mut ExpressionCompiler,
+    compiler: &ExpressionCompiler,
     given_args: &[Expr],
     given_generic: &[ParserType],
     _expected: &Expected,
-) -> CompileResult<CompiledValue> {
+) -> ExpressionCompileResult<(CompiledValue, Vec<LLVMInstruction>)> {
     if given_generic.len() != 1 {
         return Err(CompilerError::Generic(format!(
             "stalloc<T>(arg) expects exactly 1 generic type, but got {}",
@@ -99,8 +110,9 @@ fn stalloc_generic_impl(
         ))
         .into());
     }
-    let int_type = CompilerType::Primitive(DEFAULT_INTEGER_TYPE);
-    let count_val = compiler.compile_rvalue(&given_args[0], Expected::Type(&int_type))?;
+    let int_type = CompilerType::Primitive(POINTER_SIZED_TYPE);
+    let (count_val, mut instruct) =
+        compiler.compile_rvalue(&given_args[0], Expected::Type(&int_type))?;
     let Some(count_type) = count_val.get_type() else {
         return Err(CompilerError::Generic("stalloc<T>(arg) arg is not a value".into()).into());
     };
@@ -115,28 +127,30 @@ fn stalloc_generic_impl(
     let target_type = CompilerType::from_parser_type(
         &given_generic[0],
         compiler.symbols(),
-        &compiler.ctx.current_function_path,
+        &compiler.ctx().current_function_path,
     )?;
-    let llvm_type_str = target_type.llvm_representation(compiler.symbols())?;
-    let utvc = compiler.ctx.acquire_temp_id();
-    compiler.output.push_function_body(&format!(
-        "\t%tmp{} = alloca {}, {} {}\n",
-        utvc,
-        llvm_type_str,
-        count_type.llvm_representation(compiler.symbols())?,
-        count_val.get_llvm_rep().to_string()
-    ));
-    Ok(CompiledValue::new_value(
-        LLVMVal::Register(utvc),
-        target_type.reference(),
+    let utvc = compiler.ctx().acquire_temp_id();
+    instruct.push(LLVMInstruction::AllocateStack {
+        target_reg: utvc,
+        alloc_type: target_type.clone(),
+        count: count_val.get_llvm_rep().clone(),
+        count_type: count_type.clone(),
+    });
+    println!(
+        "STALLOC RETURNS {:?}",
+        CompiledValue::new_value(LLVMVal::Register(utvc), target_type.clone().reference())
+    );
+    Ok((
+        CompiledValue::new_value(LLVMVal::Register(utvc), target_type.reference()),
+        instruct,
     ))
 }
 
 fn size_of_impl(
-    compiler: &mut ExpressionCompiler,
+    compiler: &ExpressionCompiler,
     given_args: &[Expr],
     expected: &Expected,
-) -> CompileResult<CompiledValue> {
+) -> ExpressionCompileResult<(CompiledValue, Vec<LLVMInstruction>)> {
     if given_args.len() != 1 {
         return Err(CompilerError::Generic(format!(
             "size_of(Type) expects exactly 1 argument, but got {}",
@@ -144,26 +158,29 @@ fn size_of_impl(
         ))
         .into());
     }
-    let value = compiler.compile_rvalue(&given_args[0], Expected::Anything)?;
+    let (value, instruct) = compiler.compile_rvalue(&given_args[0], Expected::Anything)?;
     let Some(value_type) = value.get_type() else {
         return Err(CompilerError::Generic("size_of(Type) Type is not a type".into()).into());
     };
     let size = value_type.calculate_layout(compiler.symbols()).size;
-    Ok(CompiledValue::new_value(
-        LLVMVal::ConstantInteger(size as i128),
-        expected
-            .get_type()
-            .filter(|x| x.is_integer())
-            .unwrap_or(&CompilerType::Primitive(DEFAULT_INTEGER_TYPE))
-            .clone(),
+    Ok((
+        CompiledValue::new_value(
+            LLVMVal::ConstantInteger(size as i128),
+            expected
+                .get_type()
+                .filter(|x| x.is_integer())
+                .unwrap_or(&CompilerType::Primitive(POINTER_SIZED_TYPE))
+                .clone(),
+        ),
+        instruct,
     ))
 }
 fn size_of_generic_impl(
-    compiler: &mut ExpressionCompiler,
+    compiler: &ExpressionCompiler,
     given_args: &[Expr],
     given_generic: &[ParserType],
     expected: &Expected,
-) -> CompileResult<CompiledValue> {
+) -> ExpressionCompileResult<(CompiledValue, Vec<LLVMInstruction>)> {
     if given_generic.len() != 1 {
         return Err(CompilerError::Generic(format!(
             "size_of<T>() expects exactly 1 generic type, but got {}",
@@ -181,25 +198,28 @@ fn size_of_generic_impl(
     let mut target_type = CompilerType::from_parser_type(
         &given_generic[0],
         compiler.symbols(),
-        &compiler.ctx.current_function_path,
+        &compiler.ctx().current_function_path,
     )?;
     target_type.substitute_global_aliases(compiler.symbols())?;
     let size = target_type.calculate_layout(compiler.symbols()).size;
-    Ok(CompiledValue::new_value(
-        LLVMVal::ConstantInteger(size as i128),
-        expected
-            .get_type()
-            .filter(|x| x.is_integer())
-            .unwrap_or(&CompilerType::Primitive(DEFAULT_INTEGER_TYPE))
-            .clone(),
+    Ok((
+        CompiledValue::new_value(
+            LLVMVal::ConstantInteger(size as i128),
+            expected
+                .get_type()
+                .filter(|x| x.is_integer())
+                .unwrap_or(&CompilerType::Primitive(POINTER_SIZED_TYPE))
+                .clone(),
+        ),
+        vec![],
     ))
 }
 
 fn ptr_of_impl(
-    compiler: &mut ExpressionCompiler,
+    compiler: &ExpressionCompiler,
     given_args: &[Expr],
     _expected: &Expected,
-) -> CompileResult<CompiledValue> {
+) -> ExpressionCompileResult<(CompiledValue, Vec<LLVMInstruction>)> {
     if given_args.len() != 1 {
         return Err(CompilerError::Generic(format!(
             "ptr_of(variable) expects exactly 1 argument, but got {}",
@@ -208,20 +228,26 @@ fn ptr_of_impl(
         .into());
     }
 
-    let lvalue = compiler.compile_lvalue(&given_args[0], false, false)?;
+    let (lvalue, instruct) = compiler.compile_lvalue(&given_args[0], LValueAccess::Read)?;
     match lvalue.location {
         LLVMVal::Global(x) => {
             if matches!(lvalue.value_type, CompilerType::Function(..)) {
-                return Ok(CompiledValue::new_value(
-                    LLVMVal::Global(x.clone()),
-                    lvalue.value_type.clone().reference(),
+                return Ok((
+                    CompiledValue::new_value(
+                        LLVMVal::Global(x.clone()),
+                        lvalue.value_type.clone().reference(),
+                    ),
+                    instruct,
                 ));
             }
         }
         LLVMVal::Variable(x) => {
-            return Ok(CompiledValue::new_value(
-                LLVMVal::Variable(x),
-                lvalue.value_type.clone().reference(),
+            return Ok((
+                CompiledValue::new_value(
+                    LLVMVal::Variable(x),
+                    lvalue.value_type.clone().reference(),
+                ),
+                instruct,
             ));
         }
 
@@ -233,10 +259,10 @@ fn ptr_of_impl(
 }
 
 fn align_of_impl(
-    compiler: &mut ExpressionCompiler,
+    compiler: &ExpressionCompiler,
     given_args: &[Expr],
     expected: &Expected,
-) -> CompileResult<CompiledValue> {
+) -> ExpressionCompileResult<(CompiledValue, Vec<LLVMInstruction>)> {
     if given_args.len() != 1 {
         return Err(CompilerError::Generic(format!(
             "align_of(Type) expects exactly 1 argument, but got {}",
@@ -244,27 +270,30 @@ fn align_of_impl(
         ))
         .into());
     }
-    let value = compiler.compile_rvalue(&given_args[0], Expected::Anything)?;
+    let (value, instruct) = compiler.compile_rvalue(&given_args[0], Expected::Anything)?;
     let Some(value_type) = value.get_type() else {
         return Err(CompilerError::Generic("align_of(Type) is not a type".into()).into());
     };
     let size = value_type.calculate_layout(compiler.symbols()).align;
-    Ok(CompiledValue::new_value(
-        LLVMVal::ConstantInteger(size as i128),
-        expected
-            .get_type()
-            .filter(|x| x.is_integer())
-            .unwrap_or(&CompilerType::Primitive(DEFAULT_INTEGER_TYPE))
-            .clone(),
+    Ok((
+        CompiledValue::new_value(
+            LLVMVal::ConstantInteger(size as i128),
+            expected
+                .get_type()
+                .filter(|x| x.is_integer())
+                .unwrap_or(&CompilerType::Primitive(POINTER_SIZED_TYPE))
+                .clone(),
+        ),
+        instruct,
     ))
 }
 #[allow(unused)]
 fn align_of_generic_impl(
-    compiler: &mut ExpressionCompiler,
+    compiler: &ExpressionCompiler,
     given_args: &[Expr],
     given_generic: &[ParserType],
     expected: &Expected,
-) -> CompileResult<CompiledValue> {
+) -> ExpressionCompileResult<(CompiledValue, Vec<LLVMInstruction>)> {
     if given_generic.len() != 1 {
         return Err(CompilerError::Generic(format!(
             "size_of<T>() expects exactly 1 generic type, but got {}",
@@ -282,31 +311,29 @@ fn align_of_generic_impl(
     let mut target_type = CompilerType::from_parser_type(
         &given_generic[0],
         compiler.symbols(),
-        &compiler.ctx.current_function_path,
+        &compiler.ctx().current_function_path,
     )?;
     target_type.substitute_global_aliases(compiler.symbols())?;
     let align = target_type.calculate_layout(compiler.symbols()).align;
-    let return_ptype = if let Expected::Type(pt) = expected {
-        if pt.is_integer() {
-            (*pt).clone()
-        } else {
-            CompilerType::Primitive(DEFAULT_INTEGER_TYPE)
-        }
-    } else {
-        CompilerType::Primitive(DEFAULT_INTEGER_TYPE)
-    };
-    Ok(CompiledValue::new_value(
-        LLVMVal::ConstantInteger(align as i128),
-        return_ptype,
+    Ok((
+        CompiledValue::new_value(
+            LLVMVal::ConstantInteger(align as i128),
+            expected
+                .get_type()
+                .filter(|x| x.is_integer())
+                .unwrap_or(&CompilerType::Primitive(POINTER_SIZED_TYPE))
+                .clone(),
+        ),
+        vec![],
     ))
 }
 // Done
 fn bitcast_generic_impl(
-    compiler: &mut ExpressionCompiler,
+    compiler: &ExpressionCompiler,
     given_args: &[Expr],
     given_generic: &[ParserType],
     _expected: &Expected,
-) -> CompileResult<CompiledValue> {
+) -> ExpressionCompileResult<(CompiledValue, Vec<LLVMInstruction>)> {
     if given_generic.len() != 1 {
         return Err(CompilerError::Generic(format!(
             "{} needs exactly 1 generic argument, but got {}",
@@ -326,17 +353,18 @@ fn bitcast_generic_impl(
     let target_type = CompilerType::from_parser_type(
         &given_generic[0],
         compiler.symbols(),
-        &compiler.ctx.current_function_path,
+        &compiler.ctx().current_function_path,
     )?;
-    let source_val = compiler.compile_rvalue(&given_args[0], Expected::Type(&target_type))?;
+    let (source_val, mut instruct) =
+        compiler.compile_rvalue(&given_args[0], Expected::Type(&target_type))?;
     let Some(source_type) = source_val.get_type() else {
         return Err(CompilerError::Generic("bitcast source is not a value".into()).into());
     };
     if source_type.is_pointer() && target_type.is_pointer() {
-        return Ok(source_val.with_type(target_type));
+        return Ok((source_val.with_type(target_type), instruct));
     }
     if source_type == &target_type {
-        return Ok(source_val);
+        return Ok((source_val, instruct));
     } else {
         let q = CompilerType::Pointer(Box::new(CompilerType::Primitive(
             find_primitive_type("i8").unwrap(),
@@ -346,10 +374,11 @@ fn bitcast_generic_impl(
         )));
         let e = CompilerType::Pointer(Box::new(CompilerType::Primitive(VOID_TYPE)));
         if target_type == e && source_val.equal_type(&q) || source_val.equal_type(&w) {
-            return Ok(source_val.with_type(target_type));
+            return Ok((source_val.with_type(target_type), instruct));
         }
     }
     if !source_type.is_bitcast_compatible(&target_type, compiler.symbols()) {
+        println!("{:?}", given_args);
         return Err(CompilerError::Generic(format!(
             "bitcast size mismatch: cannot cast from {:?} to {:?}",
             source_type, target_type
@@ -357,25 +386,38 @@ fn bitcast_generic_impl(
         .into());
     }
     if source_type.is_pointer() ^ target_type.is_pointer() {
-        let (from_t, from_v) = (
-            source_type.llvm_representation(compiler.symbols())?,
-            source_val.get_llvm_rep().to_string(),
-        );
-        let to_str = target_type.llvm_representation(compiler.symbols())?;
         if source_type.is_pointer() {
-            let utvc = compiler.emit_cast("ptrtoint", &from_t, &from_v, &to_str);
-            return Ok(CompiledValue::new_value(
-                LLVMVal::Register(utvc),
-                target_type,
+            let utvc = compiler.ctx().acquire_temp_id();
+            instruct.push(LLVMInstruction::Cast {
+                target_reg: utvc,
+                op: format!("ptrtoint"),
+                from_type: source_type.clone(),
+                from_val: source_val.get_llvm_rep().clone(),
+                to_type: target_type.clone(),
+            });
+            return Ok((
+                CompiledValue::new_value(LLVMVal::Register(utvc), target_type),
+                instruct,
             ));
         } else {
-            if from_v.parse::<i128>().map(|x| x == 0).unwrap_or(false) {
-                return Ok(CompiledValue::new_value(LLVMVal::Null, target_type.clone()));
+            let utvc = compiler.ctx().acquire_temp_id();
+
+            if LLVMVal::ConstantInteger(0) == *source_val.get_llvm_rep() {
+                return Ok((
+                    CompiledValue::new_value(LLVMVal::Null, target_type.clone()),
+                    instruct,
+                ));
             }
-            let utvc = compiler.emit_cast("inttoptr", &from_t, &from_v, &to_str);
-            return Ok(CompiledValue::new_value(
-                LLVMVal::Register(utvc),
-                target_type,
+            instruct.push(LLVMInstruction::Cast {
+                target_reg: utvc,
+                op: format!("inttoptr"),
+                from_type: source_type.clone(),
+                from_val: source_val.get_llvm_rep().clone(),
+                to_type: target_type.clone(),
+            });
+            return Ok((
+                CompiledValue::new_value(LLVMVal::Register(utvc), target_type),
+                instruct,
             ));
         }
     }
@@ -389,9 +431,12 @@ fn bitcast_generic_impl(
                 ..
             } = source_val
             {
-                return Ok(CompiledValue::new_value(
-                    LLVMVal::ConstantInteger(f64::to_bits(x).cast_signed() as i128),
-                    target_type,
+                return Ok((
+                    CompiledValue::new_value(
+                        LLVMVal::ConstantInteger(f64::to_bits(x).cast_signed() as i128),
+                        target_type,
+                    ),
+                    instruct,
                 ));
             }
         } else {
@@ -401,26 +446,28 @@ fn bitcast_generic_impl(
                 ..
             } = source_val
             {
-                return Ok(CompiledValue::new_value(
-                    LLVMVal::ConstantDecimal(f64::from_bits(i64::cast_unsigned(x as i64))),
-                    target_type,
+                return Ok((
+                    CompiledValue::new_value(
+                        LLVMVal::ConstantDecimal(f64::from_bits(i64::cast_unsigned(x as i64))),
+                        target_type,
+                    ),
+                    instruct,
                 ));
             }
         }
     }
-    let src_llvm_type = source_type.llvm_representation(compiler.symbols())?;
-    let dst_llvm_type = target_type.llvm_representation(compiler.symbols())?;
-    let utvc = compiler.emit_cast(
-        "bitcast",
-        &src_llvm_type,
-        &source_val.get_llvm_rep().to_string(),
-        &dst_llvm_type,
-    );
-
-    Ok(CompiledValue::new_value(
-        LLVMVal::Register(utvc),
-        target_type,
-    ))
+    let utvc = compiler.ctx().acquire_temp_id();
+    instruct.push(LLVMInstruction::Cast {
+        target_reg: utvc,
+        op: format!("bitcast"),
+        from_type: source_type.clone(),
+        from_val: source_val.get_llvm_rep().clone(),
+        to_type: target_type.clone(),
+    });
+    return Ok((
+        CompiledValue::new_value(LLVMVal::Register(utvc), target_type),
+        instruct,
+    ));
 }
 // Usage: asm("add rax, rbx", [["rax", foo]], [["rax", foo], ["rbx", bar]], ["flags"]);
 // Instruction: "add rax, rbx" RAX = RAX + RBX
@@ -428,10 +475,10 @@ fn bitcast_generic_impl(
 // Input: [["rax", foo], ["rbx", bar]]
 // Clobbers: ["flags"]
 fn asm_impl(
-    compiler: &mut ExpressionCompiler,
+    _compiler: &ExpressionCompiler,
     given_args: &[Expr],
     _expected: &Expected,
-) -> CompileResult<CompiledValue> {
+) -> ExpressionCompileResult<(CompiledValue, Vec<LLVMInstruction>)> {
     if given_args.len() != 4 {
         return Err(CompilerError::Generic(format!(
             "asm_impl(variable) expects exactly 4 arguments, but got {}",
@@ -446,6 +493,7 @@ fn asm_impl(
         )
         .into());
     }
+    /*
     let asm_template_str = match &given_args[0] {
         Expr::StringConst(s) => s.clone(),
         _ => {
@@ -457,7 +505,7 @@ fn asm_impl(
     };
     let mut parse_operands = |arg_index: usize,
                               is_output: bool|
-     -> CompileResult<Vec<(String, String, String)>> {
+     -> ExpressionCompileResult<Vec<(String, String, String)>> {
         let arg_expr = &given_args[arg_index];
         match arg_expr {
             Expr::Array(arr) => {
@@ -485,17 +533,16 @@ fn asm_impl(
 
                         let (llvm_value, llvm_type) = if let Expr::Name(name) = &inner[1] {
                             if is_output {
-                                let lvalue = compiler.compile_name_lvalue(
+                                let (lvalue, instruct) = compiler.compile_name_lvalue(
                                     ContextPathEnd::from_path("", name),
-                                    true,
-                                    true,
+                                    LValueAccess::Write,
                                 )?;
                                 (
                                     lvalue.location.to_string(),
                                     lvalue.value_type.llvm_representation(compiler.symbols())?,
                                 )
                             } else {
-                                let rvalue = compiler.compile_name_rvalue(
+                                let (rvalue, instruct) = compiler.compile_name_rvalue(
                                     ContextPathEnd::from_path("", name),
                                     Expected::Anything,
                                 )?;
@@ -549,13 +596,14 @@ fn asm_impl(
                 )
                 .into()),
             })
-            .collect::<CompileResult<Vec<String>>>()?,
+            .collect::<ExpressionCompileResult<Vec<String>>>()?,
         _ => panic!("Unexpected arg"),
     }
     .join(",");
+    /*
     if let Some((register, var_pointer, var_type)) = outputs.first() {
         assert!(outputs.len() == 1);
-        let utvc = compiler.ctx.acquire_temp_id();
+        let utvc = compiler.ctx().acquire_temp_id();
         compiler.output.push_function_body(&format!(
             "\t%asm{utvc} = call {} asm sideeffect inteldialect \"{}\", \"{}\"({})\n",
             var_type,
@@ -604,8 +652,12 @@ fn asm_impl(
                 .collect::<Vec<_>>()
                 .join(", ")
         ));
-    }
-    Ok(CompiledValue::NoReturn {
-        program_halt: false,
-    })
+    } */
+    */
+    Ok((
+        CompiledValue::NoReturn {
+            program_halt: false,
+        },
+        vec![],
+    ))
 }
