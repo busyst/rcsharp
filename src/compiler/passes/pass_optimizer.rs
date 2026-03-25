@@ -1,10 +1,16 @@
+use std::collections::HashMap;
+
 use rcsharp_parser::{
     expression_parser::{BinaryOp, Expr, UnaryOp},
     parser::{Stmt, StmtData},
 };
 
 use crate::{
-    compiler::{context::CompilerContext, passes::traits::CompilerPass},
+    compiler::{
+        context::{CompilerConfig, CompilerContext},
+        passes::traits::CompilerPass,
+        structs::LLVMInstruction,
+    },
     compiler_essentials::{CompileResult, LLVMVal},
 };
 
@@ -133,6 +139,69 @@ impl OptimizerPass {
         }
 
         Ok(())
+    }
+    pub fn optimize_llvm_instructions(
+        mut vec: Vec<LLVMInstruction>,
+        cfg: &CompilerConfig,
+    ) -> Vec<LLVMInstruction> {
+        Self::remove_unnecesary_labels(&mut vec);
+        vec
+    }
+    fn remove_unnecesary_labels(vec: &mut Vec<LLVMInstruction>) {
+        let mut hm: HashMap<String, i32> = HashMap::new();
+        for (idx, x) in vec.iter().enumerate() {
+            match x {
+                LLVMInstruction::Label { name } => {
+                    if vec
+                        .get(idx.wrapping_sub(1))
+                        .filter(|x| {
+                            if let LLVMInstruction::Jump { label } = x {
+                                label == name
+                            } else {
+                                false
+                            }
+                        })
+                        .is_some()
+                    {
+                        let x = hm.get_mut(name).unwrap();
+                        *x += 1;
+                    } else {
+                        let x = hm.entry(name.clone()).or_insert(0);
+                        *x += 2;
+                    }
+                }
+                LLVMInstruction::Jump { label } => {
+                    let x = hm.entry(label.clone()).or_insert(0);
+                    *x += 1;
+                }
+                LLVMInstruction::Branch {
+                    condition_val: _,
+                    then_label_name,
+                    else_label_name,
+                } => {
+                    let x = hm.entry(then_label_name.clone()).or_insert(0);
+                    *x += 2;
+                    let x = hm.entry(else_label_name.clone()).or_insert(0);
+                    *x += 2;
+                }
+                LLVMInstruction::Phi {
+                    target_reg: _,
+                    result_type: _,
+                    incoming,
+                } => {
+                    for (_, label) in incoming {
+                        let x = hm.entry(label.clone()).or_insert(0);
+                        *x += 2;
+                    }
+                }
+                _ => {}
+            }
+        }
+        vec.retain(|x| match x {
+            LLVMInstruction::Label { name } => hm.get(name).filter(|x| **x <= 2).is_none(),
+            LLVMInstruction::Jump { label } => hm.get(label).filter(|x| **x <= 2).is_none(),
+            _ => true,
+        });
     }
 }
 

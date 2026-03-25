@@ -951,6 +951,11 @@ impl LLVMGenPass {
         ctx: &mut CompilerContext,
         builder: &mut LLVMOutputHandler,
     ) -> CompileResult<()> {
+        let vec =
+            crate::compiler::passes::pass_optimizer::OptimizerPass::optimize_llvm_instructions(
+                vec,
+                &ctx.config,
+            );
         for x in vec {
             match x {
                 LLVMInstruction::AllocateVar {

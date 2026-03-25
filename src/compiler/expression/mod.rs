@@ -852,10 +852,10 @@ impl<'a> ExpressionCompiler<'a> {
         }
 
         let mut gen = LLVMGenPass::new(code_gen_ctx, 0..0);
-        for _x in body {
-            let (stmt_inst, x) = gen.compile_statement(_x, self.compctx).unwrap();
+        for x in body {
+            let (stmt_inst, brk) = gen.compile_statement(x, self.compctx).unwrap();
             instructions.extend(stmt_inst);
-            if x {
+            if brk {
                 break;
             }
         }
@@ -1480,22 +1480,28 @@ impl<'a> ExpressionCompiler<'a> {
             index_expr,
             Expected::Type(&CompilerType::Primitive(POINTER_SIZED_TYPE)),
         )?;
-        instructions.append(&mut index_instructions);
 
         let index_llvm_val = index_val.try_get_llvm_rep()?.clone();
         let index_type = index_val.get_type().unwrap().clone();
 
-        if let Some((_size, base_type)) = larray_val.value_type.as_constant_array() {
+        if let Some((size, base_type)) = larray_val.value_type.as_constant_array() {
+            instructions.append(&mut index_instructions);
             if !larray_val.is_mutable && access != LValueAccess::Read {
                 return Err(CompilerError::Generic(
                     "Cannot mutate elements of a constant inline array".into(),
                 ));
             }
-            if index_llvm_val == LLVMVal::ConstantInteger(0) {
-                return Ok((
-                    CompiledLValue::new(larray_val.location, base_type.clone(), true),
-                    instructions,
-                ));
+            if let LLVMVal::ConstantInteger(x) = index_val.get_llvm_rep() {
+                if *x == 0 {
+                    return Ok((
+                        CompiledLValue::new(larray_val.location, base_type.clone(), true),
+                        instructions,
+                    ));
+                } else if *x >= size as i128 {
+                    return Err(CompilerError::Generic(format!(
+                        "Tried to access oob area of constant array"
+                    )));
+                }
             }
             let target_reg = self.ctx.acquire_temp_id();
             instructions.push(LLVMInstruction::GetElementPtr {
@@ -1518,15 +1524,15 @@ impl<'a> ExpressionCompiler<'a> {
         }
         if let Some(internal) = larray_val.value_type.as_pointer() {
             let (lr, mut instr) = self.compile_rvalue(array_expr, Expected::Anything)?;
-            instructions.append(&mut instr);
+            index_instructions.append(&mut instr);
             if index_llvm_val == LLVMVal::ConstantInteger(0) {
                 return Ok((
                     CompiledLValue::new(lr.get_llvm_rep().clone(), internal.clone(), true),
-                    instructions,
+                    index_instructions,
                 ));
             }
             let target_reg = self.ctx.acquire_temp_id();
-            instructions.push(LLVMInstruction::GetElementPtr {
+            index_instructions.push(LLVMInstruction::GetElementPtr {
                 target_reg,
                 base_type: internal.clone(),
                 ptr: lr.get_llvm_rep().clone(),
@@ -1534,7 +1540,7 @@ impl<'a> ExpressionCompiler<'a> {
             });
             return Ok((
                 CompiledLValue::new(LLVMVal::Register(target_reg), internal.clone(), true),
-                instructions,
+                index_instructions,
             ));
         } else {
             panic!("{:?} {:?} {:?}", array_expr, larray_val, index_val);

@@ -136,10 +136,6 @@ fn stalloc_generic_impl(
         count: count_val.get_llvm_rep().clone(),
         count_type: count_type.clone(),
     });
-    println!(
-        "STALLOC RETURNS {:?}",
-        CompiledValue::new_value(LLVMVal::Register(utvc), target_type.clone().reference())
-    );
     Ok((
         CompiledValue::new_value(LLVMVal::Register(utvc), target_type.reference()),
         instruct,
