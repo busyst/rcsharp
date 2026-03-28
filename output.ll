@@ -496,31 +496,22 @@ func_exit:
 	ret i64 %tmp15
 }
 define void @tests.vector_test(){
+entry:
 	%v0 = alloca %"struct.vector.Vec<i8>"
-	%v1 = alloca i1
-	%v2 = alloca i1
-	%v3 = alloca i1
-	%v4 = alloca i1
-	%v5 = alloca i1
-	%v6 = alloca i1
-	%v7 = alloca i1
-	%v8 = alloca i1
 	call void @console.write(i8* @.str.9, i32 13)
 	%tmp0 = call %"struct.vector.Vec<i8>" @"vector.new<i8>"()
 	store %"struct.vector.Vec<i8>" %tmp0, %"struct.vector.Vec<i8>"* %v0
 	%tmp1 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %v0, i32 0, i32 1
 	%tmp2 = load i32, i32* %tmp1
 	%tmp3 = icmp ne i32 %tmp2, 0
-	store i1 %tmp3, i1* %v1
 	br i1 %tmp3, label %logic_end_0, label %logic_rhs_0
 logic_rhs_0:
 	%tmp4 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %v0, i32 0, i32 2
 	%tmp5 = load i32, i32* %tmp4
 	%tmp6 = icmp ne i32 %tmp5, 0
-	store i1 %tmp6, i1* %v1
 	br label %logic_end_0
 logic_end_0:
-	%tmp7 = load i1, i1* %v1
+	%tmp7 = phi i1 [%tmp3, %entry], [%tmp6, %logic_rhs_0]
 	br i1 %tmp7, label %then1, label %endif1
 then1:
 	call void @process.throw(i8* @.str.10)
@@ -533,16 +524,14 @@ endif1:
 	%tmp8 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %v0, i32 0, i32 1
 	%tmp9 = load i32, i32* %tmp8
 	%tmp10 = icmp ne i32 %tmp9, 4
-	store i1 %tmp10, i1* %v2
 	br i1 %tmp10, label %logic_end_2, label %logic_rhs_2
 logic_rhs_2:
 	%tmp11 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %v0, i32 0, i32 2
 	%tmp12 = load i32, i32* %tmp11
 	%tmp13 = icmp ne i32 %tmp12, 4
-	store i1 %tmp13, i1* %v2
 	br label %logic_end_2
 logic_end_2:
-	%tmp14 = load i1, i1* %v2
+	%tmp14 = phi i1 [%tmp10, %endif1], [%tmp13, %logic_rhs_2]
 	br i1 %tmp14, label %then3, label %endif3
 then3:
 	call void @process.throw(i8* @.str.11)
@@ -551,17 +540,15 @@ endif3:
 	%tmp15 = load i8*, i8** %v0
 	%tmp16 = load i8, i8* %tmp15
 	%tmp17 = icmp ne i8 %tmp16, 10
-	store i1 %tmp17, i1* %v3
 	br i1 %tmp17, label %logic_end_4, label %logic_rhs_4
 logic_rhs_4:
 	%tmp18 = load i8*, i8** %v0
 	%tmp19 = getelementptr inbounds i8, i8* %tmp18, i64 3
 	%tmp20 = load i8, i8* %tmp19
 	%tmp21 = icmp ne i8 %tmp20, 40
-	store i1 %tmp21, i1* %v3
 	br label %logic_end_4
 logic_end_4:
-	%tmp22 = load i1, i1* %v3
+	%tmp22 = phi i1 [%tmp17, %endif3], [%tmp21, %logic_rhs_4]
 	br i1 %tmp22, label %then5, label %endif5
 then5:
 	call void @process.throw(i8* @.str.12)
@@ -571,16 +558,14 @@ endif5:
 	%tmp23 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %v0, i32 0, i32 1
 	%tmp24 = load i32, i32* %tmp23
 	%tmp25 = icmp ne i32 %tmp24, 5
-	store i1 %tmp25, i1* %v4
 	br i1 %tmp25, label %logic_end_6, label %logic_rhs_6
 logic_rhs_6:
 	%tmp26 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %v0, i32 0, i32 2
 	%tmp27 = load i32, i32* %tmp26
 	%tmp28 = icmp ne i32 %tmp27, 8
-	store i1 %tmp28, i1* %v4
 	br label %logic_end_6
 logic_end_6:
-	%tmp29 = load i1, i1* %v4
+	%tmp29 = phi i1 [%tmp25, %endif5], [%tmp28, %logic_rhs_6]
 	br i1 %tmp29, label %then7, label %endif7
 then7:
 	call void @process.throw(i8* @.str.13)
@@ -590,16 +575,14 @@ endif7:
 	%tmp31 = getelementptr inbounds i8, i8* %tmp30, i64 4
 	%tmp32 = load i8, i8* %tmp31
 	%tmp33 = icmp ne i8 %tmp32, 50
-	store i1 %tmp33, i1* %v5
 	br i1 %tmp33, label %logic_end_8, label %logic_rhs_8
 logic_rhs_8:
 	%tmp34 = load i8*, i8** %v0
 	%tmp35 = load i8, i8* %tmp34
 	%tmp36 = icmp ne i8 %tmp35, 10
-	store i1 %tmp36, i1* %v5
 	br label %logic_end_8
 logic_end_8:
-	%tmp37 = load i1, i1* %v5
+	%tmp37 = phi i1 [%tmp33, %endif7], [%tmp36, %logic_rhs_8]
 	br i1 %tmp37, label %then9, label %endif9
 then9:
 	call void @process.throw(i8* @.str.14)
@@ -618,17 +601,15 @@ endif10:
 	%tmp42 = getelementptr inbounds i8, i8* %tmp41, i64 5
 	%tmp43 = load i8, i8* %tmp42
 	%tmp44 = icmp ne i8 %tmp43, 65
-	store i1 %tmp44, i1* %v6
 	br i1 %tmp44, label %logic_end_11, label %logic_rhs_11
 logic_rhs_11:
 	%tmp45 = load i8*, i8** %v0
 	%tmp46 = getelementptr inbounds i8, i8* %tmp45, i64 6
 	%tmp47 = load i8, i8* %tmp46
 	%tmp48 = icmp ne i8 %tmp47, 66
-	store i1 %tmp48, i1* %v6
 	br label %logic_end_11
 logic_end_11:
-	%tmp49 = load i1, i1* %v6
+	%tmp49 = phi i1 [%tmp44, %endif10], [%tmp48, %logic_rhs_11]
 	br i1 %tmp49, label %then12, label %endif12
 then12:
 	call void @process.throw(i8* @.str.17)
@@ -638,25 +619,21 @@ endif12:
 	%tmp50 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %v0, i32 0, i32 1
 	%tmp51 = load i32, i32* %tmp50
 	%tmp52 = icmp ne i32 %tmp51, 0
-	store i1 %tmp52, i1* %v7
 	br i1 %tmp52, label %logic_end_13, label %logic_rhs_13
 logic_rhs_13:
 	%tmp53 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %v0, i32 0, i32 2
 	%tmp54 = load i32, i32* %tmp53
 	%tmp55 = icmp ne i32 %tmp54, 0
-	store i1 %tmp55, i1* %v7
 	br label %logic_end_13
 logic_end_13:
-	%tmp56 = load i1, i1* %v7
-	store i1 %tmp56, i1* %v8
+	%tmp56 = phi i1 [%tmp52, %endif12], [%tmp55, %logic_rhs_13]
 	br i1 %tmp56, label %logic_end_14, label %logic_rhs_14
 logic_rhs_14:
 	%tmp57 = load i8*, i8** %v0
 	%tmp58 = icmp ne ptr %tmp57, null
-	store i1 %tmp58, i1* %v8
 	br label %logic_end_14
 logic_end_14:
-	%tmp59 = load i1, i1* %v8
+	%tmp59 = phi i1 [%tmp56, %logic_end_13], [%tmp58, %logic_rhs_14]
 	br i1 %tmp59, label %then15, label %endif15
 then15:
 	call void @process.throw(i8* @.str.18)
@@ -667,33 +644,24 @@ endif15:
 	ret void
 }
 define i1 @tests.valid_name_token(i8 %c){
-	%v0 = alloca i1
-	%v1 = alloca i1
+entry:
 	%tmp0 = call i1 @char_utils.is_alpha(i8 %c)
-	store i1 %tmp0, i1* %v0
 	br i1 %tmp0, label %logic_end_0, label %logic_rhs_0
 logic_rhs_0:
 	%tmp1 = call i1 @char_utils.is_digit(i8 %c)
-	store i1 %tmp1, i1* %v0
 	br label %logic_end_0
 logic_end_0:
-	%tmp2 = load i1, i1* %v0
-	store i1 %tmp2, i1* %v1
+	%tmp2 = phi i1 [%tmp0, %entry], [%tmp1, %logic_rhs_0]
 	br i1 %tmp2, label %logic_end_1, label %logic_rhs_1
 logic_rhs_1:
 	%tmp3 = icmp eq i8 %c, 95
-	store i1 %tmp3, i1* %v1
 	br label %logic_end_1
 logic_end_1:
-	%tmp4 = load i1, i1* %v1
+	%tmp4 = phi i1 [%tmp2, %logic_end_0], [%tmp3, %logic_rhs_1]
 	ret i1 %tmp4
 }
 define void @tests.string_utils_test(){
-	%v0 = alloca i1
-	%v1 = alloca i1
-	%v2 = alloca i1
-	%v3 = alloca i32
-	%v4 = alloca i1
+	%v0 = alloca i32
 	call void @console.write(i8* @.str.20, i32 19)
 	%tmp0 = call i32 @string_utils.c_str_len(i8* @.str.21)
 	%tmp1 = icmp ne i32 %tmp0, 4
@@ -711,14 +679,12 @@ then1:
 endif1:
 	%tmp4 = call i1 @char_utils.is_digit(i8 55)
 	%tmp5 = xor i1 1, %tmp4
-	store i1 %tmp5, i1* %v0
 	br i1 %tmp5, label %logic_end_2, label %logic_rhs_2
 logic_rhs_2:
 	%tmp6 = call i1 @char_utils.is_digit(i8 98)
-	store i1 %tmp6, i1* %v0
 	br label %logic_end_2
 logic_end_2:
-	%tmp7 = load i1, i1* %v0
+	%tmp7 = phi i1 [%tmp5, %endif1], [%tmp6, %logic_rhs_2]
 	br i1 %tmp7, label %then3, label %endif3
 then3:
 	call void @process.throw(i8* @.str.25)
@@ -726,14 +692,12 @@ then3:
 endif3:
 	%tmp8 = call i1 @char_utils.is_alpha(i8 97)
 	%tmp9 = xor i1 1, %tmp8
-	store i1 %tmp9, i1* %v1
 	br i1 %tmp9, label %logic_end_4, label %logic_rhs_4
 logic_rhs_4:
 	%tmp10 = call i1 @char_utils.is_alpha(i8 57)
-	store i1 %tmp10, i1* %v1
 	br label %logic_end_4
 logic_end_4:
-	%tmp11 = load i1, i1* %v1
+	%tmp11 = phi i1 [%tmp9, %endif3], [%tmp10, %logic_rhs_4]
 	br i1 %tmp11, label %then5, label %endif5
 then5:
 	call void @process.throw(i8* @.str.26)
@@ -741,46 +705,42 @@ then5:
 endif5:
 	%tmp12 = call i1 @char_utils.is_xdigit(i8 70)
 	%tmp13 = xor i1 1, %tmp12
-	store i1 %tmp13, i1* %v2
 	br i1 %tmp13, label %logic_end_6, label %logic_rhs_6
 logic_rhs_6:
 	%tmp14 = call i1 @char_utils.is_xdigit(i8 71)
-	store i1 %tmp14, i1* %v2
 	br label %logic_end_6
 logic_end_6:
-	%tmp15 = load i1, i1* %v2
+	%tmp15 = phi i1 [%tmp13, %endif5], [%tmp14, %logic_rhs_6]
 	br i1 %tmp15, label %then7, label %endif7
 then7:
 	call void @process.throw(i8* @.str.27)
 	br label %endif7
 endif7:
 	%tmp16 = call i8* @string_utils.insert(i8* @.str.28, i8* @.str.29, i32 1)
-	store i32 0, i32* %v3
+	store i32 0, i32* %v0
 	br label %loop_body8
 loop_body8:
-	%tmp17 = load i32, i32* %v3
+	%tmp17 = load i32, i32* %v0
 	%tmp18 = getelementptr inbounds i8, i8* %tmp16, i32 %tmp17
 	%tmp19 = load i8, i8* %tmp18
 	%tmp20 = icmp eq i8 %tmp19, 0
-	store i1 %tmp20, i1* %v4
 	br i1 %tmp20, label %logic_rhs_9, label %logic_end_9
 logic_rhs_9:
-	%tmp21 = load i32, i32* %v3
+	%tmp21 = load i32, i32* %v0
 	%tmp22 = getelementptr inbounds i8, i8* @.str.30, i32 %tmp21
 	%tmp23 = load i8, i8* %tmp22
 	%tmp24 = icmp eq i8 %tmp23, 0
-	store i1 %tmp24, i1* %v4
 	br label %logic_end_9
 logic_end_9:
-	%tmp25 = load i1, i1* %v4
+	%tmp25 = phi i1 [%tmp20, %loop_body8], [%tmp24, %logic_rhs_9]
 	br i1 %tmp25, label %then10, label %endif10
 then10:
 	br label %loop_body8_exit
 endif10:
-	%tmp26 = load i32, i32* %v3
+	%tmp26 = load i32, i32* %v0
 	%tmp27 = getelementptr inbounds i8, i8* %tmp16, i32 %tmp26
 	%tmp28 = load i8, i8* %tmp27
-	%tmp29 = load i32, i32* %v3
+	%tmp29 = load i32, i32* %v0
 	%tmp30 = getelementptr inbounds i8, i8* @.str.30, i32 %tmp29
 	%tmp31 = load i8, i8* %tmp30
 	%tmp32 = icmp ne i8 %tmp28, %tmp31
@@ -789,9 +749,9 @@ then11:
 	call void @process.throw(i8* @.str.31)
 	br label %endif11
 endif11:
-	%tmp33 = load i32, i32* %v3
+	%tmp33 = load i32, i32* %v0
 	%tmp34 = add i32 %tmp33, 1
-	store i32 %tmp34, i32* %v3
+	store i32 %tmp34, i32* %v0
 	br label %loop_body8
 loop_body8_exit:
 	call void @mem.free(i8* %tmp16)
@@ -1047,25 +1007,22 @@ loop_body8_exit:
 	ret void
 }
 define void @tests.list_test(){
+entry:
 	%v0 = alloca %"struct.list.List<i32>"
-	%v1 = alloca i1
-	%v2 = alloca %"struct.list.ListNode<i32>"*
-	%v3 = alloca i1
+	%v1 = alloca %"struct.list.ListNode<i32>"*
 	call void @console.write(i8* @.str.56, i32 11)
 	%tmp0 = call %"struct.list.List<i32>" @"list.new<i32>"()
 	store %"struct.list.List<i32>" %tmp0, %"struct.list.List<i32>"* %v0
 	%tmp1 = getelementptr inbounds %"struct.list.List<i32>", %"struct.list.List<i32>"* %v0, i32 0, i32 2
 	%tmp2 = load i32, i32* %tmp1
 	%tmp3 = icmp ne i32 %tmp2, 0
-	store i1 %tmp3, i1* %v1
 	br i1 %tmp3, label %logic_end_0, label %logic_rhs_0
 logic_rhs_0:
 	%tmp4 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %v0
 	%tmp5 = icmp ne ptr %tmp4, null
-	store i1 %tmp5, i1* %v1
 	br label %logic_end_0
 logic_end_0:
-	%tmp6 = load i1, i1* %v1
+	%tmp6 = phi i1 [%tmp3, %entry], [%tmp5, %logic_rhs_0]
 	br i1 %tmp6, label %then1, label %endif1
 then1:
 	call void @process.throw(i8* @.str.57)
@@ -1090,8 +1047,8 @@ then3:
 	br label %endif3
 endif3:
 	%tmp12 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %v0
-	store %"struct.list.ListNode<i32>"* %tmp12, %"struct.list.ListNode<i32>"** %v2
-	%tmp13 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %v2
+	store %"struct.list.ListNode<i32>"* %tmp12, %"struct.list.ListNode<i32>"** %v1
+	%tmp13 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %v1
 	%tmp14 = load i32, i32* %tmp13
 	%tmp15 = icmp ne i32 %tmp14, 100
 	br i1 %tmp15, label %then4, label %endif4
@@ -1099,11 +1056,11 @@ then4:
 	call void @process.throw(i8* @.str.60)
 	br label %endif4
 endif4:
-	%tmp16 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %v2
+	%tmp16 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %v1
 	%tmp17 = getelementptr inbounds %"struct.list.ListNode<i32>", %"struct.list.ListNode<i32>"* %tmp16, i32 0, i32 1
 	%tmp18 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %tmp17
-	store %"struct.list.ListNode<i32>"* %tmp18, %"struct.list.ListNode<i32>"** %v2
-	%tmp19 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %v2
+	store %"struct.list.ListNode<i32>"* %tmp18, %"struct.list.ListNode<i32>"** %v1
+	%tmp19 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %v1
 	%tmp20 = load i32, i32* %tmp19
 	%tmp21 = icmp ne i32 %tmp20, 200
 	br i1 %tmp21, label %then5, label %endif5
@@ -1111,11 +1068,11 @@ then5:
 	call void @process.throw(i8* @.str.61)
 	br label %endif5
 endif5:
-	%tmp22 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %v2
+	%tmp22 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %v1
 	%tmp23 = getelementptr inbounds %"struct.list.ListNode<i32>", %"struct.list.ListNode<i32>"* %tmp22, i32 0, i32 1
 	%tmp24 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %tmp23
-	store %"struct.list.ListNode<i32>"* %tmp24, %"struct.list.ListNode<i32>"** %v2
-	%tmp25 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %v2
+	store %"struct.list.ListNode<i32>"* %tmp24, %"struct.list.ListNode<i32>"** %v1
+	%tmp25 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %v1
 	%tmp26 = load i32, i32* %tmp25
 	%tmp27 = icmp ne i32 %tmp26, 300
 	br i1 %tmp27, label %then6, label %endif6
@@ -1123,7 +1080,7 @@ then6:
 	call void @process.throw(i8* @.str.62)
 	br label %endif6
 endif6:
-	%tmp28 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %v2
+	%tmp28 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %v1
 	%tmp29 = getelementptr inbounds %"struct.list.List<i32>", %"struct.list.List<i32>"* %v0, i32 0, i32 1
 	%tmp30 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %tmp29
 	%tmp31 = icmp ne ptr %tmp28, %tmp30
@@ -1136,15 +1093,13 @@ endif7:
 	%tmp32 = getelementptr inbounds %"struct.list.List<i32>", %"struct.list.List<i32>"* %v0, i32 0, i32 2
 	%tmp33 = load i32, i32* %tmp32
 	%tmp34 = icmp ne i32 %tmp33, 0
-	store i1 %tmp34, i1* %v3
 	br i1 %tmp34, label %logic_end_8, label %logic_rhs_8
 logic_rhs_8:
 	%tmp35 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %v0
 	%tmp36 = icmp ne ptr %tmp35, null
-	store i1 %tmp36, i1* %v3
 	br label %logic_end_8
 logic_end_8:
-	%tmp37 = load i1, i1* %v3
+	%tmp37 = phi i1 [%tmp34, %endif7], [%tmp36, %logic_rhs_8]
 	br i1 %tmp37, label %then9, label %endif9
 then9:
 	call void @process.throw(i8* @.str.64)
@@ -1155,25 +1110,20 @@ endif9:
 	ret void
 }
 define i1 @tests.is_valid_number_token(i8 %c){
-	%v0 = alloca i1
-	%v1 = alloca i1
+entry:
 	%tmp0 = call i1 @char_utils.is_digit(i8 %c)
-	store i1 %tmp0, i1* %v0
 	br i1 %tmp0, label %logic_end_0, label %logic_rhs_0
 logic_rhs_0:
 	%tmp1 = call i1 @char_utils.is_xdigit(i8 %c)
-	store i1 %tmp1, i1* %v0
 	br label %logic_end_0
 logic_end_0:
-	%tmp2 = load i1, i1* %v0
-	store i1 %tmp2, i1* %v1
+	%tmp2 = phi i1 [%tmp0, %entry], [%tmp1, %logic_rhs_0]
 	br i1 %tmp2, label %logic_end_1, label %logic_rhs_1
 logic_rhs_1:
 	%tmp3 = icmp eq i8 %c, 95
-	store i1 %tmp3, i1* %v1
 	br label %logic_end_1
 logic_end_1:
-	%tmp4 = load i1, i1* %v1
+	%tmp4 = phi i1 [%tmp2, %logic_end_0], [%tmp3, %logic_rhs_1]
 	ret i1 %tmp4
 }
 define void @tests.funny(){
@@ -1184,16 +1134,10 @@ define void @tests.funny(){
 	%v4 = alloca i32
 	%v5 = alloca %"struct.vector.Vec<%struct.string.String>"
 	%v6 = alloca %"struct.vector.Vec<i64>"
-	%v7 = alloca i1
-	%v8 = alloca i1
-	%v9 = alloca i1
-	%v10 = alloca i1
-	%v11 = alloca i1
-	%v12 = alloca %struct.string.String
-	%v13 = alloca i1
-	%v14 = alloca %struct.string.String
-	%v15 = alloca %struct.string.String
-	%v16 = alloca i32
+	%v7 = alloca %struct.string.String
+	%v8 = alloca %struct.string.String
+	%v9 = alloca %struct.string.String
+	%v10 = alloca i32
 	%tmp0 = call i32 @fs.create_file(i8* @.str.65)
 	%tmp1 = icmp eq i32 %tmp0, 1
 	br i1 %tmp1, label %then0, label %endif0
@@ -1225,33 +1169,27 @@ endif2:
 	store i8 %tmp12, i8* %v2
 	%tmp13 = load i8, i8* %v2
 	%tmp14 = icmp eq i8 %tmp13, 32
-	store i1 %tmp14, i1* %v7
 	br i1 %tmp14, label %logic_end_3, label %logic_rhs_3
 logic_rhs_3:
 	%tmp15 = load i8, i8* %v2
 	%tmp16 = icmp eq i8 %tmp15, 9
-	store i1 %tmp16, i1* %v7
 	br label %logic_end_3
 logic_end_3:
-	%tmp17 = load i1, i1* %v7
-	store i1 %tmp17, i1* %v8
+	%tmp17 = phi i1 [%tmp14, %endif2], [%tmp16, %logic_rhs_3]
 	br i1 %tmp17, label %logic_end_4, label %logic_rhs_4
 logic_rhs_4:
 	%tmp18 = load i8, i8* %v2
 	%tmp19 = icmp eq i8 %tmp18, 13
-	store i1 %tmp19, i1* %v8
 	br label %logic_end_4
 logic_end_4:
-	%tmp20 = load i1, i1* %v8
-	store i1 %tmp20, i1* %v9
+	%tmp20 = phi i1 [%tmp17, %logic_end_3], [%tmp19, %logic_rhs_4]
 	br i1 %tmp20, label %logic_end_5, label %logic_rhs_5
 logic_rhs_5:
 	%tmp21 = load i8, i8* %v2
 	%tmp22 = icmp eq i8 %tmp21, 10
-	store i1 %tmp22, i1* %v9
 	br label %logic_end_5
 logic_end_5:
-	%tmp23 = load i1, i1* %v9
+	%tmp23 = phi i1 [%tmp20, %logic_end_4], [%tmp22, %logic_rhs_5]
 	br i1 %tmp23, label %then6, label %endif6
 then6:
 	%tmp24 = load i32, i32* %v1
@@ -1279,15 +1217,13 @@ else7:
 endif7:
 	%tmp36 = load i8, i8* %v2
 	%tmp37 = icmp eq i8 %tmp36, 47
-	store i1 %tmp37, i1* %v10
 	br i1 %tmp37, label %logic_rhs_8, label %logic_end_8
 logic_rhs_8:
 	%tmp38 = load i8, i8* %v3
 	%tmp39 = icmp eq i8 %tmp38, 47
-	store i1 %tmp39, i1* %v10
 	br label %logic_end_8
 logic_end_8:
-	%tmp40 = load i1, i1* %v10
+	%tmp40 = phi i1 [%tmp37, %endif7], [%tmp39, %logic_rhs_8]
 	br i1 %tmp40, label %then9, label %endif9
 then9:
 	call void @tests.consume_while(%struct.string.String* %v0, i32* %v1, i1 (i8)* @tests.not_new_line)
@@ -1301,15 +1237,13 @@ then10:
 	store i32 %tmp43, i32* %v4
 	%tmp44 = load i8, i8* %v3
 	%tmp45 = icmp eq i8 %tmp44, 120
-	store i1 %tmp45, i1* %v11
 	br i1 %tmp45, label %logic_end_11, label %logic_rhs_11
 logic_rhs_11:
 	%tmp46 = load i8, i8* %v3
 	%tmp47 = icmp eq i8 %tmp46, 98
-	store i1 %tmp47, i1* %v11
 	br label %logic_end_11
 logic_end_11:
-	%tmp48 = load i1, i1* %v11
+	%tmp48 = phi i1 [%tmp45, %then10], [%tmp47, %logic_rhs_11]
 	br i1 %tmp48, label %then12, label %endif12
 then12:
 	%tmp49 = load i32, i32* %v1
@@ -1322,31 +1256,29 @@ endif12:
 	%tmp52 = load i32, i32* %v4
 	%tmp53 = sub i32 %tmp51, %tmp52
 	%tmp54 = call %struct.string.String @string.with_size(i32 %tmp53)
-	store %struct.string.String %tmp54, %struct.string.String* %v12
+	store %struct.string.String %tmp54, %struct.string.String* %v7
 	%tmp55 = load i8*, i8** %v0
 	%tmp56 = load i32, i32* %v4
 	%tmp57 = getelementptr inbounds i8, i8* %tmp55, i32 %tmp56
-	%tmp58 = load i8*, i8** %v12
-	%tmp59 = getelementptr inbounds %struct.string.String, %struct.string.String* %v12, i32 0, i32 1
+	%tmp58 = load i8*, i8** %v7
+	%tmp59 = getelementptr inbounds %struct.string.String, %struct.string.String* %v7, i32 0, i32 1
 	%tmp60 = load i32, i32* %tmp59
 	%tmp61 = sext i32 %tmp60 to i64
 	call void @mem.copy(i8* %tmp57, i8* %tmp58, i64 %tmp61)
-	%tmp62 = load %struct.string.String, %struct.string.String* %v12
+	%tmp62 = load %struct.string.String, %struct.string.String* %v7
 	call void @"vector.push<%struct.string.String>"(%"struct.vector.Vec<%struct.string.String>"* %v5, %struct.string.String %tmp62)
 	br label %loop_body1
 ; Variable temp_string is out.
 endif10:
 	%tmp63 = load i8, i8* %v2
 	%tmp64 = call i1 @char_utils.is_alpha(i8 %tmp63)
-	store i1 %tmp64, i1* %v13
 	br i1 %tmp64, label %logic_end_13, label %logic_rhs_13
 logic_rhs_13:
 	%tmp65 = load i8, i8* %v2
 	%tmp66 = icmp eq i8 %tmp65, 95
-	store i1 %tmp66, i1* %v13
 	br label %logic_end_13
 logic_end_13:
-	%tmp67 = load i1, i1* %v13
+	%tmp67 = phi i1 [%tmp64, %endif10], [%tmp66, %logic_rhs_13]
 	br i1 %tmp67, label %then14, label %endif14
 then14:
 	%tmp68 = load i32, i32* %v1
@@ -1356,16 +1288,16 @@ then14:
 	%tmp70 = load i32, i32* %v4
 	%tmp71 = sub i32 %tmp69, %tmp70
 	%tmp72 = call %struct.string.String @string.with_size(i32 %tmp71)
-	store %struct.string.String %tmp72, %struct.string.String* %v14
+	store %struct.string.String %tmp72, %struct.string.String* %v8
 	%tmp73 = load i8*, i8** %v0
 	%tmp74 = load i32, i32* %v4
 	%tmp75 = getelementptr inbounds i8, i8* %tmp73, i32 %tmp74
-	%tmp76 = load i8*, i8** %v14
-	%tmp77 = getelementptr inbounds %struct.string.String, %struct.string.String* %v14, i32 0, i32 1
+	%tmp76 = load i8*, i8** %v8
+	%tmp77 = getelementptr inbounds %struct.string.String, %struct.string.String* %v8, i32 0, i32 1
 	%tmp78 = load i32, i32* %tmp77
 	%tmp79 = sext i32 %tmp78 to i64
 	call void @mem.copy(i8* %tmp75, i8* %tmp76, i64 %tmp79)
-	%tmp80 = load %struct.string.String, %struct.string.String* %v14
+	%tmp80 = load %struct.string.String, %struct.string.String* %v8
 	call void @"vector.push<%struct.string.String>"(%"struct.vector.Vec<%struct.string.String>"* %v5, %struct.string.String %tmp80)
 	br label %loop_body1
 ; Variable temp_string is out.
@@ -1407,16 +1339,16 @@ loop_body16_exit:
 	%tmp98 = load i32, i32* %v4
 	%tmp99 = sub i32 %tmp97, %tmp98
 	%tmp100 = call %struct.string.String @string.with_size(i32 %tmp99)
-	store %struct.string.String %tmp100, %struct.string.String* %v15
+	store %struct.string.String %tmp100, %struct.string.String* %v9
 	%tmp101 = load i8*, i8** %v0
 	%tmp102 = load i32, i32* %v4
 	%tmp103 = getelementptr inbounds i8, i8* %tmp101, i32 %tmp102
-	%tmp104 = load i8*, i8** %v15
-	%tmp105 = getelementptr inbounds %struct.string.String, %struct.string.String* %v15, i32 0, i32 1
+	%tmp104 = load i8*, i8** %v9
+	%tmp105 = getelementptr inbounds %struct.string.String, %struct.string.String* %v9, i32 0, i32 1
 	%tmp106 = load i32, i32* %tmp105
 	%tmp107 = sext i32 %tmp106 to i64
 	call void @mem.copy(i8* %tmp103, i8* %tmp104, i64 %tmp107)
-	%tmp108 = load %struct.string.String, %struct.string.String* %v15
+	%tmp108 = load %struct.string.String, %struct.string.String* %v9
 	call void @"vector.push<%struct.string.String>"(%"struct.vector.Vec<%struct.string.String>"* %v5, %struct.string.String %tmp108)
 	br label %loop_body1
 ; Variable temp_string is out.
@@ -1708,10 +1640,10 @@ endif49:
 	store i32 %tmp235, i32* %v1
 	br label %loop_body1
 loop_body1_exit:
-	store i32 0, i32* %v16
+	store i32 0, i32* %v10
 	br label %loop_body50
 loop_body50:
-	%tmp236 = load i32, i32* %v16
+	%tmp236 = load i32, i32* %v10
 	%tmp237 = getelementptr inbounds %"struct.vector.Vec<%struct.string.String>", %"struct.vector.Vec<%struct.string.String>"* %v5, i32 0, i32 1
 	%tmp238 = load i32, i32* %tmp237
 	%tmp239 = icmp uge i32 %tmp236, %tmp238
@@ -1719,13 +1651,13 @@ loop_body50:
 then51:
 	br label %loop_body50_exit
 endif51:
-	%tmp240 = load i32, i32* %v16
+	%tmp240 = load i32, i32* %v10
 	%tmp241 = load %struct.string.String*, %struct.string.String** %v5
 	%tmp242 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp241, i32 %tmp240
 	call void @string.free(%struct.string.String* %tmp242)
-	%tmp243 = load i32, i32* %v16
+	%tmp243 = load i32, i32* %v10
 	%tmp244 = add i32 %tmp243, 1
-	store i32 %tmp244, i32* %v16
+	store i32 %tmp244, i32* %v10
 	br label %loop_body50
 loop_body50_exit:
 	call void @"vector.free<%struct.string.String>"(%"struct.vector.Vec<%struct.string.String>"* %v5)
@@ -2105,10 +2037,8 @@ define i64 @stdlib.str_to_l(i8* %str, i8** %endptr, i32 %base){
 	%v0 = alloca i32
 	%v1 = alloca i64
 	%v2 = alloca i32
-	%v3 = alloca i1
-	%v4 = alloca i1
-	%v5 = alloca i64
-	%v6 = alloca i32
+	%v3 = alloca i64
+	%v4 = alloca i32
 	store i32 0, i32* %v0
 	br label %loop_body0
 loop_body0:
@@ -2186,18 +2116,15 @@ endif5:
 endif4:
 	%tmp31 = load i32, i32* %v2
 	%tmp32 = icmp eq i32 %tmp31, 16
-	store i1 %tmp32, i1* %v3
 	br i1 %tmp32, label %logic_rhs_7, label %logic_end_7
 logic_rhs_7:
 	%tmp33 = load i32, i32* %v0
 	%tmp34 = getelementptr inbounds i8, i8* %str, i32 %tmp33
 	%tmp35 = load i8, i8* %tmp34
 	%tmp36 = icmp eq i8 %tmp35, 48
-	store i1 %tmp36, i1* %v3
 	br label %logic_end_7
 logic_end_7:
-	%tmp37 = load i1, i1* %v3
-	store i1 %tmp37, i1* %v4
+	%tmp37 = phi i1 [%tmp32, %endif4], [%tmp36, %logic_rhs_7]
 	br i1 %tmp37, label %logic_rhs_8, label %logic_end_8
 logic_rhs_8:
 	%tmp38 = load i32, i32* %v0
@@ -2206,10 +2133,9 @@ logic_rhs_8:
 	%tmp41 = load i8, i8* %tmp40
 	%tmp42 = call i8 @char_utils.to_lower(i8 %tmp41)
 	%tmp43 = icmp eq i8 %tmp42, 120
-	store i1 %tmp43, i1* %v4
 	br label %logic_end_8
 logic_end_8:
-	%tmp44 = load i1, i1* %v4
+	%tmp44 = phi i1 [%tmp37, %logic_end_7], [%tmp43, %logic_rhs_8]
 	br i1 %tmp44, label %then9, label %endif9
 then9:
 	%tmp45 = load i32, i32* %v0
@@ -2217,7 +2143,7 @@ then9:
 	store i32 %tmp46, i32* %v0
 	br label %endif9
 endif9:
-	store i64 0, i64* %v5
+	store i64 0, i64* %v3
 	br label %loop_body10
 loop_body10:
 	%tmp47 = load i32, i32* %v0
@@ -2228,7 +2154,7 @@ loop_body10:
 then11:
 	%tmp51 = sub i8 %tmp49, 48
 	%tmp52 = sext i8 %tmp51 to i32
-	store i32 %tmp52, i32* %v6
+	store i32 %tmp52, i32* %v4
 	br label %endif11
 else11:
 	%tmp53 = call i1 @char_utils.is_alpha(i8 %tmp49)
@@ -2238,28 +2164,28 @@ then12:
 	%tmp55 = sub i8 %tmp54, 97
 	%tmp56 = add i8 %tmp55, 10
 	%tmp57 = sext i8 %tmp56 to i32
-	store i32 %tmp57, i32* %v6
+	store i32 %tmp57, i32* %v4
 	br label %endif12
 else12:
 	br label %loop_body10_exit
 endif12:
 	br label %endif11
 endif11:
-	%tmp58 = load i32, i32* %v6
+	%tmp58 = load i32, i32* %v4
 	%tmp59 = load i32, i32* %v2
 	%tmp60 = icmp sge i32 %tmp58, %tmp59
 	br i1 %tmp60, label %then13, label %endif13
 then13:
 	br label %loop_body10_exit
 endif13:
-	%tmp61 = load i64, i64* %v5
+	%tmp61 = load i64, i64* %v3
 	%tmp62 = load i32, i32* %v2
 	%tmp63 = sext i32 %tmp62 to i64
 	%tmp64 = mul i64 %tmp61, %tmp63
-	%tmp65 = load i32, i32* %v6
+	%tmp65 = load i32, i32* %v4
 	%tmp66 = sext i32 %tmp65 to i64
 	%tmp67 = add i64 %tmp64, %tmp66
-	store i64 %tmp67, i64* %v5
+	store i64 %tmp67, i64* %v3
 	%tmp68 = load i32, i32* %v0
 	%tmp69 = add i32 %tmp68, 1
 	store i32 %tmp69, i32* %v0
@@ -2274,7 +2200,7 @@ then14:
 	store i8* %tmp73, i8** %endptr
 	br label %endif14
 endif14:
-	%tmp74 = load i64, i64* %v5
+	%tmp74 = load i64, i64* %v3
 	%tmp75 = load i64, i64* %v1
 	%tmp76 = mul i64 %tmp74, %tmp75
 	ret i64 %tmp76
@@ -2397,7 +2323,6 @@ define %struct.string.String @process.get_executable_path(){
 define %struct.string.String @process.get_executable_env_path(){
 	%v0 = alloca %struct.string.String
 	%v1 = alloca i32
-	%v2 = alloca i1
 	%tmp0 = call %struct.string.String @process.get_executable_path()
 	store %struct.string.String %tmp0, %struct.string.String* %v0
 	%tmp1 = getelementptr inbounds %struct.string.String, %struct.string.String* %v0, i32 0, i32 1
@@ -2411,15 +2336,13 @@ loop_body0:
 	%tmp6 = getelementptr inbounds i8, i8* %tmp5, i32 %tmp4
 	%tmp7 = load i8, i8* %tmp6
 	%tmp8 = icmp eq i8 %tmp7, 92
-	store i1 %tmp8, i1* %v2
 	br i1 %tmp8, label %logic_end_1, label %logic_rhs_1
 logic_rhs_1:
 	%tmp9 = load i32, i32* %v1
 	%tmp10 = icmp slt i32 %tmp9, 0
-	store i1 %tmp10, i1* %v2
 	br label %logic_end_1
 logic_end_1:
-	%tmp11 = load i1, i1* %v2
+	%tmp11 = phi i1 [%tmp8, %loop_body0], [%tmp10, %logic_rhs_1]
 	br i1 %tmp11, label %then2, label %endif2
 then2:
 	br label %loop_body0_exit
@@ -2614,7 +2537,6 @@ func_exit:
 }
 define i32 @fs.write_to_file(i8* %path, i8* %content, i32 %content_len){
 	%v0 = alloca i32
-	%v1 = alloca i1
 	%tmp0 = call i8* @CreateFileA(i8* %path, i32 1073741824, i32 0, i8* null, i32 2, i32 128, i8* null)
 	%tmp1 = sext i32 -1 to i64
 	%tmp2 = inttoptr i64 %tmp1 to i8*
@@ -2627,15 +2549,13 @@ endif0:
 	%tmp4 = call i32 @WriteFile(i8* %tmp0, i8* %content, i32 %content_len, i32* %v0, i8* null)
 	call i32 @CloseHandle(i8* %tmp0)
 	%tmp5 = icmp ne i32 %tmp4, 0
-	store i1 %tmp5, i1* %v1
 	br i1 %tmp5, label %logic_rhs_1, label %logic_end_1
 logic_rhs_1:
 	%tmp6 = load i32, i32* %v0
 	%tmp7 = icmp eq i32 %tmp6, %content_len
-	store i1 %tmp7, i1* %v1
 	br label %logic_end_1
 logic_end_1:
-	%tmp8 = load i1, i1* %v1
+	%tmp8 = phi i1 [%tmp5, %endif0], [%tmp7, %logic_rhs_1]
 	%tmp9 = zext i1 %tmp8 to i32
 	br label %func_exit
 func_exit:
@@ -3007,282 +2927,215 @@ func_exit:
 	ret i8 %tmp2
 }
 define i1 @char_utils.is_xdigit(i8 %c){
-	%v0 = alloca i1
-	%v1 = alloca i1
-	%v2 = alloca i1
-	%v3 = alloca i1
-	%v4 = alloca i1
+entry:
 	%tmp0 = icmp sge i8 %c, 48
-	store i1 %tmp0, i1* %v0
 	br i1 %tmp0, label %logic_rhs_0, label %logic_end_0
 logic_rhs_0:
 	%tmp1 = icmp sle i8 %c, 57
-	store i1 %tmp1, i1* %v0
 	br label %logic_end_0
 logic_end_0:
-	%tmp2 = load i1, i1* %v0
-	store i1 %tmp2, i1* %v1
+	%tmp2 = phi i1 [%tmp0, %entry], [%tmp1, %logic_rhs_0]
 	br i1 %tmp2, label %logic_end_1, label %logic_rhs_1
 logic_rhs_1:
 	%tmp3 = icmp sge i8 %c, 97
-	store i1 %tmp3, i1* %v2
 	br i1 %tmp3, label %logic_rhs_2, label %logic_end_2
 logic_rhs_2:
 	%tmp4 = icmp sle i8 %c, 102
-	store i1 %tmp4, i1* %v2
 	br label %logic_end_2
 logic_end_2:
-	%tmp5 = load i1, i1* %v2
-	store i1 %tmp5, i1* %v1
+	%tmp5 = phi i1 [%tmp3, %logic_rhs_1], [%tmp4, %logic_rhs_2]
 	br label %logic_end_1
 logic_end_1:
-	%tmp6 = load i1, i1* %v1
-	store i1 %tmp6, i1* %v3
+	%tmp6 = phi i1 [%tmp2, %logic_end_0], [%tmp5, %logic_end_2]
 	br i1 %tmp6, label %logic_end_3, label %logic_rhs_3
 logic_rhs_3:
 	%tmp7 = icmp sge i8 %c, 65
-	store i1 %tmp7, i1* %v4
 	br i1 %tmp7, label %logic_rhs_4, label %logic_end_4
 logic_rhs_4:
 	%tmp8 = icmp sle i8 %c, 70
-	store i1 %tmp8, i1* %v4
 	br label %logic_end_4
 logic_end_4:
-	%tmp9 = load i1, i1* %v4
-	store i1 %tmp9, i1* %v3
+	%tmp9 = phi i1 [%tmp7, %logic_rhs_3], [%tmp8, %logic_rhs_4]
 	br label %logic_end_3
 logic_end_3:
-	%tmp10 = load i1, i1* %v3
+	%tmp10 = phi i1 [%tmp6, %logic_end_1], [%tmp9, %logic_end_4]
 	ret i1 %tmp10
 }
 define i1 @char_utils.is_upper(i8 %c){
-	%v0 = alloca i1
+entry:
 	%tmp0 = icmp sge i8 %c, 65
-	store i1 %tmp0, i1* %v0
 	br i1 %tmp0, label %logic_rhs_0, label %logic_end_0
 logic_rhs_0:
 	%tmp1 = icmp sle i8 %c, 90
-	store i1 %tmp1, i1* %v0
 	br label %logic_end_0
 logic_end_0:
-	%tmp2 = load i1, i1* %v0
+	%tmp2 = phi i1 [%tmp0, %entry], [%tmp1, %logic_rhs_0]
 	ret i1 %tmp2
 }
 define i1 @char_utils.is_space(i8 %c){
-	%v0 = alloca i1
-	%v1 = alloca i1
-	%v2 = alloca i1
-	%v3 = alloca i1
-	%v4 = alloca i1
+entry:
 	%tmp0 = icmp eq i8 %c, 32
-	store i1 %tmp0, i1* %v0
 	br i1 %tmp0, label %logic_end_0, label %logic_rhs_0
 logic_rhs_0:
 	%tmp1 = icmp eq i8 %c, 9
-	store i1 %tmp1, i1* %v0
 	br label %logic_end_0
 logic_end_0:
-	%tmp2 = load i1, i1* %v0
-	store i1 %tmp2, i1* %v1
+	%tmp2 = phi i1 [%tmp0, %entry], [%tmp1, %logic_rhs_0]
 	br i1 %tmp2, label %logic_end_1, label %logic_rhs_1
 logic_rhs_1:
 	%tmp3 = icmp eq i8 %c, 10
-	store i1 %tmp3, i1* %v1
 	br label %logic_end_1
 logic_end_1:
-	%tmp4 = load i1, i1* %v1
-	store i1 %tmp4, i1* %v2
+	%tmp4 = phi i1 [%tmp2, %logic_end_0], [%tmp3, %logic_rhs_1]
 	br i1 %tmp4, label %logic_end_2, label %logic_rhs_2
 logic_rhs_2:
 	%tmp5 = icmp eq i8 %c, 118
-	store i1 %tmp5, i1* %v2
 	br label %logic_end_2
 logic_end_2:
-	%tmp6 = load i1, i1* %v2
-	store i1 %tmp6, i1* %v3
+	%tmp6 = phi i1 [%tmp4, %logic_end_1], [%tmp5, %logic_rhs_2]
 	br i1 %tmp6, label %logic_end_3, label %logic_rhs_3
 logic_rhs_3:
 	%tmp7 = icmp eq i8 %c, 102
-	store i1 %tmp7, i1* %v3
 	br label %logic_end_3
 logic_end_3:
-	%tmp8 = load i1, i1* %v3
-	store i1 %tmp8, i1* %v4
+	%tmp8 = phi i1 [%tmp6, %logic_end_2], [%tmp7, %logic_rhs_3]
 	br i1 %tmp8, label %logic_end_4, label %logic_rhs_4
 logic_rhs_4:
 	%tmp9 = icmp eq i8 %c, 13
-	store i1 %tmp9, i1* %v4
 	br label %logic_end_4
 logic_end_4:
-	%tmp10 = load i1, i1* %v4
+	%tmp10 = phi i1 [%tmp8, %logic_end_3], [%tmp9, %logic_rhs_4]
 	ret i1 %tmp10
 }
 define i1 @char_utils.is_punct(i8 %c){
-	%v0 = alloca i1
+entry:
 	%tmp0 = call i1 @char_utils.is_graph(i8 %c)
-	store i1 %tmp0, i1* %v0
 	br i1 %tmp0, label %logic_rhs_0, label %logic_end_0
 logic_rhs_0:
 	%tmp1 = call i1 @char_utils.is_alnum(i8 %c)
 	%tmp2 = xor i1 1, %tmp1
-	store i1 %tmp2, i1* %v0
 	br label %logic_end_0
 logic_end_0:
-	%tmp3 = load i1, i1* %v0
+	%tmp3 = phi i1 [%tmp0, %entry], [%tmp2, %logic_rhs_0]
 	ret i1 %tmp3
 }
 define i1 @char_utils.is_print(i8 %c){
-	%v0 = alloca i1
+entry:
 	%tmp0 = icmp sge i8 %c, 32
-	store i1 %tmp0, i1* %v0
 	br i1 %tmp0, label %logic_rhs_0, label %logic_end_0
 logic_rhs_0:
 	%tmp1 = icmp sle i8 %c, 126
-	store i1 %tmp1, i1* %v0
 	br label %logic_end_0
 logic_end_0:
-	%tmp2 = load i1, i1* %v0
+	%tmp2 = phi i1 [%tmp0, %entry], [%tmp1, %logic_rhs_0]
 	ret i1 %tmp2
 }
 define i1 @char_utils.is_lower(i8 %c){
-	%v0 = alloca i1
+entry:
 	%tmp0 = icmp sge i8 %c, 97
-	store i1 %tmp0, i1* %v0
 	br i1 %tmp0, label %logic_rhs_0, label %logic_end_0
 logic_rhs_0:
 	%tmp1 = icmp sle i8 %c, 122
-	store i1 %tmp1, i1* %v0
 	br label %logic_end_0
 logic_end_0:
-	%tmp2 = load i1, i1* %v0
+	%tmp2 = phi i1 [%tmp0, %entry], [%tmp1, %logic_rhs_0]
 	ret i1 %tmp2
 }
 define i1 @char_utils.is_graph(i8 %c){
-	%v0 = alloca i1
+entry:
 	%tmp0 = icmp sge i8 %c, 33
-	store i1 %tmp0, i1* %v0
 	br i1 %tmp0, label %logic_rhs_0, label %logic_end_0
 logic_rhs_0:
 	%tmp1 = icmp sle i8 %c, 126
-	store i1 %tmp1, i1* %v0
 	br label %logic_end_0
 logic_end_0:
-	%tmp2 = load i1, i1* %v0
+	%tmp2 = phi i1 [%tmp0, %entry], [%tmp1, %logic_rhs_0]
 	ret i1 %tmp2
 }
 define i1 @char_utils.is_digit(i8 %c){
-	%v0 = alloca i1
+entry:
 	%tmp0 = icmp sge i8 %c, 48
-	store i1 %tmp0, i1* %v0
 	br i1 %tmp0, label %logic_rhs_0, label %logic_end_0
 logic_rhs_0:
 	%tmp1 = icmp sle i8 %c, 57
-	store i1 %tmp1, i1* %v0
 	br label %logic_end_0
 logic_end_0:
-	%tmp2 = load i1, i1* %v0
+	%tmp2 = phi i1 [%tmp0, %entry], [%tmp1, %logic_rhs_0]
 	ret i1 %tmp2
 }
 define i1 @char_utils.is_cntrl(i8 %c){
-	%v0 = alloca i1
-	%v1 = alloca i1
+entry:
 	%tmp0 = icmp sge i8 %c, 0
-	store i1 %tmp0, i1* %v0
 	br i1 %tmp0, label %logic_rhs_0, label %logic_end_0
 logic_rhs_0:
 	%tmp1 = icmp sle i8 %c, 31
-	store i1 %tmp1, i1* %v0
 	br label %logic_end_0
 logic_end_0:
-	%tmp2 = load i1, i1* %v0
-	store i1 %tmp2, i1* %v1
+	%tmp2 = phi i1 [%tmp0, %entry], [%tmp1, %logic_rhs_0]
 	br i1 %tmp2, label %logic_end_1, label %logic_rhs_1
 logic_rhs_1:
 	%tmp3 = icmp eq i8 %c, 127
-	store i1 %tmp3, i1* %v1
 	br label %logic_end_1
 logic_end_1:
-	%tmp4 = load i1, i1* %v1
+	%tmp4 = phi i1 [%tmp2, %logic_end_0], [%tmp3, %logic_rhs_1]
 	ret i1 %tmp4
 }
 define i1 @char_utils.is_alpha(i8 %c){
-	%v0 = alloca i1
-	%v1 = alloca i1
-	%v2 = alloca i1
+entry:
 	%tmp0 = icmp sge i8 %c, 97
-	store i1 %tmp0, i1* %v0
 	br i1 %tmp0, label %logic_rhs_0, label %logic_end_0
 logic_rhs_0:
 	%tmp1 = icmp sle i8 %c, 122
-	store i1 %tmp1, i1* %v0
 	br label %logic_end_0
 logic_end_0:
-	%tmp2 = load i1, i1* %v0
-	store i1 %tmp2, i1* %v1
+	%tmp2 = phi i1 [%tmp0, %entry], [%tmp1, %logic_rhs_0]
 	br i1 %tmp2, label %logic_end_1, label %logic_rhs_1
 logic_rhs_1:
 	%tmp3 = icmp sge i8 %c, 65
-	store i1 %tmp3, i1* %v2
 	br i1 %tmp3, label %logic_rhs_2, label %logic_end_2
 logic_rhs_2:
 	%tmp4 = icmp sle i8 %c, 90
-	store i1 %tmp4, i1* %v2
 	br label %logic_end_2
 logic_end_2:
-	%tmp5 = load i1, i1* %v2
-	store i1 %tmp5, i1* %v1
+	%tmp5 = phi i1 [%tmp3, %logic_rhs_1], [%tmp4, %logic_rhs_2]
 	br label %logic_end_1
 logic_end_1:
-	%tmp6 = load i1, i1* %v1
+	%tmp6 = phi i1 [%tmp2, %logic_end_0], [%tmp5, %logic_end_2]
 	ret i1 %tmp6
 }
 define i1 @char_utils.is_alnum(i8 %c){
-	%v0 = alloca i1
-	%v1 = alloca i1
-	%v2 = alloca i1
-	%v3 = alloca i1
-	%v4 = alloca i1
+entry:
 	%tmp0 = icmp sge i8 %c, 97
-	store i1 %tmp0, i1* %v0
 	br i1 %tmp0, label %logic_rhs_0, label %logic_end_0
 logic_rhs_0:
 	%tmp1 = icmp sle i8 %c, 122
-	store i1 %tmp1, i1* %v0
 	br label %logic_end_0
 logic_end_0:
-	%tmp2 = load i1, i1* %v0
-	store i1 %tmp2, i1* %v1
+	%tmp2 = phi i1 [%tmp0, %entry], [%tmp1, %logic_rhs_0]
 	br i1 %tmp2, label %logic_end_1, label %logic_rhs_1
 logic_rhs_1:
 	%tmp3 = icmp sge i8 %c, 65
-	store i1 %tmp3, i1* %v2
 	br i1 %tmp3, label %logic_rhs_2, label %logic_end_2
 logic_rhs_2:
 	%tmp4 = icmp sle i8 %c, 90
-	store i1 %tmp4, i1* %v2
 	br label %logic_end_2
 logic_end_2:
-	%tmp5 = load i1, i1* %v2
-	store i1 %tmp5, i1* %v1
+	%tmp5 = phi i1 [%tmp3, %logic_rhs_1], [%tmp4, %logic_rhs_2]
 	br label %logic_end_1
 logic_end_1:
-	%tmp6 = load i1, i1* %v1
-	store i1 %tmp6, i1* %v3
+	%tmp6 = phi i1 [%tmp2, %logic_end_0], [%tmp5, %logic_end_2]
 	br i1 %tmp6, label %logic_end_3, label %logic_rhs_3
 logic_rhs_3:
 	%tmp7 = icmp sge i8 %c, 48
-	store i1 %tmp7, i1* %v4
 	br i1 %tmp7, label %logic_rhs_4, label %logic_end_4
 logic_rhs_4:
 	%tmp8 = icmp sle i8 %c, 57
-	store i1 %tmp8, i1* %v4
 	br label %logic_end_4
 logic_end_4:
-	%tmp9 = load i1, i1* %v4
-	store i1 %tmp9, i1* %v3
+	%tmp9 = phi i1 [%tmp7, %logic_rhs_3], [%tmp8, %logic_rhs_4]
 	br label %logic_end_3
 logic_end_3:
-	%tmp10 = load i1, i1* %v3
+	%tmp10 = phi i1 [%tmp6, %logic_end_1], [%tmp9, %logic_end_4]
 	ret i1 %tmp10
 }
 define %"struct.test.QPair<i64, i64>" @xq(){

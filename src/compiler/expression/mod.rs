@@ -496,7 +496,7 @@ impl<'a> ExpressionCompiler<'a> {
         rhs: &Expr,
         expected: Expected,
     ) -> ExpressionCompileResult<(CompiledValue, Vec<LLVMInstruction>)> {
-        if matches!(op, BinaryOp::And | BinaryOp::Or | BinaryOp::BitXor) {
+        if matches!(op, BinaryOp::And | BinaryOp::Or) {
             return self.compile_short_circuit_op(lhs, *op, rhs);
         }
         let (left_val, mut instructions) = self.compile_rvalue(lhs, expected.clone())?;
@@ -730,17 +730,8 @@ impl<'a> ExpressionCompiler<'a> {
         if !ltype.is_bool() {
             return Err(CompilerError::Generic(format!("Not Boolean")).into());
         }
+        let after_lv = self.ctx.current_block_name.borrow().clone();
         let logic_id = self.ctx.acquire_label_id();
-        let result_ptr_reg = self.ctx.acquire_var_id();
-        instructions.push(LLVMInstruction::AllocateVar {
-            target_reg: result_ptr_reg,
-            alloc_type: CompilerType::Primitive(BOOL_TYPE),
-        });
-        instructions.push(LLVMInstruction::Store {
-            value: left.get_llvm_rep().clone(),
-            value_type: CompilerType::Primitive(BOOL_TYPE),
-            ptr: LLVMVal::Variable(result_ptr_reg),
-        });
 
         let label_eval_rhs = format!("logic_rhs_{}", logic_id);
         let label_end = format!("logic_end_{}", logic_id);
@@ -765,10 +756,11 @@ impl<'a> ExpressionCompiler<'a> {
         instructions.push(LLVMInstruction::Label {
             name: label_eval_rhs.to_string(),
         });
-        self.ctx.set_current_block_name(label_eval_rhs);
+        self.ctx.set_current_block_name(label_eval_rhs.clone());
         let (right, mut r_instructions) =
             self.compile_rvalue(rhs, Expected::Type(&CompilerType::Primitive(BOOL_TYPE)))?;
         instructions.append(&mut r_instructions);
+        let after_rv = self.ctx.current_block_name.borrow().clone();
         let Some(rtype) = right.get_type() else {
             return Err(CompilerError::Generic(
                 "Right side of binary operation is not value".into(),
@@ -778,24 +770,22 @@ impl<'a> ExpressionCompiler<'a> {
         if !rtype.is_bool() {
             return Err(CompilerError::Generic(format!("Not boolean")).into());
         }
-        instructions.push(LLVMInstruction::Store {
-            value: right.get_llvm_rep().clone(),
-            value_type: CompilerType::Primitive(BOOL_TYPE),
-            ptr: LLVMVal::Variable(result_ptr_reg),
-        });
         instructions.push(LLVMInstruction::Jump {
             label: label_end.clone(),
         });
         instructions.push(LLVMInstruction::Label {
-            name: label_end.to_string(),
+            name: label_end.clone(),
         });
 
-        self.ctx.set_current_block_name(label_end);
+        self.ctx.set_current_block_name(label_end.clone());
         let final_reg = self.ctx.acquire_temp_id();
-        instructions.push(LLVMInstruction::Load {
+        instructions.push(LLVMInstruction::Phi {
             target_reg: final_reg,
-            ptr: LLVMVal::Variable(result_ptr_reg),
             result_type: CompilerType::Primitive(BOOL_TYPE),
+            incoming: vec![
+                (left.get_llvm_rep().clone(), after_lv),
+                (right.get_llvm_rep().clone(), after_rv),
+            ],
         });
         Ok((
             CompiledValue::new_value(
