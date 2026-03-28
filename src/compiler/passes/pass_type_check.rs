@@ -78,36 +78,6 @@ impl<'a> CompilerPass<'a> for TypeCheckPass {
             x.file_id = *file_id;
             ctx.symbols.insert_type(type_path, x);
         }
-        for (type_env_path, file_id, struct_decl) in types {
-            let mut new_alias_types = HashMap::new();
-            for prm in &struct_decl.generic_params {
-                new_alias_types.insert(
-                    prm.clone(),
-                    CompilerType::GenericPlaceholder(prm.to_string().into_boxed_str()),
-                );
-            }
-            ctx.symbols.set_alias_types(new_alias_types);
-
-            let mut compiler_struct_fields = Vec::with_capacity(struct_decl.fields.len());
-
-            for (name, attr_type) in struct_decl.fields.iter() {
-                let field_type = if let Some(pt) = attr_type.as_primitive_type() {
-                    CompilerType::Primitive(pt)
-                } else {
-                    CompilerType::from_parser_type(attr_type, &ctx.symbols, &type_env_path)?
-                };
-                compiler_struct_fields.push((name.to_string(), field_type));
-            }
-            let mut x = Struct::new(
-                ContextPathEnd::default(),
-                compiler_struct_fields.into_boxed_slice(),
-                struct_decl.attributes.clone(),
-                struct_decl.generic_params.clone(),
-            );
-            x.file_id = file_id;
-            let type_path = ContextPathEnd::from_context_path(type_env_path, &struct_decl.name);
-            ctx.symbols.insert_type(type_path, x);
-        }
         ctx.symbols.set_alias_types(HashMap::new());
         for (enum_env_path, file_id, parsed_enum) in enums {
             let backing_type = parsed_enum.enum_type.as_integer().ok_or_else(|| {
@@ -145,6 +115,37 @@ impl<'a> CompilerPass<'a> for TypeCheckPass {
             en.file_id = file_id;
             ctx.symbols.insert_enum(enum_path, en);
         }
+        for (type_env_path, file_id, struct_decl) in types {
+            let mut new_alias_types = HashMap::new();
+            for prm in &struct_decl.generic_params {
+                new_alias_types.insert(
+                    prm.clone(),
+                    CompilerType::GenericPlaceholder(prm.to_string().into_boxed_str()),
+                );
+            }
+            ctx.symbols.set_alias_types(new_alias_types);
+
+            let mut compiler_struct_fields = Vec::with_capacity(struct_decl.fields.len());
+
+            for (name, attr_type) in struct_decl.fields.iter() {
+                let field_type = if let Some(pt) = attr_type.as_primitive_type() {
+                    CompilerType::Primitive(pt)
+                } else {
+                    CompilerType::from_parser_type(attr_type, &ctx.symbols, &type_env_path)?
+                };
+                compiler_struct_fields.push((name.to_string(), field_type));
+            }
+            let mut x = Struct::new(
+                ContextPathEnd::default(),
+                compiler_struct_fields.into_boxed_slice(),
+                struct_decl.attributes.clone(),
+                struct_decl.generic_params.clone(),
+            );
+            x.file_id = file_id;
+            let type_path = ContextPathEnd::from_context_path(type_env_path, &struct_decl.name);
+            ctx.symbols.insert_type(type_path, x);
+        }
+        ctx.symbols.set_alias_types(HashMap::new());
 
         for (current_path, _file_id, (name, var_type, _expression)) in static_variables {
             let t = CompilerType::from_parser_type(&var_type, &ctx.symbols, &current_path)?;

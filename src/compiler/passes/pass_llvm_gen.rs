@@ -427,7 +427,14 @@ impl LLVMGenPass {
             arg_type.substitute_generics(&symbols.alias_types(), symbols)?;
             let var = Variable::new(arg_type, true, false);
             var.set_constant_value(Some(LLVMVal::VariableName(arg_name.clone())));
-            self.cgctx.scope.define(arg_name.clone(), var, 0);
+            (self
+                .cgctx
+                .scope
+                .define(arg_name.clone(), var, 0, symbols)
+                .len()
+                == 0)
+                .then_some(())
+                .expect("Should not");
         }
         let fx = body.clone();
         for stmt in fx.iter() {
@@ -458,15 +465,7 @@ impl LLVMGenPass {
                 name: self.cgctx.return_label_name.to_string(),
             });
         }
-        let x = self.cgctx.scope.pop_layer(&mut ctx.symbols);
-        for x in x {
-            let (mut s_instructions, end_compile) =
-                self.compile_statement(&x.with_dummy_span(), ctx)?;
-            instructions.append(&mut s_instructions);
-            if end_compile {
-                break;
-            };
-        }
+        instructions.append(&mut self.cgctx.scope.pop_layer(&mut ctx.symbols));
         if return_type.is_void() {
             instructions.push(LLVMInstruction::ReturnVoid);
         } else {
@@ -635,15 +634,7 @@ impl LLVMGenPass {
                     break;
                 };
             }
-            let exit_stmts = self.cgctx.scope.pop_layer(&ctx.symbols);
-            for x in exit_stmts {
-                let (mut s_instructions, end_compile) =
-                    self.compile_statement(&x.with_dummy_span(), ctx)?;
-                instr.append(&mut s_instructions);
-                if end_compile {
-                    break;
-                };
-            }
+            instr.append(&mut self.cgctx.scope.pop_layer(&ctx.symbols));
             if then
                 .last()
                 .map(|x| !matches!(x.stmt, Stmt::Return(..) | Stmt::Break | Stmt::Continue))
@@ -668,15 +659,7 @@ impl LLVMGenPass {
                     break;
                 };
             }
-            let x = self.cgctx.scope.pop_layer(&ctx.symbols);
-            for x in x {
-                let (mut s_instructions, end_compile) =
-                    self.compile_statement(&x.with_dummy_span(), ctx)?;
-                instr.append(&mut s_instructions);
-                if end_compile {
-                    break;
-                };
-            }
+            instr.append(&mut self.cgctx.scope.pop_layer(&ctx.symbols));
         }
         if r#else
             .last()
@@ -756,10 +739,10 @@ impl LLVMGenPass {
             &self.cgctx.current_function_path,
         )?;
         let variable = Variable::new(var_type.clone(), is_const, is_static);
-        let mut builder = Vec::new();
+        let mut instructions = Vec::new();
         let id = if !is_const && !is_static {
             let x = self.cgctx.acquire_var_id();
-            builder.push(LLVMInstruction::AllocateVar {
+            instructions.push(LLVMInstruction::AllocateVar {
                 target_reg: x,
                 alloc_type: var_type.clone(),
             });
@@ -769,8 +752,13 @@ impl LLVMGenPass {
         };
 
         let Some(expression) = expr else {
-            self.cgctx.scope.define(name.clone(), variable, id);
-            return Ok((builder, false));
+            instructions.append(&mut self.cgctx.scope.define(
+                name.clone(),
+                variable,
+                id,
+                &ctx.symbols,
+            ));
+            return Ok((instructions, false));
         };
         let (result, mut instr) = compile_expression(
             expression,
@@ -796,7 +784,7 @@ impl LLVMGenPass {
             )
                 .into());
         }
-        builder.append(&mut instr);
+        instructions.append(&mut instr);
         if result
             .get_type()
             .map(|x| !x.as_primitive().is_some() && !x.is_pointer())
@@ -823,7 +811,12 @@ impl LLVMGenPass {
                         type_map.insert(x.clone(), (q[y][idx]).clone());
                     }
                     drop(q);
-                    self.cgctx.scope.define(name.clone(), variable, id);
+                    instructions.append(&mut self.cgctx.scope.define(
+                        name.clone(),
+                        variable,
+                        id,
+                        &ctx.symbols,
+                    ));
                     let f = ctx.symbols.get_type_by_id(tid).fields.clone();
                     for (x, expr) in f.iter().zip(fields.iter()) {
                         let ec = ExpressionCompiler::new(&mut self.cgctx, ctx);
@@ -836,11 +829,16 @@ impl LLVMGenPass {
                             value_type: t.value_type,
                             ptr: t.location,
                         });
-                        builder.append(&mut instruc);
+                        instructions.append(&mut instruc);
                     }
-                    return Ok((builder, false));
+                    return Ok((instructions, false));
                 };
-                self.cgctx.scope.define(name.clone(), variable, id);
+                instructions.append(&mut self.cgctx.scope.define(
+                    name.clone(),
+                    variable,
+                    id,
+                    &ctx.symbols,
+                ));
                 let f = ctx.symbols.get_type_by_id(x).fields.clone();
                 for (x, expr) in f.iter().zip(fields.iter()) {
                     let ec = ExpressionCompiler::new(&mut self.cgctx, ctx);
@@ -853,23 +851,33 @@ impl LLVMGenPass {
                         value_type: t.value_type,
                         ptr: t.location,
                     });
-                    builder.append(&mut instruc);
+                    instructions.append(&mut instruc);
                 }
-                return Ok((builder, false));
+                return Ok((instructions, false));
             }
         }
         if is_const {
             variable.set_constant_value(Some(result.get_llvm_rep().clone()));
-            self.cgctx.scope.define(name.clone(), variable, id);
-            return Ok((builder, false));
+            instructions.append(&mut self.cgctx.scope.define(
+                name.clone(),
+                variable,
+                id,
+                &ctx.symbols,
+            ));
+            return Ok((instructions, false));
         }
-        self.cgctx.scope.define(name.clone(), variable, id);
-        builder.push(LLVMInstruction::Store {
+        instructions.append(
+            &mut self
+                .cgctx
+                .scope
+                .define(name.clone(), variable, id, &ctx.symbols),
+        );
+        instructions.push(LLVMInstruction::Store {
             value: result.get_llvm_rep().clone(),
             value_type: var_type,
             ptr: LLVMVal::Variable(id),
         });
-        Ok((builder, false))
+        Ok((instructions, false))
     }
     fn compile_loop(
         &mut self,
@@ -909,14 +917,7 @@ impl LLVMGenPass {
 
         self.cgctx
             .set_current_block_name(format!("loop_body{}_exit", lc));
-        let x = self.cgctx.scope.pop_layer(&ctx.symbols);
-        for x in x {
-            let (mut instr, brk) = self.compile_statement(&x.with_dummy_span(), ctx)?;
-            instructions.append(&mut instr);
-            if brk {
-                break;
-            }
-        }
+        instructions.append(&mut self.cgctx.scope.pop_layer(&ctx.symbols));
         Ok((instructions, false))
     }
     fn compile_block(
@@ -935,14 +936,7 @@ impl LLVMGenPass {
             }
         }
 
-        let x = self.cgctx.scope.pop_layer(&ctx.symbols);
-        for x in x {
-            let (mut instr, brk) = self.compile_statement(&x.with_dummy_span(), ctx)?;
-            instructions.append(&mut instr);
-            if brk {
-                break;
-            }
-        }
+        instructions.append(&mut self.cgctx.scope.pop_layer(&ctx.symbols));
         Ok((instructions, false))
     }
 

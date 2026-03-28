@@ -11,7 +11,7 @@ use ordered_hash_map::OrderedHashMap;
 use rcsharp_lexer::{lex_text, LexerError, Span};
 use rcsharp_parser::{
     compiler_primitives::{Layout, PrimitiveInfo, PrimitiveKind, POINTER_SIZED_TYPE, VOID_TYPE},
-    parser::{Attribute, ParserType, Stmt, StmtData},
+    parser::{Attribute, ParserType, StmtData},
 };
 use std::{
     cell::{Cell, RefCell},
@@ -1148,9 +1148,18 @@ impl Scope {
         }
         None
     }
-    pub fn define(&mut self, name: String, variable: Variable, id: u32) {
+    pub fn define(
+        &mut self,
+        name: String,
+        variable: Variable,
+        id: u32,
+        table: &SymbolTable,
+    ) -> Vec<LLVMInstruction> {
         let current = self.layers.last_mut().expect("Scope stack underflow");
-        if let Some(_prev_value) = current.variables.insert(name.clone(), (variable, id)) {}
+        if let Some(prev_value) = current.variables.insert(name.clone(), (variable, id)) {
+            return Self::leave_scope((&name, &prev_value), table);
+        }
+        vec![]
     }
     pub fn push_layer(&mut self) {
         let current_loop = self.layers.last().and_then(|l| l.loop_tag);
@@ -1159,22 +1168,22 @@ impl Scope {
             loop_tag: current_loop,
         });
     }
-    pub fn pop_layer(&mut self, table: &SymbolTable) -> Vec<Stmt> {
+    pub fn pop_layer(&mut self, table: &SymbolTable) -> Vec<LLVMInstruction> {
         if self.layers.len() == 1 {
             panic!("Cannot pop global scope");
         }
         let layer = self.layers.pop().unwrap();
         let mut on_scope_exit = vec![];
         for var in layer.variables.iter().rev() {
-            Self::leave_scope(var, table, &mut on_scope_exit);
+            on_scope_exit.append(&mut Self::leave_scope(var, table));
         }
         return on_scope_exit;
     }
-    pub fn drop_current_scope(&mut self, table: &SymbolTable) -> Vec<Stmt> {
+    pub fn drop_current_scope(&mut self, table: &SymbolTable) -> Vec<LLVMInstruction> {
         let layer = self.layers.last_mut().unwrap();
         let mut on_scope_exit = vec![];
         for var in layer.variables.iter().rev() {
-            Self::leave_scope(var, table, &mut on_scope_exit);
+            on_scope_exit.append(&mut Self::leave_scope(var, table));
         }
         layer.variables.clear();
         return on_scope_exit;
@@ -1189,13 +1198,9 @@ impl Scope {
         }
     }
 
-    fn leave_scope(
-        var: (&String, &(Variable, u32)),
-        _table: &SymbolTable,
-        on_scope_exit: &mut Vec<Stmt>,
-    ) {
+    fn leave_scope(var: (&String, &(Variable, u32)), _table: &SymbolTable) -> Vec<LLVMInstruction> {
         if var.1 .0.compiler_type().is_pointer() {
-            return;
+            return vec![];
         }
         if var
             .1
@@ -1205,21 +1210,23 @@ impl Scope {
             .map(|x| !x.is_droppable())
             .unwrap_or(false)
         {
-            return;
+            return vec![];
         }
-        // Type dependent cleanup
-        on_scope_exit.push(Stmt::Debug(format!("Variable {} is out.", var.0)));
+        vec![LLVMInstruction::Debug(format!(
+            "Variable {} is out.",
+            var.0
+        ))]
     }
 
     pub fn deep(&self) -> usize {
         self.layers.len()
     }
 
-    pub fn pop_layer_immutable<'a>(&self, symbols: &'a SymbolTable) -> Vec<Stmt> {
+    pub fn pop_layer_immutable<'a>(&self, symbols: &'a SymbolTable) -> Vec<LLVMInstruction> {
         let layer = self.layers.last().unwrap();
         let mut on_scope_exit = vec![];
         for var in layer.variables.iter().rev() {
-            Self::leave_scope(var, symbols, &mut on_scope_exit);
+            on_scope_exit.append(&mut Self::leave_scope(var, symbols));
         }
         return on_scope_exit;
     }

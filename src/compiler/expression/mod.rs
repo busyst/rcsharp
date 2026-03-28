@@ -848,7 +848,13 @@ impl<'a> ExpressionCompiler<'a> {
         for (idx, (arg_val, arg_type)) in compiled_args.iter().enumerate() {
             let var = Variable::new(arg_type.clone(), true, false);
             var.set_constant_value(Some(arg_val.clone()));
-            code_gen_ctx.scope.define(func_args[idx].0.clone(), var, 0);
+            (code_gen_ctx
+                .scope
+                .define(func_args[idx].0.clone(), var, 0, &self.compctx.symbols)
+                .len()
+                == 0)
+                .then_some(())
+                .expect("Should not");
         }
 
         let mut gen = LLVMGenPass::new(code_gen_ctx, 0..0);
@@ -987,11 +993,22 @@ impl<'a> ExpressionCompiler<'a> {
             )));
         }
         let mut compiled_args = vec![];
-        for (i, arg_expr) in args.iter().enumerate() {
+        for (idx, arg_expr) in args.iter().enumerate() {
             let (arg_val, arg_instructions) =
-                self.compile_rvalue(arg_expr, Expected::Type(&param_types[i]))?;
+                self.compile_rvalue(arg_expr, Expected::Type(&param_types[idx]))?;
+            if !arg_val.equal_type(&param_types[idx]) {
+                return Err(CompilerError::Generic(format!(
+                    "Type missmatch in {} argument:({:?} vs {:?})",
+                    idx + 1,
+                    arg_val.get_type().unwrap(),
+                    param_types[idx]
+                )));
+            }
             instructions.extend(arg_instructions);
-            compiled_args.push((arg_val.try_get_llvm_rep()?.clone(), param_types[i].clone()));
+            compiled_args.push((
+                arg_val.try_get_llvm_rep()?.clone(),
+                param_types[idx].clone(),
+            ));
         }
         if let Some((func_args_def, body, func_id)) = inline_body_info {
             let (inline_val, inline_instr) = self.perform_inline_expansion(
@@ -1615,7 +1632,13 @@ impl<'a> ExpressionCompiler<'a> {
         }
         if let CompilerType::Struct(x) = struct_type {
             let given_struct = self.symbols().get_type_by_id(x);
-            let (position, field_type) = given_struct.get_field(member).unwrap();
+            let Some((position, field_type)) = given_struct.get_field(member) else {
+                return Err(CompilerError::Generic(format!(
+                    "Field '{}' was not found inside struct '{}'",
+                    member,
+                    given_struct.full_path()
+                )));
+            };
             if position == 0 {
                 return Ok((
                     CompiledLValue::new(base_ptr_repr, field_type.clone(), true),
