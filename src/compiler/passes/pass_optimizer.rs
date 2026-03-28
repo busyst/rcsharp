@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::HashSet;
 
 use rcsharp_parser::{
     expression_parser::{BinaryOp, Expr, UnaryOp},
@@ -142,47 +142,50 @@ impl OptimizerPass {
     }
     pub fn optimize_llvm_instructions(
         mut vec: Vec<LLVMInstruction>,
-        cfg: &CompilerConfig,
+        _cfg: &CompilerConfig,
     ) -> Vec<LLVMInstruction> {
         Self::remove_unnecesary_labels(&mut vec);
         vec
     }
     fn remove_unnecesary_labels(vec: &mut Vec<LLVMInstruction>) {
-        let mut hm: HashMap<String, i32> = HashMap::new();
+        let mut one: HashSet<String> = HashSet::new();
+        let mut mult: HashSet<String> = HashSet::new();
         for (idx, x) in vec.iter().enumerate() {
             match x {
-                LLVMInstruction::Label { name } => {
+                LLVMInstruction::Jump { label } => {
+                    if mult.contains(label) {
+                        continue;
+                    }
                     if vec
-                        .get(idx.wrapping_sub(1))
+                        .get(idx + 1)
                         .filter(|x| {
-                            if let LLVMInstruction::Jump { label } = x {
-                                label == name
+                            if let LLVMInstruction::Label { name: n_label } = *x {
+                                *n_label == *label
                             } else {
                                 false
                             }
                         })
-                        .is_some()
+                        .is_none()
                     {
-                        let x = hm.get_mut(name).unwrap();
-                        *x += 1;
-                    } else {
-                        let x = hm.entry(name.clone()).or_insert(0);
-                        *x += 2;
+                        mult.insert(label.clone());
+                        continue;
                     }
-                }
-                LLVMInstruction::Jump { label } => {
-                    let x = hm.entry(label.clone()).or_insert(0);
-                    *x += 1;
+                    if one.contains(label) {
+                        mult.insert(label.clone());
+                        one.remove(label);
+                        continue;
+                    }
+                    one.insert(label.clone());
                 }
                 LLVMInstruction::Branch {
                     condition_val: _,
                     then_label_name,
                     else_label_name,
                 } => {
-                    let x = hm.entry(then_label_name.clone()).or_insert(0);
-                    *x += 2;
-                    let x = hm.entry(else_label_name.clone()).or_insert(0);
-                    *x += 2;
+                    one.remove(then_label_name);
+                    mult.insert(then_label_name.clone());
+                    one.remove(else_label_name);
+                    mult.insert(else_label_name.clone());
                 }
                 LLVMInstruction::Phi {
                     target_reg: _,
@@ -190,16 +193,16 @@ impl OptimizerPass {
                     incoming,
                 } => {
                     for (_, label) in incoming {
-                        let x = hm.entry(label.clone()).or_insert(0);
-                        *x += 2;
+                        one.remove(label);
+                        mult.insert(label.clone());
                     }
                 }
                 _ => {}
             }
         }
         vec.retain(|x| match x {
-            LLVMInstruction::Label { name } => hm.get(name).filter(|x| **x <= 2).is_none(),
-            LLVMInstruction::Jump { label } => hm.get(label).filter(|x| **x <= 2).is_none(),
+            LLVMInstruction::Label { name } => mult.contains(name),
+            LLVMInstruction::Jump { label } => mult.contains(label),
             _ => true,
         });
     }
