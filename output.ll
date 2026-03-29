@@ -2,7 +2,7 @@
 %struct.string.String = type { i8*, i32 }
 %struct.window.BITMAP = type { i32, i32, i32, i32, i16, i16, i8* }
 %struct.window.MSG = type { i8*, i32, i64, i64, i32, %struct.window.POINT }
-%struct.window.PAINTSTRUCT = type { i8*, i32, %struct.window.RECT, i32, i32, i8* }
+%struct.window.PAINTSTRUCT = type { i8*, i32, %struct.window.RECT, i32, i32, [32 x i8] }
 %struct.window.POINT = type { i32, i32 }
 %struct.window.RECT = type { i32, i32, i32, i32 }
 %struct.window.WNDCLASSEXA = type { i32, i32, i64 (i8*, i32, i64, i64)*, i32, i32, i8*, i8*, i8*, i8*, i8*, i8*, i8* }

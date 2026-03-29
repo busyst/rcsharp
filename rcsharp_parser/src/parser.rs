@@ -321,9 +321,14 @@ impl<'a> GeneralParser<'a> {
     }
 
     pub fn parse_all(&mut self) -> ParserResult<Vec<StmtData>> {
-        let mut stmts = Vec::with_capacity(self.tokens.len() / 4);
+        let mut stmts = Vec::new();
         while !self.is_at_end() {
-            stmts.push(self.parse_toplevel_item()?);
+            let x = self.parse_toplevel_item()?;
+            if let Stmt::Block(blk) = x.stmt {
+                stmts.extend(Vec::from(blk));
+            } else {
+                stmts.push(x);
+            }
         }
         Ok(stmts)
     }
@@ -358,11 +363,7 @@ impl<'a> GeneralParser<'a> {
         }
 
         if self.peek().token == Token::Hint && !attributes.is_empty() {
-            return Err((
-                start_span,
-                // FIX 1: Pass attribute names into the error.
-                ParserError::OrphanedAttributes,
-            ));
+            return Err((start_span, ParserError::OrphanedAttributes));
         }
 
         if self.peek().token == Token::Hint {
@@ -388,6 +389,7 @@ impl<'a> GeneralParser<'a> {
                 }
                 self.parse_namespace()
             }
+            Token::LBrace => self.parse_top_level_block(),
             Token::KeywordInline => self.parse_with_modifier("inline", attributes),
             Token::KeywordConstExpr => self.parse_with_modifier("constexpr", attributes),
             Token::KeywordPub => self.parse_with_modifier("public", attributes),
@@ -415,29 +417,94 @@ impl<'a> GeneralParser<'a> {
     ) -> ParserResult<StmtData> {
         self.advance();
         let mut item = self.parse_toplevel_item()?;
-
-        macro_rules! inject {
-            ($node:expr) => {{
-                Self::prepend_modifier(&mut $node.prefixes, modifier);
-                Self::prepend_attributes(&mut $node.attributes, attributes);
-            }};
-        }
-
-        match &mut item.stmt {
-            Stmt::Function(f) => inject!(f),
-            Stmt::Struct(s) => inject!(s),
-            Stmt::Enum(e) => inject!(e),
-            _ => {
-                return Err((
-                    item.span,
+        fn count_and_validate(
+            stmt: &StmtData,
+            modifier: &str,
+        ) -> Result<usize, (Span, ParserError)> {
+            match &stmt.stmt {
+                Stmt::Function(_) | Stmt::Struct(_) | Stmt::Enum(_) => Ok(1),
+                Stmt::Block(b) => {
+                    let mut count = 0;
+                    for x in b.iter() {
+                        count += count_and_validate(x, modifier)?;
+                    }
+                    Ok(count)
+                }
+                Stmt::CompilerDud | Stmt::CompilerHint(_) => Ok(0),
+                _ => Err((
+                    stmt.span.clone(),
                     ParserError::InvalidModifier {
                         modifier: modifier.into(),
                         applicable_to: "functions, structs, or enums".into(),
                     },
-                ));
+                )),
             }
         }
+
+        fn apply_rec(
+            stmt: &mut StmtData,
+            modifier: &str,
+            attributes: &mut Option<Vec<Attribute>>,
+            count: &mut usize,
+            prepend_mod: fn(&mut Box<[String]>, &str),
+            prepend_attr: fn(&mut Box<[Attribute]>, Vec<Attribute>),
+        ) {
+            let mut apply = |prefixes: &mut Box<[String]>, attrs: &mut Box<[Attribute]>| {
+                *count -= 1;
+                let pass_attrs = if *count == 0 {
+                    attributes.take().unwrap_or_default()
+                } else {
+                    attributes.clone().unwrap_or_default()
+                };
+                prepend_mod(prefixes, modifier);
+                prepend_attr(attrs, pass_attrs);
+            };
+
+            match &mut stmt.stmt {
+                Stmt::Function(f) => apply(&mut f.prefixes, &mut f.attributes),
+                Stmt::Struct(s) => apply(&mut s.prefixes, &mut s.attributes),
+                Stmt::Enum(e) => apply(&mut e.prefixes, &mut e.attributes),
+                Stmt::Block(b) => {
+                    for x in b.iter_mut() {
+                        apply_rec(x, modifier, attributes, count, prepend_mod, prepend_attr);
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        let mut count = count_and_validate(&item, modifier)?;
+        let mut attrs_opt = Some(attributes);
+
+        apply_rec(
+            &mut item,
+            modifier,
+            &mut attrs_opt,
+            &mut count,
+            Self::prepend_modifier,
+            Self::prepend_attributes,
+        );
+
         Ok(item)
+    }
+
+    fn parse_top_level_block(&mut self) -> ParserResult<StmtData> {
+        let start = self.cursor;
+        self.advance(); // {
+        let mut stmts = vec![];
+        while self.peek().token != Token::RBrace {
+            let item = self.parse_toplevel_item()?;
+            if let Stmt::Block(blk) = item.stmt {
+                stmts.extend(Vec::from(blk));
+            } else {
+                stmts.push(item);
+            }
+        }
+        self.consume(&Token::RBrace)?;
+        Ok(StmtData {
+            stmt: Stmt::Block(stmts.into_boxed_slice()),
+            span: start..self.cursor,
+        })
     }
     fn parse_generic_params(&mut self) -> ParserResult<Vec<String>> {
         if self.peek().token != Token::LogicLess {
@@ -629,11 +696,13 @@ impl<'a> GeneralParser<'a> {
         let name = self.consume_name()?;
         self.consume(&Token::LBrace)?;
         let mut body = Vec::new();
-        loop {
-            if self.peek().token == Token::RBrace {
-                break;
+        while self.peek().token != Token::RBrace {
+            let x = self.parse_toplevel_item()?;
+            if let Stmt::Block(blk) = x.stmt {
+                body.extend(Vec::from(blk));
+            } else {
+                body.push(x);
             }
-            body.push(self.parse_toplevel_item()?);
         }
         self.consume(&Token::RBrace)?;
         Ok(StmtData {

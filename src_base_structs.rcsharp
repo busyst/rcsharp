@@ -1,7 +1,7 @@
 #[no_lazy]
 fn __chkstk() : void {
     /*
-asm(
+    asm(
         "push rcx
          push rax
          cmp rax, 4096
@@ -30,11 +30,12 @@ asm(
 fn _fltused() : i32 { return 0;}
 
 namespace process{
-    #[DllImport("kernel32.dll")]
-    no_return fn ExitProcess(code: i32): void;
     
     #[DllImport("kernel32.dll")]
-    fn GetModuleFileNameA(hModule: &i8, lpFilename: &i8, nSize: u32): u32;
+    extern{
+        no_return fn ExitProcess(code: i32): void;
+        fn GetModuleFileNameA(hModule: &i8, lpFilename: &i8, nSize: u32): u32;
+    }
 
     fn get_executable_path() : string::String {
         const size: u32 = 260;
@@ -74,21 +75,16 @@ namespace mem{
         Block_dwReserved2: u32,
     }
     #[DllImport("kernel32.dll")]
-    fn GetProcessHeap(): &i32;
-    #[DllImport("kernel32.dll")]
-    fn HeapAlloc(hHeap: &i32, dwFlags: i32, dwBytes: i64): &void;
-    #[DllImport("kernel32.dll")]
-    fn HeapReAlloc(hHeap: &i32, dwFlags: i32, lpMem: &void, dwBytes: i64): &void; // Added
-    #[DllImport("kernel32.dll")]
-    fn HeapFree(hHeap: &i32, dwFlags: i32, lpMem: &void): i32;
-    #[DllImport("kernel32.dll")]
-    fn HeapSize(hHeap: &i32, dwFlags : i32, lpMem : &i8) : i64;
-    #[DllImport("kernel32.dll")]
-    fn HeapWalk(hHeap: &i32, lpEntry: &PROCESS_HEAP_ENTRY) : i32;
-    #[DllImport("kernel32.dll")]
-    fn HeapLock(hHeap: &i32) : i32;
-    #[DllImport("kernel32.dll")]
-    fn HeapUnlock(hHeap: &i32) : i32;
+    extern{
+        fn GetProcessHeap(): &i32;
+        fn HeapAlloc(hHeap: &i32, dwFlags: i32, dwBytes: i64): &void;
+        fn HeapReAlloc(hHeap: &i32, dwFlags: i32, lpMem: &void, dwBytes: i64): &void;
+        fn HeapFree(hHeap: &i32, dwFlags: i32, lpMem: &void): i32;
+        fn HeapSize(hHeap: &i32, dwFlags : i32, lpMem : &i8) : i64;
+        fn HeapWalk(hHeap: &i32, lpEntry: &PROCESS_HEAP_ENTRY) : i32;
+        fn HeapLock(hHeap: &i32) : i32;
+        fn HeapUnlock(hHeap: &i32) : i32;
+    }
 
     fn malloc(size: i64) : &void { 
         const ptr: &void = HeapAlloc(GetProcessHeap(), 0, size);
@@ -272,22 +268,19 @@ namespace vector{
 }
 namespace console{
     #[DllImport("kernel32.dll")]
-    fn AllocConsole(): i32;
-
-    #[DllImport("kernel32.dll")]
-    fn GetStdHandle(nStdHandle: i32): &i8;
+    extern{
+        fn AllocConsole(): i32;
+        fn GetStdHandle(nStdHandle: i32): &i8;
+        fn FreeConsole(): i32;
+        fn WriteConsoleA(
+            hConsoleOutput: &i8,
+            lpBuffer: &i8,
+            nNumberOfCharsToWrite: i32,
+            lpNumberOfCharsWritten: &i32,
+            lpReserved: &i8
+        ): i32;
+    }
     
-    #[DllImport("kernel32.dll")]
-    fn FreeConsole(): i32;
-
-    #[DllImport("kernel32.dll")]
-    fn WriteConsoleA(
-        hConsoleOutput: &i8,
-        lpBuffer: &i8,
-        nNumberOfCharsToWrite: i32,
-        lpNumberOfCharsWritten: &i32,
-        lpReserved: &i8
-    ): i32;
 
     fn get_stdout() : &i8 {
         let stdout_handle: &i8 = GetStdHandle(-11 as i32);
@@ -619,19 +612,15 @@ namespace stdlib {
 }
 namespace fs{
     #[DllImport("kernel32.dll")]
-    fn CreateFileA(lpFileName: &i8, dwDesiredAccess: u32, dwShareMode: u32, lpSecurityAttributes: &i8, dwCreationDisposition: u32, dwFlagsAndAttributes: u32, hTemplateFile: &i8) : &void;
-    #[DllImport("kernel32.dll")]
-    fn WriteFile(hFile: &void, lpBuffer: &i8, nNumberOfBytesToWrite: u32, lpNumberOfBytesWritten: &u32, lpOverlapped: &i8) : i32;
-    #[DllImport("kernel32.dll")]
-    fn ReadFile(hFile: &void, lpBuffer: &i8, nNumberOfBytesToRead: u32, lpNumberOfBytesRead: &u32, lpOverlapped: &i8) : i32;
-    #[DllImport("kernel32.dll")]
-    fn GetFileSizeEx(hFile: &void, lpFileSize: &i64): i32;
-    #[DllImport("kernel32.dll")]
-    fn CloseHandle(hObject: &void) : i32;
-    #[DllImport("kernel32.dll")]
-    fn DeleteFileA(lpFileName: &i8) : i32;
-    #[DllImport("kernel32.dll")]
-    fn GetFileAttributesA(lpFileName: &i8) : u32;
+    extern{
+        fn CreateFileA(lpFileName: &i8, dwDesiredAccess: u32, dwShareMode: u32, lpSecurityAttributes: &i8, dwCreationDisposition: u32, dwFlagsAndAttributes: u32, hTemplateFile: &i8) : &void;
+        fn WriteFile(hFile: &void, lpBuffer: &i8, nNumberOfBytesToWrite: u32, lpNumberOfBytesWritten: &u32, lpOverlapped: &i8) : i32;
+        fn ReadFile(hFile: &void, lpBuffer: &i8, nNumberOfBytesToRead: u32, lpNumberOfBytesRead: &u32, lpOverlapped: &i8) : i32;
+        fn GetFileSizeEx(hFile: &void, lpFileSize: &i64): i32;
+        fn CloseHandle(hObject: &void) : i32;
+        fn DeleteFileA(lpFileName: &i8) : i32;
+        fn GetFileAttributesA(lpFileName: &i8) : u32;
+    }
     fn write_to_file(path: &i8, content: &i8, content_len: u32) : i32 {
         const CREATE_ALWAYS: u32 = 2;
         const GENERIC_WRITE: u32 = 0x40000000;
@@ -1462,101 +1451,57 @@ namespace window{
         MENUBAR = 30,
     }
     #[DllImport("user32.dll")]
-    fn RegisterClassA(lpWndClass: &WNDCLASSEXA): u16;
-
-    #[DllImport("user32.dll")]
-    fn CreateWindowExA(
-        dwExStyle: u32,
-        lpClassName: &i8,
-        lpWindowName: &i8,
-        dwStyle: u32,
-        x: i32,
-        y: i32,
-        nWidth: i32,
-        nHeight: i32,
-        hWndParent: &void,
-        hMenu: &void,
-        hInstance: &void,
-        lpParam: &void
-    ): &void;
-
-    #[DllImport("user32.dll")]
-    fn DefWindowProcA(hWnd: &void, Msg: u32, wParam: u64, lParam: u64): i64;
-
-    #[DllImport("user32.dll")]
-    fn GetMessageA(lpMsg: &MSG, hWnd: &void, wMsgFilterMin: u32, wMsgFilterMax: u32): i32;
-
-    #[DllImport("user32.dll")]
-    fn TranslateMessage(lpMsg: &MSG): i32;
-
-    #[DllImport("user32.dll")]
-    fn DispatchMessageA(lpMsg: &MSG): i64;
-
-    #[DllImport("user32.dll")]
-    fn PostQuitMessage(nExitCode: i32): void;
-
-    #[DllImport("user32.dll")]
-    fn BeginPaint(hWnd: &void, lpPaint: &PAINTSTRUCT): &void;
-
-    #[DllImport("user32.dll")]
-    fn EndPaint(hWnd: &void, lpPaint: &PAINTSTRUCT): i32;
-
-    #[DllImport("user32.dll")]
-    fn GetDC(hWnd: &void): &void;
-
-    #[DllImport("user32.dll")]
-    fn ReleaseDC(hWnd: &void, hDC: &void): i32;
-
-    #[DllImport("user32.dll")]
-    fn LoadCursorA(hInstance: &void, lpCursorName: &i8): &void;
-
-    #[DllImport("user32.dll")]
-    fn LoadIconA(hInstance: &void, lpIconName: &i8): &void;
-    
-    #[DllImport("user32.dll")]
-    fn LoadImageA(hInst: &void, name: &i8, type: u32, cx: i32, cy: i32, fuLoad: u32) : &void;
-    
-    #[DllImport("user32.dll")]
-    fn GetClientRect(hWnd: &void, lpRect: &RECT) : i32;
-    
-    #[DllImport("user32.dll")]
-    fn InvalidateRect(hWnd: &void, lpRect: &RECT, bErase: i32) : i32;
-
+    extern{
+        fn RegisterClassA(lpWndClass: &WNDCLASSEXA): u16;
+        fn CreateWindowExA(
+            dwExStyle: u32,
+            lpClassName: &i8,
+            lpWindowName: &i8,
+            dwStyle: u32,
+            x: i32,
+            y: i32,
+            nWidth: i32,
+            nHeight: i32,
+            hWndParent: &void,
+            hMenu: &void,
+            hInstance: &void,
+            lpParam: &void
+        ): &void;
+        fn DefWindowProcA(hWnd: &void, Msg: u32, wParam: u64, lParam: u64): i64;
+        fn GetMessageA(lpMsg: &MSG, hWnd: &void, wMsgFilterMin: u32, wMsgFilterMax: u32): i32;
+        fn TranslateMessage(lpMsg: &MSG): i32;
+        fn DispatchMessageA(lpMsg: &MSG): i64;
+        fn PostQuitMessage(nExitCode: i32): void;
+        fn BeginPaint(hWnd: &void, lpPaint: &PAINTSTRUCT): &void;
+        fn EndPaint(hWnd: &void, lpPaint: &PAINTSTRUCT): i32;
+        fn GetDC(hWnd: &void): &void;
+        fn ReleaseDC(hWnd: &void, hDC: &void): i32;
+        fn LoadCursorA(hInstance: &void, lpCursorName: &i8): &void;
+        fn LoadIconA(hInstance: &void, lpIconName: &i8): &void;
+        fn LoadImageA(hInst: &void, name: &i8, type: u32, cx: i32, cy: i32, fuLoad: u32) : &void;
+        fn GetClientRect(hWnd: &void, lpRect: &RECT) : i32;
+        fn InvalidateRect(hWnd: &void, lpRect: &RECT, bErase: i32) : i32;
+        fn RegisterClassExA(lpwcx: &WNDCLASSEXA): u16;
+        fn ShowWindow(hWnd: &void, nCmdShow: i32): i32;
+        
+        fn SetWindowLongPtrA(hWnd: &void, nIndex: i32, dwNewLong: &void): i64;
+        fn GetWindowLongPtrA(hWnd: &void, nIndex: i32): &void;
+    }
     #[DllImport("kernel32.dll")]
-    fn GetModuleHandleA(lpModuleName: &i8): &void;
-    #[DllImport("user32.dll")]
-    fn RegisterClassExA(lpwcx: &WNDCLASSEXA): u16;
-    #[DllImport("user32.dll")]
-    fn ShowWindow(hWnd: &void, nCmdShow: i32): i32;
+    extern{
+        fn GetModuleHandleA(lpModuleName: &i8): &void;
+    }
     #[DllImport("gdi32.dll")]
-    fn CreateCompatibleDC(hdc: &void): &void;
-    
-    #[DllImport("gdi32.dll")]
-    fn SelectObject(hdc: &void, h: &void): &void;
-    
-    #[DllImport("gdi32.dll")]
-    fn BitBlt(hdc: &void, x: i32, y: i32, cx: i32, cy: i32, hdcSrc: &void, x1: i32, y1: i32, rop: u32): i32;
-    
-    #[DllImport("gdi32.dll")]
-    fn DeleteDC(hdc: &void): i32;
-    
-    #[DllImport("gdi32.dll")]
-    fn DeleteObject(hObject: &void): i32;
-    
-    #[DllImport("gdi32.dll")]
-    fn GetObjectA(h: &void, c: i32, pv: &BITMAP) : i32;
-    
-    #[DllImport("gdi32.dll")]
-    fn SetStretchBltMode(hdc: &void, mode: i32) : i32;
-    
-    #[DllImport("gdi32.dll")]
-    fn StretchBlt(hdcDest: &void, xDest: i32, yDest: i32, wDest: i32, hDest: i32, hdcSrc: &void, xSrc: i32, ySrc: i32, wSrc: i32, hSrc: i32, rop: u32) : i32;
-    
-    #[DllImport("user32.dll")]
-    fn SetWindowLongPtrA(hWnd: &void, nIndex: i32, dwNewLong: &void): i64;
-
-    #[DllImport("user32.dll")]
-    fn GetWindowLongPtrA(hWnd: &void, nIndex: i32): &void;
+    extern{
+        fn CreateCompatibleDC(hdc: &void): &void;
+        fn SelectObject(hdc: &void, h: &void): &void;
+        fn BitBlt(hdc: &void, x: i32, y: i32, cx: i32, cy: i32, hdcSrc: &void, x1: i32, y1: i32, rop: u32): i32;
+        fn DeleteDC(hdc: &void): i32;
+        fn DeleteObject(hObject: &void): i32;
+        fn GetObjectA(h: &void, c: i32, pv: &BITMAP) : i32;
+        fn SetStretchBltMode(hdc: &void, mode: i32) : i32;
+        fn StretchBlt(hdcDest: &void, xDest: i32, yDest: i32, wDest: i32, hDest: i32, hdcSrc: &void, xSrc: i32, ySrc: i32, wSrc: i32, hSrc: i32, rop: u32) : i32;
+    }
 
     struct POINT {
         x: i32,
@@ -1572,18 +1517,18 @@ namespace window{
         pt: POINT,
     }
     struct WNDCLASSEXA {
-        cbSize: u32,                            // UINT
-        style: u32,                             // UINT
-        lpfnWndProc: &fn(&void, u32, u64, u64): i64, // WNDPROC (function pointer)
-        cbClsExtra: i32,                        // INT
-        cbWndExtra: i32,                        // INT
-        hInstance: &void,                         // HINSTANCE
-        hIcon: &void,                             // HICON
-        hCursor: &void,                           // HCURSOR
-        hbrBackground: &void,                     // HBRUSH
-        lpszMenuName: &i8,                      // LPCSTR
-        lpszClassName: &i8,                     // LPCSTR
-        hIconSm: &void,                           // HICON
+        cbSize: u32,                                    // UINT
+        style: u32,                                     // UINT
+        lpfnWndProc: &fn(&void, u32, u64, u64): i64,    // WNDPROC (function pointer)
+        cbClsExtra: i32,                                // INT
+        cbWndExtra: i32,                                // INT
+        hInstance: &void,                               // HINSTANCE
+        hIcon: &void,                                   // HICON
+        hCursor: &void,                                 // HCURSOR
+        hbrBackground: &void,                           // HBRUSH
+        lpszMenuName: &i8,                              // LPCSTR
+        lpszClassName: &i8,                             // LPCSTR
+        hIconSm: &void,                                 // HICON
     }
     struct RECT {
         left: i32,
@@ -1597,7 +1542,7 @@ namespace window{
         rcPaint: RECT,
         fRestore: i32,
         fIncUpdate: i32,
-        rgbReserved: &i8, // Array of 32 bytes technically
+        rgbReserved: [i8; 32],
     }
     struct BITMAP {
         bmType: i32,
@@ -1733,10 +1678,10 @@ namespace window{
             CW_USEDEFAULT,          // Y position
             800,                    // Width
             600,                    // Height
-            null,               // Parent window
-            null,               // Menu
+            null,                   // Parent window
+            null,                   // Menu
             hInstance,              // Application instance handle
-            null                // Additional application data
+            null                    // Additional application data
         );
 
         if is_null(hWnd) { process::throw("Window error: StartError::CreateWindowFailed"); }
