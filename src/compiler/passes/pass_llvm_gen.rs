@@ -532,7 +532,16 @@ impl LLVMGenPass {
             Stmt::Let(name, var_type, z) => {
                 self.compile_var_decl((name, var_type, z, false, false), ctx)
             }
-            Stmt::Loop(inside) => self.compile_loop(inside, ctx),
+            Stmt::Loop(inside) => self.compile_loop(inside, None, ctx),
+            Stmt::ForLoop(expression, range, inside) => {
+                self.compile_for_loop(expression, range, inside, ctx)
+            }
+            Stmt::WhileLoop(expression, inside) => {
+                self.compile_loop(inside, Some((expression, true)), ctx)
+            }
+            Stmt::DoWhileLoop(expression, inside) => {
+                self.compile_loop(inside, Some((expression, false)), ctx)
+            }
             Stmt::Continue => match self.cgctx.scope.current_loop_tag() {
                 Some(li) => {
                     return Ok((
@@ -882,21 +891,43 @@ impl LLVMGenPass {
     fn compile_loop(
         &mut self,
         inside: &[StmtData],
+        break_expression: Option<(&Expr, bool)>,
         ctx: &CompilerContext,
     ) -> CompileResult<(Vec<LLVMInstruction>, bool)> {
         let lc = self.cgctx.acquire_label_id();
+        let loop_start_label = format!("loop_start{}", lc);
+        let loop_continue_label = format!("loop_body{}", lc);
+        let loop_exit_label = format!("loop_body{}_exit", lc);
+
         let mut instructions = vec![
             LLVMInstruction::Jump {
-                label: format!("loop_body{}", lc),
+                label: loop_start_label.clone(),
             },
             LLVMInstruction::Label {
-                name: format!("loop_body{}", lc),
+                name: loop_start_label.clone(),
             },
         ];
+
         self.cgctx.scope.push_layer();
         self.cgctx.scope.set_loop_tag(Some(lc));
-        self.cgctx
-            .set_current_block_name(format!("loop_body{}", lc));
+        self.cgctx.set_current_block_name(loop_start_label.clone());
+
+        if let Some((brk_expr, true)) = break_expression {
+            instructions.append(
+                &mut self
+                    .compile_statement(
+                        &Stmt::If(
+                            brk_expr.clone(),
+                            Box::new([]),
+                            Box::new([Stmt::Break.with_dummy_span()]),
+                        )
+                        .with_dummy_span(),
+                        ctx,
+                    )?
+                    .0,
+            );
+        }
+
         let mut terminated = false;
         for x in inside {
             let (mut instr, brk) = self.compile_statement(x, ctx)?;
@@ -906,18 +937,188 @@ impl LLVMGenPass {
                 break;
             }
         }
+
         if !terminated {
             instructions.push(LLVMInstruction::Jump {
-                label: format!("loop_body{}", lc),
+                label: loop_continue_label.clone(),
             });
         }
+
         instructions.push(LLVMInstruction::Label {
-            name: format!("loop_body{}_exit", lc),
+            name: loop_continue_label.clone(),
+        });
+        self.cgctx
+            .set_current_block_name(loop_continue_label.clone());
+
+        if let Some((brk_expr, false)) = break_expression {
+            instructions.append(
+                &mut self
+                    .compile_statement(
+                        &Stmt::If(
+                            brk_expr.clone(),
+                            Box::new([]),
+                            Box::new([Stmt::Break.with_dummy_span()]),
+                        )
+                        .with_dummy_span(),
+                        ctx,
+                    )?
+                    .0,
+            );
+        }
+
+        instructions.push(LLVMInstruction::Jump {
+            label: loop_start_label.clone(),
         });
 
-        self.cgctx
-            .set_current_block_name(format!("loop_body{}_exit", lc));
+        instructions.push(LLVMInstruction::Label {
+            name: loop_exit_label.clone(),
+        });
+
+        self.cgctx.set_current_block_name(loop_exit_label.clone());
         instructions.append(&mut self.cgctx.scope.pop_layer(&ctx.symbols));
+
+        Ok((instructions, false))
+    }
+    fn compile_for_loop(
+        &mut self,
+        pattern: &Expr,
+        expression: &Expr,
+        inside: &[StmtData],
+        ctx: &CompilerContext,
+    ) -> CompileResult<(Vec<LLVMInstruction>, bool)> {
+        let mut instructions = vec![];
+
+        let Expr::Name(pattern_name) = pattern else {
+            return Err(
+                CompilerError::Generic("For loop pattern must be a variable name".into()).into(),
+            );
+        };
+        let Expr::Range(from_expr, to_expr, inclusive) = expression else {
+            return Err(CompilerError::Generic(
+                "For loop must use a range expression (e.g., 0..10)".into(),
+            )
+            .into());
+        };
+
+        let (from_val, mut from_instr) =
+            compile_expression(from_expr, Expected::Anything, &self.cgctx, ctx)?;
+        instructions.append(&mut from_instr);
+        let Some(from_type) = from_val.get_type() else {
+            return Err(CompilerError::Generic("Start of range must have a type".into()).into());
+        };
+
+        let (_to_val, mut to_instr) =
+            compile_expression(to_expr, Expected::Type(from_type), &self.cgctx, ctx)?;
+        instructions.append(&mut to_instr);
+
+        if !from_type.is_integer() {
+            return Err(
+                CompilerError::Generic("For loop range must be an integer type".into()).into(),
+            );
+        }
+
+        let var_id = self.cgctx.acquire_var_id();
+        instructions.push(LLVMInstruction::AllocateVar {
+            target_reg: var_id,
+            alloc_type: from_type.clone(),
+        });
+
+        instructions.push(LLVMInstruction::Store {
+            value: from_val.get_llvm_rep().clone(),
+            value_type: from_type.clone(),
+            ptr: LLVMVal::Variable(var_id),
+        });
+        let lc = self.cgctx.acquire_label_id();
+        let loop_cond_label = format!("loop_cond{}", lc);
+        let loop_inc_label = format!("loop_body{}", lc);
+        let loop_exit_label = format!("loop_body{}_exit", lc);
+
+        instructions.push(LLVMInstruction::Jump {
+            label: loop_cond_label.clone(),
+        });
+
+        self.cgctx.scope.push_layer();
+        self.cgctx.scope.set_loop_tag(Some(lc));
+
+        self.cgctx.scope.define(
+            pattern_name.clone(),
+            Variable::new(from_type.clone(), false, false),
+            var_id,
+            &ctx.symbols,
+        );
+        instructions.push(LLVMInstruction::Label {
+            name: loop_cond_label.clone(),
+        });
+        self.cgctx.set_current_block_name(loop_cond_label.clone());
+
+        let cond_op = if *inclusive {
+            rcsharp_parser::expression_parser::BinaryOp::Greater
+        } else {
+            rcsharp_parser::expression_parser::BinaryOp::GreaterEqual
+        };
+
+        let stay_in_loop_expr = Expr::BinaryOp(
+            Box::new(Expr::Name(pattern_name.clone())),
+            cond_op,
+            to_expr.clone(),
+        );
+
+        let (mut cond_instr, _) = self.compile_statement(
+            &Stmt::If(
+                stay_in_loop_expr,
+                Box::new([Stmt::Break.with_dummy_span()]),
+                Box::new([]),
+            )
+            .with_dummy_span(),
+            ctx,
+        )?;
+        instructions.append(&mut cond_instr);
+
+        let mut terminated = false;
+        for stmt in inside {
+            let (mut stmt_instr, stmt_terminated) = self.compile_statement(stmt, ctx)?;
+            instructions.append(&mut stmt_instr);
+            if stmt_terminated {
+                terminated = true;
+                break;
+            }
+        }
+
+        if !terminated {
+            instructions.push(LLVMInstruction::Jump {
+                label: loop_inc_label.clone(),
+            });
+        }
+
+        instructions.push(LLVMInstruction::Label {
+            name: loop_inc_label.clone(),
+        });
+        self.cgctx.set_current_block_name(loop_inc_label);
+
+        let inc_expr = Expr::Assign(
+            Box::new(Expr::Name(pattern_name.clone())),
+            Box::new(Expr::BinaryOp(
+                Box::new(Expr::Name(pattern_name.clone())),
+                rcsharp_parser::expression_parser::BinaryOp::Add,
+                Box::new(Expr::Integer(1)),
+            )),
+        );
+
+        let (_, mut inc_instr) =
+            compile_expression(&inc_expr, Expected::NoReturn, &self.cgctx, ctx)?;
+        instructions.append(&mut inc_instr);
+
+        instructions.push(LLVMInstruction::Jump {
+            label: loop_cond_label,
+        });
+
+        instructions.push(LLVMInstruction::Label {
+            name: loop_exit_label.clone(),
+        });
+
+        self.cgctx.set_current_block_name(loop_exit_label);
+        instructions.append(&mut self.cgctx.scope.pop_layer(&ctx.symbols));
+
         Ok((instructions, false))
     }
     fn compile_block(

@@ -86,23 +86,26 @@ pub struct ParsedFunction {
 }
 #[derive(Debug, Clone, PartialEq)]
 pub enum Stmt {
-    CompilerHint(Attribute),                    // #...
-    Let(String, ParserType, Option<Expr>),      // let x : ...
-    ConstLet(String, ParserType, Expr),         // const x : ...
-    Static(String, ParserType, Option<Expr>),   // static x : ...
-    Expr(Expr),                                 // a = 1 + b
-    If(Expr, Box<[StmtData]>, Box<[StmtData]>), // if 1 == 1 {} `else `if` {}`
-    Loop(Box<[StmtData]>),                      // loop { ... }
-    Break,                                      // break
-    Continue,                                   // continue
-    Return(Option<Expr>),                       // return ...
-    Function(ParsedFunction),                   // fn foo(bar: i8, ...) ... { ... }
-    Struct(ParsedStruct),                       // struct foo <T> { bar : i8, ... }
-    Enum(ParsedEnum),                           // enum foo 'base_type' { bar = ..., ... }
-    Namespace(String, Box<[StmtData]>),         // namespace foo { fn bar() ... {...} ... }
-    Block(Box<[StmtData]>),                     // ; { ... }
-    Debug(String),                              // ; 'debug statement'
-    CompilerDud,                                // ; does absolutely nothing
+    CompilerHint(Attribute),                        // #...
+    Let(String, ParserType, Option<Expr>),          // let x : ...
+    ConstLet(String, ParserType, Expr),             // const x : ...
+    Static(String, ParserType, Option<Expr>),       // static x : ...
+    Expr(Expr),                                     // a = 1 + b
+    If(Expr, Box<[StmtData]>, Box<[StmtData]>),     // if 1 == 1 {} `else `if` {}`
+    Loop(Box<[StmtData]>),                          // loop { ... }
+    WhileLoop(Box<Expr>, Box<[StmtData]>),          // while ... { ... }
+    DoWhileLoop(Box<Expr>, Box<[StmtData]>),        // do { ... } while ...;
+    ForLoop(Box<Expr>, Box<Expr>, Box<[StmtData]>), // for ... in ... { ... }
+    Break,                                          // break
+    Continue,                                       // continue
+    Return(Option<Expr>),                           // return ...
+    Function(ParsedFunction),                       // fn foo(bar: i8, ...) ... { ... }
+    Struct(ParsedStruct),                           // struct foo <T> { bar : i8, ... }
+    Enum(ParsedEnum),                               // enum foo 'base_type' { bar = ..., ... }
+    Namespace(String, Box<[StmtData]>),             // namespace foo { fn bar() ... {...} ... }
+    Block(Box<[StmtData]>),                         // ; { ... }
+    Debug(String),                                  // ; 'debug statement'
+    CompilerDud,                                    // ; does absolutely nothing
 }
 impl Stmt {
     pub fn recursive_statement_count(&self) -> u64 {
@@ -142,6 +145,7 @@ impl Stmt {
         }
     }
 }
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct StmtData {
     pub stmt: Stmt,
@@ -761,6 +765,37 @@ impl<'a> GeneralParser<'a> {
                     found: self.peek().token.clone(),
                 },
             )),
+            Token::KeywordFor => {
+                self.advance();
+                let q = self.parse_expression()?;
+                self.consume(&Token::KeywordIn)?;
+                let e = self.parse_expression()?;
+                let body = self.parse_block_body()?;
+                return Ok(StmtData {
+                    stmt: Stmt::ForLoop(Box::new(q), Box::new(e), body),
+                    span: start..self.cursor,
+                });
+            }
+            Token::KeywordWhile => {
+                self.advance();
+                let q = self.parse_expression()?;
+                let body = self.parse_block_body()?;
+                return Ok(StmtData {
+                    stmt: Stmt::WhileLoop(Box::new(q), body),
+                    span: start..self.cursor,
+                });
+            }
+            Token::KeywordDo => {
+                self.advance();
+                let body = self.parse_block_body()?;
+                self.consume(&Token::KeywordWhile)?;
+                let q = self.parse_expression()?;
+                self.consume(&Token::SemiColon)?;
+                return Ok(StmtData {
+                    stmt: Stmt::DoWhileLoop(Box::new(q), body),
+                    span: start..self.cursor,
+                });
+            }
             _ => {
                 let expr = self.parse_expression()?;
                 self.consume(&Token::SemiColon)?;

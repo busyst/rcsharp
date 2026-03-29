@@ -13,13 +13,13 @@ pub enum Expr {
     Integer(i128),
     Name(String),
     StringConst(String),
-    Type(ParserType),
+    Type(Box<ParserType>),
 
     BinaryOp(Box<Expr>, BinaryOp, Box<Expr>),
     UnaryOp(UnaryOp, Box<Expr>),
     Assign(Box<Expr>, Box<Expr>),
 
-    Cast(Box<Expr>, ParserType),
+    Cast(Box<Expr>, Box<ParserType>),
     MemberAccess(Box<Expr>, String),
     StaticAccess(Box<Expr>, String),
 
@@ -32,7 +32,7 @@ pub enum Expr {
     Array(Box<[Expr]>),
 
     StructInit(Box<Expr>, Box<[(String, Expr)]>),
-
+    Range(Box<Expr>, Box<Expr>, bool),
     Boolean(bool),
     NullPtr,
 }
@@ -145,7 +145,7 @@ pub enum UnaryOp {
 #[inline]
 fn precedence(token: &Token) -> u8 {
     match token {
-        Token::Equal => 1,
+        Token::Equal | Token::RangeDots => 1,
         Token::LogicOr => 2,
         Token::LogicAnd => 3,
         Token::BinaryOr => 4,
@@ -348,6 +348,7 @@ impl<'a> ExpressionParser<'a> {
             Token::Dot => self.parse_member_access(left),
             Token::DoubleColon => self.parse_static_access_or_generic_call(left),
             Token::KeywordAs => self.parse_cast(left),
+            Token::RangeDots => self.parse_range(left),
 
             _ => Err((
                 self.cursor..self.cursor + 1,
@@ -395,7 +396,12 @@ impl<'a> ExpressionParser<'a> {
 
     fn parse_cast(&mut self, left: Expr) -> ParserResult<Expr> {
         self.consume(&Token::KeywordAs)?;
-        Ok(Expr::Cast(Box::new(left), self.parse_type()?))
+        Ok(Expr::Cast(Box::new(left), Box::new(self.parse_type()?)))
+    }
+    fn parse_range(&mut self, left: Expr) -> Result<Expr, (std::ops::Range<usize>, ParserError)> {
+        self.advance(); // ..
+        let e = self.parse_expression()?;
+        Ok(Expr::Range(Box::new(left), Box::new(e), false))
     }
 
     fn parse_static_access_or_generic_call(&mut self, left: Expr) -> ParserResult<Expr> {
@@ -433,10 +439,10 @@ impl<'a> ExpressionParser<'a> {
         match &self.peek().token {
             Token::SemiColon => {
                 let path = expr_to_type_path(&callee);
-                Ok(Expr::Type(ParserType::Generic(
+                Ok(Expr::Type(Box::new(ParserType::Generic(
                     path,
                     generic_types.into_boxed_slice(),
-                )))
+                ))))
             }
             Token::LParen => {
                 self.advance(); // (

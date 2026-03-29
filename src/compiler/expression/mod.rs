@@ -838,13 +838,9 @@ impl<'a> ExpressionCompiler<'a> {
         for (idx, (arg_val, arg_type)) in compiled_args.iter().enumerate() {
             let var = Variable::new(arg_type.clone(), true, false);
             var.set_constant_value(Some(arg_val.clone()));
-            (code_gen_ctx
+            code_gen_ctx
                 .scope
-                .define(func_args[idx].0.clone(), var, 0, &self.compctx.symbols)
-                .len()
-                == 0)
-                .then_some(())
-                .expect("Should not");
+                .define(func_args[idx].0.clone(), var, 0, &self.compctx.symbols);
         }
 
         let mut gen = LLVMGenPass::new(code_gen_ctx, 0..0);

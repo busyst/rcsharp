@@ -24,6 +24,7 @@ pub enum Token {
     SemiColon,
     Comma,
     Dot,
+    RangeDots,
     Hint,
 
     Equal,
@@ -64,6 +65,10 @@ pub enum Token {
     KeywordStruct,
     KeywordEnum,
     KeywordLoop,
+    KeywordFor,
+    KeywordDo,
+    KeywordIn,
+    KeywordWhile,
     KeywordBreak,
     KeywordContinue,
     KeywordReturn,
@@ -98,6 +103,10 @@ const KEYWORDS_TO_TOKENS: phf::Map<&'static str, Token> = phf::phf_map!(
     "struct"    => Token::KeywordStruct,
     "enum"      => Token::KeywordEnum,
     "loop"      => Token::KeywordLoop,
+    "for"      => Token::KeywordFor,
+    "in"      => Token::KeywordIn,
+    "do"      => Token::KeywordDo,
+    "while"      => Token::KeywordWhile,
     "break"     => Token::KeywordBreak,
     "continue"  => Token::KeywordContinue,
     "return"    => Token::KeywordReturn,
@@ -210,6 +219,7 @@ fn debug_lex_emit(tokens: &Vec<TokenData>, symbol_table: &LexerSymbolTable) {
                 Token::Hint => str.push_str("#"),
                 Token::Comma => str.push_str(", "),
                 Token::Dot => str.push_str("."),
+                Token::RangeDots => str.push_str(".."),
                 Token::LParen => str.push_str("("),
                 Token::RParen => str.push_str(")"),
                 Token::Colon => str.push_str(":"),
@@ -387,12 +397,25 @@ fn process_chunk(
                 break;
             }
 
-            while let Some((idx, char)) = chars.peek() {
-                if !(char.is_digit(16) || *char == '_' || *char == '.') {
-                    number_end = *idx;
+            while let Some(&(idx, pk_char)) = chars.peek() {
+                if pk_char.is_digit(16) || pk_char == '_' {
+                    chars.next();
+                } else if pk_char == '.' {
+                    let mut lookahead = chars.clone();
+                    lookahead.next();
+                    if let Some(&(_, next_pk_char)) = lookahead.peek() {
+                        if next_pk_char == '.' {
+                            number_end = idx;
+                            break;
+                        }
+                    } else if !is_eof {
+                        break;
+                    }
+                    chars.next();
+                } else {
+                    number_end = idx;
                     break;
                 }
-                chars.next();
             }
             if number_end == 0 && is_eof {
                 number_end = readonly_input.len();
@@ -420,18 +443,35 @@ fn process_chunk(
                         break;
                     }
 
-                    while let Some((idx, char)) = chars.peek() {
-                        if !(char.is_digit(16) || *char == '_' || *char == '.') {
-                            number_end = *idx;
+                    while let Some(&(idx, pk_char)) = chars.peek() {
+                        if pk_char.is_digit(16) || pk_char == '_' {
+                            chars.next();
+                        } else if pk_char == '.' {
+                            let mut lookahead = chars.clone();
+                            lookahead.next();
+                            if let Some(&(_, next_pk_char)) = lookahead.peek() {
+                                if next_pk_char == '.' {
+                                    number_end = idx;
+                                    break;
+                                }
+                            } else if !is_eof {
+                                break;
+                            }
+                            chars.next();
+                        } else {
+                            number_end = idx;
                             break;
                         }
-                        chars.next();
                     }
                     if number_end == 0 && is_eof {
                         number_end = readonly_input.len();
                     }
                     if number_end != 0 {
-                        number_token(&readonly_input[..number_end], 0..number_end, tokens)?;
+                        number_token(
+                            &readonly_input[..number_end],
+                            base_offset..(base_offset + number_end),
+                            tokens,
+                        )?;
                         last_consumed_byte_index = number_end;
                         break;
                     } else {
@@ -600,7 +640,6 @@ fn process_chunk(
                     char.len_utf8(),
                     tokens,
                 ),
-                '.' => push_single(Token::Dot, base_offset + idx, 0, char.len_utf8(), tokens),
                 ',' => push_single(Token::Comma, base_offset + idx, 0, char.len_utf8(), tokens),
                 '+' => push_single(Token::Plus, base_offset + idx, 0, char.len_utf8(), tokens),
                 '-' => push_single(Token::Minus, base_offset + idx, 0, char.len_utf8(), tokens),
@@ -632,7 +671,15 @@ fn process_chunk(
                         last_consumed_byte_index = 2;
                     }
                     (':', _) => {
-                        push_single(Token::Colon, base_offset + idx, 0, 1, tokens);
+                        push_single(Token::Colon, base_offset + idx, 0, 2, tokens);
+                        last_consumed_byte_index = 1;
+                    }
+                    ('.', '.') => {
+                        push_single(Token::RangeDots, base_offset + idx, 0, 2, tokens);
+                        last_consumed_byte_index = 2;
+                    }
+                    ('.', _) => {
+                        push_single(Token::Dot, base_offset + idx, 0, 1, tokens);
                         last_consumed_byte_index = 1;
                     }
                     ('<', '<') => {
