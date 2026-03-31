@@ -180,7 +180,7 @@ loop_cond0:
 then1:
 	br label %loop_body0_exit
 endif1:
-	%tmp9 = call i32 @stdlib.rand()
+	%tmp9 = load i32, i32* %v1
 	%tmp10 = sext i32 %tmp9 to i64
 	call void @console.println_i64(i64 %tmp10)
 	%tmp11 = load i32, i32* %v1

@@ -145,7 +145,7 @@ pub enum UnaryOp {
 #[inline]
 fn precedence(token: &Token) -> u8 {
     match token {
-        Token::Equal | Token::RangeDots => 1,
+        Token::Equal | Token::RangeDots | Token::RangeDotsInclusive => 1,
         Token::LogicOr => 2,
         Token::LogicAnd => 3,
         Token::BinaryOr => 4,
@@ -260,10 +260,10 @@ impl<'a> ExpressionParser<'a> {
         let token = self.advance().token.clone();
 
         match token {
-            Token::Integer(v) => Ok(Expr::Integer(v)),
+            Token::Integer(sym) => Ok(Expr::Integer(sym.to_integer(self.symbol_table))),
             Token::Char(c) => Ok(Expr::Integer(c as i128)),
-            Token::Decimal(v) => Ok(Expr::Decimal(v)),
-            Token::String(sym) => Ok(Expr::StringConst(self.symbol_table.get(&sym).to_string())),
+            Token::Decimal(sym) => Ok(Expr::Decimal(sym.to_decimal(self.symbol_table))),
+            Token::String(sym) => Ok(Expr::StringConst(sym.to_string(self.symbol_table))),
             Token::Name(sym) => Ok(Expr::Name(self.symbol_table.get(&sym).to_string())),
 
             Token::KeywordTrue => Ok(Expr::Boolean(true)),
@@ -348,7 +348,8 @@ impl<'a> ExpressionParser<'a> {
             Token::Dot => self.parse_member_access(left),
             Token::DoubleColon => self.parse_static_access_or_generic_call(left),
             Token::KeywordAs => self.parse_cast(left),
-            Token::RangeDots => self.parse_range(left),
+            Token::RangeDots => self.parse_range(left, false),
+            Token::RangeDotsInclusive => self.parse_range(left, true),
 
             _ => Err((
                 self.cursor..self.cursor + 1,
@@ -398,10 +399,14 @@ impl<'a> ExpressionParser<'a> {
         self.consume(&Token::KeywordAs)?;
         Ok(Expr::Cast(Box::new(left), Box::new(self.parse_type()?)))
     }
-    fn parse_range(&mut self, left: Expr) -> Result<Expr, (std::ops::Range<usize>, ParserError)> {
+    fn parse_range(
+        &mut self,
+        left: Expr,
+        inclusive: bool,
+    ) -> Result<Expr, (std::ops::Range<usize>, ParserError)> {
         self.advance(); // ..
         let e = self.parse_expression()?;
-        Ok(Expr::Range(Box::new(left), Box::new(e), false))
+        Ok(Expr::Range(Box::new(left), Box::new(e), inclusive))
     }
 
     fn parse_static_access_or_generic_call(&mut self, left: Expr) -> ParserResult<Expr> {
@@ -545,7 +550,7 @@ impl<'a> ExpressionParser<'a> {
         self.consume(&Token::SemiColon)?;
 
         let size = match &self.advance().token {
-            Token::Integer(n) => *n,
+            Token::Integer(n) => n.to_integer(self.symbol_table),
             _ => {
                 return Err((
                     self.cursor..self.cursor + 1,
@@ -554,7 +559,10 @@ impl<'a> ExpressionParser<'a> {
             }
         };
         self.consume(&Token::RSquareBrace)?;
-        Ok(ParserType::ConstantSizeArray(Box::new(elem_type), size))
+        Ok(ParserType::ConstantSizeArray(
+            Box::new(elem_type),
+            size as i128,
+        ))
     }
 
     fn parse_named_or_generic_type(&mut self) -> ParserResult<ParserType> {

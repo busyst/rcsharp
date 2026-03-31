@@ -25,6 +25,7 @@ pub enum Token {
     Comma,
     Dot,
     RangeDots,
+    RangeDotsInclusive,
     Hint,
 
     Equal,
@@ -79,12 +80,12 @@ pub enum Token {
     KeywordFalse,
     KeywordNull,
 
-    DummyToken,
     Name(Symbol),
-    Integer(i128),
-    Decimal(f64),
+    Integer(Symbol),
+    Decimal(Symbol),
     String(Symbol),
     Char(char),
+    DummyToken,
 }
 const KEYWORDS_TO_TOKENS: phf::Map<&'static str, Token> = phf::phf_map!(
     "pub"       => Token::KeywordPub,
@@ -117,6 +118,37 @@ const KEYWORDS_TO_TOKENS: phf::Map<&'static str, Token> = phf::phf_map!(
     "false"     => Token::KeywordFalse,
     "null"      => Token::KeywordNull,
 );
+const SINGLE_CHAR_TO_TOKEN: phf::Map<char, Token> = phf::phf_map!(
+    '#' => Token::Hint,
+    '{' => Token::LBrace, '}' => Token::RBrace,
+    '[' => Token::LSquareBrace, ']' => Token::RSquareBrace,
+    '(' => Token::LParen, ')' => Token::RParen,
+    ';' => Token::SemiColon, ',' => Token::Comma,
+    '+' => Token::Plus, '-' => Token::Minus,
+    '*' => Token::Multiply, '/' => Token::Divide,
+    '%' => Token::Modulo, '^' => Token::BinaryXor,
+    ':' => Token::Colon, '<' => Token::LogicLess,
+    '>' => Token::LogicGreater, '=' => Token::Equal,
+    '!' => Token::LogicNot, '|' => Token::BinaryOr,
+    '&' => Token::BinaryAnd, '.' => Token::Dot,
+);
+
+const DOUBLE_CHAR_TO_TOKEN: phf::Map<(char, char), Token> = phf::phf_map!(
+    (':', ':') => Token::DoubleColon,
+    ('<', '<') => Token::BinaryShiftL,
+    ('<', '=') => Token::LogicLessEqual,
+    ('>', '>') => Token::BinaryShiftR,
+    ('>', '=') => Token::LogicGreaterEqual,
+    ('=', '=') => Token::LogicEqual,
+    ('!', '=') => Token::LogicNotEqual,
+    ('|', '|') => Token::LogicOr,
+    ('&', '&') => Token::LogicAnd,
+    ('.', '.') => Token::RangeDots,
+);
+
+const TRIPLE_CHAR_TO_TOKEN: phf::Map<(char, char, char), Token> = phf::phf_map!(
+    ('.', '.', '=') => Token::RangeDotsInclusive,
+);
 const ALLOWED_FILE_SIZE: u64 = 1024 * 1024 * 16; // 16 MB
 #[derive(Debug)]
 pub enum LexerError {
@@ -132,9 +164,40 @@ pub enum LexerError {
     UnexpectedCharacter(Span),
 }
 pub type LexerResult<T> = Result<T, LexerError>;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Symbol(usize);
+impl Symbol {
+    pub fn to_integer(self, symbol_table: &LexerSymbolTable) -> i128 {
+        let s = symbol_table.get(&self);
+        let (is_neg, s_without_sign) = if let Some(stripped) = s.strip_prefix('-') {
+            (true, stripped)
+        } else {
+            (false, s)
+        };
+        let (radix, digits) = if let Some(stripped) = s_without_sign.strip_prefix("0x") {
+            (16, stripped)
+        } else if let Some(stripped) = s_without_sign.strip_prefix("0b") {
+            (2, stripped)
+        } else if let Some(stripped) = s_without_sign.strip_prefix("0o") {
+            (8, stripped)
+        } else {
+            (10, s_without_sign)
+        };
+        let abs_val = u128::from_str_radix(digits, radix).unwrap();
+        let val = if is_neg {
+            (abs_val as i128).wrapping_neg()
+        } else {
+            abs_val as i128
+        };
+        val
+    }
+    pub fn to_decimal(self, symbol_table: &LexerSymbolTable) -> f64 {
+        symbol_table.get(&self).parse::<f64>().unwrap()
+    }
+    pub fn to_string(self, symbol_table: &LexerSymbolTable) -> String {
+        symbol_table.get(&self).to_string()
+    }
+}
 pub struct LexerSymbolTable {
     pub strings: Vec<String>,
     indices: HashMap<String, usize>,
@@ -198,7 +261,6 @@ pub fn lex_text(
 }
 #[allow(dead_code)]
 fn debug_lex_emit(tokens: &Vec<TokenData>, symbol_table: &LexerSymbolTable) {
-    // Just for debug safety, panic less often
     if let Ok(mut file) = std::fs::OpenOptions::new()
         .create(true)
         .truncate(true)
@@ -214,8 +276,12 @@ fn debug_lex_emit(tokens: &Vec<TokenData>, symbol_table: &LexerSymbolTable) {
                 Token::String(symbol) => {
                     str.push_str(&format!("\"{}\"", symbol_table.strings[symbol.0]));
                 }
-                Token::Integer(val) => str.push_str(&val.to_string()),
-                Token::Decimal(val) => str.push_str(&val.to_string()),
+                Token::Integer(symbol) => {
+                    str.push_str(&format!("\"{}\"", symbol_table.strings[symbol.0]));
+                }
+                Token::Decimal(symbol) => {
+                    str.push_str(&format!("\"{}\"", symbol_table.strings[symbol.0]));
+                }
                 Token::Hint => str.push_str("#"),
                 Token::Comma => str.push_str(", "),
                 Token::Dot => str.push_str("."),
@@ -351,448 +417,231 @@ fn process_chunk(
 ) -> LexerResult<()> {
     let readonly_input = input.trim_start();
     if readonly_input.is_empty() {
-        *input = String::new();
+        if is_eof {
+            input.clear();
+        }
         return Ok(());
     }
+
     let base_offset = global_offset + (input.len() - readonly_input.len());
+    let mut consumed = 0;
+    let first = readonly_input.chars().next().unwrap();
 
-    let mut last_consumed_byte_index = 0;
-    let mut chars = readonly_input.char_indices().peekable();
-
-    while let Some((idx, char)) = chars.next() {
-        if char.is_whitespace() {
-            continue;
+    if first.is_alphabetic() || first == '_' {
+        let mut end = 0;
+        for (i, c) in readonly_input.char_indices() {
+            if !c.is_alphanumeric() && c != '_' {
+                end = i;
+                break;
+            }
         }
-        if char.is_alphabetic() || char == '_' {
-            let mut name_end = 0;
-            while let Some((idx, char)) = chars.peek() {
-                if !(char.is_alphabetic() || char.is_digit(10) || *char == '_') {
-                    name_end = *idx;
-                    break;
-                }
-                chars.next();
+        if end == 0 {
+            end = readonly_input.len();
+            if !is_eof {
+                return Ok(());
             }
-            if name_end == 0 && is_eof {
-                name_end = readonly_input.len();
-            }
-            if name_end != 0 {
-                identifier_token(
-                    &readonly_input[..name_end],
-                    base_offset..(base_offset + name_end), // was 0..name_end
-                    tokens,
-                    symbols,
-                );
-                last_consumed_byte_index = name_end;
-                break;
-            } else {
-                break;
-            }
-        } else if char.is_digit(10) {
-            let mut number_end = 0;
-            if let Some(&(_pk_idx, pk_char)) = chars.peek() {
-                if matches!(pk_char, 'x' | 'X' | 'b' | 'B' | 'o' | 'O') {
-                    chars.next();
-                }
-            } else if !is_eof {
-                break;
-            }
-
-            while let Some(&(idx, pk_char)) = chars.peek() {
-                if pk_char.is_digit(16) || pk_char == '_' {
-                    chars.next();
-                } else if pk_char == '.' {
-                    let mut lookahead = chars.clone();
-                    lookahead.next();
-                    if let Some(&(_, next_pk_char)) = lookahead.peek() {
-                        if next_pk_char == '.' {
-                            number_end = idx;
-                            break;
-                        }
-                    } else if !is_eof {
-                        break;
-                    }
-                    chars.next();
-                } else {
-                    number_end = idx;
-                    break;
-                }
-            }
-            if number_end == 0 && is_eof {
-                number_end = readonly_input.len();
-            }
-            if number_end != 0 {
-                number_token(
-                    &readonly_input[..number_end],
-                    base_offset..(base_offset + number_end),
-                    tokens,
-                )?;
-                last_consumed_byte_index = number_end;
-                break;
-            } else {
-                break;
-            }
-        } else if char == '-' {
-            if let Some(&(_pk_idx, pk_char)) = chars.peek() {
-                if pk_char.is_digit(10) {
-                    let mut number_end = 0;
-                    if let Some(&(_pk_idx, pk_char)) = chars.peek() {
-                        if matches!(pk_char, 'x' | 'X' | 'b' | 'B' | 'o' | 'O') {
-                            chars.next();
-                        }
-                    } else if !is_eof {
-                        break;
-                    }
-
-                    while let Some(&(idx, pk_char)) = chars.peek() {
-                        if pk_char.is_digit(16) || pk_char == '_' {
-                            chars.next();
-                        } else if pk_char == '.' {
-                            let mut lookahead = chars.clone();
-                            lookahead.next();
-                            if let Some(&(_, next_pk_char)) = lookahead.peek() {
-                                if next_pk_char == '.' {
-                                    number_end = idx;
-                                    break;
-                                }
-                            } else if !is_eof {
-                                break;
-                            }
-                            chars.next();
-                        } else {
-                            number_end = idx;
-                            break;
-                        }
-                    }
-                    if number_end == 0 && is_eof {
-                        number_end = readonly_input.len();
-                    }
-                    if number_end != 0 {
-                        number_token(
-                            &readonly_input[..number_end],
-                            base_offset..(base_offset + number_end),
-                            tokens,
-                        )?;
-                        last_consumed_byte_index = number_end;
-                        break;
-                    } else {
-                        break;
-                    }
-                }
-            } else if !is_eof {
-                break;
-            }
-            push_single(Token::Minus, base_offset + idx, 0, char.len_utf8(), tokens);
-            last_consumed_byte_index = char.len_utf8();
-            break;
-        } else if char == '/' {
-            let pk = chars.peek();
-            if pk.is_none() {
-                if is_eof {
-                    tokens.push(TokenData {
-                        token: Token::Divide,
-                        span: 0..char.len_utf8(),
-                    });
-                    last_consumed_byte_index = char.len_utf8();
-                }
-                break;
-            }
-            let pk = pk.unwrap();
-            match pk.1 {
-                '*' => {
-                    chars.next();
-                    let mut multi_line_comment_end = 0;
-                    let mut current_char = (idx, char);
-                    while let Some((idx, char)) = chars.peek() {
-                        if *char == '/' {
-                            if current_char.1 == '*' {
-                                multi_line_comment_end = *idx + 1;
-                                break;
-                            }
-                        }
-                        current_char = chars.next().unwrap();
-                    }
-                    if multi_line_comment_end != 0 {
-                        last_consumed_byte_index = multi_line_comment_end;
-                        break;
-                    } else if is_eof {
-                        last_consumed_byte_index = readonly_input.len();
-                        break;
-                    } else {
-                        break;
-                    }
-                }
-                '/' => {
-                    chars.next();
-                    let mut single_line_comment_end = 0;
-                    while let Some((idx, char)) = chars.peek() {
-                        if *char == '\n' {
-                            single_line_comment_end = *idx + 1;
-                            break;
-                        }
-                        chars.next();
-                    }
-                    if single_line_comment_end != 0 {
-                        last_consumed_byte_index = single_line_comment_end;
-                        break;
-                    } else if is_eof {
-                        last_consumed_byte_index = readonly_input.len();
-                        break;
-                    } else {
-                        break;
-                    }
-                }
-                _ => {
-                    tokens.push(TokenData {
-                        token: Token::Divide,
-                        span: 0..char.len_utf8(),
-                    });
-                    last_consumed_byte_index = char.len_utf8();
-                    break;
-                }
-            }
-        } else if char == '"' {
-            let mut string_end = 0;
-            let mut current_char = (idx, char);
-            while let Some((idx, char)) = chars.peek() {
-                if *char == '"' {
-                    if current_char.1 != '\\' {
-                        string_end = *idx + 1;
-                        break;
-                    }
-                }
-                current_char = chars.next().unwrap();
-            }
-            if string_end == 0 && is_eof {
-                return Err(LexerError::UnclosedString(
-                    base_offset..(base_offset + readonly_input.len()),
-                ));
-            }
-            if string_end != 0 {
-                string_token(
-                    &readonly_input[1..string_end - 1],
-                    (base_offset + 1)..(base_offset + string_end - 1),
-                    tokens,
-                    symbols,
-                );
-                last_consumed_byte_index = string_end;
-                break;
-            } else {
-                break;
-            }
-        } else if char == '\'' {
-            let mut char_end = 0;
-            let mut current_char = (idx, char);
-            while let Some((idx, char)) = chars.peek() {
-                if *char == '\'' {
-                    if current_char.1 != '\\' {
-                        char_end = *idx + 1;
-                        break;
-                    }
-                }
-                if current_char.1 == '\\' {
-                    current_char = chars.next().unwrap();
-                    current_char.1 = '\0';
-                } else {
-                    current_char = chars.next().unwrap();
-                }
-            }
-            if char_end == 0 && is_eof {
-                return Err(LexerError::UnclosedChar(0..readonly_input.len()));
-            }
-            if char_end != 0 {
-                char_token(
-                    &readonly_input[1..char_end - 1],
-                    (base_offset + 1)..(base_offset + char_end - 1),
-                    tokens,
-                    symbols,
-                )?;
-                last_consumed_byte_index = char_end;
-                break;
-            } else {
-                break;
-            }
+        }
+        identifier_token(
+            &readonly_input[..end],
+            base_offset..base_offset + end,
+            tokens,
+            symbols,
+        );
+        consumed = end;
+    } else if first.is_ascii_digit()
+        || (first == '-'
+            && readonly_input
+                .chars()
+                .nth(1)
+                .map_or(false, |c| c.is_ascii_digit()))
+    {
+        let n = parse_number(readonly_input, is_eof, base_offset, tokens, symbols)?;
+        if n == 0 {
+            return Ok(());
+        }
+        consumed = n;
+    } else if readonly_input.starts_with("/*") {
+        if let Some(pos) = readonly_input.find("*/") {
+            consumed = pos + 2;
         } else {
-            let t = tokens.len();
-            match char {
-                '#' => push_single(Token::Hint, base_offset + idx, 0, char.len_utf8(), tokens),
-                '{' => push_single(Token::LBrace, base_offset + idx, 0, char.len_utf8(), tokens),
-                '}' => push_single(Token::RBrace, base_offset + idx, 0, char.len_utf8(), tokens),
-                '[' => push_single(
-                    Token::LSquareBrace,
-                    base_offset + idx,
-                    0,
-                    char.len_utf8(),
-                    tokens,
-                ),
-                ']' => push_single(
-                    Token::RSquareBrace,
-                    base_offset + idx,
-                    0,
-                    char.len_utf8(),
-                    tokens,
-                ),
-                '(' => push_single(Token::LParen, base_offset + idx, 0, char.len_utf8(), tokens),
-                ')' => push_single(Token::RParen, base_offset + idx, 0, char.len_utf8(), tokens),
-                ';' => push_single(
-                    Token::SemiColon,
-                    base_offset + idx,
-                    0,
-                    char.len_utf8(),
-                    tokens,
-                ),
-                ',' => push_single(Token::Comma, base_offset + idx, 0, char.len_utf8(), tokens),
-                '+' => push_single(Token::Plus, base_offset + idx, 0, char.len_utf8(), tokens),
-                '-' => push_single(Token::Minus, base_offset + idx, 0, char.len_utf8(), tokens),
-                '*' => push_single(
-                    Token::Multiply,
-                    base_offset + idx,
-                    0,
-                    char.len_utf8(),
-                    tokens,
-                ),
-                '%' => push_single(Token::Modulo, base_offset + idx, 0, char.len_utf8(), tokens),
-                '^' => push_single(
-                    Token::BinaryXor,
-                    base_offset + idx,
-                    0,
-                    char.len_utf8(),
-                    tokens,
-                ),
-                _ => {}
-            };
-            if tokens.len() != t {
-                last_consumed_byte_index = char.len_utf8();
-                break;
-            }
-            if let Some(&(_pk_idx, pk_char)) = chars.peek() {
-                match (char, pk_char) {
-                    (':', ':') => {
-                        push_single(Token::DoubleColon, base_offset + idx, 0, 2, tokens);
-                        last_consumed_byte_index = 2;
-                    }
-                    (':', _) => {
-                        push_single(Token::Colon, base_offset + idx, 0, 2, tokens);
-                        last_consumed_byte_index = 1;
-                    }
-                    ('.', '.') => {
-                        push_single(Token::RangeDots, base_offset + idx, 0, 2, tokens);
-                        last_consumed_byte_index = 2;
-                    }
-                    ('.', _) => {
-                        push_single(Token::Dot, base_offset + idx, 0, 1, tokens);
-                        last_consumed_byte_index = 1;
-                    }
-                    ('<', '<') => {
-                        push_single(Token::BinaryShiftL, base_offset + idx, 0, 2, tokens);
-                        last_consumed_byte_index = 2;
-                    }
-                    ('<', '=') => {
-                        push_single(Token::LogicLessEqual, base_offset + idx, 0, 2, tokens);
-                        last_consumed_byte_index = 2;
-                    }
-                    ('<', _) => {
-                        push_single(Token::LogicLess, base_offset + idx, 0, 1, tokens);
-                        last_consumed_byte_index = 1;
-                    }
-                    ('>', '>') => {
-                        push_single(Token::BinaryShiftR, base_offset + idx, 0, 2, tokens);
-                        last_consumed_byte_index = 2;
-                    }
-                    ('>', '=') => {
-                        push_single(Token::LogicGreaterEqual, base_offset + idx, 0, 2, tokens);
-                        last_consumed_byte_index = 2;
-                    }
-                    ('>', _) => {
-                        push_single(Token::LogicGreater, base_offset + idx, 0, 1, tokens);
-                        last_consumed_byte_index = 1;
-                    }
-                    ('=', '=') => {
-                        push_single(Token::LogicEqual, base_offset + idx, 0, 2, tokens);
-                        last_consumed_byte_index = 2;
-                    }
-                    ('=', _) => {
-                        push_single(Token::Equal, base_offset + idx, 0, 1, tokens);
-                        last_consumed_byte_index = 1;
-                    }
-                    ('!', '=') => {
-                        push_single(Token::LogicNotEqual, base_offset + idx, 0, 2, tokens);
-                        last_consumed_byte_index = 2;
-                    }
-                    ('!', _) => {
-                        push_single(Token::LogicNot, base_offset + idx, 0, 1, tokens);
-                        last_consumed_byte_index = 1;
-                    }
-                    ('&', '&') => {
-                        push_single(Token::LogicAnd, base_offset + idx, 0, 2, tokens);
-                        last_consumed_byte_index = 2;
-                    }
-                    ('&', _) => {
-                        push_single(Token::BinaryAnd, base_offset + idx, 0, 1, tokens);
-                        last_consumed_byte_index = 1;
-                    }
-                    ('|', '|') => {
-                        push_single(Token::LogicOr, base_offset + idx, 0, 2, tokens);
-                        last_consumed_byte_index = 2;
-                    }
-                    ('|', _) => {
-                        push_single(Token::BinaryOr, base_offset + idx, 0, 1, tokens);
-                        last_consumed_byte_index = 1;
-                    }
-                    _ => {
-                        return Err(LexerError::UnexpectedCharacter(
-                            base_offset + idx..base_offset + idx + 1,
-                        ));
-                    }
-                }
-            } else if is_eof {
-                match char {
-                    ':' => {
-                        push_single(Token::Colon, base_offset + idx, 0, 1, tokens);
-                        last_consumed_byte_index = 1;
-                    }
-                    '<' => {
-                        push_single(Token::LogicLess, base_offset + idx, 0, 1, tokens);
-                        last_consumed_byte_index = 1;
-                    }
-                    '>' => {
-                        push_single(Token::LogicGreater, base_offset + idx, 0, 1, tokens);
-                        last_consumed_byte_index = 1;
-                    }
-                    '=' => {
-                        push_single(Token::Equal, base_offset + idx, 0, 1, tokens);
-                        last_consumed_byte_index = 1;
-                    }
-                    '!' => {
-                        push_single(Token::LogicNot, base_offset + idx, 0, 1, tokens);
-                        last_consumed_byte_index = 1;
-                    }
-                    '&' => {
-                        push_single(Token::BinaryAnd, base_offset + idx, 0, 1, tokens);
-                        last_consumed_byte_index = 1;
-                    }
-                    '|' => {
-                        push_single(Token::BinaryOr, base_offset + idx, 0, 1, tokens);
-                        last_consumed_byte_index = 1;
-                    }
-                    _ => {
-                        todo!("{:?}", readonly_input);
-                    }
-                }
+            if is_eof {
+                consumed = readonly_input.len();
             } else {
+                return Ok(());
+            }
+        }
+    } else if readonly_input.starts_with("//") {
+        if let Some(pos) = readonly_input.find('\n') {
+            consumed = pos + 1;
+        } else {
+            if is_eof {
+                consumed = readonly_input.len();
+            } else {
+                return Ok(());
+            }
+        }
+    } else if first == '"' {
+        let mut end = 0;
+        let mut escaped = false;
+        for (i, c) in readonly_input.char_indices().skip(1) {
+            if escaped {
+                escaped = false;
+            } else if c == '\\' {
+                escaped = true;
+            } else if c == '"' {
+                end = i + 1;
                 break;
             }
-            if last_consumed_byte_index != 0 {
+        }
+        if end == 0 {
+            if is_eof {
+                return Err(LexerError::UnclosedString(
+                    base_offset..base_offset + readonly_input.len(),
+                ));
+            } else {
+                return Ok(());
+            }
+        }
+        string_token(
+            &readonly_input[1..end - 1],
+            base_offset + 1..base_offset + end - 1,
+            tokens,
+            symbols,
+        );
+        consumed = end;
+    } else if first == '\'' {
+        let mut end = 0;
+        let mut escaped = false;
+        for (i, c) in readonly_input.char_indices().skip(1) {
+            if escaped {
+                escaped = false;
+            } else if c == '\\' {
+                escaped = true;
+            } else if c == '\'' {
+                end = i + 1;
                 break;
             }
+        }
+        if end == 0 {
+            if is_eof {
+                return Err(LexerError::UnclosedChar(
+                    base_offset..base_offset + readonly_input.len(),
+                ));
+            } else {
+                return Ok(());
+            }
+        }
+        char_token(
+            &readonly_input[1..end - 1],
+            base_offset + 1..base_offset + end - 1,
+            tokens,
+            symbols,
+        )?;
+        consumed = end;
+    } else {
+        if !is_eof && readonly_input.len() < 3 {
+            return Ok(());
+        }
+        let mut matched = false;
+        if readonly_input.len() >= 3 {
+            let mut chars = readonly_input.chars();
+            let c1 = chars.next().unwrap();
+            let c2 = chars.next().unwrap();
+            let c3 = chars.next().unwrap();
+            if let Some(tok) = TRIPLE_CHAR_TO_TOKEN.get(&(c1, c2, c3)) {
+                let len = c1.len_utf8() + c2.len_utf8() + c3.len_utf8();
+                push_single(tok.clone(), base_offset, 0, len, tokens);
+                consumed = len;
+                matched = true;
+            }
+        }
+        if !matched && readonly_input.len() >= 2 {
+            let mut chars = readonly_input.chars();
+            let c1 = chars.next().unwrap();
+            let c2 = chars.next().unwrap();
+            if let Some(tok) = DOUBLE_CHAR_TO_TOKEN.get(&(c1, c2)) {
+                let len = c1.len_utf8() + c2.len_utf8();
+                push_single(tok.clone(), base_offset, 0, len, tokens);
+                consumed = len;
+                matched = true;
+            }
+        }
+        if !matched {
+            let c1 = readonly_input.chars().next().unwrap();
+            if let Some(tok) = SINGLE_CHAR_TO_TOKEN.get(&c1) {
+                let len = c1.len_utf8();
+                push_single(tok.clone(), base_offset, 0, len, tokens);
+                consumed = len;
+                matched = true;
+            }
+        }
+        if !matched {
+            let c1 = readonly_input.chars().next().unwrap();
+            return Err(LexerError::UnexpectedCharacter(
+                base_offset..base_offset + c1.len_utf8(),
+            ));
         }
     }
-    let fin = (input.len() - readonly_input.len()) + last_consumed_byte_index;
+
+    let fin = (input.len() - readonly_input.len()) + consumed;
     if fin > 0 {
         input.drain(..fin);
     }
     Ok(())
 }
+fn parse_number(
+    readonly_input: &str,
+    is_eof: bool,
+    base_offset: usize,
+    tokens: &mut Vec<TokenData>,
+    symbols: &mut LexerSymbolTable,
+) -> LexerResult<usize> {
+    let mut chars = readonly_input.char_indices().peekable();
+    let first = chars.next().unwrap().1;
+    if first == '-' {
+        chars.next();
+    }
 
+    while let Some(&(_, c)) = chars.peek() {
+        if c.is_ascii_alphanumeric() || c == '_' {
+            chars.next();
+        } else if c == '.' {
+            let mut lookahead = chars.clone();
+            lookahead.next();
+            if let Some(&(_, next_c)) = lookahead.peek() {
+                if next_c == '.' {
+                    break;
+                } else if next_c.is_ascii_digit() {
+                    chars.next();
+                } else {
+                    break;
+                }
+            } else if !is_eof {
+                return Ok(0);
+            } else {
+                chars.next();
+            }
+        } else {
+            break;
+        }
+    }
+
+    let end = chars
+        .peek()
+        .map(|&(i, _)| i)
+        .unwrap_or(readonly_input.len());
+    if end == readonly_input.len() && !is_eof {
+        return Ok(0);
+    }
+
+    number_token(
+        &readonly_input[..end],
+        base_offset..base_offset + end,
+        tokens,
+        symbols,
+    )?;
+    Ok(end)
+}
 fn push_single(token: Token, offset: usize, start: usize, len: usize, tokens: &mut Vec<TokenData>) {
     tokens.push(TokenData {
         token,
@@ -814,39 +663,22 @@ pub fn identifier_token(
         span,
     });
 }
-pub fn number_token(number_str: &str, span: Span, tokens: &mut Vec<TokenData>) -> LexerResult<()> {
+pub fn number_token(
+    number_str: &str,
+    span: Span,
+    tokens: &mut Vec<TokenData>,
+    symbols: &mut LexerSymbolTable,
+) -> LexerResult<()> {
     if number_str.contains('.') {
-        let val = number_str
-            .parse::<f64>()
-            .map_err(|_| LexerError::InvalidNumber(number_str.to_string(), span.clone()))?;
+        let s = number_str.replace('_', "");
         tokens.push(TokenData {
-            token: Token::Decimal(val),
+            token: Token::Decimal(symbols.get_or_intern(&s)),
             span,
         });
     } else {
         let s = number_str.replace('_', "");
-        let (is_neg, s_without_sign) = if let Some(stripped) = s.strip_prefix('-') {
-            (true, stripped)
-        } else {
-            (false, s.as_str())
-        };
-        let (radix, digits) = if let Some(stripped) = s_without_sign.strip_prefix("0x") {
-            (16, stripped)
-        } else if let Some(stripped) = s_without_sign.strip_prefix("0b") {
-            (2, stripped)
-        } else if let Some(stripped) = s_without_sign.strip_prefix("0o") {
-            (8, stripped)
-        } else {
-            (10, s_without_sign)
-        };
-        let abs_val = u128::from_str_radix(digits, radix).unwrap();
-        let v = if is_neg {
-            (abs_val as i128).wrapping_neg()
-        } else {
-            abs_val as i128
-        };
         tokens.push(TokenData {
-            token: Token::Integer(v),
+            token: Token::Integer(symbols.get_or_intern(&s)),
             span,
         });
     }
