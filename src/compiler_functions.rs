@@ -11,7 +11,11 @@ use crate::{
     },
     compiler_essentials::{CompilerError, CompilerType, LLVMVal},
 };
-
+pub type CompilerMacros = fn(
+    &ExpressionCompiler,
+    &[Expr],
+    &Expected,
+) -> ExpressionCompileResult<(Expr, Vec<LLVMInstruction>)>;
 pub type CompilerFn = fn(
     &ExpressionCompiler,
     &[Expr],
@@ -656,4 +660,35 @@ fn asm_impl(
         },
         vec![],
     ))
+}
+
+pub const COMPILER_MACROS: &[(&str, CompilerMacros)] = &[("concat", concat_impl_macro)];
+fn concat_impl_macro(
+    compiler: &ExpressionCompiler,
+    given_args: &[Expr],
+    expected: &Expected,
+) -> ExpressionCompileResult<(Expr, Vec<LLVMInstruction>)> {
+    let mut string = String::new();
+    let mut index = 0;
+    let mut exprs = given_args.to_vec();
+    while let Some(x) = exprs.get(index) {
+        match x {
+            Expr::StringConst(x) => string.push_str(x),
+            Expr::Integer(x) => string.push_str(&x.to_string()),
+            Expr::Decimal(x) => string.push_str(&x.to_string()),
+            Expr::MacroCall(callee_expr, args) => {
+                if let Expr::Name(name) = &**callee_expr {
+                    if let Some((_, func_ptr)) =
+                        COMPILER_MACROS.iter().find(|(n, _)| n == &name.as_str())
+                    {
+                        let (exp, mut m_instr) = func_ptr(compiler, args, expected).unwrap();
+                        exprs.insert(index + 1, exp);
+                    }
+                }
+            }
+            _ => unimplemented!(),
+        }
+        index += 1;
+    }
+    Ok((Expr::StringConst(string), vec![]))
 }

@@ -66,140 +66,145 @@ declare dllimport i32 @StretchBlt(i8* %hdcDest, i32 %xDest, i32 %yDest, i32 %wDe
 declare dllimport i32 @TranslateMessage(%struct.window.MSG* %lpMsg)
 
 
-@.str.0 = private unnamed_addr constant [48 x i8] c"Window error: StartError::GetModuleHandleFailed\00"
-@.str.1 = private unnamed_addr constant [42 x i8] c"Failed to load image. not valid .BMP file\00"
-@.str.2 = private unnamed_addr constant [21 x i8] c"BorderlessImageClass\00"
-@.str.3 = private unnamed_addr constant [46 x i8] c"Window error: StartError::RegisterClassFailed\00"
-@.str.4 = private unnamed_addr constant [12 x i8] c"ImageWindow\00"
-@.str.5 = private unnamed_addr constant [45 x i8] c"Window error: StartError::CreateWindowFailed\00"
-@.str.6 = private unnamed_addr constant [14 x i8] c"MyWindowClass\00"
-@.str.7 = private unnamed_addr constant [14 x i8] c"Hello, World!\00"
-@.str.8 = private unnamed_addr constant [37 x i8] c"File not found! While loading Bitmap\00"
-@.str.9 = private unnamed_addr constant [14 x i8] c"vector_test: \00"
-@.str.10 = private unnamed_addr constant [24 x i8] c"vector_test: new failed\00"
-@.str.11 = private unnamed_addr constant [33 x i8] c"vector_test: initial push failed\00"
-@.str.12 = private unnamed_addr constant [36 x i8] c"vector_test: initial content failed\00"
-@.str.13 = private unnamed_addr constant [28 x i8] c"vector_test: realloc failed\00"
-@.str.14 = private unnamed_addr constant [36 x i8] c"vector_test: realloc content failed\00"
-@.str.15 = private unnamed_addr constant [3 x i8] c"AB\00"
-@.str.16 = private unnamed_addr constant [37 x i8] c"vector_test: push_bulk length failed\00"
-@.str.17 = private unnamed_addr constant [38 x i8] c"vector_test: push_bulk content failed\00"
-@.str.18 = private unnamed_addr constant [25 x i8] c"vector_test: free failed\00"
-@.str.19 = private unnamed_addr constant [3 x i8] c"OK\00"
-@.str.20 = private unnamed_addr constant [20 x i8] c"string_utils_test: \00"
-@.str.21 = private unnamed_addr constant [5 x i8] c"test\00"
-@.str.22 = private unnamed_addr constant [36 x i8] c"string_utils_test: c_str_len failed\00"
-@.str.23 = private unnamed_addr alias [1 x i8], [1 x i8]* bitcast (i8* getelementptr inbounds ([48 x i8], [48 x i8]* @.str.0, i64 0, i64 47) to [1 x i8]*)
-@.str.24 = private unnamed_addr constant [42 x i8] c"string_utils_test: c_str_len empty failed\00"
-@.str.25 = private unnamed_addr constant [32 x i8] c"char_utils: charis_digit failed\00"
-@.str.26 = private unnamed_addr constant [28 x i8] c"char_utils: is_alpha failed\00"
-@.str.27 = private unnamed_addr constant [29 x i8] c"char_utils: is_xdigit failed\00"
-@.str.28 = private unnamed_addr constant [3 x i8] c"ac\00"
-@.str.29 = private unnamed_addr constant [2 x i8] c"b\00"
-@.str.30 = private unnamed_addr constant [4 x i8] c"abc\00"
-@.str.31 = private unnamed_addr constant [33 x i8] c"string_utils_test: insert failed\00"
-@.str.32 = private unnamed_addr constant [14 x i8] c"string_test: \00"
-@.str.33 = private unnamed_addr constant [6 x i8] c"hello\00"
-@.str.34 = private unnamed_addr alias [6 x i8], [6 x i8]* bitcast (i8* getelementptr inbounds ([12 x i8], [12 x i8]* @.str.39, i64 0, i64 6) to [6 x i8]*)
-@.str.35 = private unnamed_addr constant [41 x i8] c"string_test: from_c_string length failed\00"
-@.str.36 = private unnamed_addr constant [40 x i8] c"string_test: equal positive case failed\00"
-@.str.37 = private unnamed_addr constant [40 x i8] c"string_test: equal negative case failed\00"
-@.str.38 = private unnamed_addr alias [7 x i8], [7 x i8]* bitcast (i8* getelementptr inbounds ([12 x i8], [12 x i8]* @.str.39, i64 0, i64 5) to [7 x i8]*)
-@.str.39 = private unnamed_addr constant [12 x i8] c"hello world\00"
-@.str.40 = private unnamed_addr constant [34 x i8] c"string_test: concat length failed\00"
-@.str.41 = private unnamed_addr constant [35 x i8] c"string_test: concat content failed\00"
-@.str.42 = private unnamed_addr constant [20 x i8] c"test malloc delta: \00"
-@.str.43 = private unnamed_addr constant [15 x i8] c"process_test: \00"
-@.str.44 = private unnamed_addr constant [49 x i8] c"process_test: get_executable_path returned empty\00"
-@.str.45 = private unnamed_addr constant [53 x i8] c"process_test: get_executable_env_path returned empty\00"
-@.str.46 = private unnamed_addr constant [53 x i8] c"process_test: env path is not shorter than full path\00"
-@.str.47 = private unnamed_addr constant [53 x i8] c"process_test: env path does not end with a backslash\00"
-@.str.48 = private unnamed_addr constant [18 x i8] c"Executable Path: \00"
-@.str.49 = private unnamed_addr constant [19 x i8] c"Environment Path: \00"
-@.str.50 = private unnamed_addr constant [11 x i8] c"mem_test: \00"
-@.str.51 = private unnamed_addr constant [24 x i8] c"mem_test: malloc failed\00"
-@.str.52 = private unnamed_addr constant [35 x i8] c"mem_test: fill verification failed\00"
-@.str.53 = private unnamed_addr constant [40 x i8] c"mem_test: zero_fill verification failed\00"
-@.str.54 = private unnamed_addr constant [33 x i8] c"mem_test: malloc for copy failed\00"
-@.str.55 = private unnamed_addr constant [35 x i8] c"mem_test: copy verification failed\00"
-@.str.56 = private unnamed_addr constant [12 x i8] c"list_test: \00"
-@.str.57 = private unnamed_addr constant [22 x i8] c"list_test: new failed\00"
-@.str.58 = private unnamed_addr constant [41 x i8] c"list_test: length incorrect after extend\00"
-@.str.59 = private unnamed_addr constant [33 x i8] c"list_test: walk length incorrect\00"
-@.str.60 = private unnamed_addr constant [36 x i8] c"list_test: data mismatch for node 1\00"
-@.str.61 = private unnamed_addr constant [36 x i8] c"list_test: data mismatch for node 2\00"
-@.str.62 = private unnamed_addr constant [36 x i8] c"list_test: data mismatch for node 3\00"
-@.str.63 = private unnamed_addr constant [33 x i8] c"list_test: foot pointer mismatch\00"
-@.str.64 = private unnamed_addr constant [23 x i8] c"list_test: free failed\00"
-@.str.65 = private unnamed_addr constant [45 x i8] c"D:\Projects\rcsharp\src_base_structs.rcsharp\00"
-@.str.66 = private unnamed_addr constant [10 x i8] c"fs_test: \00"
-@.str.67 = private unnamed_addr constant [47 x i8] c"The quick brown fox jumps over crazy lost dog.\00"
-@.str.68 = private unnamed_addr constant [9 x i8] c"test.txt\00"
-@.str.69 = private unnamed_addr constant [38 x i8] c"Filesystem test failed, data mismatch\00"
-@.str.70 = private unnamed_addr constant [15 x i8] c"\0Aconsole_test:\00"
-@.str.71 = private unnamed_addr constant [26 x i8] c"--- VISUAL TEST START ---\00"
-@.str.72 = private unnamed_addr constant [22 x i8] c"Printing i64(12345): \00"
-@.str.73 = private unnamed_addr constant [23 x i8] c"Printing i64(-67890): \00"
-@.str.74 = private unnamed_addr constant [18 x i8] c"Printing i64(0): \00"
-@.str.75 = private unnamed_addr constant [27 x i8] c"Printing u64(9876543210): \00"
-@.str.76 = private unnamed_addr constant [24 x i8] c"--- VISUAL TEST END ---\00"
-@.str.77 = private unnamed_addr constant [12 x i8] c"Exception: \00"
-@.str.78 = private unnamed_addr constant [15 x i8] c"Realloc failed\00"
-@.str.79 = private unnamed_addr constant [14 x i8] c"Out of memory\00"
-@.str.80 = private unnamed_addr constant [33 x i8] c"Failed to lock heap for walking.\00"
-@.str.81 = private unnamed_addr constant [17 x i8] c"File not found: \00"
-@.str.82 = private unnamed_addr constant [17 x i8] c"File read failed\00"
-@.str.83 = private unnamed_addr constant [3 x i8] c"0\0A\00"
-@.str.84 = private unnamed_addr constant [26 x i8] c"stdout handle was invalid\00"
+@.str.0 = private unnamed_addr constant [18 x i8] c"very 13gay orgy32\00"
+@.str.1 = private unnamed_addr constant [48 x i8] c"Window error: StartError::GetModuleHandleFailed\00"
+@.str.2 = private unnamed_addr constant [42 x i8] c"Failed to load image. not valid .BMP file\00"
+@.str.3 = private unnamed_addr constant [21 x i8] c"BorderlessImageClass\00"
+@.str.4 = private unnamed_addr constant [46 x i8] c"Window error: StartError::RegisterClassFailed\00"
+@.str.5 = private unnamed_addr constant [12 x i8] c"ImageWindow\00"
+@.str.6 = private unnamed_addr constant [45 x i8] c"Window error: StartError::CreateWindowFailed\00"
+@.str.7 = private unnamed_addr constant [14 x i8] c"MyWindowClass\00"
+@.str.8 = private unnamed_addr constant [14 x i8] c"Hello, World!\00"
+@.str.9 = private unnamed_addr constant [37 x i8] c"File not found! While loading Bitmap\00"
+@.str.10 = private unnamed_addr constant [14 x i8] c"vector_test: \00"
+@.str.11 = private unnamed_addr constant [24 x i8] c"vector_test: new failed\00"
+@.str.12 = private unnamed_addr constant [33 x i8] c"vector_test: initial push failed\00"
+@.str.13 = private unnamed_addr constant [36 x i8] c"vector_test: initial content failed\00"
+@.str.14 = private unnamed_addr constant [28 x i8] c"vector_test: realloc failed\00"
+@.str.15 = private unnamed_addr constant [36 x i8] c"vector_test: realloc content failed\00"
+@.str.16 = private unnamed_addr constant [3 x i8] c"AB\00"
+@.str.17 = private unnamed_addr constant [37 x i8] c"vector_test: push_bulk length failed\00"
+@.str.18 = private unnamed_addr constant [38 x i8] c"vector_test: push_bulk content failed\00"
+@.str.19 = private unnamed_addr constant [25 x i8] c"vector_test: free failed\00"
+@.str.20 = private unnamed_addr constant [3 x i8] c"OK\00"
+@.str.21 = private unnamed_addr constant [20 x i8] c"string_utils_test: \00"
+@.str.22 = private unnamed_addr constant [5 x i8] c"test\00"
+@.str.23 = private unnamed_addr constant [36 x i8] c"string_utils_test: c_str_len failed\00"
+@.str.24 = private unnamed_addr alias [1 x i8], [1 x i8]* bitcast (i8* getelementptr inbounds ([18 x i8], [18 x i8]* @.str.0, i64 0, i64 17) to [1 x i8]*)
+@.str.25 = private unnamed_addr constant [42 x i8] c"string_utils_test: c_str_len empty failed\00"
+@.str.26 = private unnamed_addr constant [32 x i8] c"char_utils: charis_digit failed\00"
+@.str.27 = private unnamed_addr constant [28 x i8] c"char_utils: is_alpha failed\00"
+@.str.28 = private unnamed_addr constant [29 x i8] c"char_utils: is_xdigit failed\00"
+@.str.29 = private unnamed_addr constant [3 x i8] c"ac\00"
+@.str.30 = private unnamed_addr constant [2 x i8] c"b\00"
+@.str.31 = private unnamed_addr constant [4 x i8] c"abc\00"
+@.str.32 = private unnamed_addr constant [33 x i8] c"string_utils_test: insert failed\00"
+@.str.33 = private unnamed_addr constant [14 x i8] c"string_test: \00"
+@.str.34 = private unnamed_addr constant [6 x i8] c"hello\00"
+@.str.35 = private unnamed_addr alias [6 x i8], [6 x i8]* bitcast (i8* getelementptr inbounds ([12 x i8], [12 x i8]* @.str.40, i64 0, i64 6) to [6 x i8]*)
+@.str.36 = private unnamed_addr constant [41 x i8] c"string_test: from_c_string length failed\00"
+@.str.37 = private unnamed_addr constant [40 x i8] c"string_test: equal positive case failed\00"
+@.str.38 = private unnamed_addr constant [40 x i8] c"string_test: equal negative case failed\00"
+@.str.39 = private unnamed_addr alias [7 x i8], [7 x i8]* bitcast (i8* getelementptr inbounds ([12 x i8], [12 x i8]* @.str.40, i64 0, i64 5) to [7 x i8]*)
+@.str.40 = private unnamed_addr constant [12 x i8] c"hello world\00"
+@.str.41 = private unnamed_addr constant [34 x i8] c"string_test: concat length failed\00"
+@.str.42 = private unnamed_addr constant [35 x i8] c"string_test: concat content failed\00"
+@.str.43 = private unnamed_addr constant [20 x i8] c"test malloc delta: \00"
+@.str.44 = private unnamed_addr constant [15 x i8] c"process_test: \00"
+@.str.45 = private unnamed_addr constant [49 x i8] c"process_test: get_executable_path returned empty\00"
+@.str.46 = private unnamed_addr constant [53 x i8] c"process_test: get_executable_env_path returned empty\00"
+@.str.47 = private unnamed_addr constant [53 x i8] c"process_test: env path is not shorter than full path\00"
+@.str.48 = private unnamed_addr constant [53 x i8] c"process_test: env path does not end with a backslash\00"
+@.str.49 = private unnamed_addr constant [18 x i8] c"Executable Path: \00"
+@.str.50 = private unnamed_addr constant [19 x i8] c"Environment Path: \00"
+@.str.51 = private unnamed_addr constant [11 x i8] c"mem_test: \00"
+@.str.52 = private unnamed_addr constant [24 x i8] c"mem_test: malloc failed\00"
+@.str.53 = private unnamed_addr constant [35 x i8] c"mem_test: fill verification failed\00"
+@.str.54 = private unnamed_addr constant [40 x i8] c"mem_test: zero_fill verification failed\00"
+@.str.55 = private unnamed_addr constant [33 x i8] c"mem_test: malloc for copy failed\00"
+@.str.56 = private unnamed_addr constant [35 x i8] c"mem_test: copy verification failed\00"
+@.str.57 = private unnamed_addr constant [12 x i8] c"list_test: \00"
+@.str.58 = private unnamed_addr constant [22 x i8] c"list_test: new failed\00"
+@.str.59 = private unnamed_addr constant [41 x i8] c"list_test: length incorrect after extend\00"
+@.str.60 = private unnamed_addr constant [33 x i8] c"list_test: walk length incorrect\00"
+@.str.61 = private unnamed_addr constant [36 x i8] c"list_test: data mismatch for node 1\00"
+@.str.62 = private unnamed_addr constant [36 x i8] c"list_test: data mismatch for node 2\00"
+@.str.63 = private unnamed_addr constant [36 x i8] c"list_test: data mismatch for node 3\00"
+@.str.64 = private unnamed_addr constant [33 x i8] c"list_test: foot pointer mismatch\00"
+@.str.65 = private unnamed_addr constant [23 x i8] c"list_test: free failed\00"
+@.str.66 = private unnamed_addr constant [45 x i8] c"D:\Projects\rcsharp\src_base_structs.rcsharp\00"
+@.str.67 = private unnamed_addr constant [10 x i8] c"fs_test: \00"
+@.str.68 = private unnamed_addr constant [47 x i8] c"The quick brown fox jumps over crazy lost dog.\00"
+@.str.69 = private unnamed_addr constant [9 x i8] c"test.txt\00"
+@.str.70 = private unnamed_addr constant [38 x i8] c"Filesystem test failed, data mismatch\00"
+@.str.71 = private unnamed_addr constant [15 x i8] c"\0Aconsole_test:\00"
+@.str.72 = private unnamed_addr constant [26 x i8] c"--- VISUAL TEST START ---\00"
+@.str.73 = private unnamed_addr constant [22 x i8] c"Printing i64(12345): \00"
+@.str.74 = private unnamed_addr constant [23 x i8] c"Printing i64(-67890): \00"
+@.str.75 = private unnamed_addr constant [18 x i8] c"Printing i64(0): \00"
+@.str.76 = private unnamed_addr constant [27 x i8] c"Printing u64(9876543210): \00"
+@.str.77 = private unnamed_addr constant [24 x i8] c"--- VISUAL TEST END ---\00"
+@.str.78 = private unnamed_addr constant [12 x i8] c"Exception: \00"
+@.str.79 = private unnamed_addr constant [15 x i8] c"Realloc failed\00"
+@.str.80 = private unnamed_addr constant [14 x i8] c"Out of memory\00"
+@.str.81 = private unnamed_addr constant [33 x i8] c"Failed to lock heap for walking.\00"
+@.str.82 = private unnamed_addr constant [17 x i8] c"File not found: \00"
+@.str.83 = private unnamed_addr constant [17 x i8] c"File read failed\00"
+@.str.84 = private unnamed_addr constant [3 x i8] c"0\0A\00"
+@.str.85 = private unnamed_addr constant [26 x i8] c"stdout handle was invalid\00"
 @yt = internal global [43 x i32] zeroinitializer
 @stdlib.rand_seed = internal global i32 zeroinitializer
 
 define i32 @main(){
-	%v0 = alloca %"struct.Pair<i32, %struct.Pair<i8, %struct.string.String>>"
-	%v1 = alloca i32
-	%tmp0 = getelementptr inbounds [43 x i32], [43 x i32]* @yt, i32 0, i64 42
-	store i32 9999000, i32* %tmp0
-	%tmp1 = call %"struct.Pair<i32, %struct.Pair<i8, %struct.string.String>>" @"ax<i32>"()
-	store %"struct.Pair<i32, %struct.Pair<i8, %struct.string.String>>" %tmp1, %"struct.Pair<i32, %struct.Pair<i8, %struct.string.String>>"* %v0
-	%tmp2 = getelementptr inbounds %"struct.Pair<i32, %struct.Pair<i8, %struct.string.String>>", %"struct.Pair<i32, %struct.Pair<i8, %struct.string.String>>"* %v0, i32 0, i32 1
-	%tmp3 = load i8, i8* %tmp2
-	%tmp4 = sext i8 %tmp3 to i64
-	call void @console.println_i64(i64 %tmp4)
+	%v0 = alloca i8*
+	%v1 = alloca %"struct.Pair<i32, %struct.Pair<i8, %struct.string.String>>"
+	%v2 = alloca i32
+	store i8* @.str.0, i8** %v0
+	%tmp0 = load i8*, i8** %v0
+	call void @console.writeln(i8* %tmp0, i32 17)
+	%tmp1 = getelementptr inbounds [43 x i32], [43 x i32]* @yt, i32 0, i64 42
+	store i32 9999000, i32* %tmp1
+	%tmp2 = call %"struct.Pair<i32, %struct.Pair<i8, %struct.string.String>>" @"ax<i32>"()
+	store %"struct.Pair<i32, %struct.Pair<i8, %struct.string.String>>" %tmp2, %"struct.Pair<i32, %struct.Pair<i8, %struct.string.String>>"* %v1
+	%tmp3 = getelementptr inbounds %"struct.Pair<i32, %struct.Pair<i8, %struct.string.String>>", %"struct.Pair<i32, %struct.Pair<i8, %struct.string.String>>"* %v1, i32 0, i32 1
+	%tmp4 = load i8, i8* %tmp3
+	%tmp5 = sext i8 %tmp4 to i64
+	call void @console.println_i64(i64 %tmp5)
 	call void @console.println_f64(double 0x40DEADDD40000000)
 	call void @console.println_i64(i64 31415)
 	call void @console.println_i64(i64 4674364628954828846)
-	%tmp5 = add i64 4674364628954828846, 123123123123
-	%tmp6 = bitcast i64 %tmp5 to double
-	call void @console.println_f64(double %tmp6)
-	store i32 0, i32* %v1
+	%tmp6 = add i64 4674364628954828846, 123123123123
+	%tmp7 = bitcast i64 %tmp6 to double
+	call void @console.println_f64(double %tmp7)
+	store i32 0, i32* %v2
 	br label %loop_cond0
 loop_cond0:
-	%tmp7 = load i32, i32* %v1
-	%tmp8 = icmp sge i32 %tmp7, 10
-	br i1 %tmp8, label %then1, label %endif1
+	%tmp8 = load i32, i32* %v2
+	%tmp9 = icmp sge i32 %tmp8, 10
+	br i1 %tmp9, label %then1, label %endif1
 then1:
 	br label %loop_body0_exit
 endif1:
-	%tmp9 = load i32, i32* %v1
-	%tmp10 = sext i32 %tmp9 to i64
-	call void @console.println_i64(i64 %tmp10)
-	%tmp11 = load i32, i32* %v1
-	%tmp12 = add i32 %tmp11, 1
-	store i32 %tmp12, i32* %v1
+	%tmp10 = load i32, i32* %v2
+	%tmp11 = sext i32 %tmp10 to i64
+	call void @console.println_i64(i64 %tmp11)
+	%tmp12 = load i32, i32* %v2
+	%tmp13 = add i32 %tmp12, 1
+	store i32 %tmp13, i32* %v2
 	br label %loop_cond0
 loop_body0_exit:
 	call void @basic_functions()
-	%tmp13 = call %"struct.test.QPair<i64, i64>" @xq()
-	%tmp14 = ptrtoint %"struct.Pair<i32, %struct.Pair<i8, %struct.string.String>>" ()* @"ax<i32>" to i64
-	%tmp15 = ptrtoint i32 ()* @main to i64
-	%tmp16 = sub i64 %tmp14, %tmp15
-	%tmp17 = trunc i64 %tmp16 to i32
-	%tmp18 = getelementptr inbounds [43 x i32], [43 x i32]* @yt, i32 0, i64 42
-	%tmp19 = load i32, i32* %tmp18
-	%tmp20 = add i32 %tmp17, %tmp19
+	%tmp14 = call %"struct.test.QPair<i64, i64>" @xq()
+	%tmp15 = ptrtoint %"struct.Pair<i32, %struct.Pair<i8, %struct.string.String>>" ()* @"ax<i32>" to i64
+	%tmp16 = ptrtoint i32 ()* @main to i64
+	%tmp17 = sub i64 %tmp15, %tmp16
+	%tmp18 = trunc i64 %tmp17 to i32
+	%tmp19 = getelementptr inbounds [43 x i32], [43 x i32]* @yt, i32 0, i64 42
+	%tmp20 = load i32, i32* %tmp19
+	%tmp21 = add i32 %tmp18, %tmp20
 ; Variable temp is out.
 ; Variable y is out.
-	ret i32 %tmp20
+	ret i32 %tmp21
 }
 define void @window.start_image_window(i8* %imagePath){
 	%v0 = alloca i32
@@ -211,14 +216,14 @@ define void @window.start_image_window(i8* %imagePath){
 	%tmp1 = icmp eq i8* %tmp0, null
 	br i1 %tmp1, label %then1, label %endif1
 then1:
-	call void @process.throw(i8* @.str.0)
+	call void @process.throw(i8* @.str.1)
 	br label %endif1
 endif1:
 	%tmp2 = call i8* @window.load_bitmap_from_file(i8* %imagePath)
 	%tmp3 = icmp eq i8* %tmp2, null
 	br i1 %tmp3, label %then2, label %endif2
 then2:
-	call void @process.throw(i8* @.str.1)
+	call void @process.throw(i8* @.str.2)
 	br label %endif2
 endif2:
 	store i32 0, i32* %v0
@@ -248,24 +253,24 @@ endif2:
 	%tmp16 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v2, i32 0, i32 9
 	store i8* null, i8** %tmp16
 	%tmp17 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v2, i32 0, i32 10
-	store i8* @.str.2, i8** %tmp17
+	store i8* @.str.3, i8** %tmp17
 	%tmp18 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v2, i32 0, i32 11
 	store i8* null, i8** %tmp18
 	%tmp19 = call i16 @RegisterClassExA(%struct.window.WNDCLASSEXA* %v2)
 	%tmp20 = icmp eq i16 %tmp19, 0
 	br i1 %tmp20, label %then3, label %endif3
 then3:
-	call void @process.throw(i8* @.str.3)
+	call void @process.throw(i8* @.str.4)
 	br label %endif3
 endif3:
 	%tmp21 = or i32 2147483648, 268435456
 	%tmp22 = load i32, i32* %v0
 	%tmp23 = load i32, i32* %v1
-	%tmp24 = call i8* @CreateWindowExA(i32 8, i8* @.str.2, i8* @.str.4, i32 %tmp21, i32 100, i32 100, i32 %tmp22, i32 %tmp23, i8* null, i8* null, i8* %tmp0, i8* null)
+	%tmp24 = call i8* @CreateWindowExA(i32 8, i8* @.str.3, i8* @.str.5, i32 %tmp21, i32 100, i32 100, i32 %tmp22, i32 %tmp23, i8* null, i8* null, i8* %tmp0, i8* null)
 	%tmp25 = icmp eq i8* %tmp24, null
 	br i1 %tmp25, label %then5, label %endif5
 then5:
-	call void @process.throw(i8* @.str.5)
+	call void @process.throw(i8* @.str.6)
 	br label %endif5
 endif5:
 	call i64 @SetWindowLongPtrA(i8* %tmp24, i32 -21, i8* %tmp2)
@@ -296,7 +301,7 @@ define void @window.start(){
 	%tmp1 = icmp eq i8* %tmp0, null
 	br i1 %tmp1, label %then1, label %endif1
 then1:
-	call void @process.throw(i8* @.str.0)
+	call void @process.throw(i8* @.str.1)
 	br label %endif1
 endif1:
 	%tmp2 = or i32 2, 1
@@ -323,21 +328,21 @@ endif1:
 	%tmp14 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v0, i32 0, i32 9
 	store i8* null, i8** %tmp14
 	%tmp15 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v0, i32 0, i32 10
-	store i8* @.str.6, i8** %tmp15
+	store i8* @.str.7, i8** %tmp15
 	%tmp16 = getelementptr inbounds %struct.window.WNDCLASSEXA, %struct.window.WNDCLASSEXA* %v0, i32 0, i32 11
 	store i8* null, i8** %tmp16
 	%tmp17 = call i16 @RegisterClassExA(%struct.window.WNDCLASSEXA* %v0)
 	%tmp18 = icmp eq i16 %tmp17, 0
 	br i1 %tmp18, label %then2, label %endif2
 then2:
-	call void @process.throw(i8* @.str.3)
+	call void @process.throw(i8* @.str.4)
 	br label %endif2
 endif2:
-	%tmp19 = call i8* @CreateWindowExA(i32 0, i8* @.str.6, i8* @.str.7, i32 13565952, i32 2147483648, i32 2147483648, i32 800, i32 600, i8* null, i8* null, i8* %tmp0, i8* null)
+	%tmp19 = call i8* @CreateWindowExA(i32 0, i8* @.str.7, i8* @.str.8, i32 13565952, i32 2147483648, i32 2147483648, i32 800, i32 600, i8* null, i8* null, i8* %tmp0, i8* null)
 	%tmp20 = icmp eq i8* %tmp19, null
 	br i1 %tmp20, label %then4, label %endif4
 then4:
-	call void @process.throw(i8* @.str.5)
+	call void @process.throw(i8* @.str.6)
 	br label %endif4
 endif4:
 	call i32 @ShowWindow(i8* %tmp19, i32 5)
@@ -362,7 +367,7 @@ define i8* @window.load_bitmap_from_file(i8* %path){
 	%tmp1 = xor i1 1, %tmp0
 	br i1 %tmp1, label %then0, label %endif0
 then0:
-	call void @process.throw(i8* @.str.8)
+	call void @process.throw(i8* @.str.9)
 	br label %endif0
 endif0:
 	%tmp2 = call i8* @LoadImageA(i8* null, i8* %path, i32 0, i32 0, i32 0, i32 16)
@@ -498,7 +503,7 @@ func_exit:
 define void @tests.vector_test(){
 entry:
 	%v0 = alloca %"struct.vector.Vec<i8>"
-	call void @console.write(i8* @.str.9, i32 13)
+	call void @console.write(i8* @.str.10, i32 13)
 	%tmp0 = call %"struct.vector.Vec<i8>" @"vector.new<i8>"()
 	store %"struct.vector.Vec<i8>" %tmp0, %"struct.vector.Vec<i8>"* %v0
 	%tmp1 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %v0, i32 0, i32 1
@@ -514,7 +519,7 @@ logic_end_0:
 	%tmp7 = phi i1 [%tmp3, %entry], [%tmp6, %logic_rhs_0]
 	br i1 %tmp7, label %then1, label %endif1
 then1:
-	call void @process.throw(i8* @.str.10)
+	call void @process.throw(i8* @.str.11)
 	br label %endif1
 endif1:
 	call void @"vector.push<i8>"(%"struct.vector.Vec<i8>"* %v0, i8 10)
@@ -534,7 +539,7 @@ logic_end_2:
 	%tmp14 = phi i1 [%tmp10, %endif1], [%tmp13, %logic_rhs_2]
 	br i1 %tmp14, label %then3, label %endif3
 then3:
-	call void @process.throw(i8* @.str.11)
+	call void @process.throw(i8* @.str.12)
 	br label %endif3
 endif3:
 	%tmp15 = load i8*, i8** %v0
@@ -551,7 +556,7 @@ logic_end_4:
 	%tmp22 = phi i1 [%tmp17, %endif3], [%tmp21, %logic_rhs_4]
 	br i1 %tmp22, label %then5, label %endif5
 then5:
-	call void @process.throw(i8* @.str.12)
+	call void @process.throw(i8* @.str.13)
 	br label %endif5
 endif5:
 	call void @"vector.push<i8>"(%"struct.vector.Vec<i8>"* %v0, i8 50)
@@ -568,7 +573,7 @@ logic_end_6:
 	%tmp29 = phi i1 [%tmp25, %endif5], [%tmp28, %logic_rhs_6]
 	br i1 %tmp29, label %then7, label %endif7
 then7:
-	call void @process.throw(i8* @.str.13)
+	call void @process.throw(i8* @.str.14)
 	br label %endif7
 endif7:
 	%tmp30 = load i8*, i8** %v0
@@ -585,16 +590,16 @@ logic_end_8:
 	%tmp37 = phi i1 [%tmp33, %endif7], [%tmp36, %logic_rhs_8]
 	br i1 %tmp37, label %then9, label %endif9
 then9:
-	call void @process.throw(i8* @.str.14)
+	call void @process.throw(i8* @.str.15)
 	br label %endif9
 endif9:
-	call void @"vector.push_bulk<i8>"(%"struct.vector.Vec<i8>"* %v0, i8* @.str.15, i32 2)
+	call void @"vector.push_bulk<i8>"(%"struct.vector.Vec<i8>"* %v0, i8* @.str.16, i32 2)
 	%tmp38 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %v0, i32 0, i32 1
 	%tmp39 = load i32, i32* %tmp38
 	%tmp40 = icmp ne i32 %tmp39, 7
 	br i1 %tmp40, label %then10, label %endif10
 then10:
-	call void @process.throw(i8* @.str.16)
+	call void @process.throw(i8* @.str.17)
 	br label %endif10
 endif10:
 	%tmp41 = load i8*, i8** %v0
@@ -612,7 +617,7 @@ logic_end_11:
 	%tmp49 = phi i1 [%tmp44, %endif10], [%tmp48, %logic_rhs_11]
 	br i1 %tmp49, label %then12, label %endif12
 then12:
-	call void @process.throw(i8* @.str.17)
+	call void @process.throw(i8* @.str.18)
 	br label %endif12
 endif12:
 	call void @"vector.free<i8>"(%"struct.vector.Vec<i8>"* %v0)
@@ -636,10 +641,10 @@ logic_end_14:
 	%tmp59 = phi i1 [%tmp56, %logic_end_13], [%tmp58, %logic_rhs_14]
 	br i1 %tmp59, label %then15, label %endif15
 then15:
-	call void @process.throw(i8* @.str.18)
+	call void @process.throw(i8* @.str.19)
 	br label %endif15
 endif15:
-	call void @console.writeln(i8* @.str.19, i32 2)
+	call void @console.writeln(i8* @.str.20, i32 2)
 ; Variable v is out.
 	ret void
 }
@@ -693,19 +698,19 @@ logic_end_7:
 }
 define void @tests.string_utils_test(){
 	%v0 = alloca i32
-	call void @console.write(i8* @.str.20, i32 19)
-	%tmp0 = call i32 @string_utils.c_str_len(i8* @.str.21)
+	call void @console.write(i8* @.str.21, i32 19)
+	%tmp0 = call i32 @string_utils.c_str_len(i8* @.str.22)
 	%tmp1 = icmp ne i32 %tmp0, 4
 	br i1 %tmp1, label %then0, label %endif0
 then0:
-	call void @process.throw(i8* @.str.22)
+	call void @process.throw(i8* @.str.23)
 	br label %endif0
 endif0:
-	%tmp2 = call i32 @string_utils.c_str_len(i8* @.str.23)
+	%tmp2 = call i32 @string_utils.c_str_len(i8* @.str.24)
 	%tmp3 = icmp ne i32 %tmp2, 0
 	br i1 %tmp3, label %then1, label %endif1
 then1:
-	call void @process.throw(i8* @.str.24)
+	call void @process.throw(i8* @.str.25)
 	br label %endif1
 endif1:
 	br label %inl_entry2
@@ -738,7 +743,7 @@ logic_end_4:
 	%tmp11 = phi i1 [%tmp7, %inl_exit2], [%tmp10, %inl_exit5]
 	br i1 %tmp11, label %then7, label %endif7
 then7:
-	call void @process.throw(i8* @.str.25)
+	call void @process.throw(i8* @.str.26)
 	br label %endif7
 endif7:
 	br label %inl_entry8
@@ -795,7 +800,7 @@ logic_end_12:
 	%tmp27 = phi i1 [%tmp19, %inl_exit8], [%tmp26, %inl_exit13]
 	br i1 %tmp27, label %then17, label %endif17
 then17:
-	call void @process.throw(i8* @.str.26)
+	call void @process.throw(i8* @.str.27)
 	br label %endif17
 endif17:
 	br label %inl_entry19
@@ -880,10 +885,10 @@ logic_end_25:
 	%tmp51 = phi i1 [%tmp39, %inl_exit18], [%tmp50, %inl_exit26]
 	br i1 %tmp51, label %then33, label %endif33
 then33:
-	call void @process.throw(i8* @.str.27)
+	call void @process.throw(i8* @.str.28)
 	br label %endif33
 endif33:
-	%tmp52 = call i8* @string_utils.insert(i8* @.str.28, i8* @.str.29, i32 1)
+	%tmp52 = call i8* @string_utils.insert(i8* @.str.29, i8* @.str.30, i32 1)
 	store i32 0, i32* %v0
 	br label %loop_start34
 loop_start34:
@@ -894,7 +899,7 @@ loop_start34:
 	br i1 %tmp56, label %logic_end_35, label %logic_rhs_35
 logic_rhs_35:
 	%tmp57 = load i32, i32* %v0
-	%tmp58 = getelementptr inbounds i8, i8* @.str.30, i32 %tmp57
+	%tmp58 = getelementptr inbounds i8, i8* @.str.31, i32 %tmp57
 	%tmp59 = load i8, i8* %tmp58
 	%tmp60 = icmp ne i8 %tmp59, 0
 	br label %logic_end_35
@@ -908,12 +913,12 @@ endif36:
 	%tmp63 = getelementptr inbounds i8, i8* %tmp52, i32 %tmp62
 	%tmp64 = load i8, i8* %tmp63
 	%tmp65 = load i32, i32* %v0
-	%tmp66 = getelementptr inbounds i8, i8* @.str.30, i32 %tmp65
+	%tmp66 = getelementptr inbounds i8, i8* @.str.31, i32 %tmp65
 	%tmp67 = load i8, i8* %tmp66
 	%tmp68 = icmp ne i8 %tmp64, %tmp67
 	br i1 %tmp68, label %then37, label %endif37
 then37:
-	call void @process.throw(i8* @.str.31)
+	call void @process.throw(i8* @.str.32)
 	br label %endif37
 endif37:
 	%tmp69 = load i32, i32* %v0
@@ -922,7 +927,7 @@ endif37:
 	br label %loop_start34
 loop_body34_exit:
 	call void @mem.free(i8* %tmp52)
-	call void @console.writeln(i8* @.str.19, i32 2)
+	call void @console.writeln(i8* @.str.20, i32 2)
 	ret void
 }
 define void @tests.string_test(){
@@ -931,51 +936,51 @@ define void @tests.string_test(){
 	%v2 = alloca %struct.string.String
 	%v3 = alloca %struct.string.String
 	%v4 = alloca %struct.string.String
-	call void @console.write(i8* @.str.32, i32 13)
-	%tmp0 = call %struct.string.String @string.from_c_string(i8* @.str.33)
+	call void @console.write(i8* @.str.33, i32 13)
+	%tmp0 = call %struct.string.String @string.from_c_string(i8* @.str.34)
 	store %struct.string.String %tmp0, %struct.string.String* %v0
-	%tmp1 = call %struct.string.String @string.from_c_string(i8* @.str.33)
+	%tmp1 = call %struct.string.String @string.from_c_string(i8* @.str.34)
 	store %struct.string.String %tmp1, %struct.string.String* %v1
-	%tmp2 = call %struct.string.String @string.from_c_string(i8* @.str.34)
+	%tmp2 = call %struct.string.String @string.from_c_string(i8* @.str.35)
 	store %struct.string.String %tmp2, %struct.string.String* %v2
 	%tmp3 = getelementptr inbounds %struct.string.String, %struct.string.String* %v0, i32 0, i32 1
 	%tmp4 = load i32, i32* %tmp3
 	%tmp5 = icmp ne i32 %tmp4, 5
 	br i1 %tmp5, label %then0, label %endif0
 then0:
-	call void @process.throw(i8* @.str.35)
+	call void @process.throw(i8* @.str.36)
 	br label %endif0
 endif0:
 	%tmp6 = call i1 @string.equal(%struct.string.String* %v0, %struct.string.String* %v1)
 	%tmp7 = xor i1 1, %tmp6
 	br i1 %tmp7, label %then1, label %endif1
 then1:
-	call void @process.throw(i8* @.str.36)
+	call void @process.throw(i8* @.str.37)
 	br label %endif1
 endif1:
 	%tmp8 = call i1 @string.equal(%struct.string.String* %v0, %struct.string.String* %v2)
 	br i1 %tmp8, label %then2, label %endif2
 then2:
-	call void @process.throw(i8* @.str.37)
+	call void @process.throw(i8* @.str.38)
 	br label %endif2
 endif2:
-	%tmp9 = call %struct.string.String @string.concat_with_c_string(%struct.string.String* %v0, i8* @.str.38)
+	%tmp9 = call %struct.string.String @string.concat_with_c_string(%struct.string.String* %v0, i8* @.str.39)
 	store %struct.string.String %tmp9, %struct.string.String* %v3
-	%tmp10 = call %struct.string.String @string.from_c_string(i8* @.str.39)
+	%tmp10 = call %struct.string.String @string.from_c_string(i8* @.str.40)
 	store %struct.string.String %tmp10, %struct.string.String* %v4
 	%tmp11 = getelementptr inbounds %struct.string.String, %struct.string.String* %v3, i32 0, i32 1
 	%tmp12 = load i32, i32* %tmp11
 	%tmp13 = icmp ne i32 %tmp12, 11
 	br i1 %tmp13, label %then3, label %endif3
 then3:
-	call void @process.throw(i8* @.str.40)
+	call void @process.throw(i8* @.str.41)
 	br label %endif3
 endif3:
 	%tmp14 = call i1 @string.equal(%struct.string.String* %v3, %struct.string.String* %v4)
 	%tmp15 = xor i1 1, %tmp14
 	br i1 %tmp15, label %then4, label %endif4
 then4:
-	call void @process.throw(i8* @.str.41)
+	call void @process.throw(i8* @.str.42)
 	br label %endif4
 endif4:
 	call void @string.free(%struct.string.String* %v0)
@@ -983,7 +988,7 @@ endif4:
 	call void @string.free(%struct.string.String* %v2)
 	call void @string.free(%struct.string.String* %v3)
 	call void @string.free(%struct.string.String* %v4)
-	call void @console.writeln(i8* @.str.19, i32 2)
+	call void @console.writeln(i8* @.str.20, i32 2)
 ; Variable s5 is out.
 ; Variable s4 is out.
 ; Variable s3 is out.
@@ -1004,14 +1009,14 @@ define void @tests.run(){
 	call void @tests.funny()
 	%tmp1 = call i64 @mem.get_total_allocated_memory_external()
 	%tmp2 = sub i64 %tmp1, %tmp0
-	call void @console.write(i8* @.str.42, i32 19)
+	call void @console.write(i8* @.str.43, i32 19)
 	call void @console.println_i64(i64 %tmp2)
 	ret void
 }
 define void @tests.process_test(){
 	%v0 = alloca %struct.string.String
 	%v1 = alloca %struct.string.String
-	call void @console.write(i8* @.str.43, i32 14)
+	call void @console.write(i8* @.str.44, i32 14)
 	%tmp0 = call %struct.string.String @process.get_executable_path()
 	store %struct.string.String %tmp0, %struct.string.String* %v0
 	%tmp1 = call %struct.string.String @process.get_executable_env_path()
@@ -1021,7 +1026,7 @@ define void @tests.process_test(){
 	%tmp4 = icmp sle i32 %tmp3, 0
 	br i1 %tmp4, label %then0, label %endif0
 then0:
-	call void @process.throw(i8* @.str.44)
+	call void @process.throw(i8* @.str.45)
 	br label %endif0
 endif0:
 	%tmp5 = getelementptr inbounds %struct.string.String, %struct.string.String* %v1, i32 0, i32 1
@@ -1029,7 +1034,7 @@ endif0:
 	%tmp7 = icmp sle i32 %tmp6, 0
 	br i1 %tmp7, label %then1, label %endif1
 then1:
-	call void @process.throw(i8* @.str.45)
+	call void @process.throw(i8* @.str.46)
 	br label %endif1
 endif1:
 	%tmp8 = getelementptr inbounds %struct.string.String, %struct.string.String* %v1, i32 0, i32 1
@@ -1039,7 +1044,7 @@ endif1:
 	%tmp12 = icmp sge i32 %tmp9, %tmp11
 	br i1 %tmp12, label %then2, label %endif2
 then2:
-	call void @process.throw(i8* @.str.46)
+	call void @process.throw(i8* @.str.47)
 	br label %endif2
 endif2:
 	%tmp13 = getelementptr inbounds %struct.string.String, %struct.string.String* %v1, i32 0, i32 1
@@ -1051,22 +1056,22 @@ endif2:
 	%tmp19 = icmp ne i8 %tmp18, 92
 	br i1 %tmp19, label %then3, label %endif3
 then3:
-	call void @process.throw(i8* @.str.47)
+	call void @process.throw(i8* @.str.48)
 	br label %endif3
 endif3:
-	call void @console.write(i8* @.str.48, i32 17)
+	call void @console.write(i8* @.str.49, i32 17)
 	%tmp20 = load i8*, i8** %v0
 	%tmp21 = getelementptr inbounds %struct.string.String, %struct.string.String* %v0, i32 0, i32 1
 	%tmp22 = load i32, i32* %tmp21
 	call void @console.writeln(i8* %tmp20, i32 %tmp22)
-	call void @console.write(i8* @.str.49, i32 18)
+	call void @console.write(i8* @.str.50, i32 18)
 	%tmp23 = load i8*, i8** %v1
 	%tmp24 = getelementptr inbounds %struct.string.String, %struct.string.String* %v1, i32 0, i32 1
 	%tmp25 = load i32, i32* %tmp24
 	call void @console.writeln(i8* %tmp23, i32 %tmp25)
 	call void @string.free(%struct.string.String* %v0)
 	call void @string.free(%struct.string.String* %v1)
-	call void @console.writeln(i8* @.str.19, i32 2)
+	call void @console.writeln(i8* @.str.20, i32 2)
 ; Variable env_path is out.
 ; Variable full_path is out.
 	ret void
@@ -1079,12 +1084,12 @@ define void @tests.mem_test(){
 	%v0 = alloca i64
 	%v1 = alloca i64
 	%v2 = alloca i64
-	call void @console.write(i8* @.str.50, i32 10)
+	call void @console.write(i8* @.str.51, i32 10)
 	%tmp0 = call i8* @mem.malloc(i64 16)
 	%tmp1 = icmp eq i8* %tmp0, null
 	br i1 %tmp1, label %then0, label %endif0
 then0:
-	call void @process.throw(i8* @.str.51)
+	call void @process.throw(i8* @.str.52)
 	br label %endif0
 endif0:
 	call void @mem.fill(i8 88, i8* %tmp0, i64 16)
@@ -1104,7 +1109,7 @@ endif2:
 	%tmp8 = icmp ne i8 %tmp7, 88
 	br i1 %tmp8, label %then3, label %endif3
 then3:
-	call void @process.throw(i8* @.str.52)
+	call void @process.throw(i8* @.str.53)
 	br label %endif3
 endif3:
 	%tmp9 = load i64, i64* %v0
@@ -1129,7 +1134,7 @@ endif5:
 	%tmp17 = icmp ne i8 %tmp16, 0
 	br i1 %tmp17, label %then6, label %endif6
 then6:
-	call void @process.throw(i8* @.str.53)
+	call void @process.throw(i8* @.str.54)
 	br label %endif6
 endif6:
 	%tmp18 = load i64, i64* %v1
@@ -1141,7 +1146,7 @@ loop_body4_exit:
 	%tmp21 = icmp eq i8* %tmp20, null
 	br i1 %tmp21, label %then7, label %endif7
 then7:
-	call void @process.throw(i8* @.str.54)
+	call void @process.throw(i8* @.str.55)
 	br label %endif7
 endif7:
 	call void @mem.fill(i8 89, i8* %tmp20, i64 16)
@@ -1162,7 +1167,7 @@ endif9:
 	%tmp28 = icmp ne i8 %tmp27, 89
 	br i1 %tmp28, label %then10, label %endif10
 then10:
-	call void @process.throw(i8* @.str.55)
+	call void @process.throw(i8* @.str.56)
 	br label %endif10
 endif10:
 	%tmp29 = load i64, i64* %v2
@@ -1172,14 +1177,14 @@ endif10:
 loop_body8_exit:
 	call void @mem.free(i8* %tmp0)
 	call void @mem.free(i8* %tmp20)
-	call void @console.writeln(i8* @.str.19, i32 2)
+	call void @console.writeln(i8* @.str.20, i32 2)
 	ret void
 }
 define void @tests.list_test(){
 entry:
 	%v0 = alloca %"struct.list.List<i32>"
 	%v1 = alloca %"struct.list.ListNode<i32>"*
-	call void @console.write(i8* @.str.56, i32 11)
+	call void @console.write(i8* @.str.57, i32 11)
 	%tmp0 = call %"struct.list.List<i32>" @"list.new<i32>"()
 	store %"struct.list.List<i32>" %tmp0, %"struct.list.List<i32>"* %v0
 	%tmp1 = getelementptr inbounds %"struct.list.List<i32>", %"struct.list.List<i32>"* %v0, i32 0, i32 2
@@ -1194,7 +1199,7 @@ logic_end_0:
 	%tmp6 = phi i1 [%tmp3, %entry], [%tmp5, %logic_rhs_0]
 	br i1 %tmp6, label %then1, label %endif1
 then1:
-	call void @process.throw(i8* @.str.57)
+	call void @process.throw(i8* @.str.58)
 	br label %endif1
 endif1:
 	call void @"list.extend<i32>"(%"struct.list.List<i32>"* %v0, i32 100)
@@ -1205,14 +1210,14 @@ endif1:
 	%tmp9 = icmp ne i32 %tmp8, 3
 	br i1 %tmp9, label %then2, label %endif2
 then2:
-	call void @process.throw(i8* @.str.58)
+	call void @process.throw(i8* @.str.59)
 	br label %endif2
 endif2:
 	%tmp10 = call i32 @"list.walk<i32>"(%"struct.list.List<i32>"* %v0)
 	%tmp11 = icmp ne i32 %tmp10, 3
 	br i1 %tmp11, label %then3, label %endif3
 then3:
-	call void @process.throw(i8* @.str.59)
+	call void @process.throw(i8* @.str.60)
 	br label %endif3
 endif3:
 	%tmp12 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %v0
@@ -1222,7 +1227,7 @@ endif3:
 	%tmp15 = icmp ne i32 %tmp14, 100
 	br i1 %tmp15, label %then4, label %endif4
 then4:
-	call void @process.throw(i8* @.str.60)
+	call void @process.throw(i8* @.str.61)
 	br label %endif4
 endif4:
 	%tmp16 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %v1
@@ -1234,7 +1239,7 @@ endif4:
 	%tmp21 = icmp ne i32 %tmp20, 200
 	br i1 %tmp21, label %then5, label %endif5
 then5:
-	call void @process.throw(i8* @.str.61)
+	call void @process.throw(i8* @.str.62)
 	br label %endif5
 endif5:
 	%tmp22 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %v1
@@ -1246,7 +1251,7 @@ endif5:
 	%tmp27 = icmp ne i32 %tmp26, 300
 	br i1 %tmp27, label %then6, label %endif6
 then6:
-	call void @process.throw(i8* @.str.62)
+	call void @process.throw(i8* @.str.63)
 	br label %endif6
 endif6:
 	%tmp28 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %v1
@@ -1255,7 +1260,7 @@ endif6:
 	%tmp31 = icmp ne %"struct.list.ListNode<i32>"* %tmp28, %tmp30
 	br i1 %tmp31, label %then7, label %endif7
 then7:
-	call void @process.throw(i8* @.str.63)
+	call void @process.throw(i8* @.str.64)
 	br label %endif7
 endif7:
 	call void @"list.free<i32>"(%"struct.list.List<i32>"* %v0)
@@ -1271,10 +1276,10 @@ logic_end_8:
 	%tmp37 = phi i1 [%tmp34, %endif7], [%tmp36, %logic_rhs_8]
 	br i1 %tmp37, label %then9, label %endif9
 then9:
-	call void @process.throw(i8* @.str.64)
+	call void @process.throw(i8* @.str.65)
 	br label %endif9
 endif9:
-	call void @console.writeln(i8* @.str.19, i32 2)
+	call void @console.writeln(i8* @.str.20, i32 2)
 ; Variable l is out.
 	ret void
 }
@@ -1352,14 +1357,14 @@ define void @tests.funny(){
 	%v8 = alloca %struct.string.String
 	%v9 = alloca %struct.string.String
 	%v10 = alloca i32
-	%tmp0 = call i32 @fs.create_file(i8* @.str.65)
+	%tmp0 = call i32 @fs.create_file(i8* @.str.66)
 	%tmp1 = icmp eq i32 %tmp0, 1
 	br i1 %tmp1, label %then0, label %endif0
 then0:
-	call i32 @fs.delete_file(i8* @.str.65)
+	call i32 @fs.delete_file(i8* @.str.66)
 	br label %func_exit
 endif0:
-	%tmp2 = call %struct.string.String @fs.read_full_file_as_string(i8* @.str.65)
+	%tmp2 = call %struct.string.String @fs.read_full_file_as_string(i8* @.str.66)
 	store %struct.string.String %tmp2, %struct.string.String* %v0
 	%tmp3 = call %"struct.vector.Vec<%struct.string.String>" @"vector.new<%struct.string.String>"()
 	store %"struct.vector.Vec<%struct.string.String>" %tmp3, %"struct.vector.Vec<%struct.string.String>"* %v4
@@ -1930,12 +1935,12 @@ define void @tests.fs_test(){
 	%v1 = alloca %struct.string.String
 	%v2 = alloca %struct.string.String
 	%v3 = alloca %struct.string.String
-	call void @console.write(i8* @.str.66, i32 9)
-	%tmp0 = call %struct.string.String @string.from_c_string(i8* @.str.67)
+	call void @console.write(i8* @.str.67, i32 9)
+	%tmp0 = call %struct.string.String @string.from_c_string(i8* @.str.68)
 	store %struct.string.String %tmp0, %struct.string.String* %v0
 	%tmp1 = call %struct.string.String @process.get_executable_env_path()
 	store %struct.string.String %tmp1, %struct.string.String* %v1
-	%tmp2 = call %struct.string.String @string.concat_with_c_string(%struct.string.String* %v1, i8* @.str.68)
+	%tmp2 = call %struct.string.String @string.concat_with_c_string(%struct.string.String* %v1, i8* @.str.69)
 	store %struct.string.String %tmp2, %struct.string.String* %v2
 	%tmp3 = getelementptr inbounds %struct.string.String, %struct.string.String* %v2, i32 0, i32 1
 	%tmp4 = load i32, i32* %tmp3
@@ -1964,7 +1969,7 @@ define void @tests.fs_test(){
 	%tmp20 = xor i1 1, %tmp19
 	br i1 %tmp20, label %then1, label %endif1
 then1:
-	call void @process.throw(i8* @.str.69)
+	call void @process.throw(i8* @.str.70)
 	br label %endif1
 endif1:
 	call i32 @fs.delete_file(i8* %tmp7)
@@ -1972,7 +1977,7 @@ endif1:
 	call void @string.free(%struct.string.String* %v2)
 	call void @string.free(%struct.string.String* %v1)
 	call void @string.free(%struct.string.String* %v0)
-	call void @console.writeln(i8* @.str.19, i32 2)
+	call void @console.writeln(i8* @.str.20, i32 2)
 ; Variable read is out.
 ; Variable new_file_path is out.
 ; Variable env_path is out.
@@ -2009,18 +2014,18 @@ loop_body0_exit:
 	ret void
 }
 define void @tests.console_test(){
-	call void @console.writeln(i8* @.str.70, i32 14)
-	call void @console.writeln(i8* @.str.71, i32 25)
-	call void @console.write(i8* @.str.72, i32 21)
+	call void @console.writeln(i8* @.str.71, i32 14)
+	call void @console.writeln(i8* @.str.72, i32 25)
+	call void @console.write(i8* @.str.73, i32 21)
 	call void @console.println_i64(i64 12345)
-	call void @console.write(i8* @.str.73, i32 22)
+	call void @console.write(i8* @.str.74, i32 22)
 	call void @console.println_i64(i64 -67890)
-	call void @console.write(i8* @.str.74, i32 17)
+	call void @console.write(i8* @.str.75, i32 17)
 	call void @console.println_i64(i64 0)
-	call void @console.write(i8* @.str.75, i32 26)
+	call void @console.write(i8* @.str.76, i32 26)
 	call void @console.println_u64(i64 9876543210)
-	call void @console.writeln(i8* @.str.76, i32 23)
-	call void @console.writeln(i8* @.str.19, i32 2)
+	call void @console.writeln(i8* @.str.77, i32 23)
+	call void @console.writeln(i8* @.str.20, i32 2)
 	ret void
 }
 define %"struct.test.QPair<i64, i64>" @test.geg(){
@@ -2697,7 +2702,7 @@ define void @process.throw(i8* %exception)noreturn{
 	%tmp0 = call i32 @string_utils.c_str_len(i8* %exception)
 	call i32 @AllocConsole()
 	%tmp1 = call i8* @GetStdHandle(i32 -11)
-	call void @console.writeln(i8* @.str.77, i32 11)
+	call void @console.writeln(i8* @.str.78, i32 11)
 	call void @console.writeln(i8* %exception, i32 %tmp0)
 	call void @ExitProcess(i32 -1)
 	unreachable
@@ -2772,7 +2777,7 @@ endif0:
 	%tmp4 = icmp eq i8* %tmp3, null
 	br i1 %tmp4, label %then1, label %endif1
 then1:
-	call void @process.throw(i8* @.str.78)
+	call void @process.throw(i8* @.str.79)
 	br label %endif1
 endif1:
 	br label %func_exit
@@ -2786,7 +2791,7 @@ define i8* @mem.malloc(i64 %size){
 	%tmp2 = icmp eq i8* %tmp1, null
 	br i1 %tmp2, label %then0, label %endif0
 then0:
-	call void @process.throw(i8* @.str.79)
+	call void @process.throw(i8* @.str.80)
 	br label %endif0
 endif0:
 	ret i8* %tmp1
@@ -2801,7 +2806,7 @@ define i64 @mem.get_total_allocated_memory_external(){
 	%tmp2 = icmp eq i32 %tmp1, 0
 	br i1 %tmp2, label %then0, label %endif0
 then0:
-	call void @process.throw(i8* @.str.80)
+	call void @process.throw(i8* @.str.81)
 	br label %endif0
 endif0:
 	br label %loop_start1
@@ -2953,7 +2958,7 @@ define %struct.string.String @fs.read_full_file_as_string(i8* %path){
 	%tmp3 = icmp eq i8* %tmp0, %tmp2
 	br i1 %tmp3, label %then0, label %endif0
 then0:
-	%tmp4 = call i8* @string_utils.insert(i8* @.str.81, i8* %path, i32 16)
+	%tmp4 = call i8* @string_utils.insert(i8* @.str.82, i8* %path, i32 16)
 	call void @process.throw(i8* %tmp4)
 	br label %endif0
 endif0:
@@ -2980,7 +2985,7 @@ endif1:
 	br i1 %tmp15, label %then2, label %endif2
 then2:
 	call void @string.free(%struct.string.String* %v1)
-	call void @process.throw(i8* @.str.82)
+	call void @process.throw(i8* @.str.83)
 	br label %endif2
 endif2:
 	%tmp16 = getelementptr inbounds %struct.string.String, %struct.string.String* %v1, i32 0, i32 1
@@ -3078,7 +3083,7 @@ define void @console.println_u64(i64 %n){
 	%tmp1 = icmp eq i64 %n, 0
 	br i1 %tmp1, label %then0, label %endif0
 then0:
-	call void @console.write(i8* @.str.83, i32 2)
+	call void @console.write(i8* @.str.84, i32 2)
 	br label %func_exit
 endif0:
 	store i64 %n, i64* %v1
@@ -3277,7 +3282,7 @@ define i8* @console.get_stdout(){
 	%tmp4 = icmp eq i8* %tmp1, %tmp3
 	br i1 %tmp4, label %then0, label %endif0
 then0:
-	call void @process.throw(i8* @.str.84)
+	call void @process.throw(i8* @.str.85)
 	br label %endif0
 endif0:
 	%tmp5 = load i8*, i8** %v0

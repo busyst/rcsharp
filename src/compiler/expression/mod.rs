@@ -18,7 +18,7 @@ use crate::{
     compiler_essentials::{
         CompiledLValue, CompilerError, CompilerType, LLVMVal, SymbolTable, Variable,
     },
-    compiler_functions::COMPILER_FUNCTIONS,
+    compiler_functions::{COMPILER_FUNCTIONS, COMPILER_MACROS},
 };
 pub type ExpressionCompileResult<T> = Result<T, CompilerError>;
 #[derive(PartialEq, Eq)]
@@ -61,6 +61,7 @@ impl<'a> ExpressionCompiler<'a> {
             Expr::StructInit(name, inits) => self.compile_struct_init(name, inits),
             Expr::MemberAccess(obj, member) => self.compile_member_access_rvalue(obj, member),
             Expr::Call(callee, args) => self.compile_call(callee, args, None, expected),
+            Expr::MacroCall(callee, args) => self.compile_macro_call(callee, args, expected),
             Expr::CallGeneric(callee, args, generics) => {
                 self.compile_call(callee, args, Some(generics), expected)
             }
@@ -1052,6 +1053,22 @@ impl<'a> ExpressionCompiler<'a> {
                 ))
             }
         }
+    }
+    fn compile_macro_call(
+        &self,
+        callee_expr: &Expr,
+        args: &[Expr],
+        expected: Expected,
+    ) -> ExpressionCompileResult<(CompiledValue, Vec<LLVMInstruction>)> {
+        if let Expr::Name(name) = callee_expr {
+            if let Some((_, func_ptr)) = COMPILER_MACROS.iter().find(|(n, _)| n == &name.as_str()) {
+                let (exp, mut m_instr) = func_ptr(self, args, &expected)?;
+                let (ret, mut instr) = self.compile_rvalue(&exp, expected)?;
+                instr.append(&mut m_instr);
+                return Ok((ret, instr));
+            }
+        }
+        unimplemented!("{:?}", callee_expr.debug_emit())
     }
     fn compile_assignment(
         &self,

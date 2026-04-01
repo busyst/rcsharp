@@ -27,6 +27,7 @@ pub enum Expr {
 
     Call(Box<Expr>, Box<[Expr]>),
     CallGeneric(Box<Expr>, Box<[Expr]>, Box<[ParserType]>),
+    MacroCall(Box<Expr>, Box<[Expr]>),
     Index(Box<Expr>, Box<Expr>),
 
     Array(Box<[Expr]>),
@@ -343,6 +344,7 @@ impl<'a> ExpressionParser<'a> {
             | Token::BinaryShiftR
             | Token::Equal => self.parse_binary(left),
 
+            Token::LogicNot => self.parse_macro_call(left),
             Token::LParen => self.parse_call(left),
             Token::LSquareBrace => self.parse_index(left),
             Token::Dot => self.parse_member_access(left),
@@ -381,6 +383,13 @@ impl<'a> ExpressionParser<'a> {
         let args = self.parse_comma_separated_exprs(&Token::RParen)?;
         self.consume(&Token::RParen)?;
         Ok(Expr::Call(Box::new(callee), args.into_boxed_slice()))
+    }
+    fn parse_macro_call(&mut self, callee: Expr) -> ParserResult<Expr> {
+        self.advance(); // !
+        self.consume(&Token::LParen)?; // (
+        let args = self.parse_comma_separated_exprs(&Token::RParen)?;
+        self.consume(&Token::RParen)?;
+        Ok(Expr::MacroCall(Box::new(callee), args.into_boxed_slice()))
     }
 
     fn parse_index(&mut self, left: Expr) -> ParserResult<Expr> {
