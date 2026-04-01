@@ -26,6 +26,7 @@ pub enum Token {
     Dot,
     RangeDots,
     RangeDotsInclusive,
+    FatArrow,
     Hint,
 
     Equal,
@@ -139,6 +140,7 @@ const DOUBLE_CHAR_TO_TOKEN: phf::Map<(char, char), Token> = phf::phf_map!(
     ('<', '=') => Token::LogicLessEqual,
     ('>', '>') => Token::BinaryShiftR,
     ('>', '=') => Token::LogicGreaterEqual,
+    ('=', '>') => Token::FatArrow,
     ('=', '=') => Token::LogicEqual,
     ('!', '=') => Token::LogicNotEqual,
     ('|', '|') => Token::LogicOr,

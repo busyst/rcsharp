@@ -801,7 +801,7 @@ impl<'a> ExpressionCompiler<'a> {
         func_args: &[(String, CompilerType)],
         func_return_type: &CompilerType,
         body: &[StmtData],
-        _func_id: usize,
+        func_id: usize,
     ) -> ExpressionCompileResult<(CompiledValue, Vec<LLVMInstruction>)> {
         if body.is_empty() {
             if func_return_type.is_void() {
@@ -816,7 +816,7 @@ impl<'a> ExpressionCompiler<'a> {
                 "Inline function body was empty but return type is not void".to_string(),
             ));
         }
-
+        let func = self.compctx.symbols.get_function_by_id(func_id);
         let inline_id = self.ctx.acquire_label_id();
         let mut code_gen_ctx = CodeGenContext::default();
         code_gen_ctx.current_function_return_type = func_return_type.clone();
@@ -825,6 +825,7 @@ impl<'a> ExpressionCompiler<'a> {
         code_gen_ctx.var_counter.set(self.ctx.var_counter.get());
         code_gen_ctx.return_label_name = format!("inl_exit{}", inline_id);
         code_gen_ctx.set_current_block_name(format!("inl_entry{}", inline_id));
+        code_gen_ctx.current_function_path = func.path().clone();
 
         let mut instructions = vec![];
 
@@ -869,6 +870,8 @@ impl<'a> ExpressionCompiler<'a> {
         self.ctx.temp_counter.set(gen.cgctx.temp_counter.get());
         self.ctx.var_counter.set(gen.cgctx.var_counter.get());
 
+        self.ctx
+            .set_current_block_name(format!("inl_exit{}", inline_id));
         if func_return_type.is_void() {
             return Ok((
                 CompiledValue::NoReturn {

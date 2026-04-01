@@ -634,6 +634,27 @@ impl<'a> GeneralParser<'a> {
                 }),
                 span: start..self.cursor,
             });
+        } else if self.peek().token == Token::FatArrow {
+            self.advance();
+            let expr_start = self.cursor;
+            let expr = self.parse_expression()?;
+            self.consume(&Token::SemiColon)?;
+            return Ok(StmtData {
+                stmt: Stmt::Function(ParsedFunction {
+                    path: Box::from(""),
+                    attributes: attributes.into_boxed_slice(),
+                    name: name.into(),
+                    args: args.into_boxed_slice(),
+                    return_type,
+                    body: Box::new([StmtData {
+                        stmt: Stmt::Return(Some(expr)),
+                        span: expr_start..self.cursor,
+                    }]),
+                    prefixes: Box::new([]),
+                    generic_params: generic_types.into_boxed_slice(),
+                }),
+                span: start..self.cursor,
+            });
         }
 
         let body = self.parse_block_body()?;
