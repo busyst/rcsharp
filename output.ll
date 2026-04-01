@@ -2310,7 +2310,7 @@ define void @process.throw(i8* %exception)noreturn{
 	call void @console.writeln(i8* @.str.77, i32 11)
 	call void @console.writeln(i8* %exception, i32 %tmp0)
 	call void @ExitProcess(i32 -1)
-	ret void
+	unreachable
 }
 define %struct.string.String @process.get_executable_path(){
 	%v0 = alloca %struct.string.String

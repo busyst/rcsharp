@@ -521,7 +521,11 @@ impl LLVMGenPass {
         }
         instructions.append(&mut self.cgctx.scope.pop_layer(&mut ctx.symbols));
         if return_type.is_void() {
-            instructions.push(LLVMInstruction::ReturnVoid);
+            if attrs_str.contains("noreturn") {
+                instructions.push(LLVMInstruction::Unreachable);
+            } else {
+                instructions.push(LLVMInstruction::ReturnVoid);
+            }
         } else {
             if self.cgctx.pending_returns.is_empty() {
             } else {
