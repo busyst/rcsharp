@@ -21,6 +21,7 @@ pub struct CompilerConfig {
     pub emit_debug_info: bool,
     pub no_lazy_compile: bool,
     pub target_triple: String,
+    pub llvm_typeless_pointers: bool,
 }
 #[derive(Debug, Default)]
 pub struct SourceManager {

@@ -33,7 +33,7 @@ declare dllimport i8* @HeapReAlloc(i32* %hHeap, i32 %dwFlags, i8* %lpMem, i64 %d
 declare dllimport i64 @HeapSize(i32* %hHeap, i32 %dwFlags, i8* %lpMem)
 declare dllimport i32 @HeapUnlock(i32* %hHeap)
 declare dllimport i32 @HeapWalk(i32* %hHeap, %struct.mem.PROCESS_HEAP_ENTRY* %lpEntry)
-declare dllimport void @ExitProcess(i32 %code)
+declare dllimport void @ExitProcess(i32 %code)noreturn
 declare dllimport i32 @GetModuleFileNameA(i8* %hModule, i8* %lpFilename, i32 %nSize)
 declare dllimport i8* @BeginPaint(i8* %hWnd, %struct.window.PAINTSTRUCT* %lpPaint)
 declare dllimport i32 @BitBlt(i8* %hdc, i32 %x, i32 %y, i32 %cx, i32 %cy, i8* %hdcSrc, i32 %x1, i32 %y1, i32 %rop)
@@ -208,14 +208,14 @@ define void @window.start_image_window(i8* %imagePath){
 	%v3 = alloca %struct.window.RECT
 	%v4 = alloca %struct.window.MSG
 	%tmp0 = call i8* @GetModuleHandleA(i8* null)
-	%tmp1 = icmp eq ptr %tmp0, null
+	%tmp1 = icmp eq i8* %tmp0, null
 	br i1 %tmp1, label %then1, label %endif1
 then1:
 	call void @process.throw(i8* @.str.0)
 	br label %endif1
 endif1:
 	%tmp2 = call i8* @window.load_bitmap_from_file(i8* %imagePath)
-	%tmp3 = icmp eq ptr %tmp2, null
+	%tmp3 = icmp eq i8* %tmp2, null
 	br i1 %tmp3, label %then2, label %endif2
 then2:
 	call void @process.throw(i8* @.str.1)
@@ -262,7 +262,7 @@ endif3:
 	%tmp22 = load i32, i32* %v0
 	%tmp23 = load i32, i32* %v1
 	%tmp24 = call i8* @CreateWindowExA(i32 8, i8* @.str.2, i8* @.str.4, i32 %tmp21, i32 100, i32 100, i32 %tmp22, i32 %tmp23, i8* null, i8* null, i8* %tmp0, i8* null)
-	%tmp25 = icmp eq ptr %tmp24, null
+	%tmp25 = icmp eq i8* %tmp24, null
 	br i1 %tmp25, label %then5, label %endif5
 then5:
 	call void @process.throw(i8* @.str.5)
@@ -293,7 +293,7 @@ define void @window.start(){
 	%v0 = alloca %struct.window.WNDCLASSEXA
 	%v1 = alloca %struct.window.MSG
 	%tmp0 = call i8* @GetModuleHandleA(i8* null)
-	%tmp1 = icmp eq ptr %tmp0, null
+	%tmp1 = icmp eq i8* %tmp0, null
 	br i1 %tmp1, label %then1, label %endif1
 then1:
 	call void @process.throw(i8* @.str.0)
@@ -334,7 +334,7 @@ then2:
 	br label %endif2
 endif2:
 	%tmp19 = call i8* @CreateWindowExA(i32 0, i8* @.str.6, i8* @.str.7, i32 13565952, i32 2147483648, i32 2147483648, i32 800, i32 600, i8* null, i8* null, i8* %tmp0, i8* null)
-	%tmp20 = icmp eq ptr %tmp19, null
+	%tmp20 = icmp eq i8* %tmp19, null
 	br i1 %tmp20, label %then4, label %endif4
 then4:
 	call void @process.throw(i8* @.str.5)
@@ -382,7 +382,7 @@ define void @window.get_bitmap_dimensions(i8* %hBitmap, i32* %width, i32* %heigh
 }
 define void @window.draw_bitmap_stretched(i8* %hdc, i8* %hBitmap, i32 %x, i32 %y, i32 %width, i32 %height){
 	%v0 = alloca %struct.window.BITMAP
-	%tmp0 = icmp eq ptr %hBitmap, null
+	%tmp0 = icmp eq i8* %hBitmap, null
 	br i1 %tmp0, label %then0, label %endif0
 then0:
 	br label %func_exit
@@ -405,7 +405,7 @@ func_exit:
 }
 define void @window.draw_bitmap(i8* %hdc, i8* %hBitmap, i32 %x, i32 %y){
 	%v0 = alloca %struct.window.BITMAP
-	%tmp0 = icmp eq ptr %hBitmap, null
+	%tmp0 = icmp eq i8* %hBitmap, null
 	br i1 %tmp0, label %then0, label %endif0
 then0:
 	br label %func_exit
@@ -479,7 +479,7 @@ endif7:
 then8:
 	%tmp11 = call i8* @BeginPaint(i8* %hWnd, %struct.window.PAINTSTRUCT* %v0)
 	%tmp12 = call i8* @GetWindowLongPtrA(i8* %hWnd, i32 -21)
-	%tmp13 = icmp ne ptr %tmp12, null
+	%tmp13 = icmp ne i8* %tmp12, null
 	br i1 %tmp13, label %then9, label %endif9
 then9:
 	call void @window.draw_bitmap(i8* %tmp11, i8* %tmp12, i32 0, i32 0)
@@ -630,7 +630,7 @@ logic_end_13:
 	br i1 %tmp56, label %logic_end_14, label %logic_rhs_14
 logic_rhs_14:
 	%tmp57 = load i8*, i8** %v0
-	%tmp58 = icmp ne ptr %tmp57, null
+	%tmp58 = icmp ne i8* %tmp57, null
 	br label %logic_end_14
 logic_end_14:
 	%tmp59 = phi i1 [%tmp56, %logic_end_13], [%tmp58, %logic_rhs_14]
@@ -914,99 +914,97 @@ define void @tests.mem_test(){
 	%v2 = alloca i64
 	call void @console.write(i8* @.str.50, i32 10)
 	%tmp0 = call i8* @mem.malloc(i64 16)
-	%tmp1 = bitcast i8* %tmp0 to i8*
-	%tmp2 = icmp eq ptr %tmp1, null
-	br i1 %tmp2, label %then0, label %endif0
+	%tmp1 = icmp eq i8* %tmp0, null
+	br i1 %tmp1, label %then0, label %endif0
 then0:
 	call void @process.throw(i8* @.str.51)
 	br label %endif0
 endif0:
-	call void @mem.fill(i8 88, i8* %tmp1, i64 16)
-	%tmp3 = sext i32 0 to i64
-	store i64 %tmp3, i64* %v0
+	call void @mem.fill(i8 88, i8* %tmp0, i64 16)
+	%tmp2 = sext i32 0 to i64
+	store i64 %tmp2, i64* %v0
 	br label %loop_cond1
 loop_cond1:
-	%tmp4 = load i64, i64* %v0
-	%tmp5 = icmp sge i64 %tmp4, 16
-	br i1 %tmp5, label %then2, label %endif2
+	%tmp3 = load i64, i64* %v0
+	%tmp4 = icmp sge i64 %tmp3, 16
+	br i1 %tmp4, label %then2, label %endif2
 then2:
 	br label %loop_body1_exit
 endif2:
-	%tmp6 = load i64, i64* %v0
-	%tmp7 = getelementptr inbounds i8, i8* %tmp1, i64 %tmp6
-	%tmp8 = load i8, i8* %tmp7
-	%tmp9 = icmp ne i8 %tmp8, 88
-	br i1 %tmp9, label %then3, label %endif3
+	%tmp5 = load i64, i64* %v0
+	%tmp6 = getelementptr inbounds i8, i8* %tmp0, i64 %tmp5
+	%tmp7 = load i8, i8* %tmp6
+	%tmp8 = icmp ne i8 %tmp7, 88
+	br i1 %tmp8, label %then3, label %endif3
 then3:
 	call void @process.throw(i8* @.str.52)
 	br label %endif3
 endif3:
-	%tmp10 = load i64, i64* %v0
-	%tmp11 = add i64 %tmp10, 1
-	store i64 %tmp11, i64* %v0
+	%tmp9 = load i64, i64* %v0
+	%tmp10 = add i64 %tmp9, 1
+	store i64 %tmp10, i64* %v0
 	br label %loop_cond1
 loop_body1_exit:
-	call void @mem.zero_fill(i8* %tmp1, i64 16)
-	%tmp12 = sext i32 0 to i64
-	store i64 %tmp12, i64* %v1
+	call void @mem.zero_fill(i8* %tmp0, i64 16)
+	%tmp11 = sext i32 0 to i64
+	store i64 %tmp11, i64* %v1
 	br label %loop_cond4
 loop_cond4:
-	%tmp13 = load i64, i64* %v1
-	%tmp14 = icmp sge i64 %tmp13, 16
-	br i1 %tmp14, label %then5, label %endif5
+	%tmp12 = load i64, i64* %v1
+	%tmp13 = icmp sge i64 %tmp12, 16
+	br i1 %tmp13, label %then5, label %endif5
 then5:
 	br label %loop_body4_exit
 endif5:
-	%tmp15 = load i64, i64* %v1
-	%tmp16 = getelementptr inbounds i8, i8* %tmp1, i64 %tmp15
-	%tmp17 = load i8, i8* %tmp16
-	%tmp18 = icmp ne i8 %tmp17, 0
-	br i1 %tmp18, label %then6, label %endif6
+	%tmp14 = load i64, i64* %v1
+	%tmp15 = getelementptr inbounds i8, i8* %tmp0, i64 %tmp14
+	%tmp16 = load i8, i8* %tmp15
+	%tmp17 = icmp ne i8 %tmp16, 0
+	br i1 %tmp17, label %then6, label %endif6
 then6:
 	call void @process.throw(i8* @.str.53)
 	br label %endif6
 endif6:
-	%tmp19 = load i64, i64* %v1
-	%tmp20 = add i64 %tmp19, 1
-	store i64 %tmp20, i64* %v1
+	%tmp18 = load i64, i64* %v1
+	%tmp19 = add i64 %tmp18, 1
+	store i64 %tmp19, i64* %v1
 	br label %loop_cond4
 loop_body4_exit:
-	%tmp21 = call i8* @mem.malloc(i64 16)
-	%tmp22 = bitcast i8* %tmp21 to i8*
-	%tmp23 = icmp eq ptr %tmp22, null
-	br i1 %tmp23, label %then7, label %endif7
+	%tmp20 = call i8* @mem.malloc(i64 16)
+	%tmp21 = icmp eq i8* %tmp20, null
+	br i1 %tmp21, label %then7, label %endif7
 then7:
 	call void @process.throw(i8* @.str.54)
 	br label %endif7
 endif7:
-	call void @mem.fill(i8 89, i8* %tmp22, i64 16)
-	call void @mem.copy(i8* %tmp22, i8* %tmp1, i64 16)
-	%tmp24 = sext i32 0 to i64
-	store i64 %tmp24, i64* %v2
+	call void @mem.fill(i8 89, i8* %tmp20, i64 16)
+	call void @mem.copy(i8* %tmp20, i8* %tmp0, i64 16)
+	%tmp22 = sext i32 0 to i64
+	store i64 %tmp22, i64* %v2
 	br label %loop_cond8
 loop_cond8:
-	%tmp25 = load i64, i64* %v2
-	%tmp26 = icmp sge i64 %tmp25, 16
-	br i1 %tmp26, label %then9, label %endif9
+	%tmp23 = load i64, i64* %v2
+	%tmp24 = icmp sge i64 %tmp23, 16
+	br i1 %tmp24, label %then9, label %endif9
 then9:
 	br label %loop_body8_exit
 endif9:
-	%tmp27 = load i64, i64* %v2
-	%tmp28 = getelementptr inbounds i8, i8* %tmp1, i64 %tmp27
-	%tmp29 = load i8, i8* %tmp28
-	%tmp30 = icmp ne i8 %tmp29, 89
-	br i1 %tmp30, label %then10, label %endif10
+	%tmp25 = load i64, i64* %v2
+	%tmp26 = getelementptr inbounds i8, i8* %tmp0, i64 %tmp25
+	%tmp27 = load i8, i8* %tmp26
+	%tmp28 = icmp ne i8 %tmp27, 89
+	br i1 %tmp28, label %then10, label %endif10
 then10:
 	call void @process.throw(i8* @.str.55)
 	br label %endif10
 endif10:
-	%tmp31 = load i64, i64* %v2
-	%tmp32 = add i64 %tmp31, 1
-	store i64 %tmp32, i64* %v2
+	%tmp29 = load i64, i64* %v2
+	%tmp30 = add i64 %tmp29, 1
+	store i64 %tmp30, i64* %v2
 	br label %loop_cond8
 loop_body8_exit:
-	call void @mem.free(i8* %tmp1)
-	call void @mem.free(i8* %tmp22)
+	call void @mem.free(i8* %tmp0)
+	call void @mem.free(i8* %tmp20)
 	call void @console.writeln(i8* @.str.19, i32 2)
 	ret void
 }
@@ -1023,7 +1021,7 @@ entry:
 	br i1 %tmp3, label %logic_end_0, label %logic_rhs_0
 logic_rhs_0:
 	%tmp4 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %v0
-	%tmp5 = icmp ne ptr %tmp4, null
+	%tmp5 = icmp ne %"struct.list.ListNode<i32>"* %tmp4, null
 	br label %logic_end_0
 logic_end_0:
 	%tmp6 = phi i1 [%tmp3, %entry], [%tmp5, %logic_rhs_0]
@@ -1087,7 +1085,7 @@ endif6:
 	%tmp28 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %v1
 	%tmp29 = getelementptr inbounds %"struct.list.List<i32>", %"struct.list.List<i32>"* %v0, i32 0, i32 1
 	%tmp30 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %tmp29
-	%tmp31 = icmp ne ptr %tmp28, %tmp30
+	%tmp31 = icmp ne %"struct.list.ListNode<i32>"* %tmp28, %tmp30
 	br i1 %tmp31, label %then7, label %endif7
 then7:
 	call void @process.throw(i8* @.str.63)
@@ -1100,7 +1098,7 @@ endif7:
 	br i1 %tmp34, label %logic_end_8, label %logic_rhs_8
 logic_rhs_8:
 	%tmp35 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %v0
-	%tmp36 = icmp ne ptr %tmp35, null
+	%tmp36 = icmp ne %"struct.list.ListNode<i32>"* %tmp35, null
 	br label %logic_end_8
 logic_end_8:
 	%tmp37 = phi i1 [%tmp34, %endif7], [%tmp36, %logic_rhs_8]
@@ -1804,22 +1802,21 @@ define i8* @string_utils.insert(i8* %src1, i8* %src2, i32 %index){
 	%tmp3 = add i32 %tmp2, 1
 	%tmp4 = sext i32 %tmp3 to i64
 	%tmp5 = call i8* @mem.malloc(i64 %tmp4)
-	%tmp6 = bitcast i8* %tmp5 to i8*
-	%tmp7 = sext i32 %index to i64
-	call void @mem.copy(i8* %src1, i8* %tmp6, i64 %tmp7)
-	%tmp8 = getelementptr inbounds i8, i8* %tmp6, i32 %index
-	%tmp9 = sext i32 %tmp1 to i64
-	call void @mem.copy(i8* %src2, i8* %tmp8, i64 %tmp9)
-	%tmp10 = getelementptr inbounds i8, i8* %src1, i32 %index
-	%tmp11 = getelementptr inbounds i8, i8* %tmp6, i32 %index
-	%tmp12 = getelementptr inbounds i8, i8* %tmp11, i32 %tmp1
-	%tmp13 = sub i32 %tmp0, %index
-	%tmp14 = sext i32 %tmp13 to i64
-	call void @mem.copy(i8* %tmp10, i8* %tmp12, i64 %tmp14)
-	%tmp15 = add i32 %tmp0, %tmp1
-	%tmp16 = getelementptr inbounds i8, i8* %tmp6, i32 %tmp15
-	store i8 0, i8* %tmp16
-	ret i8* %tmp6
+	%tmp6 = sext i32 %index to i64
+	call void @mem.copy(i8* %src1, i8* %tmp5, i64 %tmp6)
+	%tmp7 = getelementptr inbounds i8, i8* %tmp5, i32 %index
+	%tmp8 = sext i32 %tmp1 to i64
+	call void @mem.copy(i8* %src2, i8* %tmp7, i64 %tmp8)
+	%tmp9 = getelementptr inbounds i8, i8* %src1, i32 %index
+	%tmp10 = getelementptr inbounds i8, i8* %tmp5, i32 %index
+	%tmp11 = getelementptr inbounds i8, i8* %tmp10, i32 %tmp1
+	%tmp12 = sub i32 %tmp0, %index
+	%tmp13 = sext i32 %tmp12 to i64
+	call void @mem.copy(i8* %tmp9, i8* %tmp11, i64 %tmp13)
+	%tmp14 = add i32 %tmp0, %tmp1
+	%tmp15 = getelementptr inbounds i8, i8* %tmp5, i32 %tmp14
+	store i8 0, i8* %tmp15
+	ret i8* %tmp5
 }
 define i8* @string_utils.c_str_n_copy(i8* %dest, i8* %src, i32 %n){
 	%v0 = alloca i32
@@ -1922,17 +1919,16 @@ define %struct.string.String @string.with_size(i32 %size){
 	%tmp1 = sext i32 %tmp0 to i64
 	%tmp2 = mul i64 1, %tmp1
 	%tmp3 = call i8* @mem.malloc(i64 %tmp2)
-	%tmp4 = bitcast i8* %tmp3 to i8*
-	store i8* %tmp4, i8** %v0
-	%tmp5 = getelementptr inbounds %struct.string.String, %struct.string.String* %v0, i32 0, i32 1
-	store i32 %size, i32* %tmp5
-	%tmp6 = load i8*, i8** %v0
-	%tmp7 = add i32 %size, 1
-	%tmp8 = sext i32 %tmp7 to i64
-	call void @mem.zero_fill(i8* %tmp6, i64 %tmp8)
-	%tmp9 = load %struct.string.String, %struct.string.String* %v0
+	store i8* %tmp3, i8** %v0
+	%tmp4 = getelementptr inbounds %struct.string.String, %struct.string.String* %v0, i32 0, i32 1
+	store i32 %size, i32* %tmp4
+	%tmp5 = load i8*, i8** %v0
+	%tmp6 = add i32 %size, 1
+	%tmp7 = sext i32 %tmp6 to i64
+	call void @mem.zero_fill(i8* %tmp5, i64 %tmp7)
+	%tmp8 = load %struct.string.String, %struct.string.String* %v0
 ; Variable x is out.
-	ret %struct.string.String %tmp9
+	ret %struct.string.String %tmp8
 }
 define %struct.string.String @string.from_c_string(i8* %c_string){
 	%v0 = alloca %struct.string.String
@@ -1941,19 +1937,18 @@ define %struct.string.String @string.from_c_string(i8* %c_string){
 	%tmp2 = sext i32 %tmp1 to i64
 	%tmp3 = mul i64 1, %tmp2
 	%tmp4 = call i8* @mem.malloc(i64 %tmp3)
-	%tmp5 = bitcast i8* %tmp4 to i8*
-	store i8* %tmp5, i8** %v0
-	%tmp6 = getelementptr inbounds %struct.string.String, %struct.string.String* %v0, i32 0, i32 1
-	store i32 %tmp0, i32* %tmp6
-	%tmp7 = load i8*, i8** %v0
-	%tmp8 = sext i32 %tmp0 to i64
-	call void @mem.copy(i8* %c_string, i8* %tmp7, i64 %tmp8)
-	%tmp9 = load i8*, i8** %v0
-	%tmp10 = getelementptr inbounds i8, i8* %tmp9, i32 %tmp0
-	store i8 0, i8* %tmp10
-	%tmp11 = load %struct.string.String, %struct.string.String* %v0
+	store i8* %tmp4, i8** %v0
+	%tmp5 = getelementptr inbounds %struct.string.String, %struct.string.String* %v0, i32 0, i32 1
+	store i32 %tmp0, i32* %tmp5
+	%tmp6 = load i8*, i8** %v0
+	%tmp7 = sext i32 %tmp0 to i64
+	call void @mem.copy(i8* %c_string, i8* %tmp6, i64 %tmp7)
+	%tmp8 = load i8*, i8** %v0
+	%tmp9 = getelementptr inbounds i8, i8* %tmp8, i32 %tmp0
+	store i8 0, i8* %tmp9
+	%tmp10 = load %struct.string.String, %struct.string.String* %v0
 ; Variable x is out.
-	ret %struct.string.String %tmp11
+	ret %struct.string.String %tmp10
 }
 define void @string.free(%struct.string.String* %str){
 	%tmp0 = load i8*, i8** %str
@@ -2003,26 +1998,25 @@ define %struct.string.String @string.concat_with_c_string(%struct.string.String*
 	%tmp5 = sext i32 %tmp4 to i64
 	%tmp6 = mul i64 1, %tmp5
 	%tmp7 = call i8* @mem.malloc(i64 %tmp6)
-	%tmp8 = bitcast i8* %tmp7 to i8*
-	%tmp9 = load i8*, i8** %src_string
-	%tmp10 = getelementptr inbounds %struct.string.String, %struct.string.String* %src_string, i32 0, i32 1
-	%tmp11 = load i32, i32* %tmp10
-	%tmp12 = sext i32 %tmp11 to i64
-	call void @mem.copy(i8* %tmp9, i8* %tmp8, i64 %tmp12)
-	%tmp13 = getelementptr inbounds %struct.string.String, %struct.string.String* %src_string, i32 0, i32 1
-	%tmp14 = load i32, i32* %tmp13
-	%tmp15 = sext i32 %tmp14 to i64
-	%tmp16 = getelementptr inbounds i8, i8* %tmp8, i64 %tmp15
-	%tmp17 = sext i32 %tmp0 to i64
-	call void @mem.copy(i8* %c_string, i8* %tmp16, i64 %tmp17)
-	%tmp18 = getelementptr inbounds i8, i8* %tmp8, i32 %tmp3
-	store i8 0, i8* %tmp18
-	store i8* %tmp8, i8** %v0
-	%tmp19 = getelementptr inbounds %struct.string.String, %struct.string.String* %v0, i32 0, i32 1
-	store i32 %tmp3, i32* %tmp19
-	%tmp20 = load %struct.string.String, %struct.string.String* %v0
+	%tmp8 = load i8*, i8** %src_string
+	%tmp9 = getelementptr inbounds %struct.string.String, %struct.string.String* %src_string, i32 0, i32 1
+	%tmp10 = load i32, i32* %tmp9
+	%tmp11 = sext i32 %tmp10 to i64
+	call void @mem.copy(i8* %tmp8, i8* %tmp7, i64 %tmp11)
+	%tmp12 = getelementptr inbounds %struct.string.String, %struct.string.String* %src_string, i32 0, i32 1
+	%tmp13 = load i32, i32* %tmp12
+	%tmp14 = sext i32 %tmp13 to i64
+	%tmp15 = getelementptr inbounds i8, i8* %tmp7, i64 %tmp14
+	%tmp16 = sext i32 %tmp0 to i64
+	call void @mem.copy(i8* %c_string, i8* %tmp15, i64 %tmp16)
+	%tmp17 = getelementptr inbounds i8, i8* %tmp7, i32 %tmp3
+	store i8 0, i8* %tmp17
+	store i8* %tmp7, i8** %v0
+	%tmp18 = getelementptr inbounds %struct.string.String, %struct.string.String* %v0, i32 0, i32 1
+	store i32 %tmp3, i32* %tmp18
+	%tmp19 = load %struct.string.String, %struct.string.String* %v0
 ; Variable str is out.
-	ret %struct.string.String %tmp20
+	ret %struct.string.String %tmp19
 }
 define %struct.string.String @string.clone(%struct.string.String* %src){
 	%v0 = alloca %struct.string.String
@@ -2034,20 +2028,19 @@ define %struct.string.String @string.clone(%struct.string.String* %src){
 	%tmp5 = sext i32 %tmp4 to i64
 	%tmp6 = mul i64 1, %tmp5
 	%tmp7 = call i8* @mem.malloc(i64 %tmp6)
-	%tmp8 = bitcast i8* %tmp7 to i8*
-	store i8* %tmp8, i8** %v0
-	%tmp9 = getelementptr inbounds %struct.string.String, %struct.string.String* %v0, i32 0, i32 1
-	store i32 %tmp3, i32* %tmp9
-	%tmp10 = load i8*, i8** %src
-	%tmp11 = load i8*, i8** %v0
-	%tmp12 = sext i32 %tmp1 to i64
-	call void @mem.copy(i8* %tmp10, i8* %tmp11, i64 %tmp12)
-	%tmp13 = load i8*, i8** %v0
-	%tmp14 = getelementptr inbounds i8, i8* %tmp13, i32 %tmp1
-	store i8 0, i8* %tmp14
-	%tmp15 = load %struct.string.String, %struct.string.String* %v0
+	store i8* %tmp7, i8** %v0
+	%tmp8 = getelementptr inbounds %struct.string.String, %struct.string.String* %v0, i32 0, i32 1
+	store i32 %tmp3, i32* %tmp8
+	%tmp9 = load i8*, i8** %src
+	%tmp10 = load i8*, i8** %v0
+	%tmp11 = sext i32 %tmp1 to i64
+	call void @mem.copy(i8* %tmp9, i8* %tmp10, i64 %tmp11)
+	%tmp12 = load i8*, i8** %v0
+	%tmp13 = getelementptr inbounds i8, i8* %tmp12, i32 %tmp1
+	store i8 0, i8* %tmp13
+	%tmp14 = load %struct.string.String, %struct.string.String* %v0
 ; Variable x is out.
-	ret %struct.string.String %tmp15
+	ret %struct.string.String %tmp14
 }
 define i64 @stdlib.str_to_l(i8* %str, i8** %endptr, i32 %base){
 	%v0 = alloca i32
@@ -2206,7 +2199,7 @@ endif13:
 	store i32 %tmp68, i32* %v0
 	br label %loop_start10
 loop_body10_exit:
-	%tmp69 = icmp ne ptr %endptr, null
+	%tmp69 = icmp ne i8** %endptr, null
 	br i1 %tmp69, label %then14, label %endif14
 then14:
 	%tmp70 = load i32, i32* %v0
@@ -2310,7 +2303,7 @@ loop_body4_exit:
 	%tmp34 = mul i32 %tmp32, %tmp33
 	ret i32 %tmp34
 }
-define void @process.throw(i8* %exception){
+define void @process.throw(i8* %exception)noreturn{
 	%tmp0 = call i32 @string_utils.c_str_len(i8* %exception)
 	call i32 @AllocConsole()
 	%tmp1 = call i8* @GetStdHandle(i32 -11)
@@ -2378,7 +2371,7 @@ define void @mem.zero_fill(i8* %dest, i64 %len){
 	ret void
 }
 define i8* @mem.realloc(i8* %ptr, i64 %size){
-	%tmp0 = icmp eq ptr %ptr, null
+	%tmp0 = icmp eq i8* %ptr, null
 	br i1 %tmp0, label %then0, label %endif0
 then0:
 	%tmp1 = call i8* @mem.malloc(i64 %size)
@@ -2386,7 +2379,7 @@ then0:
 endif0:
 	%tmp2 = call i32* @GetProcessHeap()
 	%tmp3 = call i8* @HeapReAlloc(i32* %tmp2, i32 0, i8* %ptr, i64 %size)
-	%tmp4 = icmp eq ptr %tmp3, null
+	%tmp4 = icmp eq i8* %tmp3, null
 	br i1 %tmp4, label %then1, label %endif1
 then1:
 	call void @process.throw(i8* @.str.78)
@@ -2400,7 +2393,7 @@ func_exit:
 define i8* @mem.malloc(i64 %size){
 	%tmp0 = call i32* @GetProcessHeap()
 	%tmp1 = call i8* @HeapAlloc(i32* %tmp0, i32 0, i64 %size)
-	%tmp2 = icmp eq ptr %tmp1, null
+	%tmp2 = icmp eq i8* %tmp1, null
 	br i1 %tmp2, label %then0, label %endif0
 then0:
 	call void @process.throw(i8* @.str.79)
@@ -2451,7 +2444,7 @@ loop_body1_exit:
 	ret i64 %tmp14
 }
 define void @mem.free(i8* %ptr){
-	%tmp0 = icmp ne ptr %ptr, null
+	%tmp0 = icmp ne i8* %ptr, null
 	br i1 %tmp0, label %then0, label %endif0
 then0:
 	%tmp1 = call i32* @GetProcessHeap()
@@ -2538,7 +2531,7 @@ define i32 @fs.write_to_file(i8* %path, i8* %content, i32 %content_len){
 	%tmp0 = call i8* @CreateFileA(i8* %path, i32 1073741824, i32 0, i8* null, i32 2, i32 128, i8* null)
 	%tmp1 = sext i32 -1 to i64
 	%tmp2 = inttoptr i64 %tmp1 to i8*
-	%tmp3 = icmp eq ptr %tmp0, %tmp2
+	%tmp3 = icmp eq i8* %tmp0, %tmp2
 	br i1 %tmp3, label %then0, label %endif0
 then0:
 	br label %func_exit
@@ -2567,7 +2560,7 @@ define %struct.string.String @fs.read_full_file_as_string(i8* %path){
 	%tmp0 = call i8* @CreateFileA(i8* %path, i32 2147483648, i32 1, i8* null, i32 3, i32 128, i8* null)
 	%tmp1 = sext i32 -1 to i64
 	%tmp2 = inttoptr i64 %tmp1 to i8*
-	%tmp3 = icmp eq ptr %tmp0, %tmp2
+	%tmp3 = icmp eq i8* %tmp0, %tmp2
 	br i1 %tmp3, label %then0, label %endif0
 then0:
 	%tmp4 = call i8* @string_utils.insert(i8* @.str.81, i8* %path, i32 16)
@@ -2629,7 +2622,7 @@ define i32 @fs.create_file(i8* %path){
 	%tmp0 = call i8* @CreateFileA(i8* %path, i32 1073741824, i32 0, i8* null, i32 1, i32 128, i8* null)
 	%tmp1 = sext i32 -1 to i64
 	%tmp2 = inttoptr i64 %tmp1 to i8*
-	%tmp3 = icmp eq ptr %tmp0, %tmp2
+	%tmp3 = icmp eq i8* %tmp0, %tmp2
 	br i1 %tmp3, label %then0, label %endif0
 then0:
 	br label %func_exit
@@ -2891,7 +2884,7 @@ define i8* @console.get_stdout(){
 	%tmp1 = load i8*, i8** %v0
 	%tmp2 = sext i32 -1 to i64
 	%tmp3 = inttoptr i64 %tmp2 to i8*
-	%tmp4 = icmp eq ptr %tmp1, %tmp3
+	%tmp4 = icmp eq i8* %tmp1, %tmp3
 	br i1 %tmp4, label %then0, label %endif0
 then0:
 	call void @process.throw(i8* @.str.84)
@@ -3204,25 +3197,23 @@ endif1:
 	%tmp12 = zext i32 %tmp11 to i64
 	%tmp13 = mul i64 16, %tmp12
 	%tmp14 = load %struct.string.String*, %struct.string.String** %vec
-	%tmp15 = bitcast %struct.string.String* %tmp14 to i8*
-	%tmp16 = call i8* @mem.realloc(i8* %tmp15, i64 %tmp13)
-	%tmp17 = bitcast i8* %tmp16 to %struct.string.String*
-	store %struct.string.String* %tmp17, %struct.string.String** %vec
-	%tmp18 = getelementptr inbounds %"struct.vector.Vec<%struct.string.String>", %"struct.vector.Vec<%struct.string.String>"* %vec, i32 0, i32 2
-	%tmp19 = load i32, i32* %v0
-	store i32 %tmp19, i32* %tmp18
+	%tmp15 = call i8* @mem.realloc(i8* %tmp14, i64 %tmp13)
+	store %struct.string.String* %tmp15, %struct.string.String** %vec
+	%tmp16 = getelementptr inbounds %"struct.vector.Vec<%struct.string.String>", %"struct.vector.Vec<%struct.string.String>"* %vec, i32 0, i32 2
+	%tmp17 = load i32, i32* %v0
+	store i32 %tmp17, i32* %tmp16
 	br label %endif0
 endif0:
-	%tmp20 = getelementptr inbounds %"struct.vector.Vec<%struct.string.String>", %"struct.vector.Vec<%struct.string.String>"* %vec, i32 0, i32 1
-	%tmp21 = load i32, i32* %tmp20
-	%tmp22 = load %struct.string.String*, %struct.string.String** %vec
-	%tmp23 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp22, i32 %tmp21
-	store %struct.string.String %data, %struct.string.String* %tmp23
-	%tmp24 = getelementptr inbounds %"struct.vector.Vec<%struct.string.String>", %"struct.vector.Vec<%struct.string.String>"* %vec, i32 0, i32 1
-	%tmp25 = getelementptr inbounds %"struct.vector.Vec<%struct.string.String>", %"struct.vector.Vec<%struct.string.String>"* %vec, i32 0, i32 1
-	%tmp26 = load i32, i32* %tmp25
-	%tmp27 = add i32 %tmp26, 1
-	store i32 %tmp27, i32* %tmp24
+	%tmp18 = getelementptr inbounds %"struct.vector.Vec<%struct.string.String>", %"struct.vector.Vec<%struct.string.String>"* %vec, i32 0, i32 1
+	%tmp19 = load i32, i32* %tmp18
+	%tmp20 = load %struct.string.String*, %struct.string.String** %vec
+	%tmp21 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp20, i32 %tmp19
+	store %struct.string.String %data, %struct.string.String* %tmp21
+	%tmp22 = getelementptr inbounds %"struct.vector.Vec<%struct.string.String>", %"struct.vector.Vec<%struct.string.String>"* %vec, i32 0, i32 1
+	%tmp23 = getelementptr inbounds %"struct.vector.Vec<%struct.string.String>", %"struct.vector.Vec<%struct.string.String>"* %vec, i32 0, i32 1
+	%tmp24 = load i32, i32* %tmp23
+	%tmp25 = add i32 %tmp24, 1
+	store i32 %tmp25, i32* %tmp22
 ; Variable data is out.
 	ret void
 }
@@ -3251,25 +3242,23 @@ endif1:
 	%tmp12 = zext i32 %tmp11 to i64
 	%tmp13 = mul i64 1, %tmp12
 	%tmp14 = load i8*, i8** %vec
-	%tmp15 = bitcast i8* %tmp14 to i8*
-	%tmp16 = call i8* @mem.realloc(i8* %tmp15, i64 %tmp13)
-	%tmp17 = bitcast i8* %tmp16 to i8*
-	store i8* %tmp17, i8** %vec
-	%tmp18 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %vec, i32 0, i32 2
-	%tmp19 = load i32, i32* %v0
-	store i32 %tmp19, i32* %tmp18
+	%tmp15 = call i8* @mem.realloc(i8* %tmp14, i64 %tmp13)
+	store i8* %tmp15, i8** %vec
+	%tmp16 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %vec, i32 0, i32 2
+	%tmp17 = load i32, i32* %v0
+	store i32 %tmp17, i32* %tmp16
 	br label %endif0
 endif0:
-	%tmp20 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %vec, i32 0, i32 1
-	%tmp21 = load i32, i32* %tmp20
-	%tmp22 = load i8*, i8** %vec
-	%tmp23 = getelementptr inbounds i8, i8* %tmp22, i32 %tmp21
-	store i8 %data, i8* %tmp23
-	%tmp24 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %vec, i32 0, i32 1
-	%tmp25 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %vec, i32 0, i32 1
-	%tmp26 = load i32, i32* %tmp25
-	%tmp27 = add i32 %tmp26, 1
-	store i32 %tmp27, i32* %tmp24
+	%tmp18 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %vec, i32 0, i32 1
+	%tmp19 = load i32, i32* %tmp18
+	%tmp20 = load i8*, i8** %vec
+	%tmp21 = getelementptr inbounds i8, i8* %tmp20, i32 %tmp19
+	store i8 %data, i8* %tmp21
+	%tmp22 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %vec, i32 0, i32 1
+	%tmp23 = getelementptr inbounds %"struct.vector.Vec<i8>", %"struct.vector.Vec<i8>"* %vec, i32 0, i32 1
+	%tmp24 = load i32, i32* %tmp23
+	%tmp25 = add i32 %tmp24, 1
+	store i32 %tmp25, i32* %tmp22
 	ret void
 }
 define %"struct.vector.Vec<i64>" @"vector.new<i64>"(){
@@ -3307,7 +3296,7 @@ define %"struct.vector.Vec<i8>" @"vector.new<i8>"(){
 }
 define void @"vector.free<%struct.string.String>"(%"struct.vector.Vec<%struct.string.String>"* %vec){
 	%tmp0 = load %struct.string.String*, %struct.string.String** %vec
-	%tmp1 = icmp ne ptr %tmp0, null
+	%tmp1 = icmp ne %struct.string.String* %tmp0, null
 	br i1 %tmp1, label %then0, label %endif0
 then0:
 	%tmp2 = load %struct.string.String*, %struct.string.String** %vec
@@ -3323,7 +3312,7 @@ endif0:
 }
 define void @"vector.free<i8>"(%"struct.vector.Vec<i8>"* %vec){
 	%tmp0 = load i8*, i8** %vec
-	%tmp1 = icmp ne ptr %tmp0, null
+	%tmp1 = icmp ne i8* %tmp0, null
 	br i1 %tmp1, label %then0, label %endif0
 then0:
 	%tmp2 = load i8*, i8** %vec
@@ -3368,7 +3357,7 @@ define i32 @"list.walk<i32>"(%"struct.list.List<i32>"* %list){
 	br label %loop_start0
 loop_start0:
 	%tmp1 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %v1
-	%tmp2 = icmp ne ptr %tmp1, null
+	%tmp2 = icmp ne %"struct.list.ListNode<i32>"* %tmp1, null
 	br i1 %tmp2, label %endif1, label %else1
 else1:
 	br label %loop_body0_exit
@@ -3404,7 +3393,7 @@ define void @"list.free<i32>"(%"struct.list.List<i32>"* %list){
 	br label %loop_start0
 loop_start0:
 	%tmp1 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %v0
-	%tmp2 = icmp ne ptr %tmp1, null
+	%tmp2 = icmp ne %"struct.list.ListNode<i32>"* %tmp1, null
 	br i1 %tmp2, label %endif1, label %else1
 else1:
 	br label %loop_body0_exit
@@ -3429,39 +3418,38 @@ loop_body0_exit:
 define void @"list.extend<i32>"(%"struct.list.List<i32>"* %list, i32 %data){
 	%v0 = alloca %"struct.list.ListNode<i32>"*
 	%tmp0 = call i8* @mem.malloc(i64 16)
-	%tmp1 = bitcast i8* %tmp0 to %"struct.list.ListNode<i32>"*
-	store %"struct.list.ListNode<i32>"* %tmp1, %"struct.list.ListNode<i32>"** %v0
+	store %"struct.list.ListNode<i32>"* %tmp0, %"struct.list.ListNode<i32>"** %v0
+	%tmp1 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %v0
+	call void @"list.new_node<i32>"(%"struct.list.ListNode<i32>"* %tmp1)
 	%tmp2 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %v0
-	call void @"list.new_node<i32>"(%"struct.list.ListNode<i32>"* %tmp2)
-	%tmp3 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %v0
-	store i32 %data, i32* %tmp3
-	%tmp4 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %list
-	%tmp5 = icmp eq ptr %tmp4, null
-	br i1 %tmp5, label %then0, label %else0
+	store i32 %data, i32* %tmp2
+	%tmp3 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %list
+	%tmp4 = icmp eq %"struct.list.ListNode<i32>"* %tmp3, null
+	br i1 %tmp4, label %then0, label %else0
 then0:
-	%tmp6 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %v0
-	store %"struct.list.ListNode<i32>"* %tmp6, %"struct.list.ListNode<i32>"** %list
-	%tmp7 = getelementptr inbounds %"struct.list.List<i32>", %"struct.list.List<i32>"* %list, i32 0, i32 1
-	%tmp8 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %v0
-	store %"struct.list.ListNode<i32>"* %tmp8, %"struct.list.ListNode<i32>"** %tmp7
+	%tmp5 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %v0
+	store %"struct.list.ListNode<i32>"* %tmp5, %"struct.list.ListNode<i32>"** %list
+	%tmp6 = getelementptr inbounds %"struct.list.List<i32>", %"struct.list.List<i32>"* %list, i32 0, i32 1
+	%tmp7 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %v0
+	store %"struct.list.ListNode<i32>"* %tmp7, %"struct.list.ListNode<i32>"** %tmp6
 	br label %endif0
 else0:
+	%tmp8 = getelementptr inbounds %"struct.list.List<i32>", %"struct.list.List<i32>"* %list, i32 0, i32 1
 	%tmp9 = getelementptr inbounds %"struct.list.List<i32>", %"struct.list.List<i32>"* %list, i32 0, i32 1
-	%tmp10 = getelementptr inbounds %"struct.list.List<i32>", %"struct.list.List<i32>"* %list, i32 0, i32 1
-	%tmp11 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %tmp10
-	%tmp12 = getelementptr inbounds %"struct.list.ListNode<i32>", %"struct.list.ListNode<i32>"* %tmp11, i32 0, i32 1
-	%tmp13 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %v0
-	store %"struct.list.ListNode<i32>"* %tmp13, %"struct.list.ListNode<i32>"** %tmp12
-	%tmp14 = getelementptr inbounds %"struct.list.List<i32>", %"struct.list.List<i32>"* %list, i32 0, i32 1
-	%tmp15 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %v0
-	store %"struct.list.ListNode<i32>"* %tmp15, %"struct.list.ListNode<i32>"** %tmp14
+	%tmp10 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %tmp9
+	%tmp11 = getelementptr inbounds %"struct.list.ListNode<i32>", %"struct.list.ListNode<i32>"* %tmp10, i32 0, i32 1
+	%tmp12 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %v0
+	store %"struct.list.ListNode<i32>"* %tmp12, %"struct.list.ListNode<i32>"** %tmp11
+	%tmp13 = getelementptr inbounds %"struct.list.List<i32>", %"struct.list.List<i32>"* %list, i32 0, i32 1
+	%tmp14 = load %"struct.list.ListNode<i32>"*, %"struct.list.ListNode<i32>"** %v0
+	store %"struct.list.ListNode<i32>"* %tmp14, %"struct.list.ListNode<i32>"** %tmp13
 	br label %endif0
 endif0:
+	%tmp15 = getelementptr inbounds %"struct.list.List<i32>", %"struct.list.List<i32>"* %list, i32 0, i32 2
 	%tmp16 = getelementptr inbounds %"struct.list.List<i32>", %"struct.list.List<i32>"* %list, i32 0, i32 2
-	%tmp17 = getelementptr inbounds %"struct.list.List<i32>", %"struct.list.List<i32>"* %list, i32 0, i32 2
-	%tmp18 = load i32, i32* %tmp17
-	%tmp19 = add i32 %tmp18, 1
-	store i32 %tmp19, i32* %tmp16
+	%tmp17 = load i32, i32* %tmp16
+	%tmp18 = add i32 %tmp17, 1
+	store i32 %tmp18, i32* %tmp15
 	ret void
 }
 define %"struct.Pair<i32, %struct.Pair<i8, %struct.string.String>>" @"ax<i32>"(){

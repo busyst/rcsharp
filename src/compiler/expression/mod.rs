@@ -1254,16 +1254,9 @@ impl<'a> ExpressionCompiler<'a> {
                 ));
             }
         } else if value_type.is_pointer() && to_type.is_pointer() {
-            let target_reg = self.ctx.acquire_temp_id();
             return Ok((
-                CompiledValue::new_value(LLVMVal::Register(target_reg), to_type.clone()),
-                vec![LLVMInstruction::Cast {
-                    target_reg,
-                    op: "bitcast".to_string(),
-                    from_type: value_type.clone(),
-                    from_val: value.get_llvm_rep().clone(),
-                    to_type: to_type.clone(),
-                }],
+                CompiledValue::new_value(value.get_llvm_rep().clone(), to_type.clone()),
+                vec![],
             ));
         }
 

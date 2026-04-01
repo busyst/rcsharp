@@ -43,6 +43,7 @@ pub fn compile_to_file(entry_path: &str, output_path: &str) -> CompileResult<()>
 pub fn compile(entry_path: &str) -> CompileResult<(CompilerContext, String)> {
     let mut ctx = CompilerContext::default();
     ctx.config.no_lazy_compile = true;
+    ctx.config.llvm_typeless_pointers = false;
     let mut loader = ModuleLoaderPass::default();
     let ast = loader.run(entry_path, &mut ctx)?;
 

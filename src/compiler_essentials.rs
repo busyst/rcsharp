@@ -1536,10 +1536,11 @@ impl LLVMOutputHandler {
         return_type_llvm: &str,
         full_function_name: &str,
         args_str: &str,
+        attrs_str: &str,
     ) {
         self.push_main(&format!(
-            "define {} @{}({}){{\n",
-            return_type_llvm, full_function_name, args_str
+            "define {} @{}({}){}{{\n",
+            return_type_llvm, full_function_name, args_str, attrs_str
         ));
     }
 

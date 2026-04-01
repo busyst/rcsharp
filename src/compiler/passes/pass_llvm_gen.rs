@@ -68,21 +68,35 @@ impl LLVMGenPass {
             .filter(|x| x.1.is_external() && x.1.usage_count.get() >= 1)
         {
             let func = &x.1;
-            let return_llvm = func.return_type.llvm_representation(&ctx.symbols)?;
             let name_llvm = func.name();
-            let args_llvm = func
+            let return_type_llvm =
+                if !ctx.config.llvm_typeless_pointers || !func.return_type.is_pointer() {
+                    x.1.return_type.llvm_representation(&ctx.symbols)?
+                } else {
+                    format!("ptr")
+                };
+
+            let args_str = func
                 .args
                 .iter()
-                .map(|(name, ptype)| {
-                    ptype
-                        .llvm_representation(&ctx.symbols)
-                        .map(|x| format!("{} %{}", x, name))
+                .map(|x| {
+                    let ty = if !ctx.config.llvm_typeless_pointers || !x.1.is_pointer() {
+                        x.1.llvm_representation(&ctx.symbols)?
+                    } else {
+                        format!("ptr")
+                    };
+                    Ok(format!("{} %{}", ty, x.0.to_string()))
                 })
-                .collect::<ExpressionCompileResult<Vec<_>>>()?
+                .collect::<CompileResult<Vec<_>>>()?
                 .join(", ");
+            let mut attrs = vec![];
+            if func.is_program_halt() {
+                attrs.push("noreturn");
+            }
+            let attrs = attrs.join(", ");
             builder.push_header(&format!(
-                "declare dllimport {} @{}({})\n",
-                return_llvm, name_llvm, args_llvm
+                "declare dllimport {} @{}({}){}\n",
+                return_type_llvm, name_llvm, args_str, attrs
             ));
         }
         Ok(())
@@ -137,7 +151,13 @@ impl LLVMGenPass {
             let field_types = r#type
                 .fields
                 .iter()
-                .map(|(_field_name, field_type)| field_type.llvm_representation(&ctx.symbols))
+                .map(|(_field_name, field_type)| {
+                    if !ctx.config.llvm_typeless_pointers || !field_type.is_pointer() {
+                        field_type.llvm_representation(&ctx.symbols)
+                    } else {
+                        Ok(format!("ptr"))
+                    }
+                })
                 .collect::<ExpressionCompileResult<Vec<_>>>()?
                 .join(", ");
             builder.push_header(&format!(
@@ -179,7 +199,13 @@ impl LLVMGenPass {
                         .iter()
                         .map(|x| {
                             x.1.with_substituted_generics(&type_map, &ctx.symbols)
-                                .map(|x| x.llvm_representation(&ctx.symbols))
+                                .map(|x| {
+                                    if !ctx.config.llvm_typeless_pointers || !x.is_pointer() {
+                                        x.llvm_representation(&ctx.symbols)
+                                    } else {
+                                        Ok(format!("ptr"))
+                                    }
+                                })
                                 .flatten()
                         })
                         .collect::<ExpressionCompileResult<Vec<_>>>()?
@@ -279,18 +305,31 @@ impl LLVMGenPass {
                                 .map(|x| (name.clone(), x))
                         })
                         .collect::<ExpressionCompileResult<Vec<_>>>()?;
+                    let mut attrs = vec![];
+                    if func.is_program_halt() {
+                        attrs.push("noreturn");
+                    }
+                    let attrs = attrs.join(", ");
                     to_do_generics.push((
                         type_map,
                         func.path().clone(),
                         func.get_implementation_name(ind, &ctx.symbols),
                         return_type,
                         args,
+                        attrs,
                         func.body.to_vec(),
                     ));
                 }
             }
-            while let Some((type_map, function_path, full_function_name, return_type, args, body)) =
-                to_do_generics.pop()
+            while let Some((
+                type_map,
+                function_path,
+                full_function_name,
+                return_type,
+                args,
+                attrs_str,
+                body,
+            )) = to_do_generics.pop()
             {
                 ctx.symbols.set_alias_types(type_map);
                 self.compile_function_base(
@@ -298,6 +337,7 @@ impl LLVMGenPass {
                     &full_function_name,
                     return_type,
                     args,
+                    &attrs_str,
                     &body.into_boxed_slice(),
                     builder,
                     ctx,
@@ -332,7 +372,7 @@ impl LLVMGenPass {
         builder: &mut LLVMOutputHandler,
         ctx: &mut CompilerContext,
     ) -> CompileResult<()> {
-        let (full_function_name, path, return_type, args, body) = {
+        let (full_function_name, path, return_type, args, attrs, body) = {
             let function = ctx.symbols.get_function_by_id_use(function_id);
             assert!(!function.is_generic());
 
@@ -350,13 +390,18 @@ impl LLVMGenPass {
                         .map(|x| (name.clone(), x))
                 })
                 .collect::<ExpressionCompileResult<Vec<_>>>()?;
-
+            let mut attrs = vec![];
+            if function.is_program_halt() {
+                attrs.push("noreturn");
+            }
+            let attrs = attrs.join(", ");
             let body = function.body.clone();
             (
                 full_function_name,
                 function.path().clone(),
                 return_type,
                 args,
+                attrs,
                 body,
             )
         };
@@ -365,6 +410,7 @@ impl LLVMGenPass {
             &full_function_name,
             return_type,
             args,
+            &attrs,
             &body,
             builder,
             ctx,
@@ -383,24 +429,32 @@ impl LLVMGenPass {
         full_function_name: &str,
         return_type: CompilerType,
         args: Vec<(String, CompilerType)>,
+        attrs_str: &str,
         body: &Box<[StmtData]>,
         builder: &mut LLVMOutputHandler,
         ctx: &mut CompilerContext,
     ) -> CompileResult<Vec<LLVMInstruction>> {
         let symbols = &ctx.symbols;
-        let return_type_llvm = return_type.llvm_representation(symbols)?;
+        let return_type_llvm = if !ctx.config.llvm_typeless_pointers || !return_type.is_pointer() {
+            return_type.llvm_representation(symbols)?
+        } else {
+            format!("ptr")
+        };
 
         let args_str = args
             .iter()
-            .map(|(name, ptype)| {
-                ptype
-                    .llvm_representation(symbols)
-                    .map(|type_str| format!("{} %{}", type_str, name))
+            .map(|x| {
+                let ty = if !ctx.config.llvm_typeless_pointers || !x.1.is_pointer() {
+                    x.1.llvm_representation(&ctx.symbols)?
+                } else {
+                    format!("ptr")
+                };
+                Ok(format!("{} %{}", ty, x.0.to_string()))
             })
-            .collect::<ExpressionCompileResult<Vec<_>>>()?
+            .collect::<CompileResult<Vec<_>>>()?
             .join(", ");
         let mut instructions = vec![];
-        builder.start_function(&return_type_llvm, full_function_name, &args_str);
+        builder.start_function(&return_type_llvm, full_function_name, &args_str, attrs_str);
         instructions.push(LLVMInstruction::Label {
             name: format!("entry"),
         });
@@ -1157,7 +1211,12 @@ impl LLVMGenPass {
                     target_reg,
                     alloc_type,
                 } => {
-                    let alloc_type_llvm = alloc_type.llvm_representation(&ctx.symbols)?;
+                    let alloc_type_llvm =
+                        if !ctx.config.llvm_typeless_pointers || !alloc_type.is_pointer() {
+                            alloc_type.llvm_representation(&ctx.symbols)?
+                        } else {
+                            format!("ptr")
+                        };
                     builder.push_function_intro(&format!(
                         "\t%v{} = alloca {}\n",
                         target_reg, alloc_type_llvm,
@@ -1169,7 +1228,12 @@ impl LLVMGenPass {
                     count_type,
                     count,
                 } => {
-                    let alloc_type_llvm = alloc_type.llvm_representation(&ctx.symbols)?;
+                    let alloc_type_llvm =
+                        if !ctx.config.llvm_typeless_pointers || !alloc_type.is_pointer() {
+                            alloc_type.llvm_representation(&ctx.symbols)?
+                        } else {
+                            format!("ptr")
+                        };
                     let count_type_llvm = count_type.llvm_representation(&ctx.symbols)?;
                     builder.push_function_body(&format!(
                         "\t%tmp{} = alloca {}, {} {}\n",
@@ -1186,8 +1250,18 @@ impl LLVMGenPass {
                     from_val,
                     to_type,
                 } => {
-                    let from_type_llvm = from_type.llvm_representation(&ctx.symbols)?;
-                    let to_type_llvm = to_type.llvm_representation(&ctx.symbols)?;
+                    let from_type_llvm =
+                        if !ctx.config.llvm_typeless_pointers || !from_type.is_pointer() {
+                            from_type.llvm_representation(&ctx.symbols)?
+                        } else {
+                            format!("ptr")
+                        };
+                    let to_type_llvm =
+                        if !ctx.config.llvm_typeless_pointers || !to_type.is_pointer() {
+                            to_type.llvm_representation(&ctx.symbols)?
+                        } else {
+                            format!("ptr")
+                        };
                     builder.push_function_body(&format!(
                         "\t%tmp{} = {} {} {} to {}\n",
                         target_reg,
@@ -1204,12 +1278,12 @@ impl LLVMGenPass {
                     lhs,
                     rhs,
                 } => {
-                    let op_type_llvm = if op_type.is_pointer() {
-                        op_type.llvm_representation(&ctx.symbols)?;
-                        "ptr".to_string()
-                    } else {
-                        op_type.llvm_representation(&ctx.symbols)?
-                    };
+                    let op_type_llvm =
+                        if !ctx.config.llvm_typeless_pointers || !op_type.is_pointer() {
+                            op_type.llvm_representation(&ctx.symbols)?
+                        } else {
+                            format!("ptr")
+                        };
                     builder.push_function_body(&format!(
                         "\t%tmp{} = {} {} {}, {}\n",
                         target_reg,
@@ -1224,12 +1298,22 @@ impl LLVMGenPass {
                     ptr,
                     result_type,
                 } => {
-                    let result_type_llvm = result_type.llvm_representation(&ctx.symbols)?;
+                    let (result_type_llvm, from_type_llvm) = if !ctx.config.llvm_typeless_pointers {
+                        let x = result_type.llvm_representation(&ctx.symbols)?;
+                        (x.clone(), format!("{}*", x))
+                    } else {
+                        if result_type.is_pointer() {
+                            (format!("ptr"), format!("ptr"))
+                        } else {
+                            let x = result_type.llvm_representation(&ctx.symbols)?;
+                            (x, format!("ptr"))
+                        }
+                    };
                     builder.push_function_body(&format!(
-                        "\t%tmp{} = load {}, {}* {}\n",
+                        "\t%tmp{} = load {}, {} {}\n",
                         target_reg,
                         result_type_llvm,
-                        result_type_llvm,
+                        from_type_llvm,
                         ptr.to_string()
                     ));
                 }
@@ -1238,7 +1322,12 @@ impl LLVMGenPass {
                     result_type,
                     incoming,
                 } => {
-                    let result_type_llvm = result_type.llvm_representation(&ctx.symbols)?;
+                    let result_type_llvm =
+                        if !ctx.config.llvm_typeless_pointers || !result_type.is_pointer() {
+                            result_type.llvm_representation(&ctx.symbols)?
+                        } else {
+                            format!("ptr")
+                        };
                     builder.push_function_body(&format!(
                         "\t%tmp{} = phi {} {}\n",
                         target_reg,
@@ -1256,7 +1345,17 @@ impl LLVMGenPass {
                     ptr,
                     indices,
                 } => {
-                    let base_type_llvm = base_type.llvm_representation(&ctx.symbols)?;
+                    let (result_type_llvm, from_type_llvm) = if !ctx.config.llvm_typeless_pointers {
+                        let x = base_type.llvm_representation(&ctx.symbols)?;
+                        (x.clone(), format!("{}*", x))
+                    } else {
+                        if base_type.is_pointer() {
+                            (format!("ptr"), format!("ptr"))
+                        } else {
+                            let x = base_type.llvm_representation(&ctx.symbols)?;
+                            (x, format!("ptr"))
+                        }
+                    };
                     let ind_llvm = indices
                         .iter()
                         .map(|x| {
@@ -1266,10 +1365,10 @@ impl LLVMGenPass {
                         .collect::<ExpressionCompileResult<Vec<_>>>()?
                         .join(", ");
                     builder.push_function_body(&format!(
-                        "\t%tmp{} = getelementptr inbounds {}, {}* {}, {}\n",
+                        "\t%tmp{} = getelementptr inbounds {}, {} {}, {}\n",
                         target_reg,
-                        base_type_llvm,
-                        base_type_llvm,
+                        result_type_llvm,
+                        from_type_llvm,
                         ptr.to_string(),
                         ind_llvm
                     ));
@@ -1281,9 +1380,19 @@ impl LLVMGenPass {
                     ptr,
                     indices,
                 } => {
-                    let base_type_llvm = base_type.llvm_representation(&ctx.symbols)?;
-                    let result_type_llvm = result_type.llvm_representation(&ctx.symbols)?;
-                    let ind_llvm = indices
+                    let (result_type_llvm, from_type_llvm) = if !ctx.config.llvm_typeless_pointers {
+                        let x = base_type.llvm_representation(&ctx.symbols)?;
+                        let y = result_type.llvm_representation(&ctx.symbols)?;
+                        (x, format!("{}*", y))
+                    } else {
+                        let x = if !base_type.is_pointer() {
+                            base_type.llvm_representation(&ctx.symbols)?
+                        } else {
+                            format!("ptr")
+                        };
+                        (x, format!("ptr"))
+                    };
+                    let ind_llvm: String = indices
                         .iter()
                         .map(|x| {
                             x.1.llvm_representation(&ctx.symbols)
@@ -1292,10 +1401,10 @@ impl LLVMGenPass {
                         .collect::<ExpressionCompileResult<Vec<_>>>()?
                         .join(", ");
                     builder.push_function_body(&format!(
-                        "\t%tmp{} = getelementptr inbounds {}, {}* {}, {}\n",
+                        "\t%tmp{} = getelementptr inbounds {}, {} {}, {}\n",
                         target_reg,
                         result_type_llvm,
-                        base_type_llvm,
+                        from_type_llvm,
                         ptr.to_string(),
                         ind_llvm
                     ));
@@ -1309,12 +1418,21 @@ impl LLVMGenPass {
                     let args_llvm = args
                         .iter()
                         .map(|x| {
-                            x.1.llvm_representation(&ctx.symbols)
-                                .map(|y| format!("{} {}", y, x.0.to_string()))
+                            let ty = if !ctx.config.llvm_typeless_pointers || !x.1.is_pointer() {
+                                x.1.llvm_representation(&ctx.symbols)?
+                            } else {
+                                format!("ptr")
+                            };
+                            Ok(format!("{} {}", ty, x.0.to_string()))
                         })
                         .collect::<ExpressionCompileResult<Vec<_>>>()?
                         .join(", ");
-                    let result_type_llvm = result_type.llvm_representation(&ctx.symbols)?;
+                    let result_type_llvm =
+                        if !ctx.config.llvm_typeless_pointers || !result_type.is_pointer() {
+                            result_type.llvm_representation(&ctx.symbols)?
+                        } else {
+                            format!("ptr")
+                        };
                     if let Some(target_reg) = target_reg {
                         builder.push_function_body(&format!(
                             "\t%tmp{} = call {} {}({})\n",
@@ -1337,12 +1455,22 @@ impl LLVMGenPass {
                     value_type,
                     ptr,
                 } => {
-                    let result_type_llvm = value_type.llvm_representation(&ctx.symbols)?;
+                    let (result_type_llvm, from_type_llvm) = if !ctx.config.llvm_typeless_pointers {
+                        let x = value_type.llvm_representation(&ctx.symbols)?;
+                        (x.clone(), format!("{}*", x))
+                    } else {
+                        if value_type.is_pointer() {
+                            (format!("ptr"), format!("ptr"))
+                        } else {
+                            let x = value_type.llvm_representation(&ctx.symbols)?;
+                            (x, format!("ptr"))
+                        }
+                    };
                     builder.push_function_body(&format!(
-                        "\tstore {} {}, {}* {}\n",
+                        "\tstore {} {}, {} {}\n",
                         result_type_llvm,
                         value.to_string(),
-                        result_type_llvm,
+                        from_type_llvm,
                         ptr.to_string()
                     ));
                 }
@@ -1367,7 +1495,12 @@ impl LLVMGenPass {
                     }
                 }
                 LLVMInstruction::Return { return_type, value } => {
-                    let return_type_llvm = return_type.llvm_representation(&ctx.symbols)?;
+                    let return_type_llvm =
+                        if !ctx.config.llvm_typeless_pointers || !return_type.is_pointer() {
+                            return_type.llvm_representation(&ctx.symbols)?
+                        } else {
+                            format!("ptr")
+                        };
                     builder.push_function_body(&format!(
                         "\tret {} {}\n",
                         return_type_llvm,
