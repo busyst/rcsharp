@@ -281,6 +281,7 @@ pub enum LLVMInstruction {
         then_label_name: String,
         else_label_name: String,
     },
+    Empty,
 }
 
 use crate::{compiler::expression::ExpressionCompileResult, compiler_essentials::CompilerError};

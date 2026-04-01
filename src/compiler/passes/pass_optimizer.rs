@@ -44,7 +44,7 @@ impl OptimizerPass {
                 Stmt::If(cond, then_block, else_block) => {
                     self.optimize_expression_tree(cond);
                     if let Expr::Boolean(val) = cond {
-                        return Ok(if *val {
+                        if *val {
                             self.optimize_block(then_block)?;
                             stmt_data.stmt = Stmt::Block(then_block.clone());
                             println!("OPT: Pruned dead ELSE branch (cond is true)");
@@ -52,7 +52,8 @@ impl OptimizerPass {
                             self.optimize_block(else_block)?;
                             stmt_data.stmt = Stmt::Block(else_block.clone());
                             println!("OPT: Pruned dead THEN branch (cond is false)");
-                        });
+                        }
+                        continue;
                     }
                     self.optimize_block(then_block)?;
                     self.optimize_block(else_block)?;
@@ -200,11 +201,21 @@ impl OptimizerPass {
                 _ => {}
             }
         }
-        vec.retain(|x| match x {
-            LLVMInstruction::Label { name } => mult.contains(name),
-            LLVMInstruction::Jump { label } => mult.contains(label),
-            _ => true,
-        });
+        for x in vec {
+            match x {
+                LLVMInstruction::Label { name } => {
+                    if !mult.contains(name) {
+                        *x = LLVMInstruction::Empty;
+                    }
+                }
+                LLVMInstruction::Jump { label } => {
+                    if !mult.contains(label) {
+                        *x = LLVMInstruction::Empty;
+                    }
+                }
+                _ => {}
+            }
+        }
     }
 }
 

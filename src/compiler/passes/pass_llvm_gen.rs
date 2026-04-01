@@ -1514,6 +1514,7 @@ impl LLVMGenPass {
                 LLVMInstruction::ReturnVoid => builder.push_function_body("\tret void\n"),
                 LLVMInstruction::Debug(x) => builder.push_function_body(&format!("; {}\n", x)),
                 LLVMInstruction::Unreachable => builder.push_function_body("\tunreachable\n"),
+                LLVMInstruction::Empty => continue,
                 //_ => builder.push_function_body(&format!("\t;{:?} DEBUG\n", x)),
             }
         }
