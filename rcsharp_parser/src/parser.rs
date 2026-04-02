@@ -4,7 +4,10 @@ use crate::{
     },
     expression_parser::{Expr, ExpressionParser},
 };
-use rcsharp_lexer::{LexerSymbolTable, Token, TokenData};
+use rcsharp_lexer::{
+    LexerSymbolTable,
+    defs::{DUMMY_EOF_TOKEN, Token, TokenData},
+};
 use std::fmt;
 
 pub type Span = std::ops::Range<usize>;
@@ -72,6 +75,25 @@ pub struct ParsedEnum {
     pub enum_type: ParserType,
     pub prefixes: Box<[String]>,
 }
+#[derive(Debug, Clone, PartialEq)]
+pub struct ParsedTrait {
+    pub path: Box<str>,
+    pub attributes: Box<[Attribute]>,
+    pub name: Box<str>,
+    pub functions: Box<[ParsedFunction]>,
+    pub generic_params: Box<[String]>,
+    pub prefixes: Box<[String]>,
+}
+#[derive(Debug, Clone, PartialEq)]
+pub struct ParsedImplementation {
+    pub implementing: Box<ParserType>,
+    pub implementing_for: Box<ParserType>,
+    pub path: Box<str>,
+    pub attributes: Box<[Attribute]>,
+    pub body: Box<[StmtData]>,
+    pub generic_params: Box<[String]>,
+    pub prefixes: Box<[String]>,
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParsedFunction {
@@ -102,7 +124,9 @@ pub enum Stmt {
     Function(ParsedFunction),                       // fn foo(bar: i8, ...) ... { ... }
     Struct(ParsedStruct),                           // struct foo <T> { bar : i8, ... }
     Enum(ParsedEnum),                               // enum foo 'base_type' { bar = ..., ... }
-    Namespace(String, Box<[StmtData]>),             // namespace foo { fn bar() ... {...} ... }
+    Namespace(String, Box<[StmtData]>),             // namespace foo { fn bar(...): ... {...} ... }
+    Impl(ParsedImplementation),                     // impl Foo { fn bar(...): ... {...} ...}
+    TraitDeclaration(ParsedTrait),                  // trait Foo { fn bar(...): ...; ... }
     Block(Box<[StmtData]>),                         // ; { ... }
     Debug(String),                                  // ; 'debug statement'
     CompilerDud,                                    // ; does absolutely nothing
@@ -247,10 +271,6 @@ impl fmt::Display for ParserType {
         }
     }
 }
-static DUMMY_EOF: TokenData = TokenData {
-    token: Token::DummyToken,
-    span: 0..0,
-};
 pub struct GeneralParser<'a> {
     tokens: &'a [TokenData],
     symbol_table: &'a LexerSymbolTable,
@@ -270,11 +290,13 @@ impl<'a> GeneralParser<'a> {
     }
     #[inline]
     fn peek(&self) -> &TokenData {
-        self.tokens.get(self.cursor).unwrap_or(&DUMMY_EOF)
+        self.tokens.get(self.cursor).unwrap_or(&DUMMY_EOF_TOKEN)
     }
     #[inline]
     fn peek_offset(&self, offset: usize) -> &TokenData {
-        self.tokens.get(self.cursor + offset).unwrap_or(&DUMMY_EOF)
+        self.tokens
+            .get(self.cursor + offset)
+            .unwrap_or(&DUMMY_EOF_TOKEN)
     }
     #[inline]
     fn advance(&mut self) -> &TokenData {
@@ -283,7 +305,7 @@ impl<'a> GeneralParser<'a> {
                 self.cursor += 1;
                 t
             }
-            None => &DUMMY_EOF,
+            None => &DUMMY_EOF_TOKEN,
         }
     }
     #[inline]
@@ -378,6 +400,8 @@ impl<'a> GeneralParser<'a> {
             Token::KeywordFunction => self.parse_function(attributes, start_span),
             Token::KeywordStruct => self.parse_struct(attributes, start_span),
             Token::KeywordEnum => self.parse_enum(attributes, start_span),
+            Token::KeywordTrait => self.parse_trait(attributes, start_span),
+            Token::KeywordImpl => self.parse_impl(attributes, start_span),
             Token::KeywordNamespace => {
                 if !attributes.is_empty() {
                     return Err((
@@ -782,6 +806,76 @@ impl<'a> GeneralParser<'a> {
         })
     }
 
+    fn parse_trait(
+        &mut self,
+        attributes: Vec<Attribute>,
+        start_span: Span,
+    ) -> ParserResult<StmtData> {
+        let start = start_span.start;
+        self.advance(); // trait
+        let name = self.consume_name()?;
+        let generic_types = self.parse_generic_params()?;
+        self.consume(&Token::LBrace)?;
+        let mut items = vec![];
+        while self.peek().token != Token::RBrace && !self.is_at_end() {
+            match self.parse_toplevel_item()? {
+                StmtData {
+                    stmt: Stmt::Function(func),
+                    span: _,
+                } => {
+                    items.push(func);
+                }
+                _ => unimplemented!(),
+            }
+        }
+        self.consume(&Token::RBrace)?;
+        return Ok(StmtData {
+            stmt: Stmt::TraitDeclaration(ParsedTrait {
+                path: "".into(),
+                attributes: attributes.into_boxed_slice(),
+                name: name.into(),
+                functions: items.into_boxed_slice(),
+                generic_params: generic_types.into_boxed_slice(),
+                prefixes: Box::new([]),
+            }),
+            span: start..self.cursor,
+        });
+    }
+
+    fn parse_impl(
+        &mut self,
+        attributes: Vec<Attribute>,
+        start_span: Span,
+    ) -> ParserResult<StmtData> {
+        let start = start_span.start;
+        self.advance(); // impl
+        let implementing = self.parse_type()?;
+        let impl_for = if self.peek().token == Token::KeywordFor {
+            self.advance();
+            self.parse_type()?
+        } else {
+            implementing.clone()
+        };
+        let generic_types = self.parse_generic_params()?;
+        self.consume(&Token::LBrace)?;
+        let mut items = vec![];
+        while self.peek().token != Token::RBrace && !self.is_at_end() {
+            items.push(self.parse_toplevel_item()?)
+        }
+        self.consume(&Token::RBrace)?;
+        return Ok(StmtData {
+            stmt: Stmt::Impl(ParsedImplementation {
+                implementing: Box::new(implementing),
+                implementing_for: Box::new(impl_for),
+                path: "".into(),
+                attributes: attributes.into_boxed_slice(),
+                body: items.into_boxed_slice(),
+                generic_params: generic_types.into_boxed_slice(),
+                prefixes: Box::new([]),
+            }),
+            span: start..self.cursor,
+        });
+    }
     fn parse_statement(&mut self) -> ParserResult<StmtData> {
         let start = self.cursor;
 

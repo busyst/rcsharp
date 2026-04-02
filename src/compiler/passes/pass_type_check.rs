@@ -1,10 +1,3 @@
-use std::collections::HashMap;
-
-use rcsharp_parser::{
-    expression_parser::Expr,
-    parser::{Stmt, StmtData},
-};
-
 use crate::{
     compiler::{
         context::{CompilerContext, ErrorSeverity, FileID},
@@ -16,6 +9,11 @@ use crate::{
         Variable,
     },
 };
+use rcsharp_parser::{
+    expression_parser::Expr,
+    parser::{Stmt, StmtData},
+};
+use std::collections::HashMap;
 
 #[derive(Default)]
 pub struct TypeCheckPass {}
@@ -34,6 +32,12 @@ impl<'a> CompilerPass<'a> for TypeCheckPass {
             worklist.push((ContextPath::default(), *x.0, x.1.to_vec()));
         }
 
+        let mut traits: Vec<(ContextPath, FileID, rcsharp_parser::parser::ParsedTrait)> = vec![];
+        let mut implementations: Vec<(
+            ContextPath,
+            FileID,
+            rcsharp_parser::parser::ParsedImplementation,
+        )> = vec![];
         let mut types: Vec<(ContextPath, FileID, rcsharp_parser::parser::ParsedStruct)> = vec![];
         let mut enums: Vec<(ContextPath, FileID, rcsharp_parser::parser::ParsedEnum)> = vec![];
         let mut functions: Vec<(ContextPath, FileID, rcsharp_parser::parser::ParsedFunction)> =
@@ -59,6 +63,12 @@ impl<'a> CompilerPass<'a> for TypeCheckPass {
                     }
                     Stmt::Enum(x) => {
                         enums.push((path.clone(), file_id.clone(), x));
+                    }
+                    Stmt::TraitDeclaration(x) => {
+                        traits.push((path.clone(), file_id.clone(), x));
+                    }
+                    Stmt::Impl(x) => {
+                        implementations.push((path.clone(), file_id.clone(), x));
                     }
                     Stmt::Static(name, var_type, expression) => {
                         static_variables.push((
@@ -188,7 +198,6 @@ impl<'a> CompilerPass<'a> for TypeCheckPass {
 
             ctx.symbols.insert_function(full_path, function);
         }
-
         Ok(())
     }
 }

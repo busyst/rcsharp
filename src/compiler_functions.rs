@@ -662,7 +662,8 @@ fn asm_impl(
     ))
 }
 
-pub const COMPILER_MACROS: &[(&str, CompilerMacros)] = &[("concat", concat_impl_macro)];
+pub const COMPILER_MACROS: &[(&str, CompilerMacros)] =
+    &[("concat", concat_impl_macro), ("format", format_impl_macro)];
 fn concat_impl_macro(
     compiler: &ExpressionCompiler,
     given_args: &[Expr],
@@ -681,7 +682,7 @@ fn concat_impl_macro(
                     if let Some((_, func_ptr)) =
                         COMPILER_MACROS.iter().find(|(n, _)| n == &name.as_str())
                     {
-                        let (exp, mut m_instr) = func_ptr(compiler, args, expected).unwrap();
+                        let (exp, mut _m_instr) = func_ptr(compiler, args, expected).unwrap();
                         exprs.insert(index + 1, exp);
                     }
                 }
@@ -690,5 +691,25 @@ fn concat_impl_macro(
         }
         index += 1;
     }
+    Ok((Expr::StringConst(string), vec![]))
+}
+fn format_impl_macro(
+    _compiler: &ExpressionCompiler,
+    given_args: &[Expr],
+    _expected: &Expected,
+) -> ExpressionCompileResult<(Expr, Vec<LLVMInstruction>)> {
+    if given_args.len() == 0 {
+        return Err(CompilerError::Generic(format!(
+            "format takes at least 1 argument"
+        )));
+    }
+    let Expr::StringConst(expr_string) = &given_args[0] else {
+        return Err(CompilerError::Generic(format!(
+            "format takes string litaral as first argument"
+        )));
+    };
+    let _other = &given_args[1..];
+
+    let string = expr_string.to_string();
     Ok((Expr::StringConst(string), vec![]))
 }

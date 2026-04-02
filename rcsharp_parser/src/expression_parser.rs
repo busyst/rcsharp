@@ -1,12 +1,12 @@
 use std::fmt::Write;
 
-use rcsharp_lexer::{LexerSymbolTable, Token, TokenData};
+use rcsharp_lexer::{
+    LexerSymbolTable,
+    defs::{DUMMY_EOF_TOKEN, Token, TokenData},
+};
 
 use crate::parser::{ParserError, ParserResult, ParserType};
-static DUMMY_EOF: TokenData = TokenData {
-    token: Token::DummyToken,
-    span: 0..0,
-};
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     Decimal(f64),
@@ -195,7 +195,7 @@ impl<'a> ExpressionParser<'a> {
     }
     #[inline]
     fn peek(&self) -> &TokenData {
-        self.tokens.get(self.cursor).unwrap_or(&DUMMY_EOF)
+        self.tokens.get(self.cursor).unwrap_or(&DUMMY_EOF_TOKEN)
     }
 
     #[inline]
@@ -205,7 +205,7 @@ impl<'a> ExpressionParser<'a> {
                 self.cursor += 1;
                 t
             }
-            None => &DUMMY_EOF,
+            None => &DUMMY_EOF_TOKEN,
         }
     }
     #[inline]
@@ -433,9 +433,17 @@ impl<'a> ExpressionParser<'a> {
         let mut fields = Vec::with_capacity(4);
         while self.peek().token != Token::RBrace && !self.is_at_end() {
             let field_name = self.consume_name()?;
-            self.consume(&Token::Colon)?;
-            let field_type = self.parse_expression()?;
-            fields.push((field_name, field_type));
+            let now = self.advance();
+            if !matches!(now.token, Token::Equal | Token::Colon) {
+                return Err((
+                    now.span.clone(),
+                    ParserError::Generic(format!(
+                        "In struct init expected ':' or '=' after field name"
+                    )),
+                ));
+            };
+            let field_expr = self.parse_expression()?;
+            fields.push((field_name, field_expr));
 
             if self.peek().token == Token::Comma {
                 self.advance();

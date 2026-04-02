@@ -8,7 +8,10 @@ use crate::compiler::{
     },
 };
 use ordered_hash_map::OrderedHashMap;
-use rcsharp_lexer::{lex_text, LexerError, Span};
+use rcsharp_lexer::{
+    defs::{LexerError, Span},
+    lex_text,
+};
 use rcsharp_parser::{
     compiler_primitives::{Layout, PrimitiveInfo, PrimitiveKind, POINTER_SIZED_TYPE, VOID_TYPE},
     parser::{Attribute, ParserType, StmtData},
@@ -1262,13 +1265,12 @@ impl From<(Span, CompilerError)> for CompilerErrorWrapper {
         }
     }
 }
-
 #[derive(Debug)]
 pub enum CompilerError {
     Generic(String),
     FunctionCompilation(Box<CompilerError>, usize),
     Io(std::io::Error),
-    LexerError(String, rcsharp_lexer::LexerError),
+    LexerError(String, LexerError),
     ParserError(String, (Span, rcsharp_parser::parser::ParserError)),
 }
 impl CompilerError {

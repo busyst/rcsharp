@@ -66,7 +66,7 @@ declare dllimport i32 @StretchBlt(i8* %hdcDest, i32 %xDest, i32 %yDest, i32 %wDe
 declare dllimport i32 @TranslateMessage(%struct.window.MSG* %lpMsg)
 
 
-@.str.0 = private unnamed_addr constant [18 x i8] c"very 13gay orgy32\00"
+@.str.0 = private unnamed_addr constant [18 x i8] c"test 13now sudo32\00"
 @.str.1 = private unnamed_addr constant [48 x i8] c"Window error: StartError::GetModuleHandleFailed\00"
 @.str.2 = private unnamed_addr constant [42 x i8] c"Failed to load image. not valid .BMP file\00"
 @.str.3 = private unnamed_addr constant [21 x i8] c"BorderlessImageClass\00"
@@ -2318,13 +2318,13 @@ logic_end_3:
 	%tmp7 = phi i1 [%tmp5, %logic_end_2], [%tmp6, %logic_rhs_3]
 	br i1 %tmp7, label %logic_end_4, label %logic_rhs_4
 logic_rhs_4:
-	%tmp8 = icmp eq i8 %tmp2, 118
+	%tmp8 = icmp eq i8 %tmp2, 11
 	br label %logic_end_4
 logic_end_4:
 	%tmp9 = phi i1 [%tmp7, %logic_end_3], [%tmp8, %logic_rhs_4]
 	br i1 %tmp9, label %logic_end_5, label %logic_rhs_5
 logic_rhs_5:
-	%tmp10 = icmp eq i8 %tmp2, 102
+	%tmp10 = icmp eq i8 %tmp2, 12
 	br label %logic_end_5
 logic_end_5:
 	%tmp11 = phi i1 [%tmp9, %logic_end_4], [%tmp10, %logic_rhs_5]
@@ -2611,13 +2611,13 @@ logic_end_3:
 	%tmp7 = phi i1 [%tmp5, %logic_end_2], [%tmp6, %logic_rhs_3]
 	br i1 %tmp7, label %logic_end_4, label %logic_rhs_4
 logic_rhs_4:
-	%tmp8 = icmp eq i8 %tmp2, 118
+	%tmp8 = icmp eq i8 %tmp2, 11
 	br label %logic_end_4
 logic_end_4:
 	%tmp9 = phi i1 [%tmp7, %logic_end_3], [%tmp8, %logic_rhs_4]
 	br i1 %tmp9, label %logic_end_5, label %logic_rhs_5
 logic_rhs_5:
-	%tmp10 = icmp eq i8 %tmp2, 102
+	%tmp10 = icmp eq i8 %tmp2, 12
 	br label %logic_end_5
 logic_end_5:
 	%tmp11 = phi i1 [%tmp9, %logic_end_4], [%tmp10, %logic_rhs_5]
