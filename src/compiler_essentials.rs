@@ -8,19 +8,18 @@ use crate::compiler::{
     },
 };
 use ordered_hash_map::OrderedHashMap;
-use rcsharp_lexer::{
-    defs::{LexerError, Span},
-    lex_text,
-};
+use rcsharp_lexer::{defs::LexerError, lex_text};
 use rcsharp_parser::{
     compiler_primitives::{Layout, PrimitiveInfo, PrimitiveKind, POINTER_SIZED_TYPE, VOID_TYPE},
-    parser::{Attribute, ParserType, StmtData},
+    defs::{Attribute, ParserError, StmtData},
+    parser::ParserType,
 };
 use std::{
     cell::{Cell, RefCell},
     collections::HashMap,
     sync::Arc,
 };
+pub(crate) type Span = std::ops::Range<usize>;
 #[derive(Debug, Clone, PartialEq)]
 pub enum LLVMVal {
     Register(u32),         // %tmp1
@@ -1271,7 +1270,7 @@ pub enum CompilerError {
     FunctionCompilation(Box<CompilerError>, usize),
     Io(std::io::Error),
     LexerError(String, LexerError),
-    ParserError(String, (Span, rcsharp_parser::parser::ParserError)),
+    ParserError(String, (Span, ParserError)),
 }
 impl CompilerError {
     pub fn extend(&self, extention_message: &str) -> CompilerError {
@@ -1319,7 +1318,7 @@ impl std::fmt::Display for CompilerError {
                 lex_text(&file, &mut tokens, &mut symbol_table).unwrap();
                 let token_span = &tokens[range.start..range.end];
                 match error {
-                    rcsharp_parser::parser::ParserError::OrphanedAttributes => {
+                    ParserError::OrphanedAttributes => {
                         let src_start = token_span.first().map(|x| x.span.start).unwrap_or(0);
                         let src_end = token_span.last().map(|x| x.span.end).unwrap_or(0);
                         let c = &file[..src_start];
@@ -1339,7 +1338,7 @@ impl std::fmt::Display for CompilerError {
                             col
                         );
                     }
-                    rcsharp_parser::parser::ParserError::ExpectedIdentifier => {
+                    ParserError::ExpectedIdentifier => {
                         let src_start = token_span.first().map(|x| x.span.start).unwrap_or(0);
                         let src_end = token_span.last().map(|x| x.span.end).unwrap_or(0);
                         let c = &file[..src_start];
@@ -1359,7 +1358,7 @@ impl std::fmt::Display for CompilerError {
                             col
                         );
                     }
-                    rcsharp_parser::parser::ParserError::UnexpectedToken { expected, found } => {
+                    ParserError::UnexpectedToken { expected, found } => {
                         let src_start = token_span.first().map(|x| x.span.start).unwrap_or(0);
                         let src_end = token_span.last().map(|x| x.span.end).unwrap_or(0);
                         let c = &file[..src_start];
@@ -1381,7 +1380,7 @@ impl std::fmt::Display for CompilerError {
                             col
                         );
                     }
-                    rcsharp_parser::parser::ParserError::ExpectedSemicolon => {
+                    ParserError::ExpectedSemicolon => {
                         let src_start = token_span.first().map(|x| x.span.start).unwrap_or(0);
                         let src_end = token_span.last().map(|x| x.span.end).unwrap_or(0);
                         let c = &file[..src_start];

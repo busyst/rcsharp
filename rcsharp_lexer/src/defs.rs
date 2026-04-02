@@ -167,7 +167,7 @@ impl Symbol {
         self.0 as usize
     }
 }
-pub type Span = std::ops::Range<usize>;
+pub(crate) type Span = std::ops::Range<usize>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct TokenData {

@@ -5,8 +5,8 @@ use std::{
 
 use rcsharp_parser::{
     compiler_primitives::BOOL_TYPE,
+    defs::{ParsedVariable, Stmt, StmtData, VarType},
     expression_parser::Expr,
-    parser::{ParserType, Span, Stmt, StmtData},
 };
 
 use crate::{
@@ -19,7 +19,8 @@ use crate::{
         structs::{CompiledValue, ContextPath, ContextPathEnd, Expected, LLVMInstruction},
     },
     compiler_essentials::{
-        CompileResult, CompilerError, CompilerType, LLVMOutputHandler, LLVMVal, Scope, Variable,
+        CompileResult, CompilerError, CompilerType, LLVMOutputHandler, LLVMVal, Scope, Span,
+        Variable,
     },
 };
 
@@ -580,15 +581,8 @@ impl LLVMGenPass {
                     return Err(x);
                 }
             },
-            Stmt::ConstLet(name, var_type, z) => {
-                self.compile_var_decl((name, var_type, &Some(z.clone()), true, false), ctx)
-            }
-            Stmt::Static(name, var_type, z) => {
-                self.compile_var_decl((name, var_type, z, false, true), ctx)
-            }
-
-            Stmt::Let(name, var_type, z) => {
-                self.compile_var_decl((name, var_type, z, false, false), ctx)
+            Stmt::StaticLet(pvar) | Stmt::ConstLet(pvar) | Stmt::Let(pvar) => {
+                self.compile_var_decl(pvar, ctx)
             }
             Stmt::Loop(inside) => self.compile_loop(inside, None, ctx),
             Stmt::ForLoop(expression, range, inside) => {
@@ -796,10 +790,16 @@ impl LLVMGenPass {
     }
     fn compile_var_decl(
         &mut self,
-        var: (&String, &ParserType, &Option<Expr>, bool, bool),
+        var: &ParsedVariable,
         ctx: &CompilerContext,
     ) -> CompileResult<(Vec<LLVMInstruction>, bool)> {
-        let (name, p_type, expr, is_const, is_static) = var;
+        let (name, p_type, expr, is_const, is_static) = (
+            var.name.to_string(),
+            &var.var_type,
+            &var.expr,
+            var.var_comp_type == VarType::Constant,
+            var.var_comp_type == VarType::Static,
+        );
         let var_type = CompilerType::from_parser_type(
             p_type,
             &ctx.symbols,

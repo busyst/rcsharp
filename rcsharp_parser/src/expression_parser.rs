@@ -5,7 +5,10 @@ use rcsharp_lexer::{
     defs::{DUMMY_EOF_TOKEN, Token, TokenData},
 };
 
-use crate::parser::{ParserError, ParserResult, ParserType};
+use crate::{
+    defs::{ParserError, ParserResult},
+    parser::ParserType,
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {

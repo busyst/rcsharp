@@ -5,8 +5,9 @@ use rcsharp_parser::{
         find_primitive_type, BOOL_TYPE, CHAR_TYPE, DEFAULT_DECIMAL_TYPE, DEFAULT_INTEGER_TYPE,
         POINTER_SIZED_TYPE,
     },
+    defs::{Stmt, StmtData},
     expression_parser::{expr_to_type_path, BinaryOp, Expr, UnaryOp},
-    parser::{ParserType, Stmt, StmtData},
+    parser::ParserType,
 };
 
 use crate::{

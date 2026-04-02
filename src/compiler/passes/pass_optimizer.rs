@@ -1,8 +1,8 @@
 use std::collections::HashSet;
 
 use rcsharp_parser::{
+    defs::{Stmt, StmtData},
     expression_parser::{BinaryOp, Expr, UnaryOp},
-    parser::{Stmt, StmtData},
 };
 
 use crate::{
@@ -36,9 +36,11 @@ impl OptimizerPass {
         for stmt_data in body.iter_mut() {
             match &mut stmt_data.stmt {
                 Stmt::Expr(expr) => self.optimize_expression_tree(expr),
-                Stmt::ConstLet(_, _, expr) => self.optimize_expression_tree(expr),
-                Stmt::Let(_, _, Some(expr)) => self.optimize_expression_tree(expr),
-                Stmt::Static(_, _, Some(expr)) => self.optimize_expression_tree(expr),
+                Stmt::StaticLet(var) | Stmt::ConstLet(var) | Stmt::Let(var) => {
+                    if let Some(x) = &mut var.expr {
+                        self.optimize_expression_tree(x)
+                    }
+                }
                 Stmt::Return(Some(expr)) => self.optimize_expression_tree(expr),
 
                 Stmt::If(cond, then_block, else_block) => {

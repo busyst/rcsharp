@@ -1,10 +1,7 @@
 use std::{collections::HashMap, path::Path};
 
 use rcsharp_lexer::{lex_file, LexerSymbolTable};
-use rcsharp_parser::{
-    expression_parser::Expr,
-    parser::{GeneralParser, StmtData},
-};
+use rcsharp_parser::{defs::StmtData, expression_parser::Expr, parser::GeneralParser};
 
 use crate::{
     compiler::{

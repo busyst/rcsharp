@@ -10,8 +10,11 @@ use crate::{
     },
 };
 use rcsharp_parser::{
+    defs::{
+        ParsedEnum, ParsedFunction, ParsedImplementation, ParsedStruct, ParsedTrait,
+        ParsedVariable, Stmt, StmtData,
+    },
     expression_parser::Expr,
-    parser::{Stmt, StmtData},
 };
 use std::collections::HashMap;
 
@@ -32,21 +35,12 @@ impl<'a> CompilerPass<'a> for TypeCheckPass {
             worklist.push((ContextPath::default(), *x.0, x.1.to_vec()));
         }
 
-        let mut traits: Vec<(ContextPath, FileID, rcsharp_parser::parser::ParsedTrait)> = vec![];
-        let mut implementations: Vec<(
-            ContextPath,
-            FileID,
-            rcsharp_parser::parser::ParsedImplementation,
-        )> = vec![];
-        let mut types: Vec<(ContextPath, FileID, rcsharp_parser::parser::ParsedStruct)> = vec![];
-        let mut enums: Vec<(ContextPath, FileID, rcsharp_parser::parser::ParsedEnum)> = vec![];
-        let mut functions: Vec<(ContextPath, FileID, rcsharp_parser::parser::ParsedFunction)> =
-            vec![];
-        let mut static_variables: Vec<(
-            ContextPath,
-            FileID,
-            (String, rcsharp_parser::parser::ParserType, Option<Expr>),
-        )> = vec![];
+        let mut traits: Vec<(ContextPath, FileID, ParsedTrait)> = vec![];
+        let mut implementations: Vec<(ContextPath, FileID, ParsedImplementation)> = vec![];
+        let mut types: Vec<(ContextPath, FileID, ParsedStruct)> = vec![];
+        let mut enums: Vec<(ContextPath, FileID, ParsedEnum)> = vec![];
+        let mut functions: Vec<(ContextPath, FileID, ParsedFunction)> = vec![];
+        let mut static_variables: Vec<(ContextPath, FileID, ParsedVariable)> = vec![];
 
         while let Some((path, file_id, body)) = worklist.pop() {
             for x in body {
@@ -70,12 +64,8 @@ impl<'a> CompilerPass<'a> for TypeCheckPass {
                     Stmt::Impl(x) => {
                         implementations.push((path.clone(), file_id.clone(), x));
                     }
-                    Stmt::Static(name, var_type, expression) => {
-                        static_variables.push((
-                            path.clone(),
-                            file_id.clone(),
-                            (name, var_type, expression),
-                        ));
+                    Stmt::StaticLet(var) => {
+                        static_variables.push((path.clone(), file_id.clone(), var));
                     }
                     _ => {}
                 }
@@ -157,9 +147,9 @@ impl<'a> CompilerPass<'a> for TypeCheckPass {
         }
         ctx.symbols.set_alias_types(HashMap::new());
 
-        for (current_path, _file_id, (name, var_type, _expression)) in static_variables {
-            let t = CompilerType::from_parser_type(&var_type, &ctx.symbols, &current_path)?;
-            let full_path = ContextPathEnd::from_context_path(current_path, &name);
+        for (current_path, _file_id, var) in static_variables {
+            let t = CompilerType::from_parser_type(&var.var_type, &ctx.symbols, &current_path)?;
+            let full_path = ContextPathEnd::from_context_path(current_path, &var.name);
             ctx.symbols
                 .insert_static_var(full_path, Variable::new(t, false, true))?;
         }
