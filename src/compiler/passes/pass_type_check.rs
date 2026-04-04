@@ -41,6 +41,7 @@ impl<'a> CompilerPass<'a> for TypeCheckPass {
         let mut enums: Vec<(ContextPath, FileID, ParsedEnum)> = vec![];
         let mut functions: Vec<(ContextPath, FileID, ParsedFunction)> = vec![];
         let mut static_variables: Vec<(ContextPath, FileID, ParsedVariable)> = vec![];
+        let mut consts: Vec<(ContextPath, FileID, ParsedVariable)> = vec![];
 
         while let Some((path, file_id, body)) = worklist.pop() {
             for x in body {
@@ -66,6 +67,9 @@ impl<'a> CompilerPass<'a> for TypeCheckPass {
                     }
                     Stmt::StaticLet(var) => {
                         static_variables.push((path.clone(), file_id.clone(), var));
+                    }
+                    Stmt::ConstLet(var) => {
+                        consts.push((path.clone(), file_id.clone(), var));
                     }
                     _ => {}
                 }
@@ -152,6 +156,23 @@ impl<'a> CompilerPass<'a> for TypeCheckPass {
             let full_path = ContextPathEnd::from_context_path(current_path, &var.name);
             ctx.symbols
                 .insert_static_var(full_path, Variable::new(t, false, true))?;
+        }
+        for (current_path, _file_id, var) in consts {
+            let t = CompilerType::from_parser_type(&var.var_type, &ctx.symbols, &current_path)?;
+            let full_path = ContextPathEnd::from_context_path(current_path, &var.name);
+            let c_var = Variable::new(t, true, false);
+            let Some(expr) = var.expr else {
+                return Err(CompilerError::Generic(format!("Const must have expression")).into());
+            };
+            let Some(expr) = constant_expression_compiler(&expr) else {
+                return Err(CompilerError::Generic(format!(
+                    "Expresion {} did nit compiled to contant",
+                    expr.debug_emit()
+                ))
+                .into());
+            };
+            c_var.set_constant_value(Some(expr));
+            ctx.symbols.insert_const(full_path, c_var)?;
         }
         for (current_path, file_id, parsed_function) in functions {
             let return_type = CompilerType::from_parser_type(

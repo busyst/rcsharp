@@ -1582,6 +1582,7 @@ pub struct SymbolTable {
     alias_types: HashMap<String, CompilerType>,
     enums: ContextPathDictionary<Enum>,
     static_variables: ContextPathDictionary<Variable>,
+    consts: ContextPathDictionary<Variable>,
 }
 impl SymbolTable {
     pub fn get_type_by_id(&self, type_id: usize) -> &Struct {
@@ -1614,6 +1615,12 @@ impl SymbolTable {
         fqn: &'a ContextPathEnd,
     ) -> Option<(&'a ContextPathEnd, &'a Variable)> {
         self.static_variables.get(&fqn).map(|x| (fqn, x))
+    }
+    pub fn get_const_by_path<'a>(
+        &'a self,
+        fqn: &'a ContextPathEnd,
+    ) -> Option<(&'a ContextPathEnd, &'a Variable)> {
+        self.consts.get(&fqn).map(|x| (fqn, x))
     }
     pub fn insert_type(&mut self, full_path: ContextPathEnd, structure: Struct) {
         if let Some(x) = self.types.get_mut(&full_path) {
@@ -1662,7 +1669,20 @@ impl SymbolTable {
         }
         return Ok(());
     }
-
+    pub fn insert_const(
+        &mut self,
+        full_path: ContextPathEnd,
+        variable: Variable,
+    ) -> CompileResult<()> {
+        if let Some(_) = self.consts.insert(&full_path, variable) {
+            return Err(CompilerError::Generic(format!(
+                "Constant with name {} already exists!",
+                full_path.to_string()
+            ))
+            .into());
+        }
+        return Ok(());
+    }
     pub fn functions_iter(&self) -> ContextPathDictionaryIter<'_, Function> {
         self.functions.iter()
     }

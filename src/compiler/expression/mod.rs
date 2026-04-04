@@ -126,6 +126,21 @@ impl<'a> ExpressionCompiler<'a> {
             var_type.substitute_global_aliases(self.symbols())?;
             return variable.load_llvm_value(0, &path.to_string(), self.ctx, var_type);
         }
+        if let Some((path, variable)) = self
+            .symbols()
+            .get_const_by_path(&glob_path)
+            .or_else(|| self.symbols().get_const_by_path(&name))
+        {
+            let mut vtype = variable.compiler_type.clone();
+            vtype.substitute_global_aliases(self.symbols())?;
+            variable.mark_usage(false, false);
+            if let Some(val) = variable.try_load_const_llvm_value() {
+                return Ok((val, vec![]));
+            }
+            let mut var_type = variable.compiler_type().clone();
+            var_type.substitute_global_aliases(self.symbols())?;
+            return variable.load_llvm_value(0, &path.to_string(), self.ctx, var_type);
+        }
         if let Some(ptype) = find_primitive_type(&name.to_string()) {
             return Ok((CompiledValue::Type(CompilerType::Primitive(ptype)), vec![]));
         }
@@ -167,10 +182,11 @@ impl<'a> ExpressionCompiler<'a> {
                 .collect(),
         );
 
-        if let Some(x) = self.symbols().get_enum_by_path(&enum_path).or_else(|| {
-            self.symbols()
-                .get_enum_by_path(&enum_path.with_start(&func_path))
-        }) {
+        if let Some(x) = self
+            .symbols()
+            .get_enum_by_path(&enum_path.with_start(&func_path))
+            .or_else(|| self.symbols().get_enum_by_path(&enum_path))
+        {
             return Ok((
                 CompiledValue::Value {
                     llvm_repr: x
@@ -184,8 +200,43 @@ impl<'a> ExpressionCompiler<'a> {
                 vec![],
             ));
         }
+        let rel_path =
+            ContextPathEnd::from_vec(path.iter().rev().map(|x| Arc::from(*x)).collect::<Vec<_>>());
+        let abs_path = rel_path.with_start(&self.ctx.current_function_path);
+
+        if let Some((path, variable)) = self
+            .symbols()
+            .get_static_by_path(&abs_path)
+            .or_else(|| self.symbols().get_static_by_path(&rel_path))
+        {
+            let mut vtype = variable.compiler_type.clone();
+            vtype.substitute_global_aliases(self.symbols())?;
+            variable.mark_usage(false, false);
+            if let Some(val) = variable.try_load_const_llvm_value() {
+                return Ok((val, vec![]));
+            }
+            let mut var_type = variable.compiler_type().clone();
+            var_type.substitute_global_aliases(self.symbols())?;
+            return variable.load_llvm_value(0, &path.to_string(), self.ctx, var_type);
+        }
+        if let Some((path, variable)) = self
+            .symbols()
+            .get_const_by_path(&abs_path)
+            .or_else(|| self.symbols().get_const_by_path(&rel_path))
+        {
+            let mut vtype = variable.compiler_type.clone();
+            vtype.substitute_global_aliases(self.symbols())?;
+            variable.mark_usage(false, false);
+            if let Some(val) = variable.try_load_const_llvm_value() {
+                return Ok((val, vec![]));
+            }
+            let mut var_type = variable.compiler_type().clone();
+            var_type.substitute_global_aliases(self.symbols())?;
+            return variable.load_llvm_value(0, &path.to_string(), self.ctx, var_type);
+        }
         Err(CompilerError::Generic(format!(
-            "Static access not implemented for non-enums"
+            "Invalid path {}/{}",
+            abs_path, rel_path
         )))
     }
     fn compile_integer_literal(

@@ -2733,17 +2733,17 @@ define %struct.string.String @process.get_executable_env_path(){
 	br label %loop_start0
 loop_start0:
 	%tmp4 = load i32, i32* %v1
-	%tmp5 = load i8*, i8** %v0
-	%tmp6 = getelementptr inbounds i8, i8* %tmp5, i32 %tmp4
-	%tmp7 = load i8, i8* %tmp6
-	%tmp8 = icmp ne i8 %tmp7, 92
-	br i1 %tmp8, label %logic_rhs_1, label %logic_end_1
+	%tmp5 = icmp sge i32 %tmp4, 0
+	br i1 %tmp5, label %logic_rhs_1, label %logic_end_1
 logic_rhs_1:
-	%tmp9 = load i32, i32* %v1
-	%tmp10 = icmp sge i32 %tmp9, 0
+	%tmp6 = load i32, i32* %v1
+	%tmp7 = load i8*, i8** %v0
+	%tmp8 = getelementptr inbounds i8, i8* %tmp7, i32 %tmp6
+	%tmp9 = load i8, i8* %tmp8
+	%tmp10 = icmp ne i8 %tmp9, 92
 	br label %logic_end_1
 logic_end_1:
-	%tmp11 = phi i1 [%tmp8, %loop_start0], [%tmp10, %logic_rhs_1]
+	%tmp11 = phi i1 [%tmp5, %loop_start0], [%tmp10, %logic_rhs_1]
 	br i1 %tmp11, label %endif2, label %else2
 else2:
 	br label %loop_body0_exit

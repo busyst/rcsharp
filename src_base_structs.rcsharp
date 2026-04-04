@@ -47,7 +47,7 @@ namespace process{
     fn get_executable_env_path() : string::String {
         let string : string::String = get_executable_path();
         let index : i32 = string.len as i32 - 1;
-        while string.data[index] != '\\' && index >= 0 {
+        while index >= 0 && string.data[index] != '\\' {
             index = index - 1;
         }
         string.len = (index + 1) as i32;
@@ -56,7 +56,7 @@ namespace process{
     pub no_return fn throw(exception: &i8) : void {
         const len: i32 = string_utils::c_str_len(exception);
         console::AllocConsole();
-        const stdout_handle: &i8 = console::GetStdHandle(-11 as i32);
+        const stdout_handle: &i8 = console::GetStdHandle(console::STD_OUTPUT_HANDLE);
         console::writeln("Exception: ", 11);
         console::writeln(exception, len);
         ExitProcess(-1);
@@ -267,6 +267,7 @@ namespace vector{
     }
 }
 namespace console{
+    pub const STD_OUTPUT_HANDLE: i32 = -11;
     #[DllImport("kernel32.dll")]
     extern{
         fn AllocConsole(): i32;
@@ -283,7 +284,7 @@ namespace console{
     
 
     fn get_stdout() : &i8 {
-        let stdout_handle: &i8 = GetStdHandle(-11 as i32);
+        let stdout_handle: &i8 = GetStdHandle(STD_OUTPUT_HANDLE);
         if (stdout_handle == bitcast::<&i8>(-1 as isize)) {
             process::throw("stdout handle was invalid");
         }
@@ -1103,7 +1104,7 @@ namespace tests{
 
 namespace window{
     // Down from here, ai assisted code
-    
+    pub const GWLP_USERDATA: i32 = -21;
     // https://program-day.tistory.com/22
     enum WM : u32 {
         NULL = 0x0000,
@@ -1568,7 +1569,7 @@ namespace window{
         if uMsg == WM::PAINT {
             let ps: PAINTSTRUCT;
             const hdc: &void = BeginPaint(hWnd, &ps);
-            const hStoredImage: &void = GetWindowLongPtrA(hWnd, -21);
+            const hStoredImage: &void = GetWindowLongPtrA(hWnd, GWLP_USERDATA);
             if hStoredImage != null {
                 draw_bitmap(hdc, hStoredImage, 0, 0);
             }
@@ -1720,7 +1721,7 @@ namespace window{
         );
         if is_null(hWnd) { process::throw("Window error: StartError::CreateWindowFailed"); }
 
-        SetWindowLongPtrA(hWnd, -21, local_hImage);
+        SetWindowLongPtrA(hWnd, GWLP_USERDATA, local_hImage);
 
         ShowWindow(hWnd, SW::SHOW);
         let rect: RECT;

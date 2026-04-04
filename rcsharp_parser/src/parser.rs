@@ -257,6 +257,7 @@ impl<'a> GeneralParser<'a> {
             Token::KeywordNoReturn => self.parse_with_modifier("no_return", attributes),
             Token::KeywordExtern => self.parse_with_modifier("extern", attributes),
             Token::KeywordStatic => self.parse_static_let_statement(start_span.start),
+            Token::KeywordConst => self.parse_const_let_statement(start_span.start),
             _ => {
                 if !attributes.is_empty() {
                     return Err((start_span, ParserError::OrphanedAttributes));
@@ -283,7 +284,11 @@ impl<'a> GeneralParser<'a> {
             modifier: &str,
         ) -> Result<usize, (Span, ParserError)> {
             match &stmt.stmt {
-                Stmt::Function(_) | Stmt::Struct(_) | Stmt::Enum(_) => Ok(1),
+                Stmt::Function(_)
+                | Stmt::Struct(_)
+                | Stmt::Enum(_)
+                | Stmt::StaticLet(_)
+                | Stmt::ConstLet(_) => Ok(1),
                 Stmt::Block(b) => {
                     let mut count = 0;
                     for x in b.iter() {
@@ -325,6 +330,8 @@ impl<'a> GeneralParser<'a> {
                 Stmt::Function(f) => apply(&mut f.prefixes, &mut f.attributes),
                 Stmt::Struct(s) => apply(&mut s.prefixes, &mut s.attributes),
                 Stmt::Enum(e) => apply(&mut e.prefixes, &mut e.attributes),
+                Stmt::StaticLet(e) => apply(&mut e.prefixes, &mut e.attributes),
+                Stmt::ConstLet(e) => apply(&mut e.prefixes, &mut e.attributes),
                 Stmt::Block(b) => {
                     for x in b.iter_mut() {
                         apply_rec(x, modifier, attributes, count, prepend_mod, prepend_attr);
@@ -836,7 +843,7 @@ impl<'a> GeneralParser<'a> {
         let initializer = self.parse_expression()?;
         self.consume(&Token::SemiColon)?;
         Ok(StmtData {
-            stmt: Stmt::StaticLet(ParsedVariable {
+            stmt: Stmt::ConstLet(ParsedVariable {
                 path: "".into(),
                 attributes: Box::new([]),
                 name: name.into(),
