@@ -1448,6 +1448,19 @@ impl CompiledLValue {
             function_id: Some(id),
         })
     }
+    pub fn load_rvalue(
+        self,
+        ctx: &CodeGenContext,
+        instr: &mut Vec<LLVMInstruction>,
+    ) -> CompiledValue {
+        let target_reg = ctx.acquire_temp_id();
+        instr.push(LLVMInstruction::Load {
+            target_reg,
+            ptr: self.location,
+            result_type: self.value_type.clone(),
+        });
+        CompiledValue::new_value(LLVMVal::Register(target_reg), self.value_type)
+    }
 }
 
 #[derive(Default)]
@@ -1610,17 +1623,11 @@ impl SymbolTable {
     pub fn get_enum_by_path(&self, fqn: &ContextPathEnd) -> Option<&Enum> {
         self.enums.get(&fqn)
     }
-    pub fn get_static_by_path<'a>(
-        &'a self,
-        fqn: &'a ContextPathEnd,
-    ) -> Option<(&'a ContextPathEnd, &'a Variable)> {
-        self.static_variables.get(&fqn).map(|x| (fqn, x))
+    pub fn get_static_by_path(&self, fqn: &ContextPathEnd) -> Option<(ContextPathEnd, &Variable)> {
+        self.static_variables.get(&fqn).map(|x| (fqn.clone(), x))
     }
-    pub fn get_const_by_path<'a>(
-        &'a self,
-        fqn: &'a ContextPathEnd,
-    ) -> Option<(&'a ContextPathEnd, &'a Variable)> {
-        self.consts.get(&fqn).map(|x| (fqn, x))
+    pub fn get_const_by_path(&self, fqn: &ContextPathEnd) -> Option<(ContextPathEnd, &Variable)> {
+        self.consts.get(&fqn).map(|x| (fqn.clone(), x))
     }
     pub fn insert_type(&mut self, full_path: ContextPathEnd, structure: Struct) {
         if let Some(x) = self.types.get_mut(&full_path) {

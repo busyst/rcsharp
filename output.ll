@@ -1093,90 +1093,87 @@ then0:
 	br label %endif0
 endif0:
 	call void @mem.fill(i8 88, i8* %tmp0, i64 16)
-	%tmp2 = sext i32 0 to i64
-	store i64 %tmp2, i64* %v0
+	store i64 0, i64* %v0
 	br label %loop_cond1
 loop_cond1:
-	%tmp3 = load i64, i64* %v0
-	%tmp4 = icmp sge i64 %tmp3, 16
-	br i1 %tmp4, label %then2, label %endif2
+	%tmp2 = load i64, i64* %v0
+	%tmp3 = icmp sge i64 %tmp2, 16
+	br i1 %tmp3, label %then2, label %endif2
 then2:
 	br label %loop_body1_exit
 endif2:
-	%tmp5 = load i64, i64* %v0
-	%tmp6 = getelementptr inbounds i8, i8* %tmp0, i64 %tmp5
-	%tmp7 = load i8, i8* %tmp6
-	%tmp8 = icmp ne i8 %tmp7, 88
-	br i1 %tmp8, label %then3, label %endif3
+	%tmp4 = load i64, i64* %v0
+	%tmp5 = getelementptr inbounds i8, i8* %tmp0, i64 %tmp4
+	%tmp6 = load i8, i8* %tmp5
+	%tmp7 = icmp ne i8 %tmp6, 88
+	br i1 %tmp7, label %then3, label %endif3
 then3:
 	call void @process.throw(i8* @.str.53)
 	br label %endif3
 endif3:
-	%tmp9 = load i64, i64* %v0
-	%tmp10 = add i64 %tmp9, 1
-	store i64 %tmp10, i64* %v0
+	%tmp8 = load i64, i64* %v0
+	%tmp9 = add i64 %tmp8, 1
+	store i64 %tmp9, i64* %v0
 	br label %loop_cond1
 loop_body1_exit:
 	call void @mem.zero_fill(i8* %tmp0, i64 16)
-	%tmp11 = sext i32 0 to i64
-	store i64 %tmp11, i64* %v1
+	store i64 0, i64* %v1
 	br label %loop_cond4
 loop_cond4:
-	%tmp12 = load i64, i64* %v1
-	%tmp13 = icmp sge i64 %tmp12, 16
-	br i1 %tmp13, label %then5, label %endif5
+	%tmp10 = load i64, i64* %v1
+	%tmp11 = icmp sge i64 %tmp10, 16
+	br i1 %tmp11, label %then5, label %endif5
 then5:
 	br label %loop_body4_exit
 endif5:
-	%tmp14 = load i64, i64* %v1
-	%tmp15 = getelementptr inbounds i8, i8* %tmp0, i64 %tmp14
-	%tmp16 = load i8, i8* %tmp15
-	%tmp17 = icmp ne i8 %tmp16, 0
-	br i1 %tmp17, label %then6, label %endif6
+	%tmp12 = load i64, i64* %v1
+	%tmp13 = getelementptr inbounds i8, i8* %tmp0, i64 %tmp12
+	%tmp14 = load i8, i8* %tmp13
+	%tmp15 = icmp ne i8 %tmp14, 0
+	br i1 %tmp15, label %then6, label %endif6
 then6:
 	call void @process.throw(i8* @.str.54)
 	br label %endif6
 endif6:
-	%tmp18 = load i64, i64* %v1
-	%tmp19 = add i64 %tmp18, 1
-	store i64 %tmp19, i64* %v1
+	%tmp16 = load i64, i64* %v1
+	%tmp17 = add i64 %tmp16, 1
+	store i64 %tmp17, i64* %v1
 	br label %loop_cond4
 loop_body4_exit:
-	%tmp20 = call i8* @mem.malloc(i64 16)
-	%tmp21 = icmp eq i8* %tmp20, null
-	br i1 %tmp21, label %then7, label %endif7
+	%tmp18 = call i8* @mem.malloc(i64 16)
+	%tmp19 = icmp eq i8* %tmp18, null
+	br i1 %tmp19, label %then7, label %endif7
 then7:
 	call void @process.throw(i8* @.str.55)
 	br label %endif7
 endif7:
-	call void @mem.fill(i8 89, i8* %tmp20, i64 16)
-	call void @mem.copy(i8* %tmp20, i8* %tmp0, i64 16)
-	%tmp22 = sext i32 0 to i64
-	store i64 %tmp22, i64* %v2
+	call void @mem.fill(i8 89, i8* %tmp18, i64 16)
+	call void @mem.copy(i8* %tmp18, i8* %tmp0, i64 16)
+	store i64 0, i64* %v2
 	br label %loop_cond8
 loop_cond8:
-	%tmp23 = load i64, i64* %v2
-	%tmp24 = icmp sge i64 %tmp23, 16
-	br i1 %tmp24, label %then9, label %endif9
+	%tmp20 = load i64, i64* %v2
+	%tmp21 = icmp sge i64 %tmp20, 16
+	br i1 %tmp21, label %then9, label %endif9
 then9:
 	br label %loop_body8_exit
 endif9:
-	%tmp25 = load i64, i64* %v2
-	%tmp26 = getelementptr inbounds i8, i8* %tmp0, i64 %tmp25
-	%tmp27 = load i8, i8* %tmp26
-	%tmp28 = icmp ne i8 %tmp27, 89
-	br i1 %tmp28, label %then10, label %endif10
+	%tmp22 = load i64, i64* %v2
+	%tmp23 = getelementptr inbounds i8, i8* %tmp0, i64 %tmp22
+	%tmp24 = load i8, i8* %tmp23
+	%tmp25 = icmp ne i8 %tmp24, 89
+	br i1 %tmp25, label %then10, label %endif10
 then10:
 	call void @process.throw(i8* @.str.56)
 	br label %endif10
 endif10:
-	%tmp29 = load i64, i64* %v2
-	%tmp30 = add i64 %tmp29, 1
-	store i64 %tmp30, i64* %v2
+	%tmp26 = load i64, i64* %v2
+	%tmp27 = add i64 %tmp26, 1
+	store i64 %tmp27, i64* %v2
 	br label %loop_cond8
 loop_body8_exit:
 	call void @mem.free(i8* %tmp0)
-	call void @mem.free(i8* %tmp20)
+	call void @mem.free(i8* %tmp18)
 	call void @console.writeln(i8* @.str.20, i32 2)
 	ret void
 }
@@ -2854,155 +2851,151 @@ define void @mem.fill(i8 %val, i8* %dest, i64 %len){
 }
 define void @mem.copy(i8* %src, i8* %dest, i64 %len){
 	%v0 = alloca i64
-	%tmp0 = sext i32 0 to i64
-	store i64 %tmp0, i64* %v0
+	store i64 0, i64* %v0
 	br label %loop_cond0
 loop_cond0:
-	%tmp1 = load i64, i64* %v0
-	%tmp2 = icmp sge i64 %tmp1, %len
-	br i1 %tmp2, label %then1, label %endif1
+	%tmp0 = load i64, i64* %v0
+	%tmp1 = icmp sge i64 %tmp0, %len
+	br i1 %tmp1, label %then1, label %endif1
 then1:
 	br label %loop_body0_exit
 endif1:
-	%tmp3 = load i64, i64* %v0
-	%tmp4 = getelementptr inbounds i8, i8* %dest, i64 %tmp3
-	%tmp5 = load i64, i64* %v0
-	%tmp6 = getelementptr inbounds i8, i8* %src, i64 %tmp5
-	%tmp7 = load i8, i8* %tmp6
-	store i8 %tmp7, i8* %tmp4
-	%tmp8 = load i64, i64* %v0
-	%tmp9 = add i64 %tmp8, 1
-	store i64 %tmp9, i64* %v0
+	%tmp2 = load i64, i64* %v0
+	%tmp3 = getelementptr inbounds i8, i8* %dest, i64 %tmp2
+	%tmp4 = load i64, i64* %v0
+	%tmp5 = getelementptr inbounds i8, i8* %src, i64 %tmp4
+	%tmp6 = load i8, i8* %tmp5
+	store i8 %tmp6, i8* %tmp3
+	%tmp7 = load i64, i64* %v0
+	%tmp8 = add i64 %tmp7, 1
+	store i64 %tmp8, i64* %v0
 	br label %loop_cond0
 loop_body0_exit:
 	ret void
 }
 define i32 @mem.compare(i8* %left, i8* %right, i64 %len){
 	%v0 = alloca i64
-	%tmp0 = sext i32 0 to i64
-	store i64 %tmp0, i64* %v0
+	store i64 0, i64* %v0
 	br label %loop_cond0
 loop_cond0:
-	%tmp1 = load i64, i64* %v0
-	%tmp2 = icmp sge i64 %tmp1, %len
-	br i1 %tmp2, label %then1, label %endif1
+	%tmp0 = load i64, i64* %v0
+	%tmp1 = icmp sge i64 %tmp0, %len
+	br i1 %tmp1, label %then1, label %endif1
 then1:
 	br label %loop_body0_exit
 endif1:
-	%tmp3 = load i64, i64* %v0
-	%tmp4 = getelementptr inbounds i8, i8* %left, i64 %tmp3
-	%tmp5 = load i8, i8* %tmp4
-	%tmp6 = load i64, i64* %v0
-	%tmp7 = getelementptr inbounds i8, i8* %right, i64 %tmp6
-	%tmp8 = load i8, i8* %tmp7
-	%tmp9 = icmp slt i8 %tmp5, %tmp8
-	br i1 %tmp9, label %then2, label %endif2
+	%tmp2 = load i64, i64* %v0
+	%tmp3 = getelementptr inbounds i8, i8* %left, i64 %tmp2
+	%tmp4 = load i8, i8* %tmp3
+	%tmp5 = load i64, i64* %v0
+	%tmp6 = getelementptr inbounds i8, i8* %right, i64 %tmp5
+	%tmp7 = load i8, i8* %tmp6
+	%tmp8 = icmp slt i8 %tmp4, %tmp7
+	br i1 %tmp8, label %then2, label %endif2
 then2:
 	br label %func_exit
 endif2:
-	%tmp10 = load i64, i64* %v0
-	%tmp11 = getelementptr inbounds i8, i8* %left, i64 %tmp10
-	%tmp12 = load i8, i8* %tmp11
-	%tmp13 = load i64, i64* %v0
-	%tmp14 = getelementptr inbounds i8, i8* %right, i64 %tmp13
-	%tmp15 = load i8, i8* %tmp14
-	%tmp16 = icmp sgt i8 %tmp12, %tmp15
-	br i1 %tmp16, label %then3, label %endif3
+	%tmp9 = load i64, i64* %v0
+	%tmp10 = getelementptr inbounds i8, i8* %left, i64 %tmp9
+	%tmp11 = load i8, i8* %tmp10
+	%tmp12 = load i64, i64* %v0
+	%tmp13 = getelementptr inbounds i8, i8* %right, i64 %tmp12
+	%tmp14 = load i8, i8* %tmp13
+	%tmp15 = icmp sgt i8 %tmp11, %tmp14
+	br i1 %tmp15, label %then3, label %endif3
 then3:
 	br label %func_exit
 endif3:
-	%tmp17 = load i64, i64* %v0
-	%tmp18 = add i64 %tmp17, 1
-	store i64 %tmp18, i64* %v0
+	%tmp16 = load i64, i64* %v0
+	%tmp17 = add i64 %tmp16, 1
+	store i64 %tmp17, i64* %v0
 	br label %loop_cond0
 loop_body0_exit:
 	br label %func_exit
 func_exit:
-	%tmp19 = phi i32 [-1, %then2], [1, %then3], [0, %loop_body0_exit]
-	ret i32 %tmp19
+	%tmp18 = phi i32 [-1, %then2], [1, %then3], [0, %loop_body0_exit]
+	ret i32 %tmp18
 }
 define i32 @fs.write_to_file(i8* %path, i8* %content, i32 %content_len){
 	%v0 = alloca i32
 	%tmp0 = call i8* @CreateFileA(i8* %path, i32 1073741824, i32 0, i8* null, i32 2, i32 128, i8* null)
-	%tmp1 = sext i32 -1 to i64
-	%tmp2 = inttoptr i64 %tmp1 to i8*
-	%tmp3 = icmp eq i8* %tmp0, %tmp2
-	br i1 %tmp3, label %then0, label %endif0
+	%tmp1 = inttoptr i64 -1 to i8*
+	%tmp2 = icmp eq i8* %tmp0, %tmp1
+	br i1 %tmp2, label %then0, label %endif0
 then0:
 	br label %func_exit
 endif0:
 	store i32 0, i32* %v0
-	%tmp4 = call i32 @WriteFile(i8* %tmp0, i8* %content, i32 %content_len, i32* %v0, i8* null)
+	%tmp3 = call i32 @WriteFile(i8* %tmp0, i8* %content, i32 %content_len, i32* %v0, i8* null)
 	call i32 @CloseHandle(i8* %tmp0)
-	%tmp5 = icmp ne i32 %tmp4, 0
-	br i1 %tmp5, label %logic_rhs_1, label %logic_end_1
+	%tmp4 = icmp ne i32 %tmp3, 0
+	br i1 %tmp4, label %logic_rhs_1, label %logic_end_1
 logic_rhs_1:
-	%tmp6 = load i32, i32* %v0
-	%tmp7 = icmp eq i32 %tmp6, %content_len
+	%tmp5 = load i32, i32* %v0
+	%tmp6 = icmp eq i32 %tmp5, %content_len
 	br label %logic_end_1
 logic_end_1:
-	%tmp8 = phi i1 [%tmp5, %endif0], [%tmp7, %logic_rhs_1]
-	%tmp9 = zext i1 %tmp8 to i32
+	%tmp7 = phi i1 [%tmp4, %endif0], [%tmp6, %logic_rhs_1]
+	%tmp8 = zext i1 %tmp7 to i32
 	br label %func_exit
 func_exit:
-	%tmp10 = phi i32 [0, %then0], [%tmp9, %logic_end_1]
-	ret i32 %tmp10
+	%tmp9 = phi i32 [0, %then0], [%tmp8, %logic_end_1]
+	ret i32 %tmp9
 }
 define %struct.string.String @fs.read_full_file_as_string(i8* %path){
 	%v0 = alloca i64
 	%v1 = alloca %struct.string.String
 	%v2 = alloca i32
 	%tmp0 = call i8* @CreateFileA(i8* %path, i32 2147483648, i32 1, i8* null, i32 3, i32 128, i8* null)
-	%tmp1 = sext i32 -1 to i64
-	%tmp2 = inttoptr i64 %tmp1 to i8*
-	%tmp3 = icmp eq i8* %tmp0, %tmp2
-	br i1 %tmp3, label %then0, label %endif0
+	%tmp1 = inttoptr i64 -1 to i8*
+	%tmp2 = icmp eq i8* %tmp0, %tmp1
+	br i1 %tmp2, label %then0, label %endif0
 then0:
-	%tmp4 = call i8* @string_utils.insert(i8* @.str.82, i8* %path, i32 16)
-	call void @process.throw(i8* %tmp4)
+	%tmp3 = call i8* @string_utils.insert(i8* @.str.82, i8* %path, i32 16)
+	call void @process.throw(i8* %tmp3)
 	br label %endif0
 endif0:
 	store i64 0, i64* %v0
-	%tmp5 = call i32 @GetFileSizeEx(i8* %tmp0, i64* %v0)
-	%tmp6 = icmp eq i32 %tmp5, 0
-	br i1 %tmp6, label %then1, label %endif1
+	%tmp4 = call i32 @GetFileSizeEx(i8* %tmp0, i64* %v0)
+	%tmp5 = icmp eq i32 %tmp4, 0
+	br i1 %tmp5, label %then1, label %endif1
 then1:
 	call i32 @CloseHandle(i8* %tmp0)
-	%tmp7 = call %struct.string.String @string.empty()
+	%tmp6 = call %struct.string.String @string.empty()
 	br label %func_exit
 endif1:
-	%tmp8 = load i64, i64* %v0
-	%tmp9 = trunc i64 %tmp8 to i32
-	%tmp10 = call %struct.string.String @string.with_size(i32 %tmp9)
-	store %struct.string.String %tmp10, %struct.string.String* %v1
+	%tmp7 = load i64, i64* %v0
+	%tmp8 = trunc i64 %tmp7 to i32
+	%tmp9 = call %struct.string.String @string.with_size(i32 %tmp8)
+	store %struct.string.String %tmp9, %struct.string.String* %v1
 	store i32 0, i32* %v2
-	%tmp11 = load i8*, i8** %v1
-	%tmp12 = load i64, i64* %v0
-	%tmp13 = trunc i64 %tmp12 to i32
-	%tmp14 = call i32 @ReadFile(i8* %tmp0, i8* %tmp11, i32 %tmp13, i32* %v2, i8* null)
+	%tmp10 = load i8*, i8** %v1
+	%tmp11 = load i64, i64* %v0
+	%tmp12 = trunc i64 %tmp11 to i32
+	%tmp13 = call i32 @ReadFile(i8* %tmp0, i8* %tmp10, i32 %tmp12, i32* %v2, i8* null)
 	call i32 @CloseHandle(i8* %tmp0)
-	%tmp15 = icmp eq i32 %tmp14, 0
-	br i1 %tmp15, label %then2, label %endif2
+	%tmp14 = icmp eq i32 %tmp13, 0
+	br i1 %tmp14, label %then2, label %endif2
 then2:
 	call void @string.free(%struct.string.String* %v1)
 	call void @process.throw(i8* @.str.83)
 	br label %endif2
 endif2:
-	%tmp16 = getelementptr inbounds %struct.string.String, %struct.string.String* %v1, i32 0, i32 1
-	%tmp17 = load i64, i64* %v0
-	%tmp18 = trunc i64 %tmp17 to i32
-	store i32 %tmp18, i32* %tmp16
-	%tmp19 = getelementptr inbounds %struct.string.String, %struct.string.String* %v1, i32 0, i32 1
-	%tmp20 = load i32, i32* %tmp19
-	%tmp21 = load i8*, i8** %v1
-	%tmp22 = getelementptr inbounds i8, i8* %tmp21, i32 %tmp20
-	store i8 0, i8* %tmp22
-	%tmp23 = load %struct.string.String, %struct.string.String* %v1
+	%tmp15 = getelementptr inbounds %struct.string.String, %struct.string.String* %v1, i32 0, i32 1
+	%tmp16 = load i64, i64* %v0
+	%tmp17 = trunc i64 %tmp16 to i32
+	store i32 %tmp17, i32* %tmp15
+	%tmp18 = getelementptr inbounds %struct.string.String, %struct.string.String* %v1, i32 0, i32 1
+	%tmp19 = load i32, i32* %tmp18
+	%tmp20 = load i8*, i8** %v1
+	%tmp21 = getelementptr inbounds i8, i8* %tmp20, i32 %tmp19
+	store i8 0, i8* %tmp21
+	%tmp22 = load %struct.string.String, %struct.string.String* %v1
 	br label %func_exit
 func_exit:
 ; Variable buffer is out.
-	%tmp24 = phi %struct.string.String [%tmp7, %then1], [%tmp23, %endif2]
-	ret %struct.string.String %tmp24
+	%tmp23 = phi %struct.string.String [%tmp6, %then1], [%tmp22, %endif2]
+	ret %struct.string.String %tmp23
 }
 define i1 @fs.file_exists(i8* %path){
 	%tmp0 = call i32 @GetFileAttributesA(i8* %path)
@@ -3015,18 +3008,17 @@ define i32 @fs.delete_file(i8* %path){
 }
 define i32 @fs.create_file(i8* %path){
 	%tmp0 = call i8* @CreateFileA(i8* %path, i32 1073741824, i32 0, i8* null, i32 1, i32 128, i8* null)
-	%tmp1 = sext i32 -1 to i64
-	%tmp2 = inttoptr i64 %tmp1 to i8*
-	%tmp3 = icmp eq i8* %tmp0, %tmp2
-	br i1 %tmp3, label %then0, label %endif0
+	%tmp1 = inttoptr i64 -1 to i8*
+	%tmp2 = icmp eq i8* %tmp0, %tmp1
+	br i1 %tmp2, label %then0, label %endif0
 then0:
 	br label %func_exit
 endif0:
 	call i32 @CloseHandle(i8* %tmp0)
 	br label %func_exit
 func_exit:
-	%tmp4 = phi i32 [0, %then0], [1, %endif0]
-	ret i32 %tmp4
+	%tmp3 = phi i32 [0, %then0], [1, %endif0]
+	ret i32 %tmp3
 }
 define void @console.writeln(i8* %buffer, i32 %len){
 	%v0 = alloca i32
@@ -3277,16 +3269,15 @@ define i8* @console.get_stdout(){
 	%tmp0 = call i8* @GetStdHandle(i32 -11)
 	store i8* %tmp0, i8** %v0
 	%tmp1 = load i8*, i8** %v0
-	%tmp2 = sext i32 -1 to i64
-	%tmp3 = inttoptr i64 %tmp2 to i8*
-	%tmp4 = icmp eq i8* %tmp1, %tmp3
-	br i1 %tmp4, label %then0, label %endif0
+	%tmp2 = inttoptr i64 -1 to i8*
+	%tmp3 = icmp eq i8* %tmp1, %tmp2
+	br i1 %tmp3, label %then0, label %endif0
 then0:
 	call void @process.throw(i8* @.str.85)
 	br label %endif0
 endif0:
-	%tmp5 = load i8*, i8** %v0
-	ret i8* %tmp5
+	%tmp4 = load i8*, i8** %v0
+	ret i8* %tmp4
 }
 define %"struct.test.QPair<i64, i64>" @xq(){
 	%tmp0 = call %"struct.test.QPair<i64, i64>" @test.geg()
@@ -3487,22 +3478,21 @@ endif0:
 }
 define void @"mem.default_fill<i8>"(i8 %val, i8* %dest, i64 %len){
 	%v0 = alloca i64
-	%tmp0 = sext i32 0 to i64
-	store i64 %tmp0, i64* %v0
+	store i64 0, i64* %v0
 	br label %loop_cond0
 loop_cond0:
-	%tmp1 = load i64, i64* %v0
-	%tmp2 = icmp sge i64 %tmp1, %len
-	br i1 %tmp2, label %then1, label %endif1
+	%tmp0 = load i64, i64* %v0
+	%tmp1 = icmp sge i64 %tmp0, %len
+	br i1 %tmp1, label %then1, label %endif1
 then1:
 	br label %loop_body0_exit
 endif1:
-	%tmp3 = load i64, i64* %v0
-	%tmp4 = getelementptr inbounds i8, i8* %dest, i64 %tmp3
-	store i8 %val, i8* %tmp4
-	%tmp5 = load i64, i64* %v0
-	%tmp6 = add i64 %tmp5, 1
-	store i64 %tmp6, i64* %v0
+	%tmp2 = load i64, i64* %v0
+	%tmp3 = getelementptr inbounds i8, i8* %dest, i64 %tmp2
+	store i8 %val, i8* %tmp3
+	%tmp4 = load i64, i64* %v0
+	%tmp5 = add i64 %tmp4, 1
+	store i64 %tmp5, i64* %v0
 	br label %loop_cond0
 loop_body0_exit:
 	ret void

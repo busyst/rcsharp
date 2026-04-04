@@ -12,6 +12,7 @@ use crate::{
         structs::LLVMInstruction,
     },
     compiler_essentials::{CompileResult, LLVMVal},
+    compiler_functions::COMPILER_FUNCTIONS,
 };
 
 #[derive(Default)]
@@ -88,12 +89,40 @@ impl OptimizerPass {
             Expr::UnaryOp(_, inner) => {
                 self.optimize_expression_tree(inner);
             }
-            Expr::Call(_, args) => {
+            Expr::Call(name, args) => {
+                if let Expr::Name(x) = &**name {
+                    if let Some((Some(f), _)) = COMPILER_FUNCTIONS
+                        .iter()
+                        .find(|(name, _, _, _)| name == x)
+                        .map(|x| x.3)
+                        .flatten()
+                    {
+                        let Ok(ex) = f(args) else {
+                            return;
+                        };
+                        *expr = ex;
+                        return;
+                    }
+                }
                 for arg in args {
                     self.optimize_expression_tree(arg);
                 }
             }
-            Expr::CallGeneric(_, args, ..) => {
+            Expr::CallGeneric(name, args, pt) => {
+                if let Expr::Name(x) = &**name {
+                    if let Some((_, Some(f))) = COMPILER_FUNCTIONS
+                        .iter()
+                        .find(|(name, _, _, _)| name == x)
+                        .map(|x| x.3)
+                        .flatten()
+                    {
+                        let Ok(ex) = f(args, pt) else {
+                            return;
+                        };
+                        *expr = ex;
+                        return;
+                    }
+                }
                 for arg in args {
                     self.optimize_expression_tree(arg);
                 }
@@ -143,6 +172,7 @@ impl OptimizerPass {
 
         Ok(())
     }
+
     pub fn optimize_llvm_instructions(
         mut vec: Vec<LLVMInstruction>,
         _cfg: &CompilerConfig,

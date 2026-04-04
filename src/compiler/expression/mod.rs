@@ -92,12 +92,7 @@ impl<'a> ExpressionCompiler<'a> {
             var_type.substitute_global_aliases(self.symbols())?;
             return var.load_llvm_value(*id, &name_str, self.ctx(), var_type);
         }
-        let glob_path = name.with_start(&self.ctx.current_function_path);
-        if let Some(internal_id) = self
-            .symbols()
-            .get_function_id_by_path(&glob_path)
-            .or_else(|| self.symbols().get_function_id_by_path(&name))
-        {
+        if let Some(internal_id) = self.resolve_path(&name, |s, p| s.get_function_id_by_path(p)) {
             return Ok((
                 if self
                     .symbols()
@@ -111,11 +106,7 @@ impl<'a> ExpressionCompiler<'a> {
                 vec![],
             ));
         }
-        if let Some((path, variable)) = self
-            .symbols()
-            .get_static_by_path(&glob_path)
-            .or_else(|| self.symbols().get_static_by_path(&name))
-        {
+        if let Some((path, variable)) = self.resolve_path(&name, |s, p| s.get_static_by_path(p)) {
             let mut vtype = variable.compiler_type.clone();
             vtype.substitute_global_aliases(self.symbols())?;
             variable.mark_usage(false, false);
@@ -126,11 +117,7 @@ impl<'a> ExpressionCompiler<'a> {
             var_type.substitute_global_aliases(self.symbols())?;
             return variable.load_llvm_value(0, &path.to_string(), self.ctx, var_type);
         }
-        if let Some((path, variable)) = self
-            .symbols()
-            .get_const_by_path(&glob_path)
-            .or_else(|| self.symbols().get_const_by_path(&name))
-        {
+        if let Some((path, variable)) = self.resolve_path(&name, |s, p| s.get_const_by_path(p)) {
             let mut vtype = variable.compiler_type.clone();
             vtype.substitute_global_aliases(self.symbols())?;
             variable.mark_usage(false, false);
@@ -144,11 +131,7 @@ impl<'a> ExpressionCompiler<'a> {
         if let Some(ptype) = find_primitive_type(&name.to_string()) {
             return Ok((CompiledValue::Type(CompilerType::Primitive(ptype)), vec![]));
         }
-        if let Some(type_id) = self
-            .symbols()
-            .get_type_id_by_path(&glob_path)
-            .or_else(|| self.symbols().get_type_id_by_path(&name))
-        {
+        if let Some(type_id) = self.resolve_path(&name, |s, p| s.get_type_id_by_path(p)) {
             return Ok((CompiledValue::Type(CompilerType::Struct(type_id)), vec![]));
         }
         panic!("{}", name)
@@ -416,15 +399,8 @@ impl<'a> ExpressionCompiler<'a> {
         let (lvalue, mut instructions) =
             self.compile_index_lvalue(array, index, LValueAccess::Read)?;
 
-        let target_reg = self.ctx.acquire_temp_id();
-        instructions.push(LLVMInstruction::Load {
-            target_reg,
-            ptr: lvalue.location,
-            result_type: lvalue.value_type.clone(),
-        });
-
         Ok((
-            CompiledValue::new_value(LLVMVal::Register(target_reg), lvalue.value_type),
+            lvalue.load_rvalue(self.ctx, &mut instructions),
             instructions,
         ))
     }
@@ -436,15 +412,8 @@ impl<'a> ExpressionCompiler<'a> {
         let (lvalue, mut instructions) =
             self.compile_member_access_lvalue(obj, member, LValueAccess::Read)?;
 
-        let target_reg = self.ctx.acquire_temp_id();
-        instructions.push(LLVMInstruction::Load {
-            target_reg,
-            ptr: lvalue.location,
-            result_type: lvalue.value_type.clone(),
-        });
-
         Ok((
-            CompiledValue::new_value(LLVMVal::Register(target_reg), lvalue.value_type),
+            lvalue.load_rvalue(self.ctx, &mut instructions),
             instructions,
         ))
     }
@@ -1198,7 +1167,7 @@ impl<'a> ExpressionCompiler<'a> {
             (value_type.as_primitive(), to_type.as_primitive())
         {
             if from_info.is_integer() && to_info.is_integer() {
-                if from_info.layout == to_info.layout {
+                if from_info.layout == to_info.layout || value.as_literal_number().is_some() {
                     return Ok((
                         CompiledValue::new_value(
                             value.get_llvm_rep().clone(),
@@ -1725,6 +1694,13 @@ impl<'a> ExpressionCompiler<'a> {
     }
     pub fn ctx(&self) -> &'a CodeGenContext {
         self.ctx
+    }
+    fn resolve_path<'b, T, F>(&'b self, path_end: &ContextPathEnd, lookup_fn: F) -> Option<T>
+    where
+        F: Fn(&'b SymbolTable, &ContextPathEnd) -> Option<T>,
+    {
+        let abs_path = path_end.with_start(&self.ctx.current_function_path);
+        lookup_fn(self.symbols(), &abs_path).or_else(|| lookup_fn(self.symbols(), path_end))
     }
 }
 pub fn compile_expression(

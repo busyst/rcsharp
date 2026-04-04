@@ -27,29 +27,39 @@ pub type GenericCompilerFn = fn(
     &[ParserType],
     &Expected,
 ) -> ExpressionCompileResult<(CompiledValue, Vec<LLVMInstruction>)>;
+pub type ConstantCompilerFn = fn(&[Expr]) -> ExpressionCompileResult<Expr>;
+pub type ConstantGenericCompilerFn = fn(&[Expr], &[ParserType]) -> ExpressionCompileResult<Expr>;
 
-pub const COMPILER_FUNCTIONS: &[(&str, Option<CompilerFn>, Option<GenericCompilerFn>, bool)] = &[
+pub const COMPILER_FUNCTIONS: &[(
+    &str,
+    Option<CompilerFn>,
+    Option<GenericCompilerFn>,
+    Option<(
+        Option<ConstantCompilerFn>,
+        Option<ConstantGenericCompilerFn>,
+    )>,
+)] = &[
     (
         "stalloc",
         Some(stalloc_impl),
         Some(stalloc_generic_impl),
-        false,
+        None,
     ),
     (
         "size_of",
         Some(size_of_impl),
         Some(size_of_generic_impl),
-        true,
+        None,
     ),
     (
         "align_of",
         Some(align_of_impl),
         Some(align_of_generic_impl),
-        true,
+        None,
     ),
-    ("ptr_of", Some(ptr_of_impl), None, false),
-    ("bitcast", None, Some(bitcast_generic_impl), false),
-    ("asm", Some(asm_impl), None, false),
+    ("ptr_of", Some(ptr_of_impl), None, None),
+    ("bitcast", None, Some(bitcast_generic_impl), None),
+    ("asm", Some(asm_impl), None, None),
 ];
 
 fn stalloc_impl(
