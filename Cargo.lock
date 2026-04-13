@@ -143,6 +143,7 @@ dependencies = [
 name = "rcsharp_parser"
 version = "1.0.0"
 dependencies = [
+ "phf",
  "rcsharp_lexer",
 ]
 

@@ -89,7 +89,7 @@ impl OptimizerPass {
             Expr::UnaryOp(_, inner) => {
                 self.optimize_expression_tree(inner);
             }
-            Expr::Call(name, args) => {
+            Expr::Call(name, args, None) => {
                 if let Expr::Name(x) = &**name {
                     if let Some((Some(f), _)) = COMPILER_FUNCTIONS
                         .iter()
@@ -108,7 +108,7 @@ impl OptimizerPass {
                     self.optimize_expression_tree(arg);
                 }
             }
-            Expr::CallGeneric(name, args, pt) => {
+            Expr::Call(name, args, Some(pt)) => {
                 if let Expr::Name(x) = &**name {
                     if let Some((_, Some(f))) = COMPILER_FUNCTIONS
                         .iter()
@@ -298,7 +298,7 @@ pub fn constant_expression_optimizer_base(expr: &Expr) -> Option<Expr> {
             .map(|new_rhs| Expr::Assign(lhs.clone(), Box::new(new_rhs))),
         Expr::Index(arr, idx) => constant_expression_optimizer_base(idx)
             .map(|new_idx| Expr::Index(arr.clone(), Box::new(new_idx))),
-        Expr::Call(callee, args) => {
+        Expr::Call(callee, args, None) => {
             let mut changed = false;
             let new_args = args
                 .iter()
@@ -313,7 +313,7 @@ pub fn constant_expression_optimizer_base(expr: &Expr) -> Option<Expr> {
                 .collect();
 
             if changed {
-                Some(Expr::Call(callee.clone(), new_args))
+                Some(Expr::Call(callee.clone(), new_args, None))
             } else {
                 None
             }

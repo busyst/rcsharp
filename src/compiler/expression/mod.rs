@@ -61,11 +61,10 @@ impl<'a> ExpressionCompiler<'a> {
             Expr::BinaryOp(lhs, op, rhs) => self.compile_binary_op(lhs, op, rhs, expected),
             Expr::StructInit(name, inits) => self.compile_struct_init(name, inits),
             Expr::MemberAccess(obj, member) => self.compile_member_access_rvalue(obj, member),
-            Expr::Call(callee, args) => self.compile_call(callee, args, None, expected),
-            Expr::MacroCall(callee, args) => self.compile_macro_call(callee, args, expected),
-            Expr::CallGeneric(callee, args, generics) => {
-                self.compile_call(callee, args, Some(generics), expected)
+            Expr::Call(callee, args, generics) => {
+                self.compile_call(callee, args, generics.as_ref().map(|v| &**v), expected)
             }
+            Expr::MacroCall(callee, args) => self.compile_macro_call(callee, args, expected),
             Expr::Assign(lhs, rhs) => self.compile_assignment(lhs, rhs, expected),
             Expr::Cast(expr, target_type) => self.compile_cast(expr, target_type, expected),
             _ => Err(CompilerError::Generic(format!("Not a rvalue {:?}", expr))),

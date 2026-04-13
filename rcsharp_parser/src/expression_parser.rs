@@ -28,8 +28,8 @@ pub enum Expr {
 
     NameWithGenerics(Box<Expr>, Box<[ParserType]>),
 
-    Call(Box<Expr>, Box<[Expr]>),
-    CallGeneric(Box<Expr>, Box<[Expr]>, Box<[ParserType]>),
+    Call(Box<Expr>, Box<[Expr]>, Option<Box<[ParserType]>>),
+    MemberCall(Box<Expr>, String, Box<[Expr]>, Option<Box<[ParserType]>>),
     MacroCall(Box<Expr>, Box<[Expr]>),
     Index(Box<Expr>, Box<Expr>),
 
@@ -54,7 +54,7 @@ impl Expr {
         match self {
             Self::Name(n) => n.clone(),
             Self::Integer(n) => n.to_string(),
-            Self::Call(callee, args) => {
+            Self::Call(callee, args, None) => {
                 let args_str = args
                     .iter()
                     .map(|a| a.debug_emit_inner(1))
@@ -62,7 +62,7 @@ impl Expr {
                     .join(", ");
                 format!("CALL|[{}]({})|", callee.debug_emit_inner(depth), args_str)
             }
-            Self::CallGeneric(callee, args, generics) => {
+            Self::Call(callee, args, Some(generics)) => {
                 let args_str = args
                     .iter()
                     .map(|a| a.debug_emit_inner(1))
@@ -385,7 +385,7 @@ impl<'a> ExpressionParser<'a> {
         self.advance(); // (
         let args = self.parse_comma_separated_exprs(&Token::RParen)?;
         self.consume(&Token::RParen)?;
-        Ok(Expr::Call(Box::new(callee), args.into_boxed_slice()))
+        Ok(Expr::Call(Box::new(callee), args.into_boxed_slice(), None))
     }
     fn parse_macro_call(&mut self, callee: Expr) -> ParserResult<Expr> {
         self.advance(); // !
@@ -404,7 +404,19 @@ impl<'a> ExpressionParser<'a> {
 
     fn parse_member_access(&mut self, left: Expr) -> ParserResult<Expr> {
         self.consume(&Token::Dot)?;
-        Ok(Expr::MemberAccess(Box::new(left), self.consume_name()?))
+        let name = self.consume_name()?;
+        if self.peek().token == Token::LParen {
+            self.advance();
+            let args = self.parse_comma_separated_exprs(&Token::RParen)?;
+            self.consume(&Token::RParen)?;
+            return Ok(Expr::MemberCall(
+                Box::new(left),
+                name,
+                args.into_boxed_slice(),
+                None,
+            ));
+        }
+        Ok(Expr::MemberAccess(Box::new(left), name))
     }
 
     fn parse_cast(&mut self, left: Expr) -> ParserResult<Expr> {
@@ -473,10 +485,10 @@ impl<'a> ExpressionParser<'a> {
                 self.advance(); // (
                 let args = self.parse_comma_separated_exprs(&Token::RParen)?;
                 self.consume(&Token::RParen)?;
-                Ok(Expr::CallGeneric(
+                Ok(Expr::Call(
                     Box::new(callee),
                     args.into_boxed_slice(),
-                    generic_types.into_boxed_slice(),
+                    Some(generic_types.into_boxed_slice()),
                 ))
             }
             _ => {

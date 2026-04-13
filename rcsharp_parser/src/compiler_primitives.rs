@@ -88,7 +88,7 @@ macro_rules! prim {
         }
     };
 }
-const PRIMITIVE_TYPES_INFO: &[PrimitiveInfo] = &[
+pub const PRIMITIVE_TYPES_INFO: &[PrimitiveInfo] = &[
     /*0*/ prim!("void", 0, 1, "void", PrimitiveKind::Void),
     /*1*/ prim!("bool", 1, 1, "i1", PrimitiveKind::Bool),
     // SInts
