@@ -2,13 +2,14 @@ use rcsharp_lexer::{lex_text, LexerSymbolTable};
 
 use crate::{
     compiler::{
-        context::{CompilerContext, ErrorSeverity},
+        context::{CompileOutputType, CompilerContext, ErrorSeverity},
         passes::{
             pass_llvm_gen::LLVMGenPass, pass_module_loader::ModuleLoaderPass,
             pass_optimizer::OptimizerPass, pass_type_check::TypeCheckPass, traits::CompilerPass,
         },
     },
     compiler_essentials::{CompileResult, CompilerError},
+    Args,
 };
 
 pub mod pass_llvm_gen;
@@ -17,8 +18,8 @@ pub mod pass_optimizer;
 pub mod pass_type_check;
 pub mod traits;
 
-pub fn compile_to_file(entry_path: &str, output_path: &str) -> CompileResult<()> {
-    let (ctx, llvm_ir) = compile(entry_path)?;
+pub fn compile_to_file(args: &Args) -> CompileResult<()> {
+    let (ctx, llvm_ir) = compile(args)?;
     let diag = &ctx.diagnostics;
     let error_count = diag
         .iter()
@@ -43,15 +44,25 @@ pub fn compile_to_file(entry_path: &str, output_path: &str) -> CompileResult<()>
             eprintln!("{}", err);
         }
     }
-    std::fs::write(output_path, llvm_ir).map_err(|e| CompilerError::Generic(e.to_string()))?;
+    std::fs::write(args.output.as_ref().unwrap(), llvm_ir)
+        .map_err(|e| CompilerError::Generic(e.to_string()))?;
     Ok(())
 }
-pub fn compile(entry_path: &str) -> CompileResult<(CompilerContext, String)> {
+pub fn compile(args: &Args) -> CompileResult<(CompilerContext, String)> {
     let mut ctx = CompilerContext::default();
-    ctx.config.no_lazy_compile = true;
+    //ctx.config.no_lazy_compile = true;
+    if args.executable {
+        ctx.config.compile_to = CompileOutputType::Executable;
+    } else if args.is_dynamic_library {
+        ctx.config.compile_to = CompileOutputType::DynamicLibrary;
+    } else if args.is_library {
+        ctx.config.compile_to = CompileOutputType::Library;
+    } else {
+        ctx.config.compile_to = CompileOutputType::None;
+    }
     ctx.config.llvm_typeless_pointers = false;
     let mut loader = ModuleLoaderPass::default();
-    let ast = loader.run(entry_path, &mut ctx)?;
+    let ast = loader.run(args.input.as_ref().unwrap(), &mut ctx)?;
 
     let mut type_checker = TypeCheckPass::default();
     type_checker.run(&ast, &mut ctx)?;

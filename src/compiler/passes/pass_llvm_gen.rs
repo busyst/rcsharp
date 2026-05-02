@@ -1,6 +1,6 @@
 use std::{
     cell::{Cell, RefCell},
-    collections::HashMap,
+    collections::{HashMap, HashSet},
 };
 
 use rcsharp_parser::{
@@ -11,7 +11,7 @@ use rcsharp_parser::{
 
 use crate::{
     compiler::{
-        context::CompilerContext,
+        context::{CompileOutputType, CompilerContext},
         expression::{
             compile_expression, ExpressionCompileResult, ExpressionCompiler, LValueAccess,
         },
@@ -175,11 +175,7 @@ impl LLVMGenPass {
                 if imps_len == 0 {
                     continue;
                 }
-                let index = ctx
-                    .symbols
-                    .types_iter()
-                    .position(|x| x.0 == full_path)
-                    .unwrap();
+                let index = ctx.symbols.get_type_id_by_path(full_path).unwrap();
 
                 if done.get(&index).filter(|x| **x == imps_len).is_some() {
                     continue;
@@ -226,21 +222,99 @@ impl LLVMGenPass {
         builder: &mut LLVMOutputHandler,
         ctx: &mut CompilerContext,
     ) -> CompileResult<()> {
-        let Some(main) = ctx
-            .symbols
-            .get_function_id_by_path(&ContextPathEnd::from_path("", "main"))
-        else {
-            return Err(CompilerError::Generic(format!("Function 'main' was not found!")).into());
+        let mut to_do = match ctx.config.compile_to {
+            CompileOutputType::None => ctx
+                .symbols
+                .functions_iter()
+                .enumerate()
+                .filter(|x| x.1 .1.is_normal())
+                .map(|x| x.0)
+                .collect::<Vec<_>>(),
+            CompileOutputType::Library | CompileOutputType::DynamicLibrary => {
+                let Some(main) = ctx
+                    .symbols
+                    .get_function_id_by_path(&ContextPathEnd::from_path("", "main"))
+                else {
+                    return Err(
+                        CompilerError::Generic(format!("Function 'main' was not found!")).into(),
+                    );
+                };
+
+                builder.push_main("define void @_DllMainCRTStartup(){\n");
+                if ctx.symbols.get_function_by_id(main).return_type.is_void() {
+                    if ctx.symbols.get_function_by_id(main).args.is_empty() {
+                        builder.emit_line_body("call void @main()");
+                    } else {
+                        builder.emit_line_body("call void @main(i32 0, ptr null)");
+                    }
+                    builder.emit_line_body("call void @ExitProcess(i32 0)");
+                } else {
+                    if ctx.symbols.get_function_by_id(main).args.is_empty() {
+                        builder.emit_line_body("%result = call i32 @main()");
+                    } else {
+                        builder.emit_line_body("%result = call i32 @main(i32 0, ptr null)");
+                    }
+                    builder.emit_line_body("call void @ExitProcess(i32 %result)");
+                }
+                builder.emit_line_body("unreachable");
+                builder.end_function();
+                let mut output = vec![main];
+                output.extend(
+                    ctx.symbols
+                        .functions_iter()
+                        .enumerate()
+                        .filter(|x| x.1 .1.is_export())
+                        .map(|x| x.0),
+                );
+                output
+            }
+            CompileOutputType::Executable => {
+                let Some(main) = ctx
+                    .symbols
+                    .get_function_id_by_path(&ContextPathEnd::from_path("", "main"))
+                else {
+                    return Err(
+                        CompilerError::Generic(format!("Function 'main' was not found!")).into(),
+                    );
+                };
+                //builder.push_main("declare dllimport ptr @GetCommandLineW()\n");
+                //builder.push_main("declare dllimport ptr @CommandLineToArgvW(ptr %a1, ptr %a2)\n");
+
+                builder.push_main("define void @mainCRTStartup(){\n");
+                //builder.emit_line_body("%cmdline = call ptr @GetCommandLineW()");
+                //builder.emit_line_body("%argc_ptr = alloca i32");
+                //builder.emit_line_body(
+                //    "%argv_ptr = call ptr @CommandLineToArgvW(ptr %cmdline, ptr %argc_ptr)\n",
+                //);
+                //builder.emit_line_body("%argc = load i32, ptr null\n");
+                if ctx.symbols.get_function_by_id(main).return_type.is_void() {
+                    if ctx.symbols.get_function_by_id(main).args.is_empty() {
+                        builder.emit_line_body("call void @main()");
+                    } else {
+                        builder.emit_line_body("call void @main(i32 0, ptr null)");
+                    }
+                    //builder.emit_line_body("call void @ExitProcess(i32 0)");
+                } else {
+                    if ctx.symbols.get_function_by_id(main).args.is_empty() {
+                        builder.emit_line_body("%result = call i32 @main()");
+                    } else {
+                        builder.emit_line_body("%result = call i32 @main(i32 0, ptr null)");
+                    }
+                    //builder.emit_line_body("call void @ExitProcess(i32 %result)");
+                }
+                builder.emit_line_body("unreachable");
+                builder.end_function();
+                vec![main]
+            }
         };
-        let mut to_do = vec![main];
-        let mut done = vec![];
+        let mut done: HashSet<usize> = HashSet::new();
 
         let mut done_generics = HashMap::new();
         let mut to_do_generics = vec![];
         loop {
             while let Some(c_id) = to_do.pop() {
                 self.compile_function(c_id, builder, ctx)?;
-                done.push(c_id);
+                done.insert(c_id);
                 if !to_do.is_empty() {
                     continue;
                 }
@@ -250,12 +324,8 @@ impl LLVMGenPass {
                         && !x.1.is_external()
                         && !x.1.is_inline()
                 }) {
-                    let index = ctx
-                        .symbols
-                        .functions_iter()
-                        .position(|x| x.0 == path)
-                        .unwrap();
-                    if done.iter().any(|x| *x == index) {
+                    let index = ctx.symbols.get_function_id_by_path(path).unwrap();
+                    if done.contains(&index) {
                         continue;
                     }
                     to_do.push(index);
@@ -272,11 +342,7 @@ impl LLVMGenPass {
                 if imps_len == 0 {
                     continue;
                 }
-                let index = ctx
-                    .symbols
-                    .functions_iter()
-                    .position(|x| x.0 == path)
-                    .unwrap();
+                let index = ctx.symbols.get_function_id_by_path(path).unwrap();
                 if done_generics
                     .get(&index)
                     .filter(|x| **x == imps_len)
@@ -350,12 +416,8 @@ impl LLVMGenPass {
                     && !x.1.is_external()
                     && !x.1.is_inline()
             }) {
-                let index = ctx
-                    .symbols
-                    .functions_iter()
-                    .position(|x| x.0 == path)
-                    .unwrap();
-                if done.iter().any(|x| *x == index) {
+                let index = ctx.symbols.get_function_id_by_path(path).unwrap();
+                if done.contains(&index) {
                     continue;
                 }
                 new = true;
@@ -858,68 +920,20 @@ impl LLVMGenPass {
             .unwrap_or(false)
         {
             if let CompiledValue::StructValue { fields, val_type } = result {
-                let CompilerType::Struct(x) = val_type else {
-                    let CompilerType::GenericStructInstance(tid, y) = val_type else {
-                        todo!();
-                    };
-                    let mut type_map = HashMap::new();
-                    let q = ctx
-                        .symbols
-                        .get_type_by_id(tid)
-                        .generic_implementations
-                        .borrow();
-                    for (idx, x) in ctx
-                        .symbols
-                        .get_type_by_id(tid)
-                        .generic_params
-                        .iter()
-                        .enumerate()
-                    {
-                        type_map.insert(x.clone(), (q[y][idx]).clone());
-                    }
-                    drop(q);
-                    instructions.append(&mut self.cgctx.scope.define(
-                        name.clone(),
-                        variable,
-                        id,
-                        &ctx.symbols,
-                    ));
-                    let f = ctx.symbols.get_type_by_id(tid).fields.clone();
-                    for (x, expr) in f.iter().zip(fields.iter()) {
-                        let ec = ExpressionCompiler::new(&mut self.cgctx, ctx);
-                        let (t, mut instruc) = ec.compile_lvalue(
-                            &Expr::MemberAccess(Box::new(Expr::Name(name.clone())), x.0.clone()),
-                            LValueAccess::ModifyContent,
-                        )?;
-                        instruc.push(LLVMInstruction::Store {
-                            value: expr.clone(),
-                            value_type: t.value_type,
-                            ptr: t.location,
-                        });
-                        instructions.append(&mut instruc);
-                    }
-                    return Ok((instructions, false));
+                let type_id = match val_type {
+                    CompilerType::Struct(id) => id,
+                    CompilerType::GenericStructInstance(id, _) => id,
+                    _ => todo!("Unhandled struct value type"),
                 };
-                instructions.append(&mut self.cgctx.scope.define(
-                    name.clone(),
+                self.emit_struct_field_stores(
+                    &name,
                     variable,
                     id,
-                    &ctx.symbols,
-                ));
-                let f = ctx.symbols.get_type_by_id(x).fields.clone();
-                for (x, expr) in f.iter().zip(fields.iter()) {
-                    let ec = ExpressionCompiler::new(&mut self.cgctx, ctx);
-                    let (t, mut instruc) = ec.compile_lvalue(
-                        &Expr::MemberAccess(Box::new(Expr::Name(name.clone())), x.0.clone()),
-                        LValueAccess::ModifyContent,
-                    )?;
-                    instruc.push(LLVMInstruction::Store {
-                        value: expr.clone(),
-                        value_type: t.value_type,
-                        ptr: t.location,
-                    });
-                    instructions.append(&mut instruc);
-                }
+                    type_id,
+                    &fields,
+                    &mut instructions,
+                    ctx,
+                )?;
                 return Ok((instructions, false));
             }
         }
@@ -945,6 +959,41 @@ impl LLVMGenPass {
             ptr: LLVMVal::Variable(id),
         });
         Ok((instructions, false))
+    }
+    fn emit_struct_field_stores(
+        &mut self,
+        var_name: &str,
+        variable: Variable,
+        alloc_id: u32,
+        type_id: usize,
+        field_values: &[LLVMVal],
+        instructions: &mut Vec<LLVMInstruction>,
+        ctx: &CompilerContext,
+    ) -> CompileResult<()> {
+        instructions.append(&mut self.cgctx.scope.define(
+            var_name.to_string(),
+            variable,
+            alloc_id,
+            &ctx.symbols,
+        ));
+        let fields = ctx.symbols.get_type_by_id(type_id).fields.clone();
+        for ((field_name, _field_type), field_val) in fields.iter().zip(field_values.iter()) {
+            let ec = ExpressionCompiler::new(&mut self.cgctx, ctx);
+            let (lval, mut field_instr) = ec.compile_lvalue(
+                &Expr::MemberAccess(
+                    Box::new(Expr::Name(var_name.to_string())),
+                    field_name.clone(),
+                ),
+                LValueAccess::ModifyContent,
+            )?;
+            field_instr.push(LLVMInstruction::Store {
+                value: field_val.clone(),
+                value_type: lval.value_type,
+                ptr: lval.location,
+            });
+            instructions.append(&mut field_instr);
+        }
+        Ok(())
     }
     fn compile_loop(
         &mut self,
@@ -1205,10 +1254,7 @@ impl LLVMGenPass {
         builder: &mut LLVMOutputHandler,
     ) -> CompileResult<()> {
         let vec =
-            crate::compiler::passes::pass_optimizer::OptimizerPass::optimize_llvm_instructions(
-                vec,
-                &ctx.config,
-            );
+            crate::compiler::passes::pass_optimizer::optimize_llvm_instructions(vec, &ctx.config);
         for x in vec {
             match x {
                 LLVMInstruction::AllocateVar {

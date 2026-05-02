@@ -5,8 +5,8 @@ use crate::{
         structs::{ContextPath, ContextPathEnd},
     },
     compiler_essentials::{
-        CompileResult, CompilerError, CompilerType, Enum, Function, FunctionFlags, LLVMVal, Struct,
-        Variable,
+        CompileResult, CompiledTrait, CompiledTraitImpl, CompilerError, CompilerType, Enum,
+        Function, FunctionFlags, LLVMVal, Struct, TraitMethodSignature, Variable,
     },
 };
 use rcsharp_parser::{
@@ -123,8 +123,8 @@ impl<'a> CompilerPass<'a> for TypeCheckPass {
             let mut new_alias_types = HashMap::new();
             for prm in &struct_decl.generic_params {
                 new_alias_types.insert(
-                    prm.clone(),
-                    CompilerType::GenericPlaceholder(prm.to_string().into_boxed_str()),
+                    prm.name.clone(),
+                    CompilerType::GenericPlaceholder(prm.name.clone().into_boxed_str()),
                 );
             }
             ctx.symbols.set_alias_types(new_alias_types);
@@ -143,13 +143,65 @@ impl<'a> CompilerPass<'a> for TypeCheckPass {
                 ContextPathEnd::default(),
                 compiler_struct_fields.into_boxed_slice(),
                 struct_decl.attributes.clone(),
-                struct_decl.generic_params.clone(),
+                struct_decl
+                    .generic_params
+                    .iter()
+                    .map(|p| p.name.clone())
+                    .collect::<Vec<_>>()
+                    .into_boxed_slice(),
             );
             x.file_id = file_id;
             let type_path = ContextPathEnd::from_context_path(type_env_path, &struct_decl.name);
             ctx.symbols.insert_type(type_path, x);
         }
         ctx.symbols.set_alias_types(HashMap::new());
+
+        for (trait_env_path, file_id, parsed_trait) in traits {
+            let mut methods = vec![];
+            for method in parsed_trait.functions.iter() {
+                let has_self = method
+                    .args
+                    .first()
+                    .map(|(n, _)| n == "self")
+                    .unwrap_or(false);
+                let self_is_ref = if has_self {
+                    matches!(method.args[0].1.as_pointer(), Some(_))
+                } else {
+                    false
+                };
+                let mut resolved_args = Vec::with_capacity(method.args.len());
+                for (name, parser_type) in method.args.iter() {
+                    let ct =
+                        CompilerType::from_parser_type(parser_type, &ctx.symbols, &trait_env_path)?;
+                    resolved_args.push((name.clone(), ct));
+                }
+                let return_type = CompilerType::from_parser_type(
+                    &method.return_type,
+                    &ctx.symbols,
+                    &trait_env_path,
+                )?;
+                methods.push(TraitMethodSignature {
+                    name: method.name.clone(),
+                    args: resolved_args.into_boxed_slice(),
+                    return_type,
+                    has_self,
+                    self_is_ref,
+                });
+            }
+            let trait_path = ContextPathEnd::from_context_path(trait_env_path, &parsed_trait.name);
+            let compiled_trait = CompiledTrait {
+                full_path: trait_path.clone(),
+                generic_params: parsed_trait
+                    .generic_params
+                    .iter()
+                    .map(|p| p.name.clone())
+                    .collect::<Vec<_>>()
+                    .into_boxed_slice(),
+                methods: methods.into_boxed_slice(),
+                file_id,
+            };
+            ctx.symbols.insert_trait(trait_path, compiled_trait);
+        }
 
         for (current_path, _file_id, var) in static_variables {
             let t = CompilerType::from_parser_type(&var.var_type, &ctx.symbols, &current_path)?;
@@ -166,7 +218,7 @@ impl<'a> CompilerPass<'a> for TypeCheckPass {
             };
             let Some(expr) = constant_expression_compiler(&expr) else {
                 return Err(CompilerError::Generic(format!(
-                    "Expresion {} did nit compiled to contant",
+                    "Expression {} did nit compiled to constant",
                     expr.debug_emit()
                 ))
                 .into());
@@ -196,9 +248,15 @@ impl<'a> CompilerPass<'a> for TypeCheckPass {
                 args,
                 return_type,
                 b,
-                0.into(),
+                FunctionFlags::default(),
                 parsed_function.attributes.clone(),
-                parsed_function.generic_params.clone(),
+                parsed_function
+                    .generic_params
+                    .iter()
+                    .map(|p| p.name.clone())
+                    .collect::<Vec<_>>()
+                    .into_boxed_slice(),
+                std::collections::HashMap::new(),
             );
             function.file_id = file_id;
             let flags = determine_function_flags(&function, &parsed_function.prefixes)?;
@@ -209,6 +267,125 @@ impl<'a> CompilerPass<'a> for TypeCheckPass {
 
             ctx.symbols.insert_function(full_path, function);
         }
+
+        for (impl_env_path, file_id, parsed_impl) in implementations {
+            let for_type = CompilerType::from_parser_type(
+                &parsed_impl.implementing_for,
+                &ctx.symbols,
+                &impl_env_path,
+            )?;
+            let for_type_id = match &for_type {
+                CompilerType::Struct(id) => *id,
+                _ => {
+                    return Err(CompilerError::Generic(format!(
+                        "impl target must be a struct type, got {:?}",
+                        for_type
+                    ))
+                    .into())
+                }
+            };
+            let for_type_path = ctx.symbols.get_type_by_id(for_type_id).full_path().clone();
+
+            let mut self_alias = ctx.symbols.alias_types().clone();
+            self_alias.insert("Self".to_string(), for_type.clone());
+            ctx.symbols.set_alias_types(self_alias);
+
+            let trait_id_opt = if let Some(trait_type) = &parsed_impl.trait_name {
+                let trait_path_str = match trait_type.as_ref() {
+                    rcsharp_parser::parser::ParserType::Named(name) => name.clone(),
+                    other => format!("{}", other),
+                };
+                let rel_path = ContextPathEnd::from_path("", &trait_path_str);
+                let abs_path = rel_path.with_start(&impl_env_path);
+                ctx.symbols
+                    .get_trait_id_by_path(&abs_path)
+                    .or_else(|| ctx.symbols.get_trait_id_by_path(&rel_path))
+            } else {
+                None
+            };
+
+            let mut method_fn_ids: HashMap<Box<str>, usize> = HashMap::new();
+            for stmt in parsed_impl.body.iter() {
+                if let Stmt::Function(func_def) = &stmt.stmt {
+                    let return_type = CompilerType::from_parser_type(
+                        &func_def.return_type,
+                        &ctx.symbols,
+                        &impl_env_path,
+                    )?;
+                    let mut args_vec = Vec::with_capacity(func_def.args.len());
+                    for (name, type_expr) in func_def.args.iter() {
+                        let arg_type = CompilerType::from_parser_type(
+                            type_expr,
+                            &ctx.symbols,
+                            &impl_env_path,
+                        )?;
+                        args_vec.push((name.clone(), arg_type));
+                    }
+                    let method_path = if trait_id_opt.is_some() {
+                        let trait_name = parsed_impl.trait_name.as_ref().unwrap();
+                        let trait_name_str = match trait_name.as_ref() {
+                            rcsharp_parser::parser::ParserType::Named(n) => n.clone(),
+                            other => format!("{}", other),
+                        };
+                        ContextPathEnd::from_full_path(&format!(
+                            "{}.{}.{}",
+                            trait_name_str,
+                            for_type_path.to_string(),
+                            func_def.name
+                        ))
+                    } else {
+                        ContextPathEnd::from_full_path(&format!(
+                            "{}.{}",
+                            for_type_path.to_string(),
+                            func_def.name
+                        ))
+                    };
+
+                    let mut function = Function::new(
+                        ContextPathEnd::default(),
+                        args_vec.into_boxed_slice(),
+                        return_type,
+                        func_def.body.clone(),
+                        FunctionFlags::default(),
+                        func_def.attributes.clone(),
+                        func_def
+                            .generic_params
+                            .iter()
+                            .map(|p| p.name.clone())
+                            .collect::<Vec<_>>()
+                            .into_boxed_slice(),
+                        std::collections::HashMap::new(),
+                    );
+                    function.file_id = file_id;
+                    ctx.symbols.insert_function(method_path.clone(), function);
+                    let fn_id = ctx.symbols.get_function_id_by_path(&method_path).unwrap();
+                    method_fn_ids.insert(func_def.name.clone(), fn_id);
+                }
+            }
+
+            if let Some(trait_id) = trait_id_opt {
+                {
+                    let trait_def = ctx.symbols.get_trait_by_id(trait_id);
+                    for required_method in trait_def.methods.iter() {
+                        if !method_fn_ids.contains_key(&required_method.name) {
+                            return Err(CompilerError::Generic(format!(
+                                "impl is missing required trait method '{}'",
+                                required_method.name
+                            ))
+                            .into());
+                        }
+                    }
+                }
+                ctx.symbols.push_trait_impl(CompiledTraitImpl {
+                    trait_id,
+                    for_type_id,
+                    method_fn_ids,
+                });
+            }
+            ctx.symbols
+                .set_alias_types(std::collections::HashMap::new());
+        }
+
         Ok(())
     }
 }

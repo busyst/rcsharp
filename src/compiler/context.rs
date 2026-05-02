@@ -14,12 +14,21 @@ pub struct CompilerContext {
     pub diagnostics: Vec<(ErrorSeverity, CompilerError)>,
     pub strings_header: RefCell<Vec<StringEntry>>,
 }
+#[derive(Default, PartialEq, Eq, PartialOrd, Ord)]
+pub enum CompileOutputType {
+    #[default]
+    None,
+    DynamicLibrary,
+    Library,
+    Executable,
+}
 #[derive(Default)]
 pub struct CompilerConfig {
     pub optimization_level: u8,
     pub include_paths: Vec<PathBuf>,
     pub emit_debug_info: bool,
     pub no_lazy_compile: bool,
+    pub compile_to: CompileOutputType,
     pub target_triple: String,
     pub llvm_typeless_pointers: bool,
 }

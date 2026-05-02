@@ -3,8 +3,8 @@ use crate::{
         DEFAULT_INTEGER_TYPE, PrimitiveInfo, PrimitiveKind, find_primitive_type,
     },
     defs::{
-        Attribute, ParsedEnum, ParsedFunction, ParsedImplementation, ParsedStruct, ParsedTrait,
-        ParsedVariable, ParserError, ParserResult, Span, Stmt, StmtData, VarType,
+        Attribute, GenericParam, ParsedEnum, ParsedFunction, ParsedImplementation, ParsedStruct,
+        ParsedTrait, ParsedVariable, ParserError, ParserResult, Span, Stmt, StmtData, VarType,
     },
     expression_parser::{Expr, ExpressionParser},
 };
@@ -374,7 +374,7 @@ impl<'a> GeneralParser<'a> {
             span: start..self.cursor,
         })
     }
-    fn parse_generic_params(&mut self) -> ParserResult<Vec<String>> {
+    fn parse_generic_params(&mut self) -> ParserResult<Vec<GenericParam>> {
         if self.peek().token != Token::LogicLess {
             return Ok(Vec::new());
         }
@@ -386,7 +386,23 @@ impl<'a> GeneralParser<'a> {
                 self.advance();
                 break;
             }
-            params.push(self.consume_name()?);
+            let name = self.consume_name()?;
+            let bounds = if self.peek().token == Token::Colon {
+                self.advance(); // :
+                let mut bounds = Vec::new();
+                loop {
+                    bounds.push(self.consume_name()?);
+                    if self.peek().token == Token::Plus {
+                        self.advance();
+                    } else {
+                        break;
+                    }
+                }
+                bounds
+            } else {
+                vec![]
+            };
+            params.push(GenericParam { name, bounds });
             match self.peek().token {
                 Token::Comma => {
                     self.advance();
@@ -693,12 +709,13 @@ impl<'a> GeneralParser<'a> {
     ) -> ParserResult<StmtData> {
         let start = start_span.start;
         self.advance(); // impl
-        let implementing = self.parse_type()?;
-        let impl_for = if self.peek().token == Token::KeywordFor {
+        let first_type = self.parse_type()?;
+        let (trait_name, implementing_for) = if self.peek().token == Token::KeywordFor {
             self.advance();
-            self.parse_type()?
+            let for_type = self.parse_type()?;
+            (Some(Box::new(first_type)), Box::new(for_type))
         } else {
-            implementing.clone()
+            (None, Box::new(first_type))
         };
         let generic_types = self.parse_generic_params()?;
         self.consume(&Token::LBrace)?;
@@ -709,8 +726,8 @@ impl<'a> GeneralParser<'a> {
         self.consume(&Token::RBrace)?;
         return Ok(StmtData {
             stmt: Stmt::Impl(ParsedImplementation {
-                implementing: Box::new(implementing),
-                implementing_for: Box::new(impl_for),
+                trait_name,
+                implementing_for,
                 path: "".into(),
                 attributes: attributes.into_boxed_slice(),
                 body: items.into_boxed_slice(),

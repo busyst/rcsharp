@@ -48,12 +48,17 @@ impl Attribute {
     }
 }
 #[derive(Debug, Clone, PartialEq)]
+pub struct GenericParam {
+    pub name: String,
+    pub bounds: Vec<String>,
+}
+#[derive(Debug, Clone, PartialEq)]
 pub struct ParsedStruct {
     pub path: Box<str>,
     pub attributes: Box<[Attribute]>,
     pub name: Box<str>,
     pub fields: Box<[(String, ParserType)]>,
-    pub generic_params: Box<[String]>,
+    pub generic_params: Box<[GenericParam]>,
     pub prefixes: Box<[String]>,
 }
 #[derive(Debug, Clone, PartialEq)]
@@ -71,17 +76,17 @@ pub struct ParsedTrait {
     pub attributes: Box<[Attribute]>,
     pub name: Box<str>,
     pub functions: Box<[ParsedFunction]>,
-    pub generic_params: Box<[String]>,
+    pub generic_params: Box<[GenericParam]>,
     pub prefixes: Box<[String]>,
 }
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParsedImplementation {
-    pub implementing: Box<ParserType>,
+    pub trait_name: Option<Box<ParserType>>,
     pub implementing_for: Box<ParserType>,
     pub path: Box<str>,
     pub attributes: Box<[Attribute]>,
     pub body: Box<[StmtData]>,
-    pub generic_params: Box<[String]>,
+    pub generic_params: Box<[GenericParam]>,
     pub prefixes: Box<[String]>,
 }
 #[derive(Debug, Clone, PartialEq)]
@@ -93,7 +98,7 @@ pub struct ParsedFunction {
     pub return_type: ParserType,
     pub body: Box<[StmtData]>,
     pub prefixes: Box<[String]>,
-    pub generic_params: Box<[String]>,
+    pub generic_params: Box<[GenericParam]>,
 }
 #[derive(Debug, Clone, PartialEq)]
 pub enum VarType {

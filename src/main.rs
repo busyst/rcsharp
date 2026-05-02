@@ -4,14 +4,28 @@ use crate::compiler::passes::compile_to_file;
 pub mod compiler;
 pub mod compiler_essentials;
 pub mod compiler_functions;
+use clap::Parser;
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+pub struct Args {
+    #[arg(short, long)]
+    input: Option<String>,
+    #[arg(short, long)]
+    output: Option<String>,
+    #[arg(short = 'L', long)]
+    is_library: bool,
+    #[arg(short = 'D', long)]
+    is_dynamic_library: bool,
+    #[arg(short = 'E', long)]
+    executable: bool,
+}
 fn main() -> Result<(), ()> {
-    let full_path = std::env::args()
-        .nth(1)
-        .unwrap_or("./src.rcsharp".to_string());
-    let output_full_path = std::env::args().nth(2).unwrap_or("./output.ll".to_string());
+    let mut args = Args::parse();
+    args.input = Some(args.input.unwrap_or_else(|| format!("./src.rcsharp")));
+    args.output = Some(args.output.unwrap_or_else(|| format!("./output.ll")));
     let program_start = Instant::now();
 
-    if let Err(err) = compile_to_file(full_path.as_str(), &output_full_path) {
+    if let Err(err) = compile_to_file(&args) {
         eprintln!("{}", err.error);
         return Err(());
     }

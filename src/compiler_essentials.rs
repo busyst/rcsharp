@@ -621,31 +621,36 @@ impl Enum {
         }
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct CompiledTrait {
+    pub full_path: ContextPathEnd,
+    pub generic_params: Box<[String]>,
+    pub methods: Box<[TraitMethodSignature]>,
+    pub file_id: FileID,
+}
+
+#[derive(Debug, Clone)]
+pub struct TraitMethodSignature {
+    pub name: Box<str>,
+    pub args: Box<[(String, CompilerType)]>,
+    pub return_type: CompilerType,
+    pub has_self: bool,
+    pub self_is_ref: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct CompiledTraitImpl {
+    pub trait_id: usize,
+    pub for_type_id: usize,
+    pub method_fn_ids: std::collections::HashMap<Box<str>, usize>,
+}
 #[derive(Debug, Clone, Copy, Default)]
 pub struct StructFlags {
     pub is_generic: bool,
     pub is_primitive: bool,
 }
 
-impl StructFlags {
-    fn to_byte(&self) -> u8 {
-        let mut b = 0;
-        if self.is_generic {
-            b |= 64;
-        }
-        if self.is_primitive {
-            b |= 128;
-        }
-        b
-    }
-
-    fn from_byte(b: u8) -> Self {
-        Self {
-            is_generic: (b & 64) != 0,
-            is_primitive: (b & 128) != 0,
-        }
-    }
-}
 #[allow(unused)]
 #[derive(Debug, Clone)]
 pub struct Struct {
@@ -654,7 +659,7 @@ pub struct Struct {
     pub generic_params: Box<[String]>,
     pub generic_implementations: RefCell<Vec<Box<[CompilerType]>>>,
     attributes: Box<[Attribute]>,
-    flags: Cell<u8>,
+    flags: StructFlags,
     cached_layout: RefCell<Option<Layout>>,
     pub file_id: FileID,
 }
@@ -666,18 +671,16 @@ impl Struct {
         attributes: Box<[Attribute]>,
         generic_params: Box<[String]>,
     ) -> Self {
-        let flags = StructFlags {
-            is_generic: !generic_params.is_empty(),
-            is_primitive: false,
-        };
-
         Self {
             full_path: path,
             fields,
             attributes,
-            generic_params,
+            generic_params: generic_params.clone(),
             generic_implementations: RefCell::new(vec![]),
-            flags: Cell::new(flags.to_byte()),
+            flags: StructFlags {
+                is_generic: !generic_params.is_empty(),
+                is_primitive: false,
+            },
             cached_layout: RefCell::new(None),
             file_id: 0,
         }
@@ -689,14 +692,14 @@ impl Struct {
             generic_params: Box::new([]),
             generic_implementations: RefCell::new(vec![]),
             attributes: Box::new([]),
-            flags: Cell::new(0),
+            flags: StructFlags::default(),
             cached_layout: RefCell::new(None),
             file_id: 0,
         }
     }
 
     fn get_flags(&self) -> StructFlags {
-        StructFlags::from_byte(self.flags.get())
+        self.flags
     }
 
     pub fn is_primitive(&self) -> bool {
@@ -792,43 +795,8 @@ pub struct FunctionFlags {
     pub is_inline: bool,
     pub is_const_expression: bool,
     pub is_external: bool,
+    pub is_export: bool,
     pub is_program_halt: bool,
-}
-
-impl FunctionFlags {
-    fn to_byte(&self) -> u8 {
-        let mut b = 0;
-        if self.is_program_halt {
-            b |= 4;
-        }
-        if self.is_generic {
-            b |= 8;
-        }
-        if self.is_public {
-            b |= 16;
-        }
-        if self.is_inline {
-            b |= 32;
-        }
-        if self.is_const_expression {
-            b |= 64;
-        }
-        if self.is_external {
-            b |= 128;
-        }
-        b
-    }
-
-    fn from_byte(b: u8) -> Self {
-        Self {
-            is_program_halt: (b & 4) != 0,
-            is_generic: (b & 8) != 0,
-            is_public: (b & 16) != 0,
-            is_inline: (b & 32) != 0,
-            is_const_expression: (b & 64) != 0,
-            is_external: (b & 128) != 0,
-        }
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -838,9 +806,10 @@ pub struct Function {
     pub return_type: CompilerType,
     pub body: Box<[StmtData]>,
     pub attributes: Box<[Attribute]>,
-    flags: Cell<u8>,
+    flags: Cell<FunctionFlags>,
 
     pub generic_params: Box<[String]>,
+    pub generic_bounds: std::collections::HashMap<String, Vec<usize>>,
     pub generic_implementations: RefCell<Vec<Box<[CompilerType]>>>,
     pub usage_count: Cell<usize>,
     pub file_id: FileID,
@@ -851,9 +820,10 @@ impl Function {
         args: Box<[(String, CompilerType)]>,
         return_type: CompilerType,
         body: Box<[StmtData]>,
-        initial_flags: u8,
+        initial_flags: FunctionFlags,
         attributes: Box<[Attribute]>,
         generic_params: Box<[String]>,
+        generic_bounds: std::collections::HashMap<String, Vec<usize>>,
     ) -> Self {
         Self {
             full_path: path,
@@ -863,13 +833,14 @@ impl Function {
             attributes,
             flags: Cell::new(initial_flags),
             generic_params,
+            generic_bounds,
             generic_implementations: RefCell::new(vec![]),
             usage_count: Cell::new(0),
             file_id: 0,
         }
     }
     pub fn get_flags(&self) -> FunctionFlags {
-        FunctionFlags::from_byte(self.flags.get())
+        self.flags.get()
     }
     pub fn is_normal(&self) -> bool {
         !self.get_flags().is_generic && !self.get_flags().is_external && !self.get_flags().is_inline
@@ -880,6 +851,9 @@ impl Function {
     pub fn is_external(&self) -> bool {
         self.get_flags().is_external
     }
+    pub fn is_export(&self) -> bool {
+        self.get_flags().is_export
+    }
     pub fn is_inline(&self) -> bool {
         self.get_flags().is_inline
     }
@@ -888,7 +862,7 @@ impl Function {
         self.get_flags().is_program_halt
     }
     pub fn set_flags(&self, flags: FunctionFlags) {
-        self.flags.set(flags.to_byte());
+        self.flags.set(flags);
     }
     pub fn name(&self) -> &str {
         &self.full_path.name()
@@ -986,48 +960,10 @@ pub struct VariableFlags {
 #[derive(Debug, Clone)]
 pub struct Variable {
     pub compiler_type: CompilerType,
-    flags: Cell<u8>,
+    flags: Cell<VariableFlags>,
     value: RefCell<Option<LLVMVal>>,
 }
-impl VariableFlags {
-    fn to_byte(&self) -> u8 {
-        let mut b = 0;
-        if self.read {
-            b |= 1;
-        }
-        if self.written {
-            b |= 2;
-        }
-        if self.modified_content {
-            b |= 4;
-        }
-        if self.static_storage {
-            b |= 8;
-        }
-        if self.inline {
-            b |= 16;
-        }
-        if self.is_alias {
-            b |= 32;
-        }
-        if self.is_constant {
-            b |= 64;
-        }
-        b
-    }
 
-    fn from_byte(b: u8) -> Self {
-        Self {
-            read: (b & 1) != 0,
-            written: (b & 2) != 0,
-            modified_content: (b & 4) != 0,
-            static_storage: (b & 8) != 0,
-            inline: (b & 16) != 0,
-            is_alias: (b & 32) != 0,
-            is_constant: (b & 64) != 0,
-        }
-    }
-}
 impl Variable {
     pub fn new(compiler_type: CompilerType, is_const: bool, is_static: bool) -> Self {
         Self::with_flags(
@@ -1042,12 +978,12 @@ impl Variable {
     fn with_flags(compiler_type: CompilerType, flags: VariableFlags) -> Self {
         Self {
             compiler_type,
-            flags: Cell::new(flags.to_byte()),
+            flags: Cell::new(flags),
             value: RefCell::new(None),
         }
     }
     pub fn get_flags(&self) -> VariableFlags {
-        VariableFlags::from_byte(self.flags.get())
+        self.flags.get()
     }
     pub fn update_flags<F>(&self, f: F)
     where
@@ -1055,7 +991,7 @@ impl Variable {
     {
         let mut flags = self.get_flags();
         f(&mut flags);
-        self.flags.set(flags.to_byte());
+        self.flags.set(flags);
     }
     pub fn mark_usage(&self, is_write: bool, modifies_content: bool) {
         if self.get_flags().is_constant && is_write {
@@ -1596,6 +1532,8 @@ pub struct SymbolTable {
     enums: ContextPathDictionary<Enum>,
     static_variables: ContextPathDictionary<Variable>,
     consts: ContextPathDictionary<Variable>,
+    traits: ContextPathDictionary<CompiledTrait>,
+    trait_impls: Vec<CompiledTraitImpl>,
 }
 impl SymbolTable {
     pub fn get_type_by_id(&self, type_id: usize) -> &Struct {
@@ -1704,5 +1642,38 @@ impl SymbolTable {
     }
     pub fn alias_types(&self) -> &HashMap<String, CompilerType> {
         &self.alias_types
+    }
+
+    pub fn insert_trait(&mut self, full_path: ContextPathEnd, mut compiled_trait: CompiledTrait) {
+        compiled_trait.full_path = full_path.clone();
+        self.traits.insert(&full_path, compiled_trait);
+    }
+
+    pub fn get_trait_by_id(&self, trait_id: usize) -> &CompiledTrait {
+        self.traits
+            .values()
+            .nth(trait_id)
+            .expect("Invalid trait id")
+    }
+
+    pub fn get_trait_id_by_path(&self, fqn: &ContextPathEnd) -> Option<usize> {
+        self.traits.index_of(fqn)
+    }
+
+    pub fn traits_iter(&self) -> ContextPathDictionaryIter<'_, CompiledTrait> {
+        self.traits.iter()
+    }
+
+    pub fn find_trait_method_for_type(&self, type_id: usize, method_name: &str) -> Option<usize> {
+        self.trait_impls
+            .iter()
+            .find(|impl_| {
+                impl_.for_type_id == type_id && impl_.method_fn_ids.contains_key(method_name)
+            })
+            .and_then(|impl_| impl_.method_fn_ids.get(method_name).copied())
+    }
+
+    pub fn push_trait_impl(&mut self, impl_: CompiledTraitImpl) {
+        self.trait_impls.push(impl_);
     }
 }

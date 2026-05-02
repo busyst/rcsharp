@@ -67,6 +67,13 @@ impl<'a> ExpressionCompiler<'a> {
             Expr::MacroCall(callee, args) => self.compile_macro_call(callee, args, expected),
             Expr::Assign(lhs, rhs) => self.compile_assignment(lhs, rhs, expected),
             Expr::Cast(expr, target_type) => self.compile_cast(expr, target_type, expected),
+            Expr::MemberCall(receiver, method_name, args, generics) => self.compile_member_call(
+                receiver,
+                method_name,
+                args,
+                generics.as_ref().map(|v| &**v),
+                expected,
+            ),
             _ => Err(CompilerError::Generic(format!("Not a rvalue {:?}", expr))),
         }
     }
@@ -133,7 +140,10 @@ impl<'a> ExpressionCompiler<'a> {
         if let Some(type_id) = self.resolve_path(&name, |s, p| s.get_type_id_by_path(p)) {
             return Ok((CompiledValue::Type(CompilerType::Struct(type_id)), vec![]));
         }
-        panic!("{}", name)
+        return Err(CompilerError::Generic(format!(
+            "Undefined symbol: '{}'",
+            name
+        )));
     }
     fn compile_static_access_rvalue(
         &self,
@@ -1074,6 +1084,179 @@ impl<'a> ExpressionCompiler<'a> {
             }
         }
     }
+    fn compile_member_call(
+        &self,
+        receiver: &Expr,
+        method_name: &str,
+        args: &[Expr],
+        _generics: Option<&[ParserType]>,
+        expected: Expected,
+    ) -> ExpressionCompileResult<(CompiledValue, Vec<LLVMInstruction>)> {
+        let (receiver_val, mut instructions) = self.compile_rvalue(receiver, Expected::Anything)?;
+        let receiver_type = receiver_val
+            .get_type()
+            .ok_or_else(|| CompilerError::Generic("Method call receiver has no type".into()))?
+            .clone();
+
+        let (struct_type_id, self_llvm_val, self_param_type) = match &receiver_type {
+            CompilerType::Struct(id) => (
+                *id,
+                receiver_val.get_llvm_rep().clone(),
+                receiver_type.clone(),
+            ),
+            CompilerType::Pointer(inner) => {
+                if let CompilerType::Struct(id) = inner.as_ref() {
+                    (
+                        *id,
+                        receiver_val.get_llvm_rep().clone(),
+                        receiver_type.clone(),
+                    )
+                } else {
+                    return Err(CompilerError::Generic(format!(
+                        "Cannot call method '{}' on pointer to non-struct type {:?}",
+                        method_name, inner
+                    )));
+                }
+            }
+            other => {
+                return Err(CompilerError::Generic(format!(
+                    "Cannot call method '{}' on non-struct type {:?}",
+                    method_name, other
+                )));
+            }
+        };
+
+        let struct_path = self
+            .symbols()
+            .get_type_by_id(struct_type_id)
+            .full_path()
+            .to_string();
+
+        let fn_id = self
+            .symbols()
+            .find_trait_method_for_type(struct_type_id, method_name)
+            .or_else(|| {
+                let method_path =
+                    ContextPathEnd::from_full_path(&format!("{}.{}", struct_path, method_name));
+                self.symbols().get_function_id_by_path(&method_path)
+            })
+            .ok_or_else(|| {
+                CompilerError::Generic(format!(
+                    "No method '{}' found for type '{}'",
+                    method_name, struct_path
+                ))
+            })?;
+
+        let (return_type, param_types, has_self, inline_info) = {
+            let func = self.compctx.symbols.get_function_by_id(fn_id);
+            let has_self = func
+                .args
+                .first()
+                .map(|(name, _)| name == "self")
+                .unwrap_or(false);
+            let self_skip = if has_self { 1 } else { 0 };
+            let param_types: Vec<CompilerType> = func
+                .args
+                .iter()
+                .skip(self_skip)
+                .map(|(_, t)| t.clone())
+                .collect();
+            let return_type = func.return_type.clone();
+            let is_inline = func.is_inline();
+            let inline_info = is_inline.then_some((func.args.clone(), func.body.clone(), fn_id));
+            (return_type, param_types, has_self, inline_info)
+        };
+
+        if args.len() != param_types.len() {
+            return Err(CompilerError::Generic(format!(
+                "Method '{}' expects {} argument(s), got {}",
+                method_name,
+                param_types.len(),
+                args.len()
+            )));
+        }
+
+        let mut compiled_args: Vec<(LLVMVal, CompilerType)> = vec![];
+        if has_self {
+            compiled_args.push((self_llvm_val, self_param_type));
+        }
+        for (idx, arg_expr) in args.iter().enumerate() {
+            let expected_type = &param_types[idx];
+            let (arg_val, arg_instr) =
+                self.compile_rvalue(arg_expr, Expected::Type(expected_type))?;
+            if !arg_val.equal_type(expected_type) {
+                return Err(CompilerError::Generic(format!(
+                    "Type mismatch in argument {} of method '{}': expected {:?}, got {:?}",
+                    idx + 1,
+                    method_name,
+                    expected_type,
+                    arg_val.get_type()
+                )));
+            }
+            instructions.extend(arg_instr);
+            compiled_args.push((arg_val.try_get_llvm_rep()?.clone(), expected_type.clone()));
+        }
+
+        if let Some((func_args_def, body, func_id_for_inline)) = inline_info {
+            let (inline_val, inline_instr) = self.perform_inline_expansion(
+                &compiled_args,
+                &func_args_def,
+                &return_type,
+                &body,
+                func_id_for_inline,
+            )?;
+            instructions.extend(inline_instr);
+            return Ok((inline_val, instructions));
+        }
+
+        let func_full_path = self
+            .compctx
+            .symbols
+            .get_function_by_id(fn_id)
+            .full_path()
+            .to_string();
+        let callee = LLVMVal::Global(format!("\"{}\"", func_full_path));
+
+        if return_type.is_void() {
+            instructions.push(LLVMInstruction::Call {
+                target_reg: None,
+                callee,
+                args: compiled_args,
+                result_type: return_type,
+            });
+            Ok((
+                CompiledValue::NoReturn {
+                    program_halt: false,
+                },
+                instructions,
+            ))
+        } else if let Expected::NoReturn = expected {
+            instructions.push(LLVMInstruction::Call {
+                target_reg: None,
+                callee,
+                args: compiled_args,
+                result_type: return_type,
+            });
+            Ok((
+                CompiledValue::NoReturn {
+                    program_halt: false,
+                },
+                instructions,
+            ))
+        } else {
+            let target_reg = self.ctx.acquire_temp_id();
+            instructions.push(LLVMInstruction::Call {
+                target_reg: Some(target_reg),
+                callee,
+                args: compiled_args,
+                result_type: return_type.clone(),
+            });
+            Ok((
+                CompiledValue::new_value(LLVMVal::Register(target_reg), return_type),
+                instructions,
+            ))
+        }
+    }
     fn compile_macro_call(
         &self,
         callee_expr: &Expr,
@@ -1686,7 +1869,10 @@ impl<'a> ExpressionCompiler<'a> {
                 instructions,
             ));
         }
-        panic!("{:?}.{}\n {:?}", obj_expr, member, obj_lval);
+        return Err(CompilerError::Generic(format!(
+            "No field or method '{}' found on type {:?}",
+            member, obj_lval.value_type
+        )));
     }
     pub fn symbols(&self) -> &SymbolTable {
         &self.compctx.symbols

@@ -25,7 +25,11 @@ impl<'a> CompilerPass<'a> for ModuleLoaderPass {
     ) -> CompileResult<Self::Output> {
         let main_file = Path::new(input);
         if !main_file.exists() {
-            return Err(CompilerError::Generic("Main file was not found".to_string()).into());
+            return Err(CompilerError::Generic(format!(
+                "Main file was not found on path:{}",
+                input
+            ))
+            .into());
         }
 
         let mut to_runn_throu = vec![std::path::absolute(main_file)

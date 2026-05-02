@@ -9,7 +9,7 @@ cargo build --manifest-path "%ROOT_DIR%Cargo.toml" -q || (
     exit /b 1
 )
 cd /d "%TARGET_DIR%"
-cargo run --manifest-path "%ROOT_DIR%Cargo.toml" -q -- "%INPUT_FILE%" || (
+cargo run --manifest-path "%ROOT_DIR%Cargo.toml" -q -- -E -i "%INPUT_FILE%" || (
     echo Error: cargo run failed
     exit /b %errorlevel%
 )
@@ -32,9 +32,9 @@ if exist ".code_snippets\readyLibs\include.txt" (
 
 if not "%Libs%"=="" (
     echo libs included: %Libs%
-    lld-link %Libs% /subsystem:console /entry:main "%TARGET_DIR%output.obj" /out:"%TARGET_DIR%output.exe"
+    lld-link %Libs% "%TARGET_DIR%output.obj" /out:"%TARGET_DIR%output.exe"
 ) else (
-    lld-link /subsystem:console /entry:main "%TARGET_DIR%output.obj" /out:"%TARGET_DIR%output.exe"
+    lld-link "%TARGET_DIR%output.obj" /out:"%TARGET_DIR%output.exe"
 )
 
 if %errorlevel% neq 0 (

@@ -173,14 +173,7 @@ impl OptimizerPass {
         Ok(())
     }
 
-    pub fn optimize_llvm_instructions(
-        mut vec: Vec<LLVMInstruction>,
-        _cfg: &CompilerConfig,
-    ) -> Vec<LLVMInstruction> {
-        Self::remove_unnecesary_labels(&mut vec);
-        vec
-    }
-    fn remove_unnecesary_labels(vec: &mut Vec<LLVMInstruction>) {
+    fn remove_unnecessary_labels(vec: &mut Vec<LLVMInstruction>) {
         let mut one: HashSet<String> = HashSet::new();
         let mut mult: HashSet<String> = HashSet::new();
         for (idx, x) in vec.iter().enumerate() {
@@ -249,6 +242,14 @@ impl OptimizerPass {
             }
         }
     }
+}
+
+pub fn optimize_llvm_instructions(
+    mut vec: Vec<LLVMInstruction>,
+    _cfg: &CompilerConfig,
+) -> Vec<LLVMInstruction> {
+    OptimizerPass::remove_unnecessary_labels(&mut vec);
+    vec
 }
 
 pub fn constant_expression_optimizer_base(expr: &Expr) -> Option<Expr> {
