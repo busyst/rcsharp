@@ -402,6 +402,15 @@ namespace string{
         x.data[len] = 0;
         return x;
     }
+    fn from_data(data: &i8, len: i32) : String{
+        let x: String = String::{
+            len: len,
+            data: mem::malloc(size_of::<i8>() * (len + 1) as i64) as &i8
+        };
+        mem::copy(data, x.data, len as i64);
+        x.data[len] = 0;
+        return x;
+    }
     fn empty() : String {
         let x: String = String::{
             data: null,

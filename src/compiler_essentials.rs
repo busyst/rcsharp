@@ -746,7 +746,13 @@ impl Struct {
     }
 
     pub fn get_implementation_index(&self, generics: &[CompilerType]) -> Option<usize> {
-        assert!(self.is_generic());
+        if !self.is_generic() {
+            println!(
+                "Tried to get implementation index of not generic {:?}",
+                self.full_path()
+            );
+            panic!()
+        }
         if self.generic_params.len() != generics.len() {
             return None;
         }
