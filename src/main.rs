@@ -23,6 +23,7 @@ fn main() -> Result<(), ()> {
     let mut args = Args::parse();
     args.input = Some(args.input.unwrap_or_else(|| format!("./src.rcsharp")));
     args.output = Some(args.output.unwrap_or_else(|| format!("./output.ll")));
+    args.executable = true;
     let program_start = Instant::now();
 
     if let Err(err) = compile_to_file(&args) {

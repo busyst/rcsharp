@@ -1148,7 +1148,7 @@ impl<'a> ExpressionCompiler<'a> {
             })?;
 
         let (return_type, param_types, has_self, inline_info) = {
-            let func = self.compctx.symbols.get_function_by_id(fn_id);
+            let func = self.compctx.symbols.get_function_by_id_use(fn_id);
             let has_self = func
                 .args
                 .first()
@@ -1553,7 +1553,7 @@ impl<'a> ExpressionCompiler<'a> {
             .get_function_id_by_path(&fqn_local)
             .or_else(|| self.symbols().get_function_id_by_path(&name))
         {
-            //let func = self.symbols().get_function_by_id_use(fid);
+            self.symbols().get_function_by_id_use(fid);
             return Ok((CompiledLValue::from_function(fid, self.symbols())?, vec![]));
         }
         if let Some((var_path, var)) = self

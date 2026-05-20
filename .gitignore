@@ -6,3 +6,4 @@ output.obj
 .code_snippets/*
 ./debug_lexer
 debug_lexer
+output.ll
