@@ -3,6 +3,7 @@ use std::{
     collections::{HashMap, HashSet},
 };
 
+use ordered_hash_map::OrderedHashMap;
 use rcsharp_parser::{
     compiler_primitives::BOOL_TYPE,
     defs::{ParsedVariable, Stmt, StmtData, VarType},
@@ -167,7 +168,7 @@ impl LLVMGenPass {
                 field_types
             ));
         }
-        let mut done = HashMap::new();
+        let mut done = OrderedHashMap::new();
         loop {
             let mut new = false;
             for (full_path, r#type) in ctx.symbols.types_iter().filter(|x| x.1.is_generic()) {
@@ -309,7 +310,7 @@ impl LLVMGenPass {
         };
         let mut done: HashSet<usize> = HashSet::new();
 
-        let mut done_generics = HashMap::new();
+        let mut done_generics = OrderedHashMap::new();
         let mut to_do_generics = vec![];
         loop {
             while let Some(c_id) = to_do.pop() {

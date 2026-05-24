@@ -1,5 +1,6 @@
-use std::{collections::HashMap, path::Path};
+use std::{collections::HashSet, path::Path};
 
+use ordered_hash_map::OrderedHashMap;
 use rcsharp_lexer::{lex_file, LexerSymbolTable};
 use rcsharp_parser::{defs::StmtData, expression_parser::Expr, parser::GeneralParser};
 
@@ -16,7 +17,7 @@ pub struct ModuleLoaderPass {}
 impl<'a> CompilerPass<'a> for ModuleLoaderPass {
     type Input = &'a str;
 
-    type Output = HashMap<FileID, Vec<StmtData>>;
+    type Output = OrderedHashMap<FileID, Vec<StmtData>>;
 
     fn run(
         &mut self,
@@ -39,7 +40,7 @@ impl<'a> CompilerPass<'a> for ModuleLoaderPass {
             .to_string()];
 
         let mut runned_throu = vec![];
-        let mut visited = std::collections::HashSet::new();
+        let mut visited = HashSet::new();
         let mut offset = 0;
         let mut symbol = LexerSymbolTable::new();
         while let Some(path) = to_runn_throu.pop() {
@@ -66,6 +67,7 @@ impl<'a> CompilerPass<'a> for ModuleLoaderPass {
                     return Err(CompilerError::ParserError(path, err).into());
                 }
             };
+            let mut pending_includes = vec![];
             for (span, attr) in q.iter() {
                 if attr.name_equals("include") {
                     let include_path_expr = attr.one_argument();
@@ -88,7 +90,7 @@ impl<'a> CompilerPass<'a> for ModuleLoaderPass {
                         .into());
                     }
 
-                    to_runn_throu.push(
+                    pending_includes.push(
                         std::path::absolute(&file)
                             .unwrap()
                             .to_str()
@@ -97,10 +99,16 @@ impl<'a> CompilerPass<'a> for ModuleLoaderPass {
                     );
                 }
             }
+            pending_includes.sort();
+            for include_path in pending_includes.into_iter().rev() {
+                to_runn_throu.push(include_path);
+            }
             runned_throu.push((path, lexed));
         }
 
-        let mut stmt_vec = HashMap::new();
+        runned_throu.sort_by(|a, b| a.0.cmp(&b.0));
+
+        let mut stmt_vec = OrderedHashMap::new();
         for (path, tokens) in runned_throu.iter() {
             let parsed = match GeneralParser::new(tokens, &symbol).parse_all() {
                 Ok(parse) => parse,

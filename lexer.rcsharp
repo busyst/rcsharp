@@ -1,0 +1,709 @@
+#include("./src_base_structs.rcsharp")
+pub enum TokenType : i8 {
+    LParen,
+    RParen,
+    LBrace,
+    RBrace,
+    LSquareBrace,
+    RSquareBrace,
+    Colon,
+    DoubleColon,
+    SemiColon,
+    Comma,
+    Dot,
+    RangeDots,
+    RangeDotsInclusive,
+
+    FatArrow,
+    Hint,
+
+    Equal,
+    Plus,
+    Minus,
+    Multiply,
+    Divide,
+    Modulo,
+    LogicNot,
+    LogicEqual,
+    LogicNotEqual,
+    LogicOr,
+    LogicAnd,
+    LogicGreater,
+    LogicGreaterEqual,
+    LogicLess,
+    LogicLessEqual,
+    BitNot,
+    BitOr,
+    BitAnd,
+    BitXor,
+    BitShiftL,
+    BitShiftR,
+
+    KeywordPub,
+    KeywordInline,
+    KeywordConst,
+    KeywordExtern,
+    KeywordMatch,
+    KeywordFunction,
+    KeywordLet,
+    KeywordStatic,
+    KeywordAs,
+    KeywordIf,
+    KeywordElse,
+    KeywordTrait,
+    KeywordImpl,
+    KeywordStruct,
+    KeywordEnum,
+    KeywordLoop,
+    KeywordFor,
+    KeywordDo,
+    KeywordIn,
+    KeywordWhile,
+    KeywordBreak,
+    KeywordContinue,
+    KeywordReturn,
+    KeywordThis,
+    KeywordOperator,
+    KeywordNamespace,
+    KeywordTrue,
+    KeywordFalse,
+    KeywordNull,
+
+    Name,
+    Integer,
+    Decimal,
+    String,
+    Char,
+    DummyToken,
+}
+fn is_modifier(val: TokenType) : bool{
+    return val == TokenType::KeywordPub || val == TokenType::KeywordInline || val == TokenType::KeywordConst || val == TokenType::KeywordExtern || val == TokenType::KeywordStatic;
+}
+fn token_type_to_string(val: &TokenData, symbol_vector: &vector::Vec<string::String>) : string::String{
+    if symbol_vector != null{
+        if val.token_type == TokenType::Name {
+            return string::clone(&symbol_vector.array[val.symbol_id]);
+        } else if val.token_type == TokenType::String {
+            return string::clone(&symbol_vector.array[val.symbol_id]);
+        } else if val.token_type == TokenType::Integer {
+            return string::clone(&symbol_vector.array[val.symbol_id]);
+        } else if val.token_type == TokenType::Decimal {
+            return string::clone(&symbol_vector.array[val.symbol_id]);
+        } else if val.token_type == TokenType::Char {
+            return string::from_c_string("CHAR");
+        }
+    }
+
+    if val.token_type == TokenType::LParen { return string::from_c_string("("); }
+    else if val.token_type == TokenType::RParen { return string::from_c_string(")"); }
+    else if val.token_type == TokenType::LBrace { return string::from_c_string("{"); }
+    else if val.token_type == TokenType::RBrace { return string::from_c_string("}"); }
+    else if val.token_type == TokenType::LSquareBrace { return string::from_c_string("["); }
+    else if val.token_type == TokenType::RSquareBrace { return string::from_c_string("]"); }
+    else if val.token_type == TokenType::Colon { return string::from_c_string(":"); }
+    else if val.token_type == TokenType::DoubleColon { return string::from_c_string("::"); }
+    else if val.token_type == TokenType::SemiColon { return string::from_c_string(";"); }
+    else if val.token_type == TokenType::Comma { return string::from_c_string(","); }
+    else if val.token_type == TokenType::Dot { return string::from_c_string("."); }
+    else if val.token_type == TokenType::RangeDots { return string::from_c_string(".."); }
+    else if val.token_type == TokenType::RangeDotsInclusive { return string::from_c_string("..="); }
+    else if val.token_type == TokenType::FatArrow { return string::from_c_string("=>"); }
+    else if val.token_type == TokenType::Hint { return string::from_c_string("#"); }
+
+    else if val.token_type == TokenType::Equal { return string::from_c_string("="); }
+    else if val.token_type == TokenType::Plus { return string::from_c_string("+"); }
+    else if val.token_type == TokenType::Minus { return string::from_c_string("-"); }
+    else if val.token_type == TokenType::Multiply { return string::from_c_string("*"); }
+    else if val.token_type == TokenType::Divide { return string::from_c_string("/"); }
+    else if val.token_type == TokenType::Modulo { return string::from_c_string("%"); }
+    else if val.token_type == TokenType::LogicNot { return string::from_c_string("!"); }
+    else if val.token_type == TokenType::LogicEqual { return string::from_c_string("=="); }
+    else if val.token_type == TokenType::LogicNotEqual { return string::from_c_string("!="); }
+    else if val.token_type == TokenType::LogicOr { return string::from_c_string("||"); }
+    else if val.token_type == TokenType::LogicAnd { return string::from_c_string("&&"); }
+    else if val.token_type == TokenType::LogicGreater { return string::from_c_string(">"); }
+    else if val.token_type == TokenType::LogicGreaterEqual { return string::from_c_string(">="); }
+    else if val.token_type == TokenType::LogicLess { return string::from_c_string("<"); }
+    else if val.token_type == TokenType::LogicLessEqual { return string::from_c_string("<="); }
+    else if val.token_type == TokenType::BitNot { return string::from_c_string("~"); }
+    else if val.token_type == TokenType::BitOr { return string::from_c_string("|"); }
+    else if val.token_type == TokenType::BitAnd { return string::from_c_string("&"); }
+    else if val.token_type == TokenType::BitXor { return string::from_c_string("^"); }
+
+    else if val.token_type == TokenType::KeywordPub { return string::from_c_string("PUB"); }
+    else if val.token_type == TokenType::KeywordInline { return string::from_c_string("INLINE"); }
+    else if val.token_type == TokenType::KeywordConst { return string::from_c_string("CONST"); }
+    else if val.token_type == TokenType::KeywordExtern { return string::from_c_string("EXTERN"); }
+    else if val.token_type == TokenType::KeywordMatch { return string::from_c_string("MATCH"); }
+    else if val.token_type == TokenType::KeywordFunction { return string::from_c_string("FN"); }
+    else if val.token_type == TokenType::KeywordLet { return string::from_c_string("LET"); }
+    else if val.token_type == TokenType::KeywordStatic { return string::from_c_string("STATIC"); }
+    else if val.token_type == TokenType::KeywordAs { return string::from_c_string("AS"); }
+    else if val.token_type == TokenType::KeywordIf { return string::from_c_string("IF"); }
+    else if val.token_type == TokenType::KeywordElse { return string::from_c_string("ELSE"); }
+    else if val.token_type == TokenType::KeywordTrait { return string::from_c_string("TRAIT"); }
+    else if val.token_type == TokenType::KeywordImpl { return string::from_c_string("IMPL"); }
+    else if val.token_type == TokenType::KeywordStruct { return string::from_c_string("STRUCT"); }
+    else if val.token_type == TokenType::KeywordEnum { return string::from_c_string("ENUM"); }
+    else if val.token_type == TokenType::KeywordLoop { return string::from_c_string("LOOP"); }
+    else if val.token_type == TokenType::KeywordFor { return string::from_c_string("FOR"); }
+    else if val.token_type == TokenType::KeywordDo { return string::from_c_string("DO"); }
+    else if val.token_type == TokenType::KeywordIn { return string::from_c_string("IN"); }
+    else if val.token_type == TokenType::KeywordWhile { return string::from_c_string("WHILE"); }
+    else if val.token_type == TokenType::KeywordBreak { return string::from_c_string("BREAK"); }
+    else if val.token_type == TokenType::KeywordContinue { return string::from_c_string("CONTINUE"); }
+    else if val.token_type == TokenType::KeywordReturn { return string::from_c_string("RETURN"); }
+    else if val.token_type == TokenType::KeywordThis { return string::from_c_string("THIS"); }
+    else if val.token_type == TokenType::KeywordOperator { return string::from_c_string("OPERATOR"); }
+    else if val.token_type == TokenType::KeywordNamespace { return string::from_c_string("NAMESPACE"); }
+    else if val.token_type == TokenType::KeywordTrue { return string::from_c_string("TRUE"); }
+    else if val.token_type == TokenType::KeywordFalse { return string::from_c_string("FALSE"); }
+    else if val.token_type == TokenType::KeywordNull { return string::from_c_string("NULL"); }
+
+    return string::from_c_string("UNKNOWN_TOKEN");
+}
+pub struct TokenData{
+    token_type : TokenType,
+    symbol_id : u16,
+    file_offset: u32
+}
+fn handle_number(data: &i8, start: u32, end: u32, tokens: &vector::Vec<TokenData>, symbols: &vector::Vec<string::String>){
+    const len: i32 = (end - start) as i32;
+    const start_ptr: &i8 = data + start;
+
+    for i in 0 as u32 .. symbols.length{
+        if symbols.array[i].len != len{
+            continue;
+        }
+        if mem::compare(start_ptr, symbols.array[i].data, len as i64) == 0{
+            let temp: TokenData = TokenData::{ token_type: TokenType::String, symbol_id: i as u16, file_offset: start };
+            vector::push::<TokenData>(tokens, temp);
+            return;
+        }
+    }
+    let symbol_id: u16 = symbols.length as u16;
+    vector::push::<string::String>(symbols, string::from_data(start_ptr, len));
+
+    let temp: TokenData = TokenData::{ token_type: TokenType::Integer, symbol_id: symbol_id, file_offset: start };
+    vector::push::<TokenData>(tokens, temp);
+}
+fn handle_decimal_number(data: &i8, start: u32, end: u32, tokens: &vector::Vec<TokenData>, symbols: &vector::Vec<string::String>){
+    const len: i32 = (end - start) as i32;
+    const start_ptr: &i8 = data + start;
+
+    for i in 0 as u32 .. symbols.length{
+        if symbols.array[i].len != len{
+            continue;
+        }
+        if mem::compare(start_ptr, symbols.array[i].data, len as i64) == 0{
+            let temp: TokenData = TokenData::{ token_type: TokenType::String, symbol_id: i as u16, file_offset: start };
+            vector::push::<TokenData>(tokens, temp);
+            return;
+        }
+    }
+    let symbol_id: u16 = symbols.length as u16;
+    vector::push::<string::String>(symbols, string::from_data(start_ptr, len));
+
+    let temp: TokenData = TokenData::{ token_type: TokenType::Decimal, symbol_id: symbol_id, file_offset: start };
+    vector::push::<TokenData>(tokens, temp);
+}
+fn handle_string(data: &i8, start: u32, end: u32, tokens: &vector::Vec<TokenData>, symbols: &vector::Vec<string::String>){
+    const len: i32 = (end - start) as i32 - 2;
+    const start_ptr: &i8 = data + start + 1;
+    const stack_buffer: &i8 = stalloc::<i8>(len);
+    let index: u32 = start + 1;
+    let write_head: u32 = 0;
+    while index < end - 1{
+        let current_char: i8 = data[index];
+        if current_char == '\\'{
+            //if end - index == 1{ impossible
+            //    process::throw("Unescaped escape character");
+            //}
+            let next_char: i8 = data[index + 1];
+            let return_char: i8;
+            if next_char == '\\'{
+                return_char ='\\';
+            }else if next_char == 'n'{
+                return_char ='\n';
+            }else if next_char == 'r'{
+                return_char ='\r';
+            }else if next_char == 't'{
+                return_char ='\t';
+            }else if next_char == '\''{
+                return_char ='\'';
+            }else if next_char == '"'{
+                return_char ='"';
+            }else if next_char == 'v'{
+                return_char = 11;
+            }else if next_char == 'f'{
+                return_char = 12;
+            }else if next_char == '0'{
+                return_char = 0;
+            }else{
+                const start_ptr: &i8 = data + start + 1;
+                console::println_i64(next_char as i64);
+                console::writeln(start_ptr, len);
+                process::throw("Invalid escape character!");
+            }
+            stack_buffer[write_head] = return_char;
+            write_head = write_head + 1;
+            index = index + 2;
+            continue;
+        }
+        stack_buffer[write_head] = current_char;
+        write_head = write_head + 1;
+        index = index + 1;
+    }
+
+    for i in 0 as u32 .. symbols.length{
+        if symbols.array[i].len != len{
+            continue;
+        }
+        if mem::compare(start_ptr, symbols.array[i].data, len as i64) == 0{
+            let temp: TokenData = TokenData::{ token_type: TokenType::String, symbol_id: i as u16, file_offset: start };
+            vector::push::<TokenData>(tokens, temp);
+            return;
+        }
+    }
+    let symbol_id: u16 = symbols.length as u16;
+    vector::push::<string::String>(symbols, string::from_data(stack_buffer, write_head as i32));
+
+    let temp: TokenData = TokenData::{ token_type: TokenType::String, symbol_id: symbol_id, file_offset: start };
+    vector::push::<TokenData>(tokens, temp);
+}
+fn handle_char(data: &i8, start: u32, end: u32, tokens: &vector::Vec<TokenData>, symbols: &vector::Vec<string::String>){
+    const len: i32 = (end - start) as i32 - 2;
+    const start_ptr: &i8 = data + start + 1;
+    const start_char: i8 = *start_ptr;
+    if start_char == '\\'{
+        //if len == 1{ impossible
+        //    process::throw("Unescaped escape character");
+        //}
+        let next_char: i8 = *(start_ptr + 1);
+        let return_char: u16;
+        if next_char == '\\'{
+            return_char ='\\';
+        }else if next_char == 'n'{
+            return_char ='\n';
+        }else if next_char == 'r'{
+            return_char ='\r';
+        }else if next_char == 't'{
+            return_char ='\t';
+        }else if next_char == '\''{
+            return_char ='\'';
+        }else if next_char == 'v'{
+            return_char = 11;
+        }else if next_char == 'f'{
+            return_char = 12;
+        }else if next_char == '0'{
+            return_char = 0;
+        }else{
+            console::writeln(start_ptr, len);
+            process::throw("Invalid escape character!");
+        }
+        let temp: TokenData = TokenData::{ token_type: TokenType::Char, symbol_id: return_char, file_offset: start };
+        vector::push::<TokenData>(tokens, temp);
+        return;
+    }
+    if len != 1{
+        process::throw("Char is too long");
+    }
+    let temp: TokenData = TokenData::{ token_type: TokenType::Char, symbol_id: start_char as u16, file_offset: start };
+    vector::push::<TokenData>(tokens, temp);
+}
+fn handle_symbol(data: &i8, start: u32, end: u32, tokens: &vector::Vec<TokenData>, symbols: &vector::Vec<string::String>){
+    const len: i32 = (end - start) as i32;
+    const start_ptr: &i8 = data + start;
+    
+    if len == 2{ 
+        if mem::compare(start_ptr, "if", 2) == 0 { let temp: TokenData = TokenData::{ token_type: TokenType::KeywordIf, symbol_id: 0, file_offset: start }; vector::push::<TokenData>(tokens, temp); return; }
+        if mem::compare(start_ptr, "do", 2) == 0 { let temp: TokenData = TokenData::{ token_type: TokenType::KeywordDo, symbol_id: 0, file_offset: start }; vector::push::<TokenData>(tokens, temp); return; }
+        if mem::compare(start_ptr, "as", 2) == 0 { let temp: TokenData = TokenData::{ token_type: TokenType::KeywordAs, symbol_id: 0, file_offset: start }; vector::push::<TokenData>(tokens, temp); return; }
+        if mem::compare(start_ptr, "in", 2) == 0 { let temp: TokenData = TokenData::{ token_type: TokenType::KeywordIn, symbol_id: 0, file_offset: start }; vector::push::<TokenData>(tokens, temp); return; }
+        if mem::compare(start_ptr, "fn", 2) == 0 { let temp: TokenData = TokenData::{ token_type: TokenType::KeywordFunction, symbol_id: 0, file_offset: start }; vector::push::<TokenData>(tokens, temp); return; }
+    }else if len == 3{
+        if mem::compare(start_ptr, "let", 3) == 0 { let temp: TokenData = TokenData::{ token_type: TokenType::KeywordLet, symbol_id: 0, file_offset: start }; vector::push::<TokenData>(tokens, temp); return; }
+        if mem::compare(start_ptr, "pub", 3) == 0 { let temp: TokenData = TokenData::{ token_type: TokenType::KeywordPub, symbol_id: 0, file_offset: start }; vector::push::<TokenData>(tokens, temp); return; }
+        if mem::compare(start_ptr, "for", 3) == 0 { let temp: TokenData = TokenData::{ token_type: TokenType::KeywordFor, symbol_id: 0, file_offset: start }; vector::push::<TokenData>(tokens, temp); return; }
+    }else if len == 4{
+        if mem::compare(start_ptr, "true", 4) == 0 { let temp: TokenData = TokenData::{ token_type: TokenType::KeywordTrue, symbol_id: 0, file_offset: start }; vector::push::<TokenData>(tokens, temp); return; }
+        if mem::compare(start_ptr, "loop", 4) == 0 { let temp: TokenData = TokenData::{ token_type: TokenType::KeywordLoop, symbol_id: 0, file_offset: start }; vector::push::<TokenData>(tokens, temp); return; }
+        if mem::compare(start_ptr, "this", 4) == 0 { let temp: TokenData = TokenData::{ token_type: TokenType::KeywordThis, symbol_id: 0, file_offset: start }; vector::push::<TokenData>(tokens, temp); return; }
+        if mem::compare(start_ptr, "null", 4) == 0 { let temp: TokenData = TokenData::{ token_type: TokenType::KeywordNull, symbol_id: 0, file_offset: start }; vector::push::<TokenData>(tokens, temp); return; }
+        if mem::compare(start_ptr, "else", 4) == 0 { let temp: TokenData = TokenData::{ token_type: TokenType::KeywordElse, symbol_id: 0, file_offset: start }; vector::push::<TokenData>(tokens, temp); return; }
+        if mem::compare(start_ptr, "enum", 4) == 0 { let temp: TokenData = TokenData::{ token_type: TokenType::KeywordEnum, symbol_id: 0, file_offset: start }; vector::push::<TokenData>(tokens, temp); return; }
+        if mem::compare(start_ptr, "impl", 4) == 0 { let temp: TokenData = TokenData::{ token_type: TokenType::KeywordImpl, symbol_id: 0, file_offset: start }; vector::push::<TokenData>(tokens, temp); return; }
+    }else if len == 5{
+        if mem::compare(start_ptr, "const", 5) == 0 { let temp: TokenData = TokenData::{ token_type: TokenType::KeywordConst, symbol_id: 0, file_offset: start }; vector::push::<TokenData>(tokens, temp); return; }
+        if mem::compare(start_ptr, "match", 5) == 0 { let temp: TokenData = TokenData::{ token_type: TokenType::KeywordMatch, symbol_id: 0, file_offset: start }; vector::push::<TokenData>(tokens, temp); return; }
+        if mem::compare(start_ptr, "trait", 5) == 0 { let temp: TokenData = TokenData::{ token_type: TokenType::KeywordTrait, symbol_id: 0, file_offset: start }; vector::push::<TokenData>(tokens, temp); return; }
+        if mem::compare(start_ptr, "while", 5) == 0 { let temp: TokenData = TokenData::{ token_type: TokenType::KeywordWhile, symbol_id: 0, file_offset: start }; vector::push::<TokenData>(tokens, temp); return; }
+        if mem::compare(start_ptr, "break", 5) == 0 { let temp: TokenData = TokenData::{ token_type: TokenType::KeywordBreak, symbol_id: 0, file_offset: start }; vector::push::<TokenData>(tokens, temp); return; }
+        if mem::compare(start_ptr, "false", 5) == 0 { let temp: TokenData = TokenData::{ token_type: TokenType::KeywordFalse, symbol_id: 0, file_offset: start }; vector::push::<TokenData>(tokens, temp); return; }
+    }else if len == 6{
+        if mem::compare(start_ptr, "inline", 6) == 0 { let temp: TokenData = TokenData::{ token_type: TokenType::KeywordInline, symbol_id: 0, file_offset: start }; vector::push::<TokenData>(tokens, temp); return; }
+        if mem::compare(start_ptr, "extern", 6) == 0 { let temp: TokenData = TokenData::{ token_type: TokenType::KeywordExtern, symbol_id: 0, file_offset: start }; vector::push::<TokenData>(tokens, temp); return; }
+        if mem::compare(start_ptr, "static", 6) == 0 { let temp: TokenData = TokenData::{ token_type: TokenType::KeywordStatic, symbol_id: 0, file_offset: start }; vector::push::<TokenData>(tokens, temp); return; }
+        if mem::compare(start_ptr, "struct", 6) == 0 { let temp: TokenData = TokenData::{ token_type: TokenType::KeywordStruct, symbol_id: 0, file_offset: start }; vector::push::<TokenData>(tokens, temp); return; }
+        if mem::compare(start_ptr, "return", 6) == 0 { let temp: TokenData = TokenData::{ token_type: TokenType::KeywordReturn, symbol_id: 0, file_offset: start }; vector::push::<TokenData>(tokens, temp); return; }
+    }else if len == 8{
+        if mem::compare(start_ptr, "continue", 8) == 0 { let temp: TokenData = TokenData::{ token_type: TokenType::KeywordContinue, symbol_id: 0, file_offset: start }; vector::push::<TokenData>(tokens, temp); return; }
+        if mem::compare(start_ptr, "operator", 8) == 0 { let temp: TokenData = TokenData::{ token_type: TokenType::KeywordOperator, symbol_id: 0, file_offset: start }; vector::push::<TokenData>(tokens, temp); return; }
+    }else if len == 9 {
+        if mem::compare(start_ptr, "namespace", 9) == 0 { let temp: TokenData = TokenData::{ token_type: TokenType::KeywordNamespace, symbol_id: 0, file_offset: start }; vector::push::<TokenData>(tokens, temp); return; }
+    }
+    
+    for i in 0 as u32 .. symbols.length{
+        if symbols.array[i].len != len{
+            continue;
+        }
+        if mem::compare(start_ptr, symbols.array[i].data, len as i64) == 0{
+            let temp: TokenData = TokenData::{ token_type: TokenType::Name, symbol_id: i as u16, file_offset: start };
+            vector::push::<TokenData>(tokens, temp);
+            return;
+        }
+    }
+    const symbol_id: u16 = symbols.length as u16;
+    vector::push::<string::String>(symbols, string::from_data(start_ptr, len));
+
+    let temp: TokenData = TokenData::{ token_type: TokenType::Name, symbol_id: symbol_id, file_offset: start };
+    vector::push::<TokenData>(tokens, temp);
+    return;
+}
+pub fn lex(data: &string::String, token_vector: &vector::Vec<TokenData>, symbol_vector: &vector::Vec<string::String>){
+    let index: u32 = 0;
+    while index < data.len as u32{
+        let char: i8 = data.data[index];
+        if char == ' ' || char_utils::is_cntrl(char){
+            data.data[index] = '\0';
+            index = index + 1;
+            continue;
+        }
+
+        let next_char: i8 = 0;
+        if index + 1 < data.len as u32{
+            next_char = data.data[index + 1];
+        }else{
+            next_char = 0;
+        }
+        let second_next_char: i8 = 0;
+        if index + 2 < data.len as u32{
+            second_next_char = data.data[index + 2];
+        }else{
+            second_next_char = 0;
+        }
+
+        if char_utils::is_alpha(char) || char == '_' {
+            let j: u32 = index + 1;
+            while j < data.len as u32{
+                if char_utils::is_alnum(data.data[j]) || data.data[j] == '_'{
+                    j = j + 1;
+                    continue;
+                }
+                break;
+            }
+            handle_symbol(data.data, index, j, token_vector, symbol_vector);
+            index = j;
+            continue;
+        }else if char_utils::is_digit(char) || (char == '-' && char_utils::is_digit(next_char)) {
+            let j: u32 = index + 1;
+            if char == '-' {
+                char = next_char;
+            }
+            if char == '0'{ // Encoded
+                if next_char == 'x' {// 16
+                    j = j + 1;
+                }else if next_char == 'b'{ // 2
+                    j = j + 1;
+                }else{ // 8
+                    
+                }
+            }
+            let dot: bool = false;
+            while j < data.len as u32{
+                if char_utils::is_xdigit(data.data[j]) || data.data[j] == '_' {
+                    j = j + 1;
+                    continue;
+                }
+                if data.data[j] == '.'{
+                    if !dot{
+                        dot = true;
+                        j = j + 1;
+                        continue;
+                    }
+                }
+                break;
+            }
+            if dot{
+                handle_decimal_number(data.data, index, j, token_vector, symbol_vector);
+            }else{
+                handle_number(data.data, index, j, token_vector, symbol_vector);
+            }
+            index = j;
+            continue;
+        }else if char == '"'{
+            let j: u32 = index + 1;
+            let c: bool = false;
+            while j < data.len as u32{
+                if data.data[j] == '"'{
+                    if c {
+                        c = false;
+                        j = j + 1;
+                        continue;
+                    }else{
+                        j = j + 1;
+                        break;
+                    }
+                }
+                if data.data[j] == '\\' {
+                    c = !c;
+                    j = j + 1;
+                    continue;
+                }
+                if c {
+                    c = false;
+                }
+                j = j + 1;
+                continue;
+            }
+            handle_string(data.data, index, j, token_vector, symbol_vector);
+            index = j;
+            continue;
+        }else if char == '\''{
+            let j: u32 = index + 1;
+            let c: bool = false;
+            while j < data.len as u32{
+                if data.data[j] == '\''{
+                    if c {
+                        c = false;
+                        j = j + 1;
+                        continue;
+                    }else{
+                        j = j + 1;
+                        break;
+                    }
+                }
+                if data.data[j] == '\\' {
+                    c = !c;
+                    j = j + 1;
+                    continue;
+                }
+                if c {
+                    c = false;
+                }
+                j = j + 1;
+                continue;
+            }
+            handle_char(data.data, index, j, token_vector, symbol_vector);
+            index = j;
+            continue;
+        }else if char == '/' && next_char == '/'{
+            let j: u32 = index + 2;
+            while j < data.len as u32{
+                if data.data[j] == '\n'{
+                    j = j + 1;
+                    break;
+                }
+                j = j + 1;
+                continue;
+            }
+            let len: i32 = (j - index) as i32;
+            //console::writeln(data.data + index, len);
+            mem::fill('\0', data.data + index, len as i64);
+            index = j;
+            continue;
+        }else if char == '/' && next_char == '*'{
+            let j: u32 = index + 2;
+            let nesting: i32 = 1;
+            let c: bool = false;
+            while j < data.len as u32{
+                if j + 1 < data.len as u32 {
+                    if data.data[j] == '/' && data.data[j + 1] == '*' {
+                        nesting = nesting + 1;
+                        j = j + 2;
+                        continue;
+                    }
+                    if data.data[j] == '*' && data.data[j + 1] == '/' {
+                        nesting = nesting - 1;
+                        j = j + 2;
+                        if nesting == 0 {
+                            break;
+                        }
+                        continue;
+                    }
+                }
+                j = j + 1;
+            }
+            let len: i32 = (j - index) as i32;
+            //console::writeln(data.data + index, len);
+            mem::fill('\0', data.data + index, len as i64);
+            index = j;
+            continue;
+        }
+
+        let token_type: TokenType = TokenType::DummyToken;
+        if char == '#'{
+            token_type = TokenType::Hint;
+            data.data[index] = ' ';
+            index = index + 1;
+        }else if char == '('{
+            token_type = TokenType::LParen;
+            data.data[index] = ' ';
+            index = index + 1;
+        }else if char == ')'{
+            token_type = TokenType::RParen;
+            data.data[index] = ' ';
+            index = index + 1;
+        }else if char == '{'{
+            token_type = TokenType::LBrace;
+            data.data[index] = ' ';
+            index = index + 1;
+        }else if char == '}'{
+            token_type = TokenType::RBrace;
+            data.data[index] = ' ';
+            index = index + 1;
+        }else if char == '['{
+            token_type = TokenType::LSquareBrace;
+            data.data[index] = ' ';
+            index = index + 1;
+        }else if char == ']'{
+            token_type = TokenType::RSquareBrace;
+            data.data[index] = ' ';
+            index = index + 1;
+        }else if char == ':'{
+            if next_char == ':'{
+                token_type = TokenType::DoubleColon;
+                data.data[index] = ' '; data.data[index + 1] = ' ';
+                index = index + 2;
+            }else{
+                token_type = TokenType::Colon;
+                data.data[index] = ' ';
+                index = index + 1;
+            }
+        }else if char == '='{
+            if next_char == '='{
+                token_type = TokenType::LogicEqual;
+                data.data[index] = ' '; data.data[index + 1] = ' ';
+                index = index + 2;
+            }else if next_char == '>'{
+                token_type = TokenType::FatArrow;
+                data.data[index] = ' '; data.data[index + 1] = ' ';
+                index = index + 2;
+            }else{
+                token_type = TokenType::Equal;
+                data.data[index] = ' ';
+                index = index + 1;
+            }
+        }else if char == ';'{
+            token_type = TokenType::SemiColon;
+            data.data[index] = ' ';
+            index = index + 1;
+        }else if char == ','{
+            token_type = TokenType::Comma;
+            data.data[index] = ' ';
+            index = index + 1;
+        }else if char == '+'{
+            token_type = TokenType::Plus;
+            data.data[index] = ' ';
+            index = index + 1;
+        }else if char == '-'{
+            token_type = TokenType::Minus;
+            data.data[index] = ' ';
+            index = index + 1;
+        }else if char == '*'{
+            token_type = TokenType::Multiply;
+            data.data[index] = ' ';
+            index = index + 1;
+        }else if char == '/'{
+            token_type = TokenType::Divide;
+            data.data[index] = ' ';
+            index = index + 1;
+        }else if char == '%'{
+            token_type = TokenType::Modulo;
+            data.data[index] = ' ';
+            index = index + 1;
+        }else if char == '!'{
+            if next_char == '='{
+                token_type = TokenType::LogicNotEqual;
+                data.data[index] = ' '; data.data[index + 1] = ' ';
+                index = index + 2;
+            }else{
+                token_type = TokenType::LogicNot;
+                data.data[index] = ' ';
+                index = index + 1;
+            }
+        }else if char == '&'{
+            if next_char == '&'{
+                token_type = TokenType::LogicAnd;
+                data.data[index] = ' '; data.data[index + 1] = ' ';
+                index = index + 2;
+            }else{
+                token_type = TokenType::BitAnd;
+                data.data[index] = ' ';
+                index = index + 1;
+            }
+        }else if char == '|'{
+            if next_char == '|'{
+                token_type = TokenType::LogicOr;
+                data.data[index] = ' '; data.data[index + 1] = ' ';
+                index = index + 2;
+            }else{
+                token_type = TokenType::BitOr;
+                data.data[index] = ' ';
+                index = index + 1;
+            }
+        }else if char == '.'{
+            if next_char == '.'{
+                if second_next_char == '='{
+                    token_type = TokenType::RangeDotsInclusive;
+                    data.data[index] = ' '; data.data[index + 1] = ' '; data.data[index + 2] = ' ';
+                    index = index + 3;
+                }else{
+                    token_type = TokenType::RangeDots;
+                    data.data[index] = ' '; data.data[index + 1] = ' ';
+                    index = index + 2;
+                }
+            }else{
+                token_type = TokenType::Dot;
+                data.data[index] = ' ';
+                index = index + 1;
+            }
+        }else if char == '<'{
+            if next_char == '='{
+                token_type = TokenType::LogicLessEqual;
+                data.data[index] = ' '; data.data[index + 1] = ' ';
+                index = index + 2;
+            }else{
+                token_type = TokenType::LogicLess;
+                data.data[index] = ' ';
+                index = index + 1;
+            }
+        }else if char == '>'{
+            if next_char == '='{
+                token_type = TokenType::LogicGreaterEqual;
+                data.data[index] = ' '; data.data[index + 1] = ' ';
+                index = index + 2;
+            }else{
+                token_type = TokenType::LogicGreater;
+                data.data[index] = ' ';
+                index = index + 1;
+            }
+        }else if char == '~'{
+            token_type = TokenType::BitNot;
+            data.data[index] = ' ';
+            index = index + 1;
+        }
+        if token_type != TokenType::DummyToken{
+            let temp: TokenData = TokenData::{ token_type: token_type, symbol_id: 0, file_offset: index };
+            vector::push::<TokenData>(token_vector, temp);
+            continue;
+        }
+
+        console::write("ACHTUNG:", 8);
+        console::println_i64(index as i64);
+        console::println_i64(data.data[index] as i64);
+        process::throw("Character not expected!");
+        //index = index + 1;
+    }
+    //console::write_string(&data);
+}

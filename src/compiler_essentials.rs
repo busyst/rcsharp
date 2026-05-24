@@ -686,13 +686,20 @@ impl Struct {
         }
     }
     pub fn new_placeholder() -> Self {
+        Self::new_placeholder_with_generics(Box::new([]))
+    }
+
+    pub fn new_placeholder_with_generics(generic_params: Box<[String]>) -> Self {
         Self {
             full_path: ContextPathEnd::default(),
             fields: Box::new([]),
-            generic_params: Box::new([]),
+            generic_params: generic_params.clone(),
             generic_implementations: RefCell::new(vec![]),
             attributes: Box::new([]),
-            flags: StructFlags::default(),
+            flags: StructFlags {
+                is_generic: !generic_params.is_empty(),
+                is_primitive: false,
+            },
             cached_layout: RefCell::new(None),
             file_id: 0,
         }
@@ -746,7 +753,13 @@ impl Struct {
     }
 
     pub fn get_implementation_index(&self, generics: &[CompilerType]) -> Option<usize> {
-        assert!(self.is_generic());
+        if !self.is_generic() {
+            println!(
+                "Tried to get implementation index of not generic {:?}",
+                self.full_path()
+            );
+            panic!()
+        }
         if self.generic_params.len() != generics.len() {
             return None;
         }
@@ -1569,8 +1582,12 @@ impl SymbolTable {
     }
     pub fn insert_type(&mut self, full_path: ContextPathEnd, structure: Struct) {
         if let Some(x) = self.types.get_mut(&full_path) {
+            let preserved_impls = std::mem::take(&mut *x.generic_implementations.borrow_mut());
             *x = structure;
             (*x).full_path = full_path;
+            if !preserved_impls.is_empty() {
+                *x.generic_implementations.borrow_mut() = preserved_impls;
+            }
             return;
         }
         let mut structure_type = structure;
@@ -1579,8 +1596,12 @@ impl SymbolTable {
     }
     pub fn insert_function(&mut self, full_path: ContextPathEnd, function_type: Function) {
         if let Some(x) = self.functions.get_mut(&full_path) {
+            let preserved_impls = std::mem::take(&mut *x.generic_implementations.borrow_mut());
             *x = function_type;
             (*x).full_path = full_path;
+            if !preserved_impls.is_empty() {
+                *x.generic_implementations.borrow_mut() = preserved_impls;
+            }
             return;
         }
         let mut function_type = function_type;

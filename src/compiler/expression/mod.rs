@@ -1289,7 +1289,8 @@ impl<'a> ExpressionCompiler<'a> {
         if left_lval.value_type != *rtype {
             return Err(CompilerError::Generic(format!(
                 "Type mismatch {:?} vs {:?}",
-                left_lval.value_type, rtype
+                left_lval.value_type.llvm_representation(self.symbols()),
+                rtype.llvm_representation(self.symbols())
             )));
         }
 
@@ -1796,7 +1797,13 @@ impl<'a> ExpressionCompiler<'a> {
 
         if let CompilerType::GenericStructInstance(x, y) = struct_type {
             let given_struct = self.symbols().get_type_by_id(x);
-            let (position, field) = given_struct.get_field(member).unwrap();
+            let Some((position, field)) = given_struct.get_field(member) else {
+                return Err(CompilerError::Generic(format!(
+                    "Field '{}' was not found inside struct '{}'",
+                    member,
+                    given_struct.full_path()
+                )));
+            };
             let implementation = given_struct.generic_implementations.borrow()[y].clone();
             let mut type_map = HashMap::new();
             for (ind, prm) in given_struct.generic_params.iter().enumerate() {
