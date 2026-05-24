@@ -33,7 +33,7 @@ namespace process{
     
     #[DllImport("kernel32.dll")]
     extern{
-        no_return fn ExitProcess(code: i32): void;
+        #[no_return] fn ExitProcess(code: i32): void;
         fn GetModuleFileNameA(hModule: &i8, lpFilename: &i8, nSize: u32): u32;
     }
 
@@ -53,7 +53,8 @@ namespace process{
         string.len = (index + 1) as i32;
         return string;
     }
-    pub no_return fn throw(exception: &i8) : void {
+    #[no_return]
+    pub fn throw(exception: &i8) : void {
         const len: i32 = string_utils::c_str_len(exception);
         console::AllocConsole();
         const stdout_handle: &i8 = console::GetStdHandle(console::STD_OUTPUT_HANDLE);

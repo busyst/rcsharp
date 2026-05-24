@@ -1582,8 +1582,7 @@ impl SymbolTable {
     }
     pub fn insert_type(&mut self, full_path: ContextPathEnd, structure: Struct) {
         if let Some(x) = self.types.get_mut(&full_path) {
-            let preserved_impls =
-                std::mem::take(&mut *x.generic_implementations.borrow_mut());
+            let preserved_impls = std::mem::take(&mut *x.generic_implementations.borrow_mut());
             *x = structure;
             (*x).full_path = full_path;
             if !preserved_impls.is_empty() {
@@ -1597,8 +1596,7 @@ impl SymbolTable {
     }
     pub fn insert_function(&mut self, full_path: ContextPathEnd, function_type: Function) {
         if let Some(x) = self.functions.get_mut(&full_path) {
-            let preserved_impls =
-                std::mem::take(&mut *x.generic_implementations.borrow_mut());
+            let preserved_impls = std::mem::take(&mut *x.generic_implementations.borrow_mut());
             *x = function_type;
             (*x).full_path = full_path;
             if !preserved_impls.is_empty() {

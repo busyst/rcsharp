@@ -5,13 +5,33 @@ pub struct Type         { type: TypeType }
 pub enum ExpressionType { Integer }
 pub struct Expression   { type: ExpressionType  }
 pub struct Argument     { name: u16, type: Type }
+
+pub struct EnumField    { name: u16, has_value: bool, value: Expression }
 pub struct HintNode     { name: u16, expressions: vector::Vec<Expression> }
-pub struct FnNode       { name: u16, arguments: vector::Vec<Argument>, return_type: &Type}
-pub struct NamespaceNode{ name: u16, }
+pub struct FnNode       { name: u16, arguments: vector::Vec<Argument>, return_type: &Type, generic: vector::Vec<u16> }
+pub struct EnumNode     { name: u16, enum_type: &Type, fields: vector::Vec<EnumField> }
+pub struct NamespaceNode{ name: u16, nodes: vector::Vec<Stmt> }
+pub struct StructNode   { name: u16, fields: vector::Vec<Argument>, generic: vector::Vec<u16>  }
 
-
+/*
+pub struct Path         { data: [u16; 8] }
+fn new_path(val: u16) : Path{
+    let x: Path;
+    x.data[0] = val;
+    x.data[1] = 65535;
+    x.data[2] = 65535;
+    x.data[3] = 65535;
+    x.data[4] = 65535;
+    x.data[5] = 65535;
+    x.data[6] = 65535;
+    x.data[7] = 65535;
+    return x;
+}
+*/
 pub enum StatementType : u8{
+    Struct,
     Namespace,
+    Enum,
     Fn,
     Hint,
 }
@@ -19,51 +39,127 @@ pub struct Stmt{
     statement_type: StatementType,
     node_ptr: &void,
 }
-fn parse_expression_comma(token_array: &TokenData, index: &u32, len: u32) : vector::Vec<Expression>{
-    let output: vector::Vec<Expression> = vector::new::<Expression>();
-    while *index < len && token_array[*index].token_type != TokenType::RParen {
-        let expr: Expression = Expression::{ type: ExpressionType::Integer };
-        let paren_nesting: i32 = 0;
-        let brace_nesting: i32 = 0;
-        while *index < len {
-            let tt: TokenType = token_array[*index].token_type;
-            if tt == TokenType::LParen { paren_nesting = paren_nesting + 1; }
-            if tt == TokenType::RParen {
-                if paren_nesting == 0 { break; }
-                paren_nesting = paren_nesting - 1;
-            }
-            if tt == TokenType::LBrace { brace_nesting = brace_nesting + 1; }
-            if tt == TokenType::RBrace { brace_nesting = brace_nesting - 1; }
-            
-            if tt == TokenType::Comma && paren_nesting == 0 && brace_nesting == 0 {
+fn expect(tokens: &TokenData, index: &u32, len: u32, expected: TokenType, error_msg: &i8) {
+    if *index >= len || tokens[*index].token_type != expected {
+        process::throw(error_msg); 
+    }
+    *index = *index + 1;
+}
+fn skip_nested(tokens: &TokenData, index: &u32, len: u32, open: TokenType, close: TokenType) {
+    if tokens[*index].token_type != open { return; }
+    *index = *index + 1;
+    let nesting: i32 = 1;
+    
+    while *index < len && nesting > 0 {
+        if tokens[*index].token_type == open {
+            nesting = nesting + 1;
+        } else if tokens[*index].token_type == close {
+            nesting = nesting - 1;
+        }
+        *index = *index + 1;
+    }
+}
+
+fn parse_expression(token_array: &TokenData, index: &u32, len: u32) : Expression{
+    let expr: Expression = Expression::{ type: ExpressionType::Integer };
+    
+    let paren_nesting: i32 = 0;
+    let brace_nesting: i32 = 0;
+    let square_nesting: i32 = 0;
+    while *index < len {
+        const tt: TokenType = token_array[*index].token_type;
+        
+        if tt == TokenType::LParen { paren_nesting = paren_nesting + 1; }
+        else if tt == TokenType::RParen {
+            if paren_nesting == 0 { break; }
+            paren_nesting = paren_nesting - 1;
+        }
+        else if tt == TokenType::LBrace { brace_nesting = brace_nesting + 1; }
+        else if tt == TokenType::RBrace {
+            if brace_nesting == 0 { break; }
+            brace_nesting = brace_nesting - 1;
+        }
+        else if tt == TokenType::LSquareBrace { square_nesting = square_nesting + 1; }
+        else if tt == TokenType::RSquareBrace {
+            if square_nesting == 0 { break; }
+            square_nesting = square_nesting - 1;
+        }
+        else if paren_nesting == 0 && brace_nesting == 0 && square_nesting == 0 {
+            if tt == TokenType::Comma || tt == TokenType::SemiColon {
                 break;
             }
-            *index = *index + 1;
         }
         
+        *index = *index + 1;
+    }
+    return expr;
+}
+fn parse_expression_comma(token_array: &TokenData, index: &u32, len: u32) : vector::Vec<Expression> {
+    let output: vector::Vec<Expression> = vector::new::<Expression>();
+    while *index < len && token_array[*index].token_type != TokenType::RParen {
+        let expr: Expression = parse_expression(token_array, index, len);
         vector::push::<Expression>(&output, expr);
-        if token_array[*index].token_type == TokenType::Comma {
+        
+        if *index < len && token_array[*index].token_type == TokenType::Comma {
             *index = *index + 1;
+        } else {
+            break;
         }
-
     }
     return output;
 }
 fn parse_type(token_array: &TokenData, index: &u32, len: u32) : Type {
     let t: Type = Type::{ type: TypeType::Primitive };
-    
+
     if token_array[*index].token_type == TokenType::BitAnd {
         *index = *index + 1;
+        parse_type(token_array, index, len);
+        return t;
     }
     if token_array[*index].token_type == TokenType::LogicAnd {
         *index = *index + 1;
+        parse_type(token_array, index, len);
+        return t;
+    }
+    if token_array[*index].token_type == TokenType::LSquareBrace {
+        *index = *index + 1;
+        parse_type(token_array, index, len);
+        expect(token_array, index, len, TokenType::SemiColon, "Expected ';' in array type");
+        parse_expression(token_array, index, len);
+        expect(token_array, index, len, TokenType::RSquareBrace, "Expected ']' in array type");
+        return t;
     }
     if token_array[*index].token_type == TokenType::Name {
         *index = *index + 1;
-    } else {
-        process::throw("Expected type name");
+        if token_array[*index].token_type == TokenType::DoubleColon{
+            *index = *index + 1;
+            parse_type(token_array, index, len);
+        }else if token_array[*index].token_type == TokenType::LogicLess{
+            *index = *index + 1;
+            parse_type(token_array, index, len);
+            if token_array[*index].token_type == TokenType::LogicGreater{
+                *index = *index + 1;
+                return t;
+            }
+        }
+        return t;
+    }
+    if token_array[*index].token_type == TokenType::KeywordFunction {
+        *index = *index + 1;
+        expect(token_array, index, len, TokenType::LParen, "Expected LParen");
+        while token_array[*index].token_type != TokenType::RParen {
+            parse_type(token_array, index, len);
+            if token_array[*index].token_type == TokenType::Comma {
+                *index = *index + 1;
+            }
+        }
+        *index = *index + 1;
+        expect(token_array, index, len, TokenType::Colon, "Expected Colon");
+        parse_type(token_array, index, len);
+        return t;
     }
     
+    process::throw("Expected type name");
     return t;
 }
 
@@ -96,23 +192,100 @@ fn parse_argument_comma(token_array: &TokenData, index: &u32, len: u32) : vector
     
     return output;
 }
-fn parse(token_vector: &vector::Vec<TokenData>, symbol_vector: &vector::Vec<string::String>, statement_vector: &vector::Vec<Stmt>){
+fn parse_generic_params(token_array: &TokenData, index: &u32, len: u32) : vector::Vec<u16> {
+    let generics: vector::Vec<u16> = vector::new::<u16>();
+    if token_array[*index].token_type == TokenType::LogicLess {
+        *index = *index + 1;
+        while *index < len && token_array[*index].token_type != TokenType::LogicGreater {
+            if token_array[*index].token_type == TokenType::Name {
+                vector::push::<u16>(&generics, token_array[*index].symbol_id);
+                *index = *index + 1;
+            } else if token_array[*index].token_type == TokenType::Comma {
+                *index = *index + 1;
+            } else {
+                process::throw("Expected generic type name or comma");
+            }
+        }
+        expect(token_array, index, len, TokenType::LogicGreater, "Expected '>' after generic parameters");
+    }
+    return generics;
+}
+fn parse_struct_fields(token_array: &TokenData, index: &u32, len: u32) : vector::Vec<Argument> {
+    let fields: vector::Vec<Argument> = vector::new::<Argument>();
+    expect(token_array, index, len, TokenType::LBrace, "Expected '{' for struct body");
+    
+    while *index < len && token_array[*index].token_type != TokenType::RBrace {
+        let field: Argument;
+        
+        if token_array[*index].token_type != TokenType::Name {
+            process::throw("Expected field name");
+        }
+        field.name = token_array[*index].symbol_id;
+        *index = *index + 1;
+        
+        expect(token_array, index, len, TokenType::Colon, "Expected ':' after field name");
+        
+        field.type = parse_type(token_array, index, len);
+        vector::push::<Argument>(&fields, field);
+        
+        if token_array[*index].token_type == TokenType::Comma {
+            *index = *index + 1;
+        } else if token_array[*index].token_type != TokenType::RBrace {
+            process::throw("Expected ',' or '}' after struct field");
+        }
+    }
+    expect(token_array, index, len, TokenType::RBrace, "Expected '}' after struct body");
+    return fields;
+}
+fn parse_enum_fields(token_array: &TokenData, index: &u32, len: u32) : vector::Vec<EnumField> {
+    let fields: vector::Vec<EnumField> = vector::new::<EnumField>();
+    expect(token_array, index, len, TokenType::LBrace, "Expected '{' for enum body");
+    
+    while *index < len && token_array[*index].token_type != TokenType::RBrace {
+        let field: EnumField;
+        
+        if token_array[*index].token_type != TokenType::Name {
+            process::throw("Expected enum variant name");
+        }
+        field.name = token_array[*index].symbol_id;
+        *index = *index + 1;
+        
+        if token_array[*index].token_type == TokenType::Equal {
+            *index = *index + 1;
+            field.has_value = true;
+            field.value = parse_expression(token_array, index, len);
+        } else {
+            field.has_value = false;
+        }
+        vector::push::<EnumField>(&fields, field);
+        
+        if token_array[*index].token_type == TokenType::Comma {
+            *index = *index + 1;
+        } else if token_array[*index].token_type != TokenType::RBrace {
+            process::throw("Expected ',' or '}' after enum variant");
+        }
+    }
+    expect(token_array, index, len, TokenType::RBrace, "Expected '}' after enum body");
+    return fields;
+}
+const NO_MODIFIER: u32 = 0xFFFFFFFF;
+fn parse(token_array: &TokenData, token_len: u32, symbol_vector: &vector::Vec<string::String>, statement_vector: &vector::Vec<Stmt>){
     let index: u32 = 0;
-    let mod_index: u32 = 999999;
-    const len: u32 = token_vector.length;
-    const tokens: &TokenData = token_vector.array;
+    let mod_index: u32 = NO_MODIFIER;
+    const len: u32 = token_len;
+    const tokens: &TokenData = token_array;
 
-    while index < token_vector.length {
-        let token: TokenType = tokens[index].token_type;
+    while index < len {
+        const token: TokenType = tokens[index].token_type;
         if is_modifier(token){
-            if mod_index == 999999{
+            if mod_index == NO_MODIFIER{
                 mod_index = index;
             }
             index = index + 1;
             continue;
         }
         if token == TokenType::Hint {
-            mod_index = 999999;
+            mod_index = NO_MODIFIER;
 
             index = index + 1;
             let is_bracket: bool = false;
@@ -124,27 +297,20 @@ fn parse(token_vector: &vector::Vec<TokenData>, symbol_vector: &vector::Vec<stri
             if tokens[index].token_type != TokenType::Name {
                 process::throw("Expected name after hint symbol #");
             }
-            let hint_name: u16 = tokens[index].symbol_id;
+            const hint_name: u16 = tokens[index].symbol_id;
             index = index + 1;
             let exprs: vector::Vec<Expression> = vector::new::<Expression>();
             
             if tokens[index].token_type == TokenType::LParen {
                 index = index + 1;
                 exprs = parse_expression_comma(tokens, &index, len);
-                
-                if tokens[index].token_type != TokenType::RParen {
-                    process::throw("Expected RParen ')' in hint");
-                }
-                index = index + 1;
+                expect(tokens, &index, len, TokenType::RParen, "Expected ')' after arguments in hint");
             }
 
             if is_bracket {
-                if tokens[index].token_type != TokenType::RSquareBrace {
-                    process::throw("Expected RSquareBrace ']' in hint");
-                }
-                index = index + 1;
+                expect(tokens, &index, len, TokenType::RSquareBrace, "Expected ']' after arguments in attribute");
             }
-            let hint_node: &HintNode = mem::malloc(size_of::<HintNode>()) as &HintNode;
+            const hint_node: &HintNode = mem::malloc(size_of::<HintNode>()) as &HintNode;
             hint_node.name = hint_name;
             hint_node.expressions = exprs;
 
@@ -156,16 +322,19 @@ fn parse(token_vector: &vector::Vec<TokenData>, symbol_vector: &vector::Vec<stri
             continue;
         }
         if token == TokenType::KeywordFunction {
-            mod_index = 999999;
+            mod_index = NO_MODIFIER;
 
             index = index + 1;
             if tokens[index].token_type != TokenType::Name {
                 process::throw("Expected function name after 'fn'");
             }
-            let fn_name: u16 = tokens[index].symbol_id;
+            const fn_name: u16 = tokens[index].symbol_id;
             index = index + 1;
-            if tokens[index].token_type != TokenType::LParen {
-                process::throw("Expected '(' after function name");
+            if tokens[index].token_type != TokenType::LParen && tokens[index].token_type != TokenType::LogicLess {
+                process::throw("Expected '(' or '<' after function name");
+            }
+            if tokens[index].token_type == TokenType::LogicLess {
+                skip_nested(tokens, &index, len, TokenType::LogicLess, TokenType::LogicGreater);
             }
             index = index + 1;
             let args: vector::Vec<Argument> = parse_argument_comma(tokens, &index, len);
@@ -178,30 +347,31 @@ fn parse(token_vector: &vector::Vec<TokenData>, symbol_vector: &vector::Vec<stri
             let ret_type: &Type = null;
             if tokens[index].token_type == TokenType::Colon {
                 index = index + 1;
-                let parsed_type: Type = parse_type(tokens, &index, len);
+                const parsed_type: Type = parse_type(tokens, &index, len);
                 ret_type = mem::malloc(size_of::<Type>()) as &Type;
                 *ret_type = parsed_type;
             }
 
+            
             if tokens[index].token_type == TokenType::LBrace {
+                skip_nested(tokens, &index, len, TokenType::LBrace, TokenType::RBrace);
+            }else if tokens[index].token_type == TokenType::FatArrow {
                 index = index + 1;
-                let brace_count: i32 = 1;
-                while index < len && brace_count > 0 {
-                    if tokens[index].token_type == TokenType::LBrace {
-                        brace_count = brace_count + 1;
-                    } else if tokens[index].token_type == TokenType::RBrace {
-                        brace_count = brace_count - 1;
-                    }
+                while index < len && tokens[index].token_type != TokenType::SemiColon {
+                    index = index + 1;
+                }
+                if tokens[index].token_type == TokenType::SemiColon {
                     index = index + 1;
                 }
             } else if tokens[index].token_type == TokenType::SemiColon {
                 index = index + 1;
             }
 
-            let fn_node: &FnNode = mem::malloc(size_of::<FnNode>()) as &FnNode;
+            const fn_node: &FnNode = mem::malloc(size_of::<FnNode>()) as &FnNode;
             fn_node.name = fn_name;
             fn_node.arguments = args;
             fn_node.return_type = ret_type;
+            fn_node.generic = vector::new::<u16>();
 
             let stmt: Stmt = Stmt::{
                 statement_type: StatementType::Fn,
@@ -211,68 +381,166 @@ fn parse(token_vector: &vector::Vec<TokenData>, symbol_vector: &vector::Vec<stri
             continue;
         }
         if token == TokenType::KeywordNamespace {
-            mod_index = 999999;
+            mod_index = NO_MODIFIER;
 
             index = index + 1;
             if tokens[index].token_type != TokenType::Name {
                 process::throw("Expected namespace name");
             }
-            let fn_name: u16 = tokens[index].symbol_id;
+            const namespace_name: u16 = tokens[index].symbol_id;
             index = index + 1;
 
+            let nodes: vector::Vec<Stmt> = vector::new::<Stmt>();
             if tokens[index].token_type == TokenType::LBrace {
-                index = index + 1;
-                let brace_count: i32 = 1;
-                while index < len && brace_count > 0 {
-                    if tokens[index].token_type == TokenType::LBrace {
-                        brace_count = brace_count + 1;
-                    } else if tokens[index].token_type == TokenType::RBrace {
-                        brace_count = brace_count - 1;
-                    }
-                    index = index + 1;
-                }
+                const content_start: u32 = index + 1;
+                skip_nested(tokens, &index, len, TokenType::LBrace, TokenType::RBrace);
+                const content_len: u32 = (index - 1) - content_start; 
+                parse(tokens + content_start, content_len, symbol_vector, &nodes);
             } else {
                 process::throw("Expected namespace body after namespace");
             }
 
-            let fn_node: &NamespaceNode = mem::malloc(size_of::<FnNode>()) as &NamespaceNode;
-            fn_node.name = fn_name;
+            const namespace_node: &NamespaceNode = mem::malloc(size_of::<NamespaceNode>()) as &NamespaceNode;
+            namespace_node.name = namespace_name;
+            namespace_node.nodes = nodes;
 
             let stmt: Stmt = Stmt::{
                 statement_type: StatementType::Namespace,
-                node_ptr: bitcast::<&void>(fn_node)
+                node_ptr: bitcast::<&void>(namespace_node)
             };
             vector::push::<Stmt>(statement_vector, stmt);
             continue;
         }
+        if token == TokenType::KeywordEnum {
+            mod_index = NO_MODIFIER;
+            index = index + 1;
 
-        let q: string::String = token_type_to_string(&token_vector.array[index], symbol_vector);
-        console::write_string(&q);
-        console::write(" --1\n", 1);
-        string::free(&q);
-        
-        let q: string::String = token_type_to_string(&token_vector.array[index + 1], symbol_vector);
-        console::write_string(&q);
-        console::write(" --2\n", 1);
-        string::free(&q);
+            if tokens[index].token_type != TokenType::Name {
+                process::throw("Expected enum name");
+            }
+            const enum_name: u16 = tokens[index].symbol_id;
+            index = index + 1;
+            
+            let enum_type: &Type = null;
+            if tokens[index].token_type == TokenType::Colon {
+                index = index + 1;
+                const parsed_type: Type = parse_type(tokens, &index, len);
+                enum_type = mem::malloc(size_of::<Type>()) as &Type;
+                *enum_type = parsed_type;
+            }
+            
+            let fields: vector::Vec<EnumField> = vector::new::<EnumField>();
+            if tokens[index].token_type == TokenType::LBrace {
+                fields = parse_enum_fields(tokens, &index, len);
+            } else {
+                process::throw("Expected '{' for enum body");
+            }
+            
+            const enum_node: &EnumNode = mem::malloc(size_of::<EnumNode>()) as &EnumNode;
+            enum_node.name = enum_name;
+            enum_node.enum_type = enum_type;
+            enum_node.fields = fields;
 
+            let stmt: Stmt = Stmt::{
+                statement_type: StatementType::Enum,
+                node_ptr: bitcast::<&void>(enum_node)
+            };
+            vector::push::<Stmt>(statement_vector, stmt);
+            continue;
+        }
+        if token == TokenType::KeywordStruct {
+            mod_index = NO_MODIFIER;
+            index = index + 1;
+            
+            if tokens[index].token_type != TokenType::Name {
+                process::throw("Expected struct name");
+            }
+            const struct_name: u16 = tokens[index].symbol_id;
+            index = index + 1;
+            
+            let generics: vector::Vec<u16> = vector::new::<u16>();
+            if tokens[index].token_type == TokenType::LogicLess {
+                generics = parse_generic_params(tokens, &index, len);
+            }
+            
+            let fields: vector::Vec<Argument> = vector::new::<Argument>();
+            if tokens[index].token_type == TokenType::LBrace {
+                fields = parse_struct_fields(tokens, &index, len);
+            } else {
+                process::throw("Expected '{' for struct body");
+            }
+    
+            const struct_node: &StructNode = mem::malloc(size_of::<StructNode>()) as &StructNode;
+            struct_node.name = struct_name;
+            struct_node.fields = fields;
+            struct_node.generic = generics;
+
+            let stmt: Stmt = Stmt::{
+                statement_type: StatementType::Struct,
+                node_ptr: bitcast::<&void>(struct_node)
+            };
+            vector::push::<Stmt>(statement_vector, stmt);
+            continue;
+        }
+        if tokens[index].token_type == TokenType::LBrace {
+            const start: u32 = index;
+            skip_nested(tokens, &index, len, TokenType::LBrace, TokenType::RBrace);
+            let m: vector::Vec<Stmt> = vector::new::<Stmt>();
+            const len: u32 = (index - 1 - start);
+            parse(tokens + start, len, symbol_vector, &m);
+            continue;
+        }
+        if mod_index != NO_MODIFIER {
+            if tokens[index - 1].token_type == TokenType::KeywordConst || tokens[index - 1].token_type == TokenType::KeywordStatic{
+                if tokens[index].token_type != TokenType::Name {
+                    process::throw("Expected this be a constant or static declaration");
+                }
+                const var_name: u16 = tokens[index].symbol_id;
+                index = index + 1;
+                let ret_type: &Type;
+                if tokens[index].token_type == TokenType::Colon {
+                    index = index + 1;
+                    const parsed_type: Type = parse_type(tokens, &index, len);
+                    ret_type = mem::malloc(size_of::<Type>()) as &Type;
+                    *ret_type = parsed_type;
+                }else{
+                    process::throw("Expected Colon and Type");
+                }
+                if tokens[index].token_type == TokenType::Equal {
+                    index = index + 1;
+                    parse_expression(tokens, &index, len);
+
+                }else if tokens[index].token_type == TokenType::SemiColon{
+                    
+                }else{
+                    process::throw("Expected SemiColon or expression");
+                }
+                if tokens[index].token_type != TokenType::SemiColon{
+                    process::throw("Expected SemiColon");
+                }
+                index = index + 1;
+                continue;
+            }
+        }
         
-        let q: string::String = token_type_to_string(&token_vector.array[index + 2], symbol_vector);
-        console::write_string(&q);
-        console::write(" --3\n", 1);
-        string::free(&q);
+        for i in 0 as u32 .. 3{
+            let q: string::String = token_type_to_string(&tokens[index + i], null);
+            console::write_string(&q);
+            console::write("@@@@\n\r", 6);
+            string::free(&q);
+        }
 
         process::throw("--UNEXPECTED TOKEN--");
     }
 }
 fn main(){
-    let file_data: string::String = fs::read_full_file_as_string("D:/Projects/rcsharp/lexer.rcsharp");
+    let file_data: string::String = fs::read_full_file_as_string("D:/Projects/rcsharp/src_base_structs.rcsharp");
     
     let token_vector: vector::Vec<TokenData> = vector::new::<TokenData>();
     let symbol_vector: vector::Vec<string::String> = vector::new::<string::String>();
     lex(&file_data, &token_vector, &symbol_vector);
     let statement_vector: vector::Vec<Stmt> = vector::new::<Stmt>();
-    parse(&token_vector, &symbol_vector, &statement_vector);
+    parse(token_vector.array, token_vector.length, &symbol_vector, &statement_vector);
     
     console::write("Successfully parsed items: ", 27);
     console::println_i64(statement_vector.length as i64);
