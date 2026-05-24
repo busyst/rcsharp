@@ -42,7 +42,6 @@ pub enum TokenType : i8 {
     KeywordPub,
     KeywordInline,
     KeywordConst,
-    KeywordConstExpr,
     KeywordExtern,
     KeywordNoReturn,
     KeywordMatch,
@@ -77,6 +76,25 @@ pub enum TokenType : i8 {
     String,
     Char,
     DummyToken,
+}
+fn is_modifier(val: TokenType) : bool{
+    return val == TokenType::KeywordPub || val == TokenType::KeywordInline || val == TokenType::KeywordConst || val == TokenType::KeywordExtern || val == TokenType::KeywordStatic;
+}
+fn token_type_to_string(val: &TokenData, symbol_vector: &vector::Vec<string::String>) : string::String{
+    if val.token_type == TokenType::Name{
+        return string::clone(&symbol_vector.array[val.symbol_id]);
+    }
+    if val.token_type == TokenType::LBrace{
+        return string::from_c_string("LBRACE");
+    }
+    if val.token_type == TokenType::KeywordNamespace{
+        return string::from_c_string("NAMESPACE");
+    }
+    if val.token_type == TokenType::KeywordEnum{
+        return string::from_c_string("ENUM");
+    }
+    console::println_i64(val.token_type as i64);
+    return string::empty();
 }
 pub struct TokenData{
     token_type : TokenType,
@@ -153,6 +171,8 @@ fn handle_string(data: &i8, start: u32, end: u32, tokens: &vector::Vec<TokenData
                 return_char = 11;
             }else if next_char == 'f'{
                 return_char = 12;
+            }else if next_char == '0'{
+                return_char = 0;
             }else{
                 const start_ptr: &i8 = data + start + 1;
                 console::println_i64(next_char as i64);
@@ -209,6 +229,8 @@ fn handle_char(data: &i8, start: u32, end: u32, tokens: &vector::Vec<TokenData>,
             return_char = 11;
         }else if next_char == 'f'{
             return_char = 12;
+        }else if next_char == '0'{
+            return_char = 0;
         }else{
             console::writeln(start_ptr, len);
             process::throw("Invalid escape character!");
@@ -296,6 +318,12 @@ fn handle_symbol(data: &i8, start: u32, end: u32, tokens: &vector::Vec<TokenData
         }
         if mem::compare(start_ptr, "enum", 4) == 0{
             let temp: TokenData = TokenData::{ token_type: TokenType::KeywordNull, symbol_id: 0, file_offset: start };
+            vector::push::<TokenData>(tokens, temp);
+            return;
+        }
+    }else if len == 9 {
+        if mem::compare(start_ptr, "namespace", 9) == 0{
+            let temp: TokenData = TokenData::{ token_type: TokenType::KeywordNamespace, symbol_id: 0, file_offset: start };
             vector::push::<TokenData>(tokens, temp);
             return;
         }

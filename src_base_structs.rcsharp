@@ -27,7 +27,7 @@ fn __chkstk() : void {
 }
 
 #[no_lazy]
-fn _fltused() : i32 { return 0;}
+pub fn _fltused() : i32 { return 0;}
 
 namespace process{
     

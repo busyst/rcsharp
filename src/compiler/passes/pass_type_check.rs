@@ -9,6 +9,7 @@ use crate::{
         Function, FunctionFlags, LLVMVal, Struct, TraitMethodSignature, Variable,
     },
 };
+use ordered_hash_map::OrderedHashMap;
 use rcsharp_parser::{
     defs::{
         ParsedEnum, ParsedFunction, ParsedImplementation, ParsedStruct, ParsedTrait,
@@ -17,11 +18,17 @@ use rcsharp_parser::{
     expression_parser::Expr,
 };
 use std::collections::HashMap;
+pub fn sort_by_context_path_file_id<T, F>(items: &mut [(ContextPath, FileID, T)], name: F)
+where
+    F: for<'a> Fn(&'a T) -> &'a str,
+{
+    items.sort_by(|a, b| (&a.0, name(&a.2), a.1).cmp(&(&b.0, name(&b.2), b.1)));
+}
 
 #[derive(Default)]
 pub struct TypeCheckPass {}
 impl<'a> CompilerPass<'a> for TypeCheckPass {
-    type Input = &'a HashMap<FileID, Vec<StmtData>>;
+    type Input = &'a OrderedHashMap<FileID, Vec<StmtData>>;
 
     type Output = ();
 
@@ -31,8 +38,8 @@ impl<'a> CompilerPass<'a> for TypeCheckPass {
         ctx: &mut CompilerContext,
     ) -> CompileResult<Self::Output> {
         let mut worklist = vec![];
-        for x in input {
-            worklist.push((ContextPath::default(), *x.0, x.1.to_vec()));
+        for (file_id, body) in input {
+            worklist.push((ContextPath::default(), *file_id, body.to_vec()));
         }
 
         let mut traits: Vec<(ContextPath, FileID, ParsedTrait)> = vec![];
@@ -44,11 +51,12 @@ impl<'a> CompilerPass<'a> for TypeCheckPass {
         let mut consts: Vec<(ContextPath, FileID, ParsedVariable)> = vec![];
 
         while let Some((path, file_id, body)) = worklist.pop() {
+            let mut namespace_work = vec![];
             for x in body {
                 match x.stmt {
                     Stmt::Namespace(x, body) => {
                         let full_path = path.to_extended(&x);
-                        worklist.push((full_path, file_id.clone(), body.to_vec()));
+                        namespace_work.push((full_path, body.to_vec()));
                     }
                     Stmt::Struct(x) => {
                         types.push((path.clone(), file_id.clone(), x));
@@ -74,11 +82,36 @@ impl<'a> CompilerPass<'a> for TypeCheckPass {
                     _ => {}
                 }
             }
+            namespace_work.sort_by(|a, b| a.0.cmp(&b.0));
+            for (full_path, body) in namespace_work {
+                worklist.push((full_path, file_id, body));
+            }
         }
+
+        sort_by_context_path_file_id(&mut types, |s| &*s.name);
+        sort_by_context_path_file_id(&mut enums, |e| &*e.name);
+        sort_by_context_path_file_id(&mut traits, |t| &*t.name);
+        sort_by_context_path_file_id(&mut functions, |f| &*f.name);
+        sort_by_context_path_file_id(&mut static_variables, |v| &*v.name);
+        sort_by_context_path_file_id(&mut consts, |v| &*v.name);
+        implementations.sort_by(|a, b| {
+            (&a.0, a.2.implementing_for.to_string(), a.1).cmp(&(
+                &b.0,
+                b.2.implementing_for.to_string(),
+                b.1,
+            ))
+        });
+
         for (type_env_path, file_id, parsed_type) in types.iter() {
             let type_path =
                 ContextPathEnd::from_context_path(type_env_path.clone(), &parsed_type.name);
-            let mut x = Struct::new_placeholder();
+            let generic_params = parsed_type
+                .generic_params
+                .iter()
+                .map(|p| p.name.clone())
+                .collect::<Vec<_>>()
+                .into_boxed_slice();
+            let mut x = Struct::new_placeholder_with_generics(generic_params);
             x.file_id = *file_id;
             ctx.symbols.insert_type(type_path, x);
         }

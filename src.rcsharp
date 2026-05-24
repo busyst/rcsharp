@@ -2,12 +2,16 @@
 #include("./lexer.rcsharp")
 pub enum TypeType       { Primitive }
 pub struct Type         { type: TypeType }
-pub enum ExpressionType       { Integer }
+pub enum ExpressionType { Integer }
 pub struct Expression   { type: ExpressionType  }
-pub struct Argument { name: u16, type: Type }
-pub struct HintNode { name: u16, expressions: vector::Vec<Expression> }
-pub struct FnNode   { name: u16, arguments: vector::Vec<Argument>, return_type: &Type}
+pub struct Argument     { name: u16, type: Type }
+pub struct HintNode     { name: u16, expressions: vector::Vec<Expression> }
+pub struct FnNode       { name: u16, arguments: vector::Vec<Argument>, return_type: &Type}
+pub struct NamespaceNode{ name: u16, }
+
+
 pub enum StatementType : u8{
+    Namespace,
     Fn,
     Hint,
 }
@@ -15,19 +19,263 @@ pub struct Stmt{
     statement_type: StatementType,
     node_ptr: &void,
 }
-fn parse(token_vector: &vector::Vec<TokenData>, symbol_vector: &vector::Vec<string::String>, statement_vector: &vector::Vec<Stmt>){
+fn parse_expression_comma(token_array: &TokenData, index: &u32, len: u32) : vector::Vec<Expression>{
+    let output: vector::Vec<Expression> = vector::new::<Expression>();
+    while *index < len && token_array[*index].token_type != TokenType::RParen {
+        let expr: Expression = Expression::{ type: ExpressionType::Integer };
+        let paren_nesting: i32 = 0;
+        let brace_nesting: i32 = 0;
+        while *index < len {
+            let tt: TokenType = token_array[*index].token_type;
+            if tt == TokenType::LParen { paren_nesting = paren_nesting + 1; }
+            if tt == TokenType::RParen {
+                if paren_nesting == 0 { break; }
+                paren_nesting = paren_nesting - 1;
+            }
+            if tt == TokenType::LBrace { brace_nesting = brace_nesting + 1; }
+            if tt == TokenType::RBrace { brace_nesting = brace_nesting - 1; }
+            
+            if tt == TokenType::Comma && paren_nesting == 0 && brace_nesting == 0 {
+                break;
+            }
+            *index = *index + 1;
+        }
+        
+        vector::push::<Expression>(&output, expr);
+        if token_array[*index].token_type == TokenType::Comma {
+            *index = *index + 1;
+        }
+
+    }
+    return output;
+}
+fn parse_type(token_array: &TokenData, index: &u32, len: u32) : Type {
+    let t: Type = Type::{ type: TypeType::Primitive };
     
+    if token_array[*index].token_type == TokenType::BitAnd {
+        *index = *index + 1;
+    }
+    if token_array[*index].token_type == TokenType::LogicAnd {
+        *index = *index + 1;
+    }
+    if token_array[*index].token_type == TokenType::Name {
+        *index = *index + 1;
+    } else {
+        process::throw("Expected type name");
+    }
+    
+    return t;
+}
+
+fn parse_argument_comma(token_array: &TokenData, index: &u32, len: u32) : vector::Vec<Argument> {
+    let output: vector::Vec<Argument> = vector::new::<Argument>();
+    
+    while *index < len && token_array[*index].token_type != TokenType::RParen {
+        let arg: Argument;
+        
+        if token_array[*index].token_type != TokenType::Name {
+            process::throw("Expected argument name");
+        }
+        arg.name = token_array[*index].symbol_id;
+        *index = *index + 1;
+        
+        if token_array[*index].token_type != TokenType::Colon {
+            process::throw("Expected ':' after argument name");
+        }
+        *index = *index + 1;
+        
+        arg.type = parse_type(token_array, index, len);
+        vector::push::<Argument>(&output, arg);
+        
+        if token_array[*index].token_type == TokenType::Comma {
+            *index = *index + 1;
+        } else if token_array[*index].token_type != TokenType::RParen {
+            process::throw("Expected ',' or ')' after argument");
+        }
+    }
+    
+    return output;
+}
+fn parse(token_vector: &vector::Vec<TokenData>, symbol_vector: &vector::Vec<string::String>, statement_vector: &vector::Vec<Stmt>){
+    let index: u32 = 0;
+    let mod_index: u32 = 999999;
+    const len: u32 = token_vector.length;
+    const tokens: &TokenData = token_vector.array;
+
+    while index < token_vector.length {
+        let token: TokenType = tokens[index].token_type;
+        if is_modifier(token){
+            if mod_index == 999999{
+                mod_index = index;
+            }
+            index = index + 1;
+            continue;
+        }
+        if token == TokenType::Hint {
+            mod_index = 999999;
+
+            index = index + 1;
+            let is_bracket: bool = false;
+            if tokens[index].token_type == TokenType::LSquareBrace {
+                is_bracket = true;
+                index = index + 1;
+            }
+
+            if tokens[index].token_type != TokenType::Name {
+                process::throw("Expected name after hint symbol #");
+            }
+            let hint_name: u16 = tokens[index].symbol_id;
+            index = index + 1;
+            let exprs: vector::Vec<Expression> = vector::new::<Expression>();
+            
+            if tokens[index].token_type == TokenType::LParen {
+                index = index + 1;
+                exprs = parse_expression_comma(tokens, &index, len);
+                
+                if tokens[index].token_type != TokenType::RParen {
+                    process::throw("Expected RParen ')' in hint");
+                }
+                index = index + 1;
+            }
+
+            if is_bracket {
+                if tokens[index].token_type != TokenType::RSquareBrace {
+                    process::throw("Expected RSquareBrace ']' in hint");
+                }
+                index = index + 1;
+            }
+            let hint_node: &HintNode = mem::malloc(size_of::<HintNode>()) as &HintNode;
+            hint_node.name = hint_name;
+            hint_node.expressions = exprs;
+
+            let stmt: Stmt = Stmt::{
+                statement_type: StatementType::Hint,
+                node_ptr: bitcast::<&void>(hint_node)
+            };
+            vector::push::<Stmt>(statement_vector, stmt);
+            continue;
+        }
+        if token == TokenType::KeywordFunction {
+            mod_index = 999999;
+
+            index = index + 1;
+            if tokens[index].token_type != TokenType::Name {
+                process::throw("Expected function name after 'fn'");
+            }
+            let fn_name: u16 = tokens[index].symbol_id;
+            index = index + 1;
+            if tokens[index].token_type != TokenType::LParen {
+                process::throw("Expected '(' after function name");
+            }
+            index = index + 1;
+            let args: vector::Vec<Argument> = parse_argument_comma(tokens, &index, len);
+            
+            if tokens[index].token_type != TokenType::RParen {
+                process::throw("Expected ')' after function arguments");
+            }
+            index = index + 1;
+
+            let ret_type: &Type = null;
+            if tokens[index].token_type == TokenType::Colon {
+                index = index + 1;
+                let parsed_type: Type = parse_type(tokens, &index, len);
+                ret_type = mem::malloc(size_of::<Type>()) as &Type;
+                *ret_type = parsed_type;
+            }
+
+            if tokens[index].token_type == TokenType::LBrace {
+                index = index + 1;
+                let brace_count: i32 = 1;
+                while index < len && brace_count > 0 {
+                    if tokens[index].token_type == TokenType::LBrace {
+                        brace_count = brace_count + 1;
+                    } else if tokens[index].token_type == TokenType::RBrace {
+                        brace_count = brace_count - 1;
+                    }
+                    index = index + 1;
+                }
+            } else if tokens[index].token_type == TokenType::SemiColon {
+                index = index + 1;
+            }
+
+            let fn_node: &FnNode = mem::malloc(size_of::<FnNode>()) as &FnNode;
+            fn_node.name = fn_name;
+            fn_node.arguments = args;
+            fn_node.return_type = ret_type;
+
+            let stmt: Stmt = Stmt::{
+                statement_type: StatementType::Fn,
+                node_ptr: bitcast::<&void>(fn_node)
+            };
+            vector::push::<Stmt>(statement_vector, stmt);
+            continue;
+        }
+        if token == TokenType::KeywordNamespace {
+            mod_index = 999999;
+
+            index = index + 1;
+            if tokens[index].token_type != TokenType::Name {
+                process::throw("Expected namespace name");
+            }
+            let fn_name: u16 = tokens[index].symbol_id;
+            index = index + 1;
+
+            if tokens[index].token_type == TokenType::LBrace {
+                index = index + 1;
+                let brace_count: i32 = 1;
+                while index < len && brace_count > 0 {
+                    if tokens[index].token_type == TokenType::LBrace {
+                        brace_count = brace_count + 1;
+                    } else if tokens[index].token_type == TokenType::RBrace {
+                        brace_count = brace_count - 1;
+                    }
+                    index = index + 1;
+                }
+            } else {
+                process::throw("Expected namespace body after namespace");
+            }
+
+            let fn_node: &NamespaceNode = mem::malloc(size_of::<FnNode>()) as &NamespaceNode;
+            fn_node.name = fn_name;
+
+            let stmt: Stmt = Stmt::{
+                statement_type: StatementType::Namespace,
+                node_ptr: bitcast::<&void>(fn_node)
+            };
+            vector::push::<Stmt>(statement_vector, stmt);
+            continue;
+        }
+
+        let q: string::String = token_type_to_string(&token_vector.array[index], symbol_vector);
+        console::write_string(&q);
+        console::write(" --1\n", 1);
+        string::free(&q);
+        
+        let q: string::String = token_type_to_string(&token_vector.array[index + 1], symbol_vector);
+        console::write_string(&q);
+        console::write(" --2\n", 1);
+        string::free(&q);
+
+        
+        let q: string::String = token_type_to_string(&token_vector.array[index + 2], symbol_vector);
+        console::write_string(&q);
+        console::write(" --3\n", 1);
+        string::free(&q);
+
+        process::throw("--UNEXPECTED TOKEN--");
+    }
 }
 fn main(){
-    let file_data: string::String = fs::read_full_file_as_string("D:/Projects/rcsharp/src_base_structs.rcsharp");
+    let file_data: string::String = fs::read_full_file_as_string("D:/Projects/rcsharp/lexer.rcsharp");
     
     let token_vector: vector::Vec<TokenData> = vector::new::<TokenData>();
     let symbol_vector: vector::Vec<string::String> = vector::new::<string::String>();
     lex(&file_data, &token_vector, &symbol_vector);
     let statement_vector: vector::Vec<Stmt> = vector::new::<Stmt>();
     parse(&token_vector, &symbol_vector, &statement_vector);
-    let output: vector::Vec<Stmt> = vector::new::<Stmt>();
-
+    
+    console::write("Successfully parsed items: ", 27);
+    console::println_i64(statement_vector.length as i64);
 
     string::free(&file_data);
     process::ExitProcess(0);
