@@ -92,6 +92,18 @@ fn token_type_to_string(val: &TokenData, symbol_vector: &vector::Vec<string::Str
         } else if val.token_type == TokenType::Char {
             return string::from_c_string("CHAR");
         }
+    }else{
+        if val.token_type == TokenType::Name {
+            return string::from_c_string("NAME");
+        } else if val.token_type == TokenType::String {
+            return string::from_c_string("STRING");
+        } else if val.token_type == TokenType::Integer {
+            return string::from_c_string("INTEGER");
+        } else if val.token_type == TokenType::Decimal {
+            return string::from_c_string("DECIMAL");
+        } else if val.token_type == TokenType::Char {
+            return string::from_c_string("CHAR");
+        }
     }
 
     if val.token_type == TokenType::LParen { return string::from_c_string("("); }

@@ -1,0 +1,366 @@
+#include("./src_base_structs.rcsharp")
+#include("./lexer.rcsharp")
+#include("./src.rcsharp")
+
+
+
+pub struct IntegerExpr { idx: u16 }
+pub struct DecimalExpr { idx: u16 }
+pub struct CharExpr { val: u16 }
+pub struct NameExpr { idx: u16 }
+pub struct StringConstExpr { idx: u16 }
+pub struct TypeExpr { val: Type }
+pub enum BinaryOp {
+    Add,Subtract,Multiply,Divide,Modulo,Assign,
+    Equals,NotEqual,Less,LessEqual,Greater,GreaterEqual,And,Or,
+    BitAnd,BitOr,BitXor,ShiftLeft,ShiftRight,
+}
+pub struct BinaryOpExpr { lval: Expression, rval: Expression, op: BinaryOp }
+pub enum UnaryOp {
+    Negate, // -
+    Not, // !
+    Deref, // *
+    Pointer, // &
+    BitFlip, // ~
+}
+pub struct UnaryOpExpr { rval: Expression, op: UnaryOp }
+pub struct CastExpr { rval: Expression, to: Type }
+pub struct MemberAccessExpr { rval: Expression, member: u16 }
+pub struct StaticAccessExpr { rval: Expression, member: u16 }
+pub struct NameWithGenericsExpr { rval: Expression, generics: vector::Vec<Type> }
+pub struct CallExpr { lval: Expression, expr: vector::Vec<Expression> , generics: vector::Vec<Type> }
+pub struct RangeExpr { start: Expression, end: Expression, inclusive: bool }
+pub struct IndexExpr { lval: Expression, index_expr: Expression }
+pub struct ArrayExpr { expr: vector::Vec<Expression> }
+
+pub struct StructInitFieldExpr { name: u16, expr: Expression }
+pub struct StructInitExpr { type: Type, expr: vector::Vec<StructInitFieldExpr> } // type::{x: 1, y: val::constant }
+pub struct BoolExpr { val: bool }
+
+pub enum ExpressionType { Integer, Char, Decimal, Name, StringConst, Type, BinaryOp, UnaryOp, Cast, MemberAccess, StaticAccess, NameWithGenerics, Call, Index, Array, StructInit, Range, Boolean, NullPtr }
+pub struct Expression   { type: ExpressionType, val: &void  }
+
+const PREFIX_PRECEDENCE: u8 = 13;
+fn is_prefix_operator(token: TokenType) : bool {
+    return token == TokenType::Minus    || token == TokenType::Plus   || 
+           token == TokenType::LogicNot || token == TokenType::BitNot || 
+           token == TokenType::BitAnd   || token == TokenType::Multiply;
+}
+
+fn precedence(token: TokenType) : u8 {
+    if token == TokenType::Equal || token == TokenType::RangeDots || token == TokenType::RangeDotsInclusive { return 1; }
+    if token == TokenType::LogicOr                                { return 2; }
+    if token == TokenType::LogicAnd                               { return 3; }
+    if token == TokenType::BitOr                                  { return 4; }
+    if token == TokenType::BitXor                                 { return 5; }
+    if token == TokenType::BitAnd                                 { return 6; }
+    if token == TokenType::LogicEqual || token == TokenType::LogicNotEqual { return 7; }
+    if token == TokenType::LogicLess  || token == TokenType::LogicLessEqual || 
+       token == TokenType::LogicGreater || token == TokenType::LogicGreaterEqual { return 8; }
+    if token == TokenType::BitShiftL  || token == TokenType::BitShiftR { return 9; }
+    if token == TokenType::Plus       || token == TokenType::Minus     { return 10; }
+    if token == TokenType::Multiply   || token == TokenType::Divide || token == TokenType::Modulo { return 11; }
+    if token == TokenType::KeywordAs                              { return 12; }
+    if token == TokenType::LogicNot   || token == TokenType::BitNot    { return 13; }
+    if token == TokenType::LParen     || token == TokenType::LSquareBrace || 
+       token == TokenType::Dot        || token == TokenType::DoubleColon  { return 14; }
+    return 0;
+}
+
+fn get_unary_op(token: TokenType) : UnaryOp {
+    if token == TokenType::Minus    { return UnaryOp::Negate;  }
+    if token == TokenType::LogicNot { return UnaryOp::Not;     }
+    if token == TokenType::Multiply { return UnaryOp::Deref;   }
+    if token == TokenType::BitAnd   { return UnaryOp::Pointer; }
+    if token == TokenType::BitNot   { return UnaryOp::BitFlip; }
+    
+    process::throw("Invalid unary operator");
+    return UnaryOp::Negate;
+}
+fn get_binary_op(token: TokenType) : BinaryOp {
+    if token == TokenType::Plus              { return BinaryOp::Add;          }
+    if token == TokenType::Minus             { return BinaryOp::Subtract;     }
+    if token == TokenType::Multiply          { return BinaryOp::Multiply;     }
+    if token == TokenType::Divide            { return BinaryOp::Divide;       }
+    if token == TokenType::Modulo            { return BinaryOp::Modulo;       }
+    if token == TokenType::Equal             { return BinaryOp::Assign;       }
+    if token == TokenType::LogicEqual        { return BinaryOp::Equals;       }
+    if token == TokenType::LogicNotEqual     { return BinaryOp::NotEqual;     }
+    if token == TokenType::LogicLess         { return BinaryOp::Less;         }
+    if token == TokenType::LogicLessEqual    { return BinaryOp::LessEqual;    }
+    if token == TokenType::LogicGreater      { return BinaryOp::Greater;      }
+    if token == TokenType::LogicGreaterEqual { return BinaryOp::GreaterEqual; }
+    if token == TokenType::LogicAnd          { return BinaryOp::And;          }
+    if token == TokenType::LogicOr           { return BinaryOp::Or;           }
+    if token == TokenType::BitAnd            { return BinaryOp::BitAnd;       }
+    if token == TokenType::BitOr             { return BinaryOp::BitOr;        }
+    if token == TokenType::BitXor            { return BinaryOp::BitXor;       }
+    if token == TokenType::BitShiftL         { return BinaryOp::ShiftLeft;    }
+    if token == TokenType::BitShiftR         { return BinaryOp::ShiftRight;   }
+    
+    process::throw("Invalid binary operator");
+    return BinaryOp::Add;
+}
+fn parse_expression_internal(tokens: &TokenData, index: &u32, len: u32, min_precedence: u8) : Expression {
+    if *index >= len {
+        process::throw("Unexpected end of tokens in expression");
+    }
+    
+    let expr: Expression;
+    const tt: TokenType = tokens[*index].token_type;
+    
+    if tt == TokenType::Integer {
+        let int_expr: &IntegerExpr = mem::malloc(size_of::<IntegerExpr>()) as &IntegerExpr;
+        int_expr.idx = tokens[*index].symbol_id;
+        expr.type = ExpressionType::Integer;
+        expr.val = bitcast::<&void>(int_expr);
+        *index = *index + 1;
+    } else if tt == TokenType::Char {
+        let char_expr: &CharExpr = mem::malloc(size_of::<CharExpr>()) as &CharExpr;
+        char_expr.val = tokens[*index].symbol_id;
+        expr.type = ExpressionType::Char;
+        expr.val = bitcast::<&void>(char_expr);
+        *index = *index + 1;
+    } else if tt == TokenType::Decimal {
+        let dec_expr: &DecimalExpr = mem::malloc(size_of::<DecimalExpr>()) as &DecimalExpr;
+        dec_expr.idx = tokens[*index].symbol_id;
+        expr.type = ExpressionType::Decimal;
+        expr.val = bitcast::<&void>(dec_expr);
+        *index = *index + 1;
+    } else if tt == TokenType::Name {
+        let name_expr: &NameExpr = mem::malloc(size_of::<NameExpr>()) as &NameExpr;
+        name_expr.idx = tokens[*index].symbol_id;
+        expr.type = ExpressionType::Name;
+        expr.val = bitcast::<&void>(name_expr);
+        *index = *index + 1;
+    } else if tt == TokenType::String {
+        let str_expr: &StringConstExpr = mem::malloc(size_of::<StringConstExpr>()) as &StringConstExpr;
+        str_expr.idx = tokens[*index].symbol_id;
+        expr.type = ExpressionType::StringConst;
+        expr.val = bitcast::<&void>(str_expr);
+        *index = *index + 1;
+    } else if tt == TokenType::KeywordTrue {
+        let bol_expr: &BoolExpr = mem::malloc(size_of::<BoolExpr>()) as &BoolExpr;
+        bol_expr.val = true;
+        expr.type = ExpressionType::Boolean;
+        expr.val = bitcast::<&void>(bol_expr);
+        *index = *index + 1;
+    } else if tt == TokenType::KeywordFalse {
+        let bol_expr: &BoolExpr = mem::malloc(size_of::<BoolExpr>()) as &BoolExpr;
+        bol_expr.val = false;
+        expr.type = ExpressionType::Boolean;
+        expr.val = bitcast::<&void>(bol_expr);
+        *index = *index + 1;
+    } else if tt == TokenType::LParen {
+        *index = *index + 1;
+        expr = parse_expression_internal(tokens, index, len, 0);
+        expect(tokens, index, len, TokenType::RParen, "Expected ')' after parenthesized expression");
+    } else if tt == TokenType::LSquareBrace {
+        *index = *index + 1;
+        let arr_expr: &ArrayExpr = mem::malloc(size_of::<ArrayExpr>()) as &ArrayExpr;
+        arr_expr.expr = vector::new::<Expression>();
+        
+        while *index < len && tokens[*index].token_type != TokenType::RSquareBrace {
+            vector::push::<Expression>(&arr_expr.expr, parse_expression_internal(tokens, index, len, 0));
+            if tokens[*index].token_type == TokenType::Comma {
+                *index = *index + 1;
+            } else if tokens[*index].token_type != TokenType::RSquareBrace {
+                process::throw("Expected ',' or ']' in array literal");
+            }
+        }
+        expect(tokens, index, len, TokenType::RSquareBrace, "Expected ']' after array literal");
+        expr.type = ExpressionType::Array;
+        expr.val = bitcast::<&void>(arr_expr);
+    } else if is_prefix_operator(tt) {
+        *index = *index + 1;
+        let un_expr: &UnaryOpExpr = mem::malloc(size_of::<UnaryOpExpr>()) as &UnaryOpExpr;
+        un_expr.op = get_unary_op(tt);
+        un_expr.rval = parse_expression_internal(tokens, index, len, PREFIX_PRECEDENCE);
+        expr.type = ExpressionType::UnaryOp;
+        expr.val = bitcast::<&void>(un_expr);
+    } else if tt == TokenType::KeywordNull{
+        expr.type = ExpressionType::NullPtr;
+        expr.val = null;
+        *index = *index + 1;
+    } else {
+
+        for i in 0 as u32 .. 3{
+            let q: string::String = token_type_to_string(&tokens[*index + i], null);
+            console::write("---\t", 4);
+            console::write_string(&q);
+            console::write("\t---\n", 5);
+            string::free(&q);
+        }
+        process::throw("Invalid expression syntax: Unexpected prefix token");
+    }
+
+    while *index < len {
+        let next_tt: TokenType = tokens[*index].token_type;
+        let is_shift: bool = false;
+
+        if next_tt == TokenType::SemiColon || next_tt == TokenType::Comma || 
+           next_tt == TokenType::RParen || next_tt == TokenType::RBrace || 
+           next_tt == TokenType::RSquareBrace {
+            break;
+        }
+
+        if next_tt == TokenType::LogicLess && *index + 1 < len && tokens[*index + 1].token_type == TokenType::LogicLess {
+            next_tt = TokenType::BitShiftL;
+            is_shift = true;
+        } else if next_tt == TokenType::LogicGreater && *index + 1 < len && tokens[*index + 1].token_type == TokenType::LogicGreater {
+            next_tt = TokenType::BitShiftR;
+            is_shift = true;
+        }
+        const prec: u8 = precedence(next_tt);
+        if prec == 0 || prec < min_precedence {
+            break;
+        }
+
+        *index = *index + 1; 
+        if is_shift {
+            *index = *index + 1;
+        }
+        // if < is encountered and next is < then it is bitshift left and > for right
+        if next_tt == TokenType::LParen {
+            let call_expr: &CallExpr = mem::malloc(size_of::<CallExpr>()) as &CallExpr;
+            call_expr.lval = expr;
+            call_expr.expr = vector::new::<Expression>();
+            call_expr.generics = vector::new::<Type>(); 
+            
+            while *index < len && tokens[*index].token_type != TokenType::RParen {
+                vector::push::<Expression>(&call_expr.expr, parse_expression_internal(tokens, index, len, 0));
+                if tokens[*index].token_type == TokenType::Comma {
+                    *index = *index + 1;
+                } else if tokens[*index].token_type != TokenType::RParen {
+                    process::throw("Expected ',' or ')' in function arguments");
+                }
+            }
+            expect(tokens, index, len, TokenType::RParen, "Expected ')' after function arguments");
+            expr.type = ExpressionType::Call;
+            expr.val = bitcast::<&void>(call_expr);
+            
+        } else if next_tt == TokenType::LSquareBrace {
+            let idx_expr: &IndexExpr = mem::malloc(size_of::<IndexExpr>()) as &IndexExpr;
+            idx_expr.lval = expr;
+            idx_expr.index_expr = parse_expression_internal(tokens, index, len, 0);
+            expect(tokens, index, len, TokenType::RSquareBrace, "Expected ']' after array index");
+            expr.type = ExpressionType::Index;
+            expr.val = bitcast::<&void>(idx_expr);
+            
+        } else if next_tt == TokenType::DoubleColon {
+            if tokens[*index].token_type == TokenType::LogicLess {
+                *index = *index + 1; 
+                let gen_expr: &NameWithGenericsExpr = mem::malloc(size_of::<NameWithGenericsExpr>()) as &NameWithGenericsExpr;
+                gen_expr.rval = expr;
+                gen_expr.generics = vector::new::<Type>();
+                
+                while *index < len && tokens[*index].token_type != TokenType::LogicGreater {
+                    vector::push::<Type>(&gen_expr.generics, parse_type(tokens, index, len));
+                    if tokens[*index].token_type == TokenType::Comma {
+                        *index = *index + 1;
+                    } else if tokens[*index].token_type != TokenType::LogicGreater {
+                        process::throw("Expected ',' or '>' in generic arguments");
+                    }
+                }
+                expect(tokens, index, len, TokenType::LogicGreater, "Expected '>' after generic arguments");
+                expr.type = ExpressionType::NameWithGenerics;
+                expr.val = bitcast::<&void>(gen_expr);
+                
+            } else if tokens[*index].token_type == TokenType::LBrace {
+                *index = *index + 1;
+                let struct_init: &StructInitExpr = mem::malloc(size_of::<StructInitExpr>()) as &StructInitExpr;
+                struct_init.expr = vector::new::<StructInitFieldExpr>();
+                
+                while *index < len && tokens[*index].token_type != TokenType::RBrace {
+                    let field_name: u16 = tokens[*index].symbol_id;
+                    expect(tokens, index, len, TokenType::Name, "Expected field name in struct initialization");
+                    expect(tokens, index, len, TokenType::Colon, "Expected ':' after field name");
+
+                    let fe: StructInitFieldExpr;
+                    fe.name = field_name;
+                    fe.expr = parse_expression_internal(tokens, index, len, 0);
+                    vector::push::<StructInitFieldExpr>(&struct_init.expr, fe);
+                    
+                    if tokens[*index].token_type == TokenType::Comma {
+                        *index = *index + 1;
+                    } else if tokens[*index].token_type != TokenType::RBrace {
+                        process::throw("Expected ',' or '}' in struct initialization");
+                    }
+                }
+                expect(tokens, index, len, TokenType::RBrace, "Expected '}' after struct initialization");
+                expr.type = ExpressionType::StructInit;
+                expr.val = bitcast::<&void>(struct_init);
+                
+            } else {
+                let stat_expr: &StaticAccessExpr = mem::malloc(size_of::<StaticAccessExpr>()) as &StaticAccessExpr;
+                stat_expr.rval = expr;
+                if tokens[*index].token_type != TokenType::Name {
+                    process::throw("Expected member name after '::'");
+                }
+                stat_expr.member = tokens[*index].symbol_id;
+                *index = *index + 1;
+                expr.type = ExpressionType::StaticAccess;
+                expr.val = bitcast::<&void>(stat_expr);
+            }
+        } else if next_tt == TokenType::Dot {
+            let mem_expr: &MemberAccessExpr = mem::malloc(size_of::<MemberAccessExpr>()) as &MemberAccessExpr;
+            mem_expr.rval = expr;
+            if tokens[*index].token_type != TokenType::Name {
+                process::throw("Expected member name after '.'");
+            }
+            mem_expr.member = tokens[*index].symbol_id;
+            *index = *index + 1;
+            expr.type = ExpressionType::MemberAccess;
+            expr.val = bitcast::<&void>(mem_expr);
+            
+        } else if next_tt == TokenType::KeywordAs {
+            let cast_expr: &CastExpr = mem::malloc(size_of::<CastExpr>()) as &CastExpr;
+            cast_expr.rval = expr;
+            cast_expr.to = parse_type(tokens, index, len);
+            expr.type = ExpressionType::Cast;
+            expr.val = bitcast::<&void>(cast_expr);
+            
+        } else if next_tt == TokenType::RangeDots || next_tt == TokenType::RangeDotsInclusive {
+            let range_expr: &RangeExpr = mem::malloc(size_of::<RangeExpr>()) as &RangeExpr;
+            range_expr.start = expr;
+            range_expr.inclusive = (next_tt == TokenType::RangeDotsInclusive);
+            range_expr.end = parse_expression_internal(tokens, index, len, prec);
+            expr.type = ExpressionType::Range;
+            expr.val = bitcast::<&void>(range_expr);
+            
+        } else {
+            let next_min_prec: u8 = prec + 1; 
+            if next_tt == TokenType::Equal {
+                next_min_prec = prec;
+            }
+            
+            let bin_expr: &BinaryOpExpr = mem::malloc(size_of::<BinaryOpExpr>()) as &BinaryOpExpr;
+            bin_expr.lval = expr;
+            bin_expr.op = get_binary_op(next_tt);
+            bin_expr.rval = parse_expression_internal(tokens, index, len, next_min_prec);
+            
+            expr.type = ExpressionType::BinaryOp;
+            expr.val = bitcast::<&void>(bin_expr);
+        }
+    }
+    
+    return expr;
+}
+fn parse_expression(token_array: &TokenData, index: &u32, len: u32) : Expression {
+    return parse_expression_internal(token_array, index, len, 0);
+}
+
+fn parse_expression_comma(token_array: &TokenData, index: &u32, len: u32) : vector::Vec<Expression> {
+    let output: vector::Vec<Expression> = vector::new::<Expression>();
+    while *index < len && token_array[*index].token_type != TokenType::RParen {
+        let expr: Expression = parse_expression(token_array, index, len);
+        vector::push::<Expression>(&output, expr);
+        
+        if *index < len && token_array[*index].token_type == TokenType::Comma {
+            *index = *index + 1;
+        } else {
+            break;
+        }
+    }
+    return output;
+}

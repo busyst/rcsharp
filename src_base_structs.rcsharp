@@ -218,7 +218,7 @@ namespace vector{
         capacity: u32,
     }
     fn new<T>() : Vec<T>{
-        let vec : Vec<T> = Vec::<T>{
+        let vec : Vec<T> = Vec::<T>::{
             array: null,
             length: 0,
             capacity: 0,
@@ -454,6 +454,34 @@ namespace string{
             len: new_len
         };
         return str;
+    }
+    #[ExtensionOf(String)]
+    fn append_str(src_string: &String, c_string: &i8, c_string_len: i32) {
+        const new_len: i32 = c_string_len + src_string.len;
+        
+        const combined: &i8 = mem::malloc(size_of::<i8>() * (new_len + 1) as i64) as &i8;
+        
+        mem::copy(src_string.data, combined, src_string.len as i64);
+        mem::copy(c_string, combined + src_string.len as i64, c_string_len as i64);
+        combined[new_len] = 0;
+        
+        mem::free(src_string.data as &void);
+        src_string.data = combined;
+        src_string.len = new_len;
+    }
+    #[ExtensionOf(String)]
+    fn append(src_string: &String, ch: i8) {
+        const new_len: i32 = src_string.len + 1;
+        
+        const combined: &i8 = mem::malloc(size_of::<i8>() * (new_len + 1) as i64) as &i8;
+        
+        mem::copy(src_string.data, combined, src_string.len as i64);
+        combined[src_string.len as i64] = ch;
+        combined[new_len] = 0;
+        
+        mem::free(src_string.data as &void);
+        src_string.data = combined;
+        src_string.len = new_len;
     }
     #[ExtentionOf(String)]
     fn equal(first: &String, second: &String) : bool{

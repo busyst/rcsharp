@@ -186,7 +186,12 @@ impl<'a> ExpressionCompiler<'a> {
                         .iter()
                         .find(|f| f.0 == **field)
                         .map(|f| f.1.clone())
-                        .unwrap(),
+                        .ok_or_else(|| {
+                            CompilerError::Generic(format!(
+                                "{} was not found inside enum {}",
+                                field, x.full_path
+                            ))
+                        })?,
                     val_type: x.base_type.clone(),
                 },
                 vec![],

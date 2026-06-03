@@ -1,39 +1,35 @@
 #include("./src_base_structs.rcsharp")
 #include("./lexer.rcsharp")
-pub enum TypeType       { Primitive }
-pub struct Type         { type: TypeType }
-pub enum ExpressionType { Integer }
-pub struct Expression   { type: ExpressionType  }
+#include("./parser_expression.rcsharp")
+#include("./parser_type.rcsharp")
+
+
+
 pub struct Argument     { name: u16, type: Type }
 
 pub struct EnumField    { name: u16, has_value: bool, value: Expression }
 pub struct HintNode     { name: u16, expressions: vector::Vec<Expression> }
-pub struct FnNode       { name: u16, arguments: vector::Vec<Argument>, return_type: &Type, generic: vector::Vec<u16> }
+pub struct FnNode       { name: u16, arguments: vector::Vec<Argument>, return_type: &Type, generic: vector::Vec<u16>, nodes: vector::Vec<Stmt> }
 pub struct EnumNode     { name: u16, enum_type: &Type, fields: vector::Vec<EnumField> }
-pub struct NamespaceNode{ name: u16, nodes: vector::Vec<Stmt> }
 pub struct StructNode   { name: u16, fields: vector::Vec<Argument>, generic: vector::Vec<u16>  }
 
-/*
-pub struct Path         { data: [u16; 8] }
-fn new_path(val: u16) : Path{
-    let x: Path;
-    x.data[0] = val;
-    x.data[1] = 65535;
-    x.data[2] = 65535;
-    x.data[3] = 65535;
-    x.data[4] = 65535;
-    x.data[5] = 65535;
-    x.data[6] = 65535;
-    x.data[7] = 65535;
-    return x;
-}
-*/
+
+pub struct IfStmt           { cond: Expression, then_body: vector::Vec<Stmt>, else_body: vector::Vec<Stmt> }
+pub struct LoopStmt         { body: vector::Vec<Stmt> }
+pub struct WhileStmt        { cond: Expression, body: vector::Vec<Stmt> }
+pub struct DoWhileStmt      { cond: Expression, body: vector::Vec<Stmt> }
+pub struct ForStmt          { iter: Expression, in_expr: Expression, body: vector::Vec<Stmt> }
+pub struct NamespaceNode    { name: u16, nodes: vector::Vec<Stmt> }
+pub struct BlockStmt        { body: vector::Vec<Stmt> }
+pub struct ReturnNode       { has_value: bool, expression: Expression }
+pub struct ExpressionNode   { expression: Expression }
+
+pub enum VarType : u8 { Stack, Static, Constant }
+pub struct DeclarationNode { name: u16, has_value: bool, expression: Expression, var_type: Type, var_comp_type: VarType }
+
 pub enum StatementType : u8{
-    Struct,
-    Namespace,
-    Enum,
-    Fn,
-    Hint,
+    CompilerHint, VarDec, Expression, If, Loop, WhileLoop, DoWhileLoop, ForLoop,
+    Break, Continue, Return, Function, Struct, Enum, Namespace, Impl, TraitDeclaration, Block, Debug, CompilerDud, Attribute
 }
 pub struct Stmt{
     statement_type: StatementType,
@@ -41,6 +37,25 @@ pub struct Stmt{
 }
 fn expect(tokens: &TokenData, index: &u32, len: u32, expected: TokenType, error_msg: &i8) {
     if *index >= len || tokens[*index].token_type != expected {
+        for i in 0 as u32 .. 5{
+            let q: string::String = token_type_to_string(&tokens[*index + i - 5], null);
+            console::write("---\t", 4);
+            console::write_string(&q);
+            console::write("\t---\n", 5);
+            string::free(&q);
+        }
+        let q: string::String = token_type_to_string(&tokens[*index], null);
+        console::write("-->\t", 4);
+        console::write_string(&q);
+        console::write("\t<--\n", 5);
+            string::free(&q);
+        for i in 0 as u32 .. 5{
+            let q: string::String = token_type_to_string(&tokens[*index + i + 1], null);
+            console::write("---\t", 4);
+            console::write_string(&q);
+            console::write("\t---\n", 5);
+            string::free(&q);
+        }
         process::throw(error_msg); 
     }
     *index = *index + 1;
@@ -60,108 +75,8 @@ fn skip_nested(tokens: &TokenData, index: &u32, len: u32, open: TokenType, close
     }
 }
 
-fn parse_expression(token_array: &TokenData, index: &u32, len: u32) : Expression{
-    let expr: Expression = Expression::{ type: ExpressionType::Integer };
-    
-    let paren_nesting: i32 = 0;
-    let brace_nesting: i32 = 0;
-    let square_nesting: i32 = 0;
-    while *index < len {
-        const tt: TokenType = token_array[*index].token_type;
-        
-        if tt == TokenType::LParen { paren_nesting = paren_nesting + 1; }
-        else if tt == TokenType::RParen {
-            if paren_nesting == 0 { break; }
-            paren_nesting = paren_nesting - 1;
-        }
-        else if tt == TokenType::LBrace { brace_nesting = brace_nesting + 1; }
-        else if tt == TokenType::RBrace {
-            if brace_nesting == 0 { break; }
-            brace_nesting = brace_nesting - 1;
-        }
-        else if tt == TokenType::LSquareBrace { square_nesting = square_nesting + 1; }
-        else if tt == TokenType::RSquareBrace {
-            if square_nesting == 0 { break; }
-            square_nesting = square_nesting - 1;
-        }
-        else if paren_nesting == 0 && brace_nesting == 0 && square_nesting == 0 {
-            if tt == TokenType::Comma || tt == TokenType::SemiColon {
-                break;
-            }
-        }
-        
-        *index = *index + 1;
-    }
-    return expr;
-}
-fn parse_expression_comma(token_array: &TokenData, index: &u32, len: u32) : vector::Vec<Expression> {
-    let output: vector::Vec<Expression> = vector::new::<Expression>();
-    while *index < len && token_array[*index].token_type != TokenType::RParen {
-        let expr: Expression = parse_expression(token_array, index, len);
-        vector::push::<Expression>(&output, expr);
-        
-        if *index < len && token_array[*index].token_type == TokenType::Comma {
-            *index = *index + 1;
-        } else {
-            break;
-        }
-    }
-    return output;
-}
-fn parse_type(token_array: &TokenData, index: &u32, len: u32) : Type {
-    let t: Type = Type::{ type: TypeType::Primitive };
 
-    if token_array[*index].token_type == TokenType::BitAnd {
-        *index = *index + 1;
-        parse_type(token_array, index, len);
-        return t;
-    }
-    if token_array[*index].token_type == TokenType::LogicAnd {
-        *index = *index + 1;
-        parse_type(token_array, index, len);
-        return t;
-    }
-    if token_array[*index].token_type == TokenType::LSquareBrace {
-        *index = *index + 1;
-        parse_type(token_array, index, len);
-        expect(token_array, index, len, TokenType::SemiColon, "Expected ';' in array type");
-        parse_expression(token_array, index, len);
-        expect(token_array, index, len, TokenType::RSquareBrace, "Expected ']' in array type");
-        return t;
-    }
-    if token_array[*index].token_type == TokenType::Name {
-        *index = *index + 1;
-        if token_array[*index].token_type == TokenType::DoubleColon{
-            *index = *index + 1;
-            parse_type(token_array, index, len);
-        }else if token_array[*index].token_type == TokenType::LogicLess{
-            *index = *index + 1;
-            parse_type(token_array, index, len);
-            if token_array[*index].token_type == TokenType::LogicGreater{
-                *index = *index + 1;
-                return t;
-            }
-        }
-        return t;
-    }
-    if token_array[*index].token_type == TokenType::KeywordFunction {
-        *index = *index + 1;
-        expect(token_array, index, len, TokenType::LParen, "Expected LParen");
-        while token_array[*index].token_type != TokenType::RParen {
-            parse_type(token_array, index, len);
-            if token_array[*index].token_type == TokenType::Comma {
-                *index = *index + 1;
-            }
-        }
-        *index = *index + 1;
-        expect(token_array, index, len, TokenType::Colon, "Expected Colon");
-        parse_type(token_array, index, len);
-        return t;
-    }
-    
-    process::throw("Expected type name");
-    return t;
-}
+
 
 fn parse_argument_comma(token_array: &TokenData, index: &u32, len: u32) : vector::Vec<Argument> {
     let output: vector::Vec<Argument> = vector::new::<Argument>();
@@ -268,8 +183,181 @@ fn parse_enum_fields(token_array: &TokenData, index: &u32, len: u32) : vector::V
     expect(token_array, index, len, TokenType::RBrace, "Expected '}' after enum body");
     return fields;
 }
+fn is_expression_starter(token: TokenType) : bool {
+    if token == TokenType::Name || token == TokenType::Integer || 
+       token == TokenType::Decimal || token == TokenType::String || 
+       token == TokenType::Char || token == TokenType::KeywordTrue || 
+       token == TokenType::KeywordFalse || token == TokenType::KeywordNull || 
+       token == TokenType::KeywordThis || token == TokenType::LParen || 
+       token == TokenType::LSquareBrace || token == TokenType::Dot {
+        return true;
+    }
+    return is_prefix_operator(token);
+}
+fn parse_body(token_array: &TokenData, token_len: u32, symbol_vector: &vector::Vec<string::String>, statement_vector: &vector::Vec<Stmt>){
+    if token_len == 0{
+        return;
+    }
+    
+    const len: u32 = token_len;
+    const tokens: &TokenData = token_array;
+
+    let index: u32 = 0;
+    while index < len {
+        const token: TokenType = tokens[index].token_type;
+        if token == TokenType::KeywordReturn{
+            index = index + 1;
+            if tokens[index].token_type == TokenType::SemiColon{
+                index = index + 1;
+                const return_node: &ReturnNode = mem::malloc(size_of::<ReturnNode>()) as &ReturnNode;
+                return_node.has_value = false;
+                let stmt: Stmt = Stmt::{
+                    statement_type: StatementType::Return,
+                    node_ptr: null
+                };
+                vector::push::<Stmt>(statement_vector, stmt);
+                continue;
+            }
+            let expr: Expression = parse_expression(tokens, &index, len);
+            expect(tokens, &index, len, TokenType::SemiColon, "Expected ';' after return expression");
+
+            const return_node: &ReturnNode = mem::malloc(size_of::<ReturnNode>()) as &ReturnNode;
+            return_node.has_value = true;
+            return_node.expression = expr;
+            let stmt: Stmt = Stmt::{
+                statement_type: StatementType::Return,
+                node_ptr: bitcast::<&void>(return_node)
+            };
+            vector::push::<Stmt>(statement_vector, stmt);
+            continue;
+        }
+        if token == TokenType::KeywordConst || token == TokenType::KeywordLet || token == TokenType::KeywordStatic{
+            index = index + 1;
+            const var_name: u16 = tokens[index].symbol_id;
+            expect(tokens, &index, len, TokenType::Name, "Expected variable name after variable declaration keyword");
+            expect(tokens, &index, len, TokenType::Colon, "Expected ':' after variable deflaration to indicate type.");
+            let type: Type = parse_type(tokens, &index, len);
+            let has_value: bool = false;
+            let expr: Expression;
+            if tokens[index].token_type == TokenType::Equal{
+                index = index + 1;
+                let x: Expression = parse_expression(tokens, &index, len);
+                expr = x;
+                has_value = true;
+            }
+            expect(tokens, &index, len, TokenType::SemiColon, "Expected ';' at the end of variable declaration.");
+
+            const declaration_node: &DeclarationNode = mem::malloc(size_of::<DeclarationNode>()) as &DeclarationNode;
+            declaration_node.name = var_name;
+            declaration_node.var_type = type;
+            declaration_node.has_value = has_value;
+            declaration_node.expression = expr;
+            declaration_node.var_comp_type = VarType::Stack;
+            if token == TokenType::KeywordConst{
+                declaration_node.var_comp_type = VarType::Stack;
+            }else if token == TokenType::KeywordStatic{
+                declaration_node.var_comp_type = VarType::Static;
+            }
+
+            let stmt: Stmt = Stmt::{
+                statement_type: StatementType::VarDec,
+                node_ptr: bitcast::<&void>(declaration_node)
+            };
+            vector::push::<Stmt>(statement_vector, stmt);
+            continue;
+        }
+        if token == TokenType::KeywordIf{
+            index = index + 1;
+            let expression: Expression = parse_expression(tokens, &index, len);
+            if tokens[index].token_type != TokenType::LBrace{
+                process::throw( "Expected '{' as the begining of if body.");
+            }
+            skip_nested(tokens, &index, len, TokenType::LBrace, TokenType::RBrace);
+            if tokens[index].token_type == TokenType::KeywordElse{
+                index = index + 1;
+                if tokens[index].token_type == TokenType::KeywordIf{
+                    continue;
+                } else {
+                    if tokens[index].token_type != TokenType::LBrace {
+                        process::throw("Expected '{' after else");
+                    }
+                    skip_nested(tokens, &index, len, TokenType::LBrace, TokenType::RBrace);
+                }
+            }
+            continue;
+        }
+        if token == TokenType::KeywordWhile{
+            index = index + 1;
+            let expression: Expression = parse_expression(tokens, &index, len);
+            if tokens[index].token_type != TokenType::LBrace{
+                process::throw( "Expected '{' as the begining of while body.");
+            }
+            skip_nested(tokens, &index, len, TokenType::LBrace, TokenType::RBrace);
+            continue;
+        }
+        if token == TokenType::KeywordLoop{
+            index = index + 1;
+            if tokens[index].token_type != TokenType::LBrace{
+                process::throw( "Expected '{' as the begining of while body.");
+            }
+            skip_nested(tokens, &index, len, TokenType::LBrace, TokenType::RBrace);
+            continue;
+        }
+        if token == TokenType::KeywordDo{
+            index = index + 1;
+            if tokens[index].token_type != TokenType::LBrace{
+                process::throw( "Expected '{' as the begining of while body.");
+            }
+            skip_nested(tokens, &index, len, TokenType::LBrace, TokenType::RBrace);
+            expect(tokens, &index, len, TokenType::KeywordWhile, "Expected while after do block.");
+            let expression: Expression = parse_expression(tokens, &index, len);
+            expect(tokens, &index, len, TokenType::SemiColon, "Expected semicolon after do {} while expression.");
+            continue;
+        }
+        if token == TokenType::KeywordFor{
+            index = index + 1;
+            const name: u16 = tokens[index].symbol_id;
+            if tokens[index].token_type != TokenType::Name{
+                process::throw( "Expected name of iterator after for keyword.");
+            }
+            index = index + 1;
+            expect(tokens, &index, len, TokenType::KeywordIn, "Expected in after name in for structure.");
+            let expression: Expression = parse_expression(tokens, &index, len);
+            skip_nested(tokens, &index, len, TokenType::LBrace, TokenType::RBrace);
+            continue;
+        }
+        if is_expression_starter(token) {
+            let expression: Expression = parse_expression(tokens, &index, len);
+            expect(tokens, &index, len, TokenType::SemiColon, "Expected ';' at the end of expression.");
+
+
+            const expr_node: &ExpressionNode = mem::malloc(size_of::<ExpressionNode>()) as &ExpressionNode;
+            expr_node.expression = expression;
+
+            let stmt: Stmt = Stmt::{
+                statement_type: StatementType::Expression,
+                node_ptr: bitcast::<&void>(expr_node)
+            };
+            vector::push::<Stmt>(statement_vector, stmt);
+
+            continue;
+        }
+        for i in 0 as u32 .. 3{
+            let q: string::String = token_type_to_string(&tokens[index + i], symbol_vector);
+            console::write("---\t", 4);
+            console::write_string(&q);
+            console::write("\t---\n", 5);
+            string::free(&q);
+        }
+        process::throw("todo!");
+    }
+
+}
 const NO_MODIFIER: u32 = 0xFFFFFFFF;
 fn parse(token_array: &TokenData, token_len: u32, symbol_vector: &vector::Vec<string::String>, statement_vector: &vector::Vec<Stmt>){
+    if token_len == 0{
+        return;
+    }
     let index: u32 = 0;
     let mod_index: u32 = NO_MODIFIER;
     const len: u32 = token_len;
@@ -307,15 +395,17 @@ fn parse(token_array: &TokenData, token_len: u32, symbol_vector: &vector::Vec<st
                 expect(tokens, &index, len, TokenType::RParen, "Expected ')' after arguments in hint");
             }
 
+            let statement_type: StatementType = StatementType::CompilerHint;
             if is_bracket {
                 expect(tokens, &index, len, TokenType::RSquareBrace, "Expected ']' after arguments in attribute");
+                statement_type = StatementType::Attribute;
             }
             const hint_node: &HintNode = mem::malloc(size_of::<HintNode>()) as &HintNode;
             hint_node.name = hint_name;
             hint_node.expressions = exprs;
-
+            
             let stmt: Stmt = Stmt::{
-                statement_type: StatementType::Hint,
+                statement_type: statement_type,
                 node_ptr: bitcast::<&void>(hint_node)
             };
             vector::push::<Stmt>(statement_vector, stmt);
@@ -353,8 +443,12 @@ fn parse(token_array: &TokenData, token_len: u32, symbol_vector: &vector::Vec<st
             }
 
             
+            let nodes: vector::Vec<Stmt> = vector::new::<Stmt>();
             if tokens[index].token_type == TokenType::LBrace {
+                const content_start: u32 = index + 1;
                 skip_nested(tokens, &index, len, TokenType::LBrace, TokenType::RBrace);
+                const content_len: u32 = (index - 1) - content_start; 
+                parse_body(tokens + content_start, content_len, symbol_vector, &nodes);
             }else if tokens[index].token_type == TokenType::FatArrow {
                 index = index + 1;
                 while index < len && tokens[index].token_type != TokenType::SemiColon {
@@ -372,9 +466,10 @@ fn parse(token_array: &TokenData, token_len: u32, symbol_vector: &vector::Vec<st
             fn_node.arguments = args;
             fn_node.return_type = ret_type;
             fn_node.generic = vector::new::<u16>();
+            fn_node.nodes = nodes;
 
             let stmt: Stmt = Stmt::{
-                statement_type: StatementType::Fn,
+                statement_type: StatementType::Function,
                 node_ptr: bitcast::<&void>(fn_node)
             };
             vector::push::<Stmt>(statement_vector, stmt);
@@ -486,8 +581,12 @@ fn parse(token_array: &TokenData, token_len: u32, symbol_vector: &vector::Vec<st
             const start: u32 = index;
             skip_nested(tokens, &index, len, TokenType::LBrace, TokenType::RBrace);
             let m: vector::Vec<Stmt> = vector::new::<Stmt>();
-            const len: u32 = (index - 1 - start);
-            parse(tokens + start, len, symbol_vector, &m);
+            
+            const inner_len: u32 = (index - 1) - (start + 1); 
+            parse(tokens + start + 1, inner_len, symbol_vector, &m);
+            for i in 0 as u32 .. m.length{
+                vector::push::<Stmt>(statement_vector, m.array[i]);
+            }
             continue;
         }
         if mod_index != NO_MODIFIER {
@@ -519,6 +618,7 @@ fn parse(token_array: &TokenData, token_len: u32, symbol_vector: &vector::Vec<st
                     process::throw("Expected SemiColon");
                 }
                 index = index + 1;
+                mod_index = NO_MODIFIER;
                 continue;
             }
         }
@@ -545,12 +645,208 @@ fn main(){
     console::write("Successfully parsed items: ", 27);
     console::println_i64(statement_vector.length as i64);
 
+    let stdout: string::String = string::empty();
+    compile(&statement_vector, &symbol_vector, &stdout);
+    console::write("\t---\n", 5);
+    console::write_string(&stdout);
+    console::write("\n", 1);
     string::free(&file_data);
     process::ExitProcess(0);
 }
-
-/*
-    fn compile(symbol_vector: &vector::Vec<string::String>, statement_vector: &vector::Vec<Stmt>, stdout: &string::String){
-
+fn debug_dump_type(expr: &Type, symbol_vector: &vector::Vec<string::String>, stdout: &string::String) {
+    const sym_array: &string::String = symbol_vector.array;
+    if expr.type == TypeType::Named{
+        const node: &NamedType = expr.val as &NamedType;
+        string::append_str(stdout, sym_array[node.idx].data, sym_array[node.idx].len);
+    }else if expr.type == TypeType::Pointer{
+        const node: &PointerType = expr.val as &PointerType;
+        const inner: &Type = &node.inner as &Type;
+        for i in 0 as u8 .. node.deep {
+            string::append(stdout, '&');
+        }
+        debug_dump_type(inner, symbol_vector, stdout);
     }
-*/
+}
+fn debug_dump_expression(expr: &Expression, symbol_vector: &vector::Vec<string::String>, stdout: &string::String) {
+    if expr.type == ExpressionType::StringConst{
+        const data: &StringConstExpr = expr.val as &StringConstExpr;
+        string::append(stdout, '"');
+        string::append_str(stdout, symbol_vector.array[data.idx].data, symbol_vector.array[data.idx].len);
+        string::append(stdout, '"');
+    }
+}
+fn compile_body(statement_vector: &vector::Vec<Stmt>, symbol_vector: &vector::Vec<string::String>, stdout: &string::String) {
+    let index: u32 = 0;
+    let len: u32 = statement_vector.length;
+    const sym_array: &string::String = symbol_vector.array;
+    while index < len {
+        let statement: &Stmt = &statement_vector.array[index];
+        if statement.statement_type == StatementType::VarDec{
+            const node: &DeclarationNode = statement.node_ptr as &DeclarationNode;
+            if node.var_comp_type == VarType::Constant{
+                string::append_str(stdout,"\tconst ", 7);
+            }else if node.var_comp_type == VarType::Static{
+                string::append_str(stdout,"\tstatic ", 8);
+            }else if node.var_comp_type == VarType::Stack{
+                string::append_str(stdout,"\tlet ", 5);
+            }
+            string::append_str(stdout, sym_array[node.name].data, sym_array[node.name].len);
+            
+            string::append_str(stdout," : ", 3);
+            debug_dump_type(&node.var_type, symbol_vector, stdout);
+
+            if node.has_value{
+                string::append_str(stdout," = ", 3);
+                debug_dump_expression(&node.expression, symbol_vector, stdout);
+            }
+            string::append_str(stdout,"\n\r", 2);
+            index = index + 1;
+            continue;
+        } else if statement.statement_type == StatementType::Expression{
+            const node: &ExpressionNode = statement.node_ptr as &ExpressionNode;
+            string::append_str(stdout,">>>\t", 4);
+            debug_dump_expression(&node.expression, symbol_vector, stdout);
+            string::append_str(stdout,"\n\r", 2);
+            index = index + 1;
+            continue;
+        } else if statement.statement_type == StatementType::Return{
+            const node: &ReturnNode = statement.node_ptr as &ReturnNode;
+            string::append_str(stdout,"\treturn ", 7);
+            if node.has_value{
+                string::append(stdout,' ');
+                debug_dump_expression(&node.expression, symbol_vector, stdout);
+            }
+            string::append_str(stdout,"\n\r", 2);
+            index = index + 1;
+            continue;
+        }
+        for i in 0 as u32 .. 3{
+            console::println_i64(statement_vector.array[index + i].statement_type as i64);
+            console::write("@@@@\n\r", 6);
+        }
+        process::throw("--UNEXPECTED STATEMENT--");
+    }
+}
+fn compile(statement_vector: &vector::Vec<Stmt>, symbol_vector: &vector::Vec<string::String>, stdout: &string::String) {
+    let index: u32 = 0;
+    let len: u32 = statement_vector.length;
+    const sym_array: &string::String = symbol_vector.array;
+    while index < len {
+        let statement: Stmt = statement_vector.array[index];
+        if statement.statement_type == StatementType::CompilerHint{
+            const node: &HintNode = statement.node_ptr as &HintNode;
+            string::append(stdout, '#');
+            string::append_str(stdout, sym_array[node.name].data, sym_array[node.name].len);
+            string::append(stdout, '(');
+            for x in 0 as u32 .. node.expressions.length{
+                const expr: &Expression = &node.expressions.array[x];
+                debug_dump_expression(expr, symbol_vector, stdout);
+                if x != node.expressions.length - 1{
+                    string::append_str(stdout, ", ", 2);
+                }
+            }
+            string::append(stdout, ')');
+            string::append(stdout, '\n');
+        } else if statement.statement_type == StatementType::Attribute{
+            const node: &HintNode = statement.node_ptr as &HintNode;
+            string::append_str(stdout, "#[", 2);
+            string::append_str(stdout, sym_array[node.name].data, sym_array[node.name].len);
+            string::append(stdout, '(');
+            for x in 0 as u32 .. node.expressions.length{
+                const expr: &Expression = &node.expressions.array[x];
+                debug_dump_expression(expr, symbol_vector, stdout);
+                if x != node.expressions.length - 1{
+                    string::append_str(stdout, ", ", 2);
+                }
+            }
+            string::append(stdout, ')');
+            string::append_str(stdout, "]\n", 2);
+        } else if statement.statement_type == StatementType::Function{
+            const node: &FnNode = statement.node_ptr as &FnNode;
+            string::append_str(stdout, "fn ", 3);
+            string::append_str(stdout, sym_array[node.name].data, sym_array[node.name].len);
+            string::append(stdout, '(');
+            for x in 0 as u32 .. node.arguments.length{
+                const arg: &Argument = &node.arguments.array[x];
+                string::append_str(stdout, sym_array[arg.name].data, sym_array[arg.name].len);
+                string::append_str(stdout, ": ", 2);
+                debug_dump_type(&arg.type, symbol_vector, stdout);
+                if x != node.arguments.length - 1{
+                    string::append_str(stdout, ", ", 2);
+                }
+            }
+            string::append(stdout, ')');
+            if node.nodes.length != 0{
+                string::append_str(stdout, "{\n", 2);
+                compile_body(&node.nodes, symbol_vector, stdout);
+                string::append(stdout, '}');
+            }
+            string::append(stdout, '\n');
+        } else if statement.statement_type == StatementType::Struct{
+            const node: &StructNode = statement.node_ptr as &StructNode;
+            string::append_str(stdout, "struct ", 7);
+            string::append_str(stdout, sym_array[node.name].data, sym_array[node.name].len);
+            //generic
+            string::append_str(stdout, "{\n", 2);
+            for x in 0 as u32 .. node.fields.length{
+                const node: &Argument = &node.fields.array[x];
+                string::append_str(stdout, "\t", 1);
+                string::append_str(stdout, sym_array[node.name].data, sym_array[node.name].len);
+                string::append_str(stdout, ": ", 2);
+                debug_dump_type(&node.type, symbol_vector, stdout);
+                string::append(stdout, '\n');
+            }
+            string::append_str(stdout, "}\n", 2);
+        } else if statement.statement_type == StatementType::Enum{
+            const node: &EnumNode = statement.node_ptr as &EnumNode;
+            string::append_str(stdout, "enum ", 5);
+            string::append_str(stdout, sym_array[node.name].data, sym_array[node.name].len);
+            string::append_str(stdout, "{\n", 2);
+            for x in 0 as u32 .. node.fields.length{
+                const node: &EnumField = &node.fields.array[x];
+                string::append_str(stdout, "\t", 1);
+                string::append_str(stdout, sym_array[node.name].data, sym_array[node.name].len);
+                if node.has_value{
+                    string::append_str(stdout, ": ", 2);
+                    
+                }
+                string::append(stdout, '\n');
+            }
+            string::append_str(stdout, "}\n", 2);
+        } else if statement.statement_type == StatementType::Namespace{
+            const node: &NamespaceNode = statement.node_ptr as &NamespaceNode;
+            string::append_str(stdout, "namespace ", 10);
+            string::append_str(stdout, sym_array[node.name].data, sym_array[node.name].len);
+            string::append_str(stdout, "{\n", 2);
+            compile(&node.nodes,symbol_vector, stdout);
+            string::append_str(stdout, "}\n", 2);
+        } else if statement.statement_type == StatementType::VarDec{
+            const node: &DeclarationNode = statement.node_ptr as &DeclarationNode;
+            if node.var_comp_type == VarType::Constant{
+                string::append_str(stdout,"const ", 7);
+            }else if node.var_comp_type == VarType::Static{
+                string::append_str(stdout,"static ", 8);
+            }else if node.var_comp_type == VarType::Stack{
+                process::throw("let is not allowed in top scope");
+            }
+            string::append_str(stdout, sym_array[node.name].data, sym_array[node.name].len);
+            
+            string::append_str(stdout," : ", 3);
+            debug_dump_type(&node.var_type, symbol_vector, stdout);
+
+            if node.has_value{
+                string::append_str(stdout," = ", 3);
+                debug_dump_expression(&node.expression, symbol_vector, stdout);
+            }
+            string::append_str(stdout,"\n\r", 2);
+        } else{
+            for i in 0 as u32 .. 3{
+                console::println_i64(statement_vector.array[index + i].statement_type as i64);
+                console::write("@@@@\n\r", 6);
+            }
+
+            process::throw("--UNEXPECTED STATEMENT--");
+        }
+        index = index + 1;
+    }
+}
