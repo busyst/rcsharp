@@ -179,43 +179,27 @@ pub struct TokenData{
     symbol_id : u16,
     file_offset: u32
 }
-fn handle_number(data: &i8, start: u32, end: u32, tokens: &vector::Vec<TokenData>, symbols: &vector::Vec<string::String>){
-    const len: i32 = (end - start) as i32;
-    const start_ptr: &i8 = data + start;
-
+fn insert_symbol(data: &i8, len: i32, symbols: &vector::Vec<string::String>) : u16{
     for i in 0 as u32 .. symbols.length{
         if symbols.array[i].len != len{
             continue;
         }
-        if mem::compare(start_ptr, symbols.array[i].data, len as i64) == 0{
-            let temp: TokenData = TokenData::{ token_type: TokenType::String, symbol_id: i as u16, file_offset: start };
-            vector::push::<TokenData>(tokens, temp);
-            return;
+        if mem::compare(data, symbols.array[i].data, len as i64) == 0{
+            return i as u16;
         }
     }
     let symbol_id: u16 = symbols.length as u16;
-    vector::push::<string::String>(symbols, string::from_data(start_ptr, len));
+    vector::push::<string::String>(symbols, string::from_data(data, len));
 
+    return symbol_id;
+}
+fn handle_number(data: &i8, start: u32, end: u32, tokens: &vector::Vec<TokenData>, symbols: &vector::Vec<string::String>){
+    let symbol_id: u16 = insert_symbol(data + start, (end - start) as i32, symbols);
     let temp: TokenData = TokenData::{ token_type: TokenType::Integer, symbol_id: symbol_id, file_offset: start };
     vector::push::<TokenData>(tokens, temp);
 }
 fn handle_decimal_number(data: &i8, start: u32, end: u32, tokens: &vector::Vec<TokenData>, symbols: &vector::Vec<string::String>){
-    const len: i32 = (end - start) as i32;
-    const start_ptr: &i8 = data + start;
-
-    for i in 0 as u32 .. symbols.length{
-        if symbols.array[i].len != len{
-            continue;
-        }
-        if mem::compare(start_ptr, symbols.array[i].data, len as i64) == 0{
-            let temp: TokenData = TokenData::{ token_type: TokenType::String, symbol_id: i as u16, file_offset: start };
-            vector::push::<TokenData>(tokens, temp);
-            return;
-        }
-    }
-    let symbol_id: u16 = symbols.length as u16;
-    vector::push::<string::String>(symbols, string::from_data(start_ptr, len));
-
+    let symbol_id: u16 = insert_symbol(data + start, (end - start) as i32, symbols);
     let temp: TokenData = TokenData::{ token_type: TokenType::Decimal, symbol_id: symbol_id, file_offset: start };
     vector::push::<TokenData>(tokens, temp);
 }
@@ -266,20 +250,8 @@ fn handle_string(data: &i8, start: u32, end: u32, tokens: &vector::Vec<TokenData
         write_head = write_head + 1;
         index = index + 1;
     }
-
-    for i in 0 as u32 .. symbols.length{
-        if symbols.array[i].len != len{
-            continue;
-        }
-        if mem::compare(start_ptr, symbols.array[i].data, len as i64) == 0{
-            let temp: TokenData = TokenData::{ token_type: TokenType::String, symbol_id: i as u16, file_offset: start };
-            vector::push::<TokenData>(tokens, temp);
-            return;
-        }
-    }
-    let symbol_id: u16 = symbols.length as u16;
-    vector::push::<string::String>(symbols, string::from_data(stack_buffer, write_head as i32));
-
+    
+    let symbol_id: u16 = insert_symbol(start_ptr, len, symbols);
     let temp: TokenData = TokenData::{ token_type: TokenType::String, symbol_id: symbol_id, file_offset: start };
     vector::push::<TokenData>(tokens, temp);
 }
@@ -315,6 +287,9 @@ fn handle_char(data: &i8, start: u32, end: u32, tokens: &vector::Vec<TokenData>,
         }
         let temp: TokenData = TokenData::{ token_type: TokenType::Char, symbol_id: return_char, file_offset: start };
         vector::push::<TokenData>(tokens, temp);
+        if len > 2 {
+            process::throw("Char is too long");
+        }
         return;
     }
     if len != 1{
@@ -365,29 +340,15 @@ fn handle_symbol(data: &i8, start: u32, end: u32, tokens: &vector::Vec<TokenData
         if mem::compare(start_ptr, "namespace", 9) == 0 { let temp: TokenData = TokenData::{ token_type: TokenType::KeywordNamespace, symbol_id: 0, file_offset: start }; vector::push::<TokenData>(tokens, temp); return; }
     }
     
-    for i in 0 as u32 .. symbols.length{
-        if symbols.array[i].len != len{
-            continue;
-        }
-        if mem::compare(start_ptr, symbols.array[i].data, len as i64) == 0{
-            let temp: TokenData = TokenData::{ token_type: TokenType::Name, symbol_id: i as u16, file_offset: start };
-            vector::push::<TokenData>(tokens, temp);
-            return;
-        }
-    }
-    const symbol_id: u16 = symbols.length as u16;
-    vector::push::<string::String>(symbols, string::from_data(start_ptr, len));
-
+    let symbol_id: u16 = insert_symbol(start_ptr, len, symbols);
     let temp: TokenData = TokenData::{ token_type: TokenType::Name, symbol_id: symbol_id, file_offset: start };
     vector::push::<TokenData>(tokens, temp);
-    return;
 }
 pub fn lex(data: &string::String, token_vector: &vector::Vec<TokenData>, symbol_vector: &vector::Vec<string::String>){
     let index: u32 = 0;
     while index < data.len as u32{
         let char: i8 = data.data[index];
         if char == ' ' || char_utils::is_cntrl(char){
-            data.data[index] = '\0';
             index = index + 1;
             continue;
         }
@@ -521,7 +482,6 @@ pub fn lex(data: &string::String, token_vector: &vector::Vec<TokenData>, symbol_
             }
             let len: i32 = (j - index) as i32;
             //console::writeln(data.data + index, len);
-            mem::fill('\0', data.data + index, len as i64);
             index = j;
             continue;
         }else if char == '/' && next_char == '*'{
@@ -548,7 +508,6 @@ pub fn lex(data: &string::String, token_vector: &vector::Vec<TokenData>, symbol_
             }
             let len: i32 = (j - index) as i32;
             //console::writeln(data.data + index, len);
-            mem::fill('\0', data.data + index, len as i64);
             index = j;
             continue;
         }
@@ -556,153 +515,124 @@ pub fn lex(data: &string::String, token_vector: &vector::Vec<TokenData>, symbol_
         let token_type: TokenType = TokenType::DummyToken;
         if char == '#'{
             token_type = TokenType::Hint;
-            data.data[index] = ' ';
             index = index + 1;
         }else if char == '('{
             token_type = TokenType::LParen;
-            data.data[index] = ' ';
             index = index + 1;
         }else if char == ')'{
             token_type = TokenType::RParen;
-            data.data[index] = ' ';
             index = index + 1;
         }else if char == '{'{
             token_type = TokenType::LBrace;
-            data.data[index] = ' ';
             index = index + 1;
         }else if char == '}'{
             token_type = TokenType::RBrace;
-            data.data[index] = ' ';
             index = index + 1;
         }else if char == '['{
             token_type = TokenType::LSquareBrace;
-            data.data[index] = ' ';
             index = index + 1;
         }else if char == ']'{
             token_type = TokenType::RSquareBrace;
-            data.data[index] = ' ';
             index = index + 1;
         }else if char == ':'{
             if next_char == ':'{
                 token_type = TokenType::DoubleColon;
-                data.data[index] = ' '; data.data[index + 1] = ' ';
                 index = index + 2;
             }else{
                 token_type = TokenType::Colon;
-                data.data[index] = ' ';
                 index = index + 1;
             }
         }else if char == '='{
             if next_char == '='{
                 token_type = TokenType::LogicEqual;
-                data.data[index] = ' '; data.data[index + 1] = ' ';
                 index = index + 2;
             }else if next_char == '>'{
                 token_type = TokenType::FatArrow;
-                data.data[index] = ' '; data.data[index + 1] = ' ';
                 index = index + 2;
             }else{
                 token_type = TokenType::Equal;
-                data.data[index] = ' ';
                 index = index + 1;
             }
         }else if char == ';'{
             token_type = TokenType::SemiColon;
-            data.data[index] = ' ';
             index = index + 1;
         }else if char == ','{
             token_type = TokenType::Comma;
-            data.data[index] = ' ';
             index = index + 1;
         }else if char == '+'{
             token_type = TokenType::Plus;
-            data.data[index] = ' ';
             index = index + 1;
         }else if char == '-'{
             token_type = TokenType::Minus;
-            data.data[index] = ' ';
             index = index + 1;
         }else if char == '*'{
             token_type = TokenType::Multiply;
-            data.data[index] = ' ';
             index = index + 1;
         }else if char == '/'{
             token_type = TokenType::Divide;
-            data.data[index] = ' ';
             index = index + 1;
         }else if char == '%'{
             token_type = TokenType::Modulo;
-            data.data[index] = ' ';
             index = index + 1;
         }else if char == '!'{
             if next_char == '='{
                 token_type = TokenType::LogicNotEqual;
-                data.data[index] = ' '; data.data[index + 1] = ' ';
                 index = index + 2;
             }else{
                 token_type = TokenType::LogicNot;
-                data.data[index] = ' ';
                 index = index + 1;
             }
         }else if char == '&'{
             if next_char == '&'{
                 token_type = TokenType::LogicAnd;
-                data.data[index] = ' '; data.data[index + 1] = ' ';
                 index = index + 2;
             }else{
                 token_type = TokenType::BitAnd;
-                data.data[index] = ' ';
                 index = index + 1;
             }
         }else if char == '|'{
             if next_char == '|'{
                 token_type = TokenType::LogicOr;
-                data.data[index] = ' '; data.data[index + 1] = ' ';
                 index = index + 2;
             }else{
                 token_type = TokenType::BitOr;
-                data.data[index] = ' ';
                 index = index + 1;
             }
         }else if char == '.'{
             if next_char == '.'{
                 if second_next_char == '='{
                     token_type = TokenType::RangeDotsInclusive;
-                    data.data[index] = ' '; data.data[index + 1] = ' '; data.data[index + 2] = ' ';
                     index = index + 3;
                 }else{
                     token_type = TokenType::RangeDots;
-                    data.data[index] = ' '; data.data[index + 1] = ' ';
                     index = index + 2;
                 }
             }else{
                 token_type = TokenType::Dot;
-                data.data[index] = ' ';
                 index = index + 1;
             }
         }else if char == '<'{
             if next_char == '='{
                 token_type = TokenType::LogicLessEqual;
-                data.data[index] = ' '; data.data[index + 1] = ' ';
                 index = index + 2;
             }else{
                 token_type = TokenType::LogicLess;
-                data.data[index] = ' ';
                 index = index + 1;
             }
         }else if char == '>'{
             if next_char == '='{
                 token_type = TokenType::LogicGreaterEqual;
-                data.data[index] = ' '; data.data[index + 1] = ' ';
                 index = index + 2;
             }else{
                 token_type = TokenType::LogicGreater;
-                data.data[index] = ' ';
                 index = index + 1;
             }
+        }else if char == '^'{
+            token_type = TokenType::BitXor;
+
+            index = index + 1;
         }else if char == '~'{
             token_type = TokenType::BitNot;
-            data.data[index] = ' ';
             index = index + 1;
         }
         if token_type != TokenType::DummyToken{

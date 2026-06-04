@@ -451,12 +451,14 @@ fn parse(token_array: &TokenData, token_len: u32, symbol_vector: &vector::Vec<st
                 parse_body(tokens + content_start, content_len, symbol_vector, &nodes);
             }else if tokens[index].token_type == TokenType::FatArrow {
                 index = index + 1;
-                while index < len && tokens[index].token_type != TokenType::SemiColon {
-                    index = index + 1;
-                }
-                if tokens[index].token_type == TokenType::SemiColon {
-                    index = index + 1;
-                }
+                const expr_node: &ReturnNode = mem::malloc(size_of::<ReturnNode>()) as &ReturnNode;
+                expr_node.expression = parse_expression(tokens, &index, len);
+                expect(tokens, &index, len, TokenType::SemiColon, "Expected ';' after expression function");
+                let stmt: Stmt = Stmt::{
+                    statement_type: StatementType::Return,
+                    node_ptr: bitcast::<&void>(expr_node)
+                };
+                vector::push::<Stmt>(&nodes, stmt);
             } else if tokens[index].token_type == TokenType::SemiColon {
                 index = index + 1;
             }
@@ -634,24 +636,100 @@ fn parse(token_array: &TokenData, token_len: u32, symbol_vector: &vector::Vec<st
     }
 }
 fn main(){
-    let file_data: string::String = fs::read_full_file_as_string("D:/Projects/rcsharp/src_base_structs.rcsharp");
-    
-    let token_vector: vector::Vec<TokenData> = vector::new::<TokenData>();
-    let symbol_vector: vector::Vec<string::String> = vector::new::<string::String>();
-    lex(&file_data, &token_vector, &symbol_vector);
-    let statement_vector: vector::Vec<Stmt> = vector::new::<Stmt>();
-    parse(token_vector.array, token_vector.length, &symbol_vector, &statement_vector);
-    
-    console::write("Successfully parsed items: ", 27);
-    console::println_i64(statement_vector.length as i64);
+    rcsharp_compile("D:/Projects/rcsharp/src.rcsharp", "D:/Projects/rcsharp/output_v2.rcsharp");
+}
+fn rcsharp_compile(input_file_path: &i8, output_file_path: &i8) {
+    const buffer: &i8 = stalloc::<i8>(255);
+    let file_name_start: &i8;
+    const len: i32 = fs::GetFullPathNameA(input_file_path, 255, buffer, bitcast::<&i8>(&file_name_start));
+    const env_path_len: i32 = (bitcast::<usize>(file_name_start) - bitcast::<usize>(buffer)) as i32;
+    console::println_i64(env_path_len as i64);
+    const ilen : i32 = string_utils::c_str_len(input_file_path);
+    const olen : i32 = string_utils::c_str_len(output_file_path);
+    // Main script environment path
+    // for D:/Projects/rcsharp/src.rcsharp AND ./src.rcsharp gives D:/Projects/rcsharp/
+    let base_env : string::String = string::from_data(buffer, env_path_len);
+    console::write_string(&base_env);
 
+    let file_stack: vector::Vec<string::String> = vector::new::<string::String>();
+    vector::push::<string::String>(&file_stack, string::from_c_string(input_file_path));
+    
+
+
+    console::writeln("Loading...", 10);
+    let main_statement_vector: vector::Vec<Stmt> = vector::new::<Stmt>();
+    let symbol_vector: vector::Vec<string::String> = vector::new::<string::String>();
+    let file_index: u32 = 0;
+    while file_index < file_stack.length{
+        console::writeln("Reading File...", 15);
+        console::write_string(&file_stack.array[file_index]);
+        console::write("\n", 1);
+        let file_data: string::String = fs::read_full_file_as_string(file_stack.array[file_index].data);
+        let token_vector: vector::Vec<TokenData> = vector::new::<TokenData>();
+        lex(&file_data, &token_vector, &symbol_vector);
+        string::free(&file_data);
+        let statement_vector: vector::Vec<Stmt> = vector::new::<Stmt>();
+        parse(token_vector.array, token_vector.length, &symbol_vector, &statement_vector);
+        
+        for idx in 0 as u32 .. statement_vector.length{
+            const stmt: &Stmt = &statement_vector.array[idx];
+            if stmt.statement_type == StatementType::CompilerHint{
+                const node: &HintNode = stmt.node_ptr as &HintNode;
+                const sym_array: &string::String = symbol_vector.array;
+                if sym_array[node.name].len == 7 && mem::compare(sym_array[node.name].data, "include", 7) == 0{
+                    if node.expressions.length != 1{
+                        process::throw("include directive must have only one path");
+                    }
+                    const expr: &Expression = &node.expressions.array[0];
+                    if expr.type != ExpressionType::StringConst{
+                        process::throw("include directive must have only one path");
+                    }
+                    const str_expr: &StringConstExpr = expr.val as &StringConstExpr;
+                    console::write("\t", 1);
+                    console::write_string(&sym_array[str_expr.idx]);
+                    console::write("\n\r", 2);
+                    let found: bool = false;
+                    for i in 0 as u32 .. file_stack.length{
+                        if string::equal(&sym_array[str_expr.idx], &file_stack.array[i]){
+                            found = true;
+                            break;
+                        }
+                    }
+                    if !found{
+                        vector::push::<string::String>(&file_stack, string::clone(&sym_array[str_expr.idx]));
+                    }
+                    continue;
+                }else{
+                    process::throw("Unrecognized directive");
+                }
+            }
+            vector::push::<Stmt>(&main_statement_vector, *stmt);
+        }
+        vector::free::<Stmt>(&statement_vector);
+        file_index = file_index + 1;
+    }
+
+    console::writeln("Loaded...", 9);
+    console::writeln("Project Files...", 16);
+    console::write("Sym Vec Len: ", 13);
+    console::println_u64(symbol_vector.length as u64);
+    for i in 0 as u32 .. file_stack.length{
+        console::write("\t", 1);
+        console::write_string(&file_stack.array[i]);
+        console::write("\n", 1);
+    }
+    console::println_i64(main_statement_vector.length as i64);
+    console::writeln("Compiling...", 12);
     let stdout: string::String = string::empty();
-    compile(&statement_vector, &symbol_vector, &stdout);
-    console::write("\t---\n", 5);
-    console::write_string(&stdout);
-    console::write("\n", 1);
-    string::free(&file_data);
+    compile(&main_statement_vector, &symbol_vector, &stdout);
+    fs::write_to_file(output_file_path, stdout.data, stdout.len as u32);
+
+    //console::write("\t---\n", 5);
+    //console::write_string(&stdout);
+    //console::write("\n", 1);
     process::ExitProcess(0);
+
+    
 }
 fn debug_dump_type(expr: &Type, symbol_vector: &vector::Vec<string::String>, stdout: &string::String) {
     const sym_array: &string::String = symbol_vector.array;
@@ -665,15 +743,60 @@ fn debug_dump_type(expr: &Type, symbol_vector: &vector::Vec<string::String>, std
             string::append(stdout, '&');
         }
         debug_dump_type(inner, symbol_vector, stdout);
+    }else if expr.type == TypeType::Function{
+        const node: &FunctionType = expr.val as &FunctionType;
+        string::append_str(stdout, "fn(", 3);
+        for i in 0 as u32 .. node.args.length {
+            debug_dump_type(&node.args.array[i], symbol_vector, stdout);
+            if i != node.args.length - 1{
+                string::append_str(stdout, ", ", 2);
+            }
+        }
+        string::append_str(stdout, ") : ", 4);
+        debug_dump_type(&node.return_type, symbol_vector, stdout);
+    }else if expr.type == TypeType::NamespaceLink{
+        const node: &NamespaceLinkType = expr.val as &NamespaceLinkType;
+        for i in 0 as u8 .. node.path.len {
+            string::append_str(stdout, sym_array[node.path.data[i]].data, sym_array[node.path.data[i]].len);
+            string::append_str(stdout, "::", 2);
+        }
+        const inner: &Type = &node.rval as &Type;
+        debug_dump_type(inner, symbol_vector, stdout);
+    }else if expr.type == TypeType::Generic{
+        const node: &GenericType = expr.val as &GenericType;
+        string::append_str(stdout, sym_array[node.idx].data, sym_array[node.idx].len);
+        string::append(stdout, '<');
+        for i in 0 as u32 .. node.gen_args.length {
+            debug_dump_type(&node.gen_args.array[i], symbol_vector, stdout);
+            if i != node.gen_args.length - 1{
+                string::append_str(stdout, ", ", 2);
+            }
+        }
+        string::append(stdout, '>');
+    }else if expr.type == TypeType::ConstantSizeArray{
+        const node: &ConstantSizeArrayType = expr.val as &ConstantSizeArrayType;
+        string::append(stdout, '[');
+        debug_dump_type(&node.inner, symbol_vector, stdout);
+        string::append_str(stdout, "; ", 2);
+        debug_dump_expression(&node.size, symbol_vector, stdout);
+        string::append(stdout, ']');
     }
 }
 fn debug_dump_expression(expr: &Expression, symbol_vector: &vector::Vec<string::String>, stdout: &string::String) {
-    if expr.type == ExpressionType::StringConst{
+    if expr.type == ExpressionType::Integer || expr.type == ExpressionType::Decimal || expr.type == ExpressionType::Name{
+        const data: &IntegerExpr = expr.val as &IntegerExpr;
+        string::append_str(stdout, symbol_vector.array[data.idx].data, symbol_vector.array[data.idx].len);
+    } else if expr.type == ExpressionType::Char{
+        const data: &CharExpr = expr.val as &CharExpr;
+        string::append(stdout, '\'');
+        string::append(stdout, data.val as i8);
+        string::append(stdout, '\'');
+    } else if expr.type == ExpressionType::StringConst{
         const data: &StringConstExpr = expr.val as &StringConstExpr;
         string::append(stdout, '"');
         string::append_str(stdout, symbol_vector.array[data.idx].data, symbol_vector.array[data.idx].len);
         string::append(stdout, '"');
-    }
+    } 
 }
 fn compile_body(statement_vector: &vector::Vec<Stmt>, symbol_vector: &vector::Vec<string::String>, stdout: &string::String) {
     let index: u32 = 0;
@@ -727,6 +850,8 @@ fn compile_body(statement_vector: &vector::Vec<Stmt>, symbol_vector: &vector::Ve
         process::throw("--UNEXPECTED STATEMENT--");
     }
 }
+
+
 fn compile(statement_vector: &vector::Vec<Stmt>, symbol_vector: &vector::Vec<string::String>, stdout: &string::String) {
     let index: u32 = 0;
     let len: u32 = statement_vector.length;
@@ -747,6 +872,8 @@ fn compile(statement_vector: &vector::Vec<Stmt>, symbol_vector: &vector::Vec<str
             }
             string::append(stdout, ')');
             string::append(stdout, '\n');
+            index = index + 1;
+            continue;
         } else if statement.statement_type == StatementType::Attribute{
             const node: &HintNode = statement.node_ptr as &HintNode;
             string::append_str(stdout, "#[", 2);
@@ -761,6 +888,8 @@ fn compile(statement_vector: &vector::Vec<Stmt>, symbol_vector: &vector::Vec<str
             }
             string::append(stdout, ')');
             string::append_str(stdout, "]\n", 2);
+            index = index + 1;
+            continue;
         } else if statement.statement_type == StatementType::Function{
             const node: &FnNode = statement.node_ptr as &FnNode;
             string::append_str(stdout, "fn ", 3);
@@ -782,6 +911,8 @@ fn compile(statement_vector: &vector::Vec<Stmt>, symbol_vector: &vector::Vec<str
                 string::append(stdout, '}');
             }
             string::append(stdout, '\n');
+            index = index + 1;
+            continue;
         } else if statement.statement_type == StatementType::Struct{
             const node: &StructNode = statement.node_ptr as &StructNode;
             string::append_str(stdout, "struct ", 7);
@@ -797,6 +928,8 @@ fn compile(statement_vector: &vector::Vec<Stmt>, symbol_vector: &vector::Vec<str
                 string::append(stdout, '\n');
             }
             string::append_str(stdout, "}\n", 2);
+            index = index + 1;
+            continue;
         } else if statement.statement_type == StatementType::Enum{
             const node: &EnumNode = statement.node_ptr as &EnumNode;
             string::append_str(stdout, "enum ", 5);
@@ -813,6 +946,8 @@ fn compile(statement_vector: &vector::Vec<Stmt>, symbol_vector: &vector::Vec<str
                 string::append(stdout, '\n');
             }
             string::append_str(stdout, "}\n", 2);
+            index = index + 1;
+            continue;
         } else if statement.statement_type == StatementType::Namespace{
             const node: &NamespaceNode = statement.node_ptr as &NamespaceNode;
             string::append_str(stdout, "namespace ", 10);
@@ -820,6 +955,8 @@ fn compile(statement_vector: &vector::Vec<Stmt>, symbol_vector: &vector::Vec<str
             string::append_str(stdout, "{\n", 2);
             compile(&node.nodes,symbol_vector, stdout);
             string::append_str(stdout, "}\n", 2);
+            index = index + 1;
+            continue;
         } else if statement.statement_type == StatementType::VarDec{
             const node: &DeclarationNode = statement.node_ptr as &DeclarationNode;
             if node.var_comp_type == VarType::Constant{
@@ -839,6 +976,8 @@ fn compile(statement_vector: &vector::Vec<Stmt>, symbol_vector: &vector::Vec<str
                 debug_dump_expression(&node.expression, symbol_vector, stdout);
             }
             string::append_str(stdout,"\n\r", 2);
+            index = index + 1;
+            continue;
         } else{
             for i in 0 as u32 .. 3{
                 console::println_i64(statement_vector.array[index + i].statement_type as i64);
@@ -847,6 +986,5 @@ fn compile(statement_vector: &vector::Vec<Stmt>, symbol_vector: &vector::Vec<str
 
             process::throw("--UNEXPECTED STATEMENT--");
         }
-        index = index + 1;
     }
 }

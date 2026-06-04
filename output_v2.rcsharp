@@ -1,0 +1,1747 @@
+struct Argument{
+	name: u16
+	type: Type
+}
+struct EnumField{
+	name: u16
+	has_value: bool
+	value: Expression
+}
+struct HintNode{
+	name: u16
+	expressions: vector::Vec<Expression>
+}
+struct FnNode{
+	name: u16
+	arguments: vector::Vec<Argument>
+	return_type: &Type
+	generic: vector::Vec<u16>
+	nodes: vector::Vec<Stmt>
+}
+struct EnumNode{
+	name: u16
+	enum_type: &Type
+	fields: vector::Vec<EnumField>
+}
+struct StructNode{
+	name: u16
+	fields: vector::Vec<Argument>
+	generic: vector::Vec<u16>
+}
+struct IfStmt{
+	cond: Expression
+	then_body: vector::Vec<Stmt>
+	else_body: vector::Vec<Stmt>
+}
+struct LoopStmt{
+	body: vector::Vec<Stmt>
+}
+struct WhileStmt{
+	cond: Expression
+	body: vector::Vec<Stmt>
+}
+struct DoWhileStmt{
+	cond: Expression
+	body: vector::Vec<Stmt>
+}
+struct ForStmt{
+	iter: Expression
+	in_expr: Expression
+	body: vector::Vec<Stmt>
+}
+struct NamespaceNode{
+	name: u16
+	nodes: vector::Vec<Stmt>
+}
+struct BlockStmt{
+	body: vector::Vec<Stmt>
+}
+struct ReturnNode{
+	has_value: bool
+	expression: Expression
+}
+struct ExpressionNode{
+	expression: Expression
+}
+enum VarType{
+	Stack
+	Static
+	Constant
+}
+struct DeclarationNode{
+	name: u16
+	has_value: bool
+	expression: Expression
+	var_type: Type
+	var_comp_type: VarType
+}
+enum StatementType{
+	CompilerHint
+	VarDec
+	Expression
+	If
+	Loop
+	WhileLoop
+	DoWhileLoop
+	ForLoop
+	Break
+	Continue
+	Return
+	Function
+	Struct
+	Enum
+	Namespace
+	Impl
+	TraitDeclaration
+	Block
+	Debug
+	CompilerDud
+	Attribute
+}
+struct Stmt{
+	statement_type: StatementType
+	node_ptr: &void
+}
+fn expect(tokens: &TokenData, index: &u32, len: u32, expected: TokenType, error_msg: &i8){
+>>>	
+}
+fn skip_nested(tokens: &TokenData, index: &u32, len: u32, open: TokenType, close: TokenType){
+>>>	
+	let nesting : i32 = 1
+}
+fn parse_argument_comma(token_array: &TokenData, index: &u32, len: u32){
+	let output : vector::Vec<Argument> = 
+	return output
+}
+fn parse_generic_params(token_array: &TokenData, index: &u32, len: u32){
+	let generics : vector::Vec<u16> = 
+	return generics
+}
+fn parse_struct_fields(token_array: &TokenData, index: &u32, len: u32){
+	let fields : vector::Vec<Argument> = 
+>>>	
+>>>	
+	return fields
+}
+fn parse_enum_fields(token_array: &TokenData, index: &u32, len: u32){
+	let fields : vector::Vec<EnumField> = 
+>>>	
+>>>	
+	return fields
+}
+fn is_expression_starter(token: TokenType){
+	return 
+}
+fn parse_body(token_array: &TokenData, token_len: u32, symbol_vector: &vector::Vec<string::String>, statement_vector: &vector::Vec<Stmt>){
+	let len : u32 = token_len
+	let tokens : &TokenData = token_array
+	let index : u32 = 0
+}
+fn parse(token_array: &TokenData, token_len: u32, symbol_vector: &vector::Vec<string::String>, statement_vector: &vector::Vec<Stmt>){
+	let index : u32 = 0
+	let mod_index : u32 = NO_MODIFIER
+	let len : u32 = token_len
+	let tokens : &TokenData = token_array
+}
+fn main(){
+>>>	
+}
+fn rcsharp_compile(input_file_path: &i8, output_file_path: &i8){
+	let buffer : &i8 = 
+	let file_name_start : &i8
+	let len : i32 = 
+	let env_path_len : i32 = 
+>>>	
+	let ilen : i32 = 
+	let olen : i32 = 
+	let base_env : string::String = 
+>>>	
+	let file_stack : vector::Vec<string::String> = 
+>>>	
+>>>	
+	let main_statement_vector : vector::Vec<Stmt> = 
+	let symbol_vector : vector::Vec<string::String> = 
+	let file_index : u32 = 0
+>>>	
+>>>	
+>>>	
+>>>	
+>>>	
+>>>	
+	let stdout : string::String = 
+>>>	
+>>>	
+>>>	
+}
+fn debug_dump_type(expr: &Type, symbol_vector: &vector::Vec<string::String>, stdout: &string::String){
+	let sym_array : &string::String = 
+}
+fn debug_dump_expression(expr: &Expression, symbol_vector: &vector::Vec<string::String>, stdout: &string::String)
+fn compile_body(statement_vector: &vector::Vec<Stmt>, symbol_vector: &vector::Vec<string::String>, stdout: &string::String){
+	let index : u32 = 0
+	let len : u32 = 
+	let sym_array : &string::String = 
+}
+fn compile(statement_vector: &vector::Vec<Stmt>, symbol_vector: &vector::Vec<string::String>, stdout: &string::String){
+	let index : u32 = 0
+	let len : u32 = 
+	let sym_array : &string::String = 
+}
+#[no_lazy()]
+fn __chkstk()
+#[no_lazy()]
+fn _fltused(){
+	return 0
+}
+namespace process{
+#[DllImport("kernel32.dll")]
+#[no_return()]
+fn ExitProcess(code: i32)
+fn GetModuleFileNameA(hModule: &i8, lpFilename: &i8, nSize: u32)
+fn get_executable_path(){
+	let size : u32 = 260
+	let string : string::String = 
+	let len : u32 = 
+>>>	
+	return string
+}
+fn get_executable_env_path(){
+	let string : string::String = 
+	let index : i32 = 
+>>>	
+	return string
+}
+#[no_return()]
+fn throw(exception: &i8){
+	let len : i32 = 
+>>>	
+	let stdout_handle : &i8 = 
+>>>	
+>>>	
+>>>	
+}
+}
+namespace mem{
+struct PROCESS_HEAP_ENTRY{
+	lpData: &void
+	cbData: u32
+	cbOverhead: u8
+	iRegionIndex: u8
+	wFlags: u16
+	Block_hMem: &void
+	Block_dwReserved0: u32
+	Block_dwReserved1: u32
+	Block_dwReserved2: u32
+}
+#[DllImport("kernel32.dll")]
+fn GetProcessHeap()
+fn HeapAlloc(hHeap: &i32, dwFlags: i32, dwBytes: i64)
+fn HeapReAlloc(hHeap: &i32, dwFlags: i32, lpMem: &void, dwBytes: i64)
+fn HeapFree(hHeap: &i32, dwFlags: i32, lpMem: &void)
+fn HeapSize(hHeap: &i32, dwFlags: i32, lpMem: &i8)
+fn HeapWalk(hHeap: &i32, lpEntry: &PROCESS_HEAP_ENTRY)
+fn HeapLock(hHeap: &i32)
+fn HeapUnlock(hHeap: &i32)
+fn malloc(size: i64){
+	let ptr : &void = 
+	return ptr
+}
+fn realloc(ptr: &void, size: i64){
+	let new_ptr : &void = 
+	return new_ptr
+}
+fn free(ptr: &void)
+fn copy(src: &i8, dest: &i8, len: i64)
+fn compare(left: &i8, right: &i8, len: i64){
+	return 0
+}
+fn fill(val: i8, dest: &i8, len: i64){
+>>>	
+}
+fn zero_fill(dest: &i8, len: i64){
+>>>	
+}
+fn default_fill(val: T, dest: &T, len: i64)
+fn get_total_allocated_memory_external(){
+	let hHeap : &i32 = 
+	let total_size : i64 = 0
+	let entry : PROCESS_HEAP_ENTRY
+>>>	
+>>>	
+	return total_size
+}
+}
+namespace list{
+struct List{
+	head: &ListNode<T>
+	foot: &ListNode<T>
+	length: u32
+}
+struct ListNode{
+	data: T
+	next_node: &ListNode<T>
+}
+fn new(){
+	let list : List<T>
+>>>	
+>>>	
+>>>	
+	return list
+}
+fn new_node(list: &ListNode<T>){
+>>>	
+>>>	
+}
+fn extend(list: &List<T>, data: T){
+	let node_to_add : &ListNode<T> = 
+>>>	
+>>>	
+>>>	
+}
+fn walk(list: &List<T>){
+	let l : u32 = 
+	let ptr : &ListNode<T> = 
+	return l
+}
+fn free(list: &List<T>){
+	let current : &ListNode<T> = 
+>>>	
+>>>	
+>>>	
+}
+}
+namespace vector{
+struct Vec{
+	array: &T
+	length: u32
+	capacity: u32
+}
+fn new(){
+	let vec : Vec<T> = 
+	return vec
+}
+#[ExtentionOf(Vec)]
+fn push(vec: &Vec<T>, data: T){
+>>>	
+>>>	
+}
+#[ExtentionOf(Vec)]
+fn push_bulk(vec: &Vec<T>, data: &T, data_len: i32)
+#[ExtentionOf(Vec)]
+fn remove_at(vec: &Vec<T>, index: u32){
+	let i : u32 = index
+>>>	
+}
+#[ExtentionOf(Vec)]
+fn free(vec: &Vec<T>){
+>>>	
+>>>	
+>>>	
+}
+}
+namespace console{
+#[DllImport("kernel32.dll")]
+fn AllocConsole()
+fn GetStdHandle(nStdHandle: i32)
+fn FreeConsole()
+fn WriteConsoleA(hConsoleOutput: &i8, lpBuffer: &i8, nNumberOfCharsToWrite: i32, lpNumberOfCharsWritten: &i32, lpReserved: &i8)
+fn get_stdout(){
+	let stdout_handle : &i8 = 
+	return stdout_handle
+}
+fn write(buffer: &i8, len: i32){
+	let chars_written : i32
+>>>	
+}
+fn write_string(str: &string::String){
+	let chars_written : i32
+>>>	
+}
+fn writeln(buffer: &i8, len: i32){
+>>>	
+	let cw : i32
+	let nl : i8 = 10
+>>>	
+}
+fn print_char(n: i8){
+	let b : i8 = n
+>>>	
+}
+fn println_i64(n: i64)
+fn println_u64(n: u64){
+	let buffer : &i8 = 
+	let i : i32 = 20
+	let mut_n : u64 = n
+>>>	
+	let start_ptr : &i8 = 
+	let len : i32 = 
+>>>	
+}
+fn println_f64(n: f64){
+	let PRECISION : i32 = 6
+	let mut_n : f64 = n
+	let rounder : f64 = 0.5
+>>>	
+	let integer_part : u64 = 
+	let fractional_part : f64 = 
+>>>	
+>>>	
+}
+}
+namespace string{
+struct String{
+	data: &i8
+	len: i32
+}
+fn from_c_string(c_string: &i8){
+	let len : i32 = 
+	let x : String = 
+>>>	
+>>>	
+	return x
+}
+fn from_data(data: &i8, len: i32){
+	let x : String = 
+>>>	
+>>>	
+	return x
+}
+fn empty(){
+	let x : String = 
+	return x
+}
+fn with_size(size: i32){
+	let x : String = 
+>>>	
+	return x
+}
+#[ExtentionOf(String)]
+fn clone(src: &String){
+	let len : i32 = 
+	let x : String = 
+>>>	
+>>>	
+	return x
+}
+#[ExtentionOf(String)]
+fn concat_with_c_string(src_string: &String, c_string: &i8){
+	let c_string_len : i32 = 
+	let new_len : i32 = 
+	let combined : &i8 = 
+>>>	
+>>>	
+>>>	
+	let str : String = 
+	return str
+}
+#[ExtensionOf(String)]
+fn append_str(src_string: &String, c_string: &i8, c_string_len: i32){
+	let new_len : i32 = 
+	let combined : &i8 = 
+>>>	
+>>>	
+>>>	
+>>>	
+>>>	
+>>>	
+}
+#[ExtensionOf(String)]
+fn append(src_string: &String, ch: i8){
+	let new_len : i32 = 
+	let combined : &i8 = 
+>>>	
+>>>	
+>>>	
+>>>	
+>>>	
+>>>	
+}
+#[ExtentionOf(String)]
+fn equal(first: &String, second: &String){
+	return 
+}
+#[ExtentionOf(String)]
+fn free(str: &String){
+>>>	
+>>>	
+}
+#[ExtentionOf(String)]
+fn as_c_string_stalloc(string: &String, stallocd_buffer: &i8){
+>>>	
+>>>	
+}
+}
+namespace char_utils{
+fn is_alnum(c: i8){
+	return
+}
+fn is_alpha(c: i8){
+	return
+}
+fn is_cntrl(c: i8){
+	return
+}
+fn is_digit(c: i8){
+	return
+}
+fn is_graph(c: i8){
+	return
+}
+fn is_lower(c: i8){
+	return
+}
+fn is_print(c: i8){
+	return
+}
+fn is_punct(c: i8){
+	return
+}
+fn is_space(c: i8){
+	return
+}
+fn is_upper(c: i8){
+	return
+}
+fn is_xdigit(c: i8){
+	return
+}
+fn to_lower(c: i8){
+	return c
+}
+fn to_upper(c: i8){
+	return c
+}
+}
+namespace string_utils{
+fn c_str_copy(dest: &i8, src: &i8){
+	let i : i32 = 0
+	return dest
+}
+fn c_str_n_copy(dest: &i8, src: &i8, n: i32){
+	let i : i32 = 0
+	return dest
+}
+fn insert(src1: &i8, src2: &i8, index: i32){
+	let len1 : i32 = 
+	let len2 : i32 = 
+	let output : &i8 = 
+>>>	
+>>>	
+>>>	
+>>>	
+	return output
+}
+fn c_str_len(str: &i8){
+	let len : i32 = 0
+	return len
+}
+}
+namespace stdlib{
+fn atoi(str: &i8){
+	let res : i32 = 0
+	let sign : i32 = 1
+	let i : i32 = 0
+	return 
+}
+fn str_to_l(str: &i8, endptr: &&i8, base: i32){
+	let i : i32 = 0
+	let sign : i64 = 1
+	let b : i32 = base
+	let result : i64 = 0
+	let digit_val : i32
+	return 
+}
+fn srand(seed: u32){
+>>>	
+}
+fn rand(){
+>>>	
+	return 
+}
+}
+namespace fs{
+#[DllImport("kernel32.dll")]
+fn CreateFileA(lpFileName: &i8, dwDesiredAccess: u32, dwShareMode: u32, lpSecurityAttributes: &i8, dwCreationDisposition: u32, dwFlagsAndAttributes: u32, hTemplateFile: &i8)
+fn WriteFile(hFile: &void, lpBuffer: &i8, nNumberOfBytesToWrite: u32, lpNumberOfBytesWritten: &u32, lpOverlapped: &i8)
+fn ReadFile(hFile: &void, lpBuffer: &i8, nNumberOfBytesToRead: u32, lpNumberOfBytesRead: &u32, lpOverlapped: &i8)
+fn GetFileSizeEx(hFile: &void, lpFileSize: &i64)
+fn CloseHandle(hObject: &void)
+fn DeleteFileA(lpFileName: &i8)
+fn GetFileAttributesA(lpFileName: &i8)
+fn GetFullPathNameA(lpFileName: &i8, nBufferLength: i32, lpBuffer: &i8, lpFilePart: &i8)
+fn PathCombineA(pszDest: &i8, pszDir: &i8, pszFile: &i8)
+fn write_to_file(path: &i8, content: &i8, content_len: u32){
+	let CREATE_ALWAYS : u32 = 2
+	let GENERIC_WRITE : u32 = 0x40000000
+	let FILE_ATTRIBUTE_NORMAL : u32 = 0x80
+	let hFile : &void = 
+	let bytes_written : u32 = 0
+	let success : i32 = 
+>>>	
+	return 
+}
+fn read_full_file_as_string(path: &i8){
+	let GENERIC_READ : u32 = 0x80000000
+	let OPEN_EXISTING : u32 = 3
+	let hFile : &void = 
+	let file_size : i64 = 0
+	let buffer : string::String = 
+	let bytes_read : u32 = 0
+	let success : i32 = 
+>>>	
+>>>	
+>>>	
+	return buffer
+}
+fn create_file(path: &i8){
+	let hFile : &void = 
+>>>	
+	return 1
+}
+fn delete_file(path: &i8){
+	return 
+}
+fn file_exists(path: &i8){
+	let INVALID_FILE_ATTRIBUTES : u32 = 0xFFFFFFFF
+	let attributes : u32 = 
+	return 
+}
+}
+namespace tests{
+fn run(){
+	let pre_test_mem : i64 = 
+>>>	
+>>>	
+>>>	
+>>>	
+>>>	
+>>>	
+>>>	
+>>>	
+>>>	
+	let post_test_mem : i64 = 
+	let delta : i64 = 
+>>>	
+>>>	
+}
+fn mem_test(){
+>>>	
+	let size : i64 = 16
+	let buffer1 : &i8 = 
+>>>	
+>>>	
+	let buffer2 : &i8 = 
+>>>	
+>>>	
+>>>	
+>>>	
+>>>	
+}
+fn string_utils_test(){
+>>>	
+	let inserted : &i8 = 
+	let expected : &i8 = "abc"
+	let i : i32 = 0
+>>>	
+>>>	
+}
+fn string_test(){
+>>>	
+	let s1 : string::String = 
+	let s2 : string::String = 
+	let s3 : string::String = 
+	let s4 : string::String = 
+	let s5 : string::String = 
+>>>	
+>>>	
+>>>	
+>>>	
+>>>	
+>>>	
+}
+fn vector_test(){
+>>>	
+	let v : vector::Vec<i8> = 
+>>>	
+>>>	
+>>>	
+>>>	
+>>>	
+	let data_to_push : &i8 = "AB"
+>>>	
+>>>	
+>>>	
+}
+fn list_test(){
+>>>	
+	let l : list::List<i32> = 
+>>>	
+>>>	
+>>>	
+	let current : &list::ListNode<i32> = 
+>>>	
+>>>	
+>>>	
+>>>	
+}
+fn process_test(){
+>>>	
+	let full_path : string::String = 
+	let env_path : string::String = 
+>>>	
+>>>	
+>>>	
+>>>	
+>>>	
+>>>	
+>>>	
+}
+fn console_test(){
+>>>	
+>>>	
+>>>	
+>>>	
+>>>	
+>>>	
+>>>	
+>>>	
+>>>	
+>>>	
+>>>	
+>>>	
+}
+fn fs_test(){
+>>>	
+	let data : string::String = 
+	let env_path : string::String = 
+	let new_file_path : string::String = 
+	let c_string : &i8 = 
+>>>	
+>>>	
+>>>	
+>>>	
+>>>	
+	let read : string::String = 
+>>>	
+>>>	
+>>>	
+>>>	
+>>>	
+>>>	
+}
+fn consume_while(file: &string::String, iterator: &i32, condition: &fn(i8) : bool)
+fn not_new_line(c: i8){
+	return 
+}
+fn valid_name_token(c: i8){
+	return 
+}
+fn is_valid_number_token(c: i8){
+	return 
+}
+enum LexerTokens{
+	String
+}
+fn funny(){
+	let path : &i8 = "D:\\Projects\\rcsharp\\src_base_structs.rcsharp"
+	let file : string::String = 
+	let char : i8
+	let next_char : i8
+	let index : i32
+	let data : vector::Vec<string::String> = 
+	let tokens : vector::Vec<LexerTokens> = 
+>>>	
+>>>	
+}
+}
+namespace window{
+enum WM{
+	NULL: 
+	CREATE: 
+	DESTROY: 
+	MOVE: 
+	SIZE: 
+	ACTIVATE: 
+	SETFOCUS: 
+	KILLFOCUS: 
+	ENABLE: 
+	SETREDRAW: 
+	SETTEXT: 
+	GETTEXT: 
+	GETTEXTLENGTH: 
+	PAINT: 
+	CLOSE: 
+	QUERYENDSESSION: 
+	QUERYOPEN: 
+	ENDSESSION: 
+	QUIT: 
+	ERASEBKGND: 
+	SYSCOLORCHANGE: 
+	SHOWWINDOW: 
+	WININICHANGE: 
+	SETTINGCHANGE: 
+	DEVMODECHANGE: 
+	ACTIVATEAPP: 
+	FONTCHANGE: 
+	TIMECHANGE: 
+	CANCELMODE: 
+	SETCURSOR: 
+	MOUSEACTIVATE: 
+	CHILDACTIVATE: 
+	QUEUESYNC: 
+	GETMINMAXINFO: 
+	PAINTICON: 
+	ICONERASEBKGND: 
+	NEXTDLGCTL: 
+	SPOOLERSTATUS: 
+	DRAWITEM: 
+	MEASUREITEM: 
+	DELETEITEM: 
+	VKEYTOITEM: 
+	CHARTOITEM: 
+	SETFONT: 
+	GETFONT: 
+	SETHOTKEY: 
+	GETHOTKEY: 
+	QUERYDRAGICON: 
+	COMPAREITEM: 
+	GETOBJECT: 
+	COMPACTING: 
+	COMMNOTIFY: 
+	WINDOWPOSCHANGING: 
+	WINDOWPOSCHANGED: 
+	POWER: 
+	COPYDATA: 
+	CANCELJOURNAL: 
+	NOTIFY: 
+	INPUTLANGCHANGEREQUEST: 
+	INPUTLANGCHANGE: 
+	TCARD: 
+	HELP: 
+	USERCHANGED: 
+	NOTIFYFORMAT: 
+	CONTEXTMENU: 
+	STYLECHANGING: 
+	STYLECHANGED: 
+	DISPLAYCHANGE: 
+	GETICON: 
+	SETICON: 
+	NCCREATE: 
+	NCDESTROY: 
+	NCCALCSIZE: 
+	NCHITTEST: 
+	NCPAINT: 
+	NCACTIVATE: 
+	GETDLGCODE: 
+	SYNCPAINT: 
+	NCMOUSEMOVE: 
+	NCLBUTTONDOWN: 
+	NCLBUTTONUP: 
+	NCLBUTTONDBLCLK: 
+	NCRBUTTONDOWN: 
+	NCRBUTTONUP: 
+	NCRBUTTONDBLCLK: 
+	NCMBUTTONDOWN: 
+	NCMBUTTONUP: 
+	NCMBUTTONDBLCLK: 
+	NCXBUTTONDOWN: 
+	NCXBUTTONUP: 
+	NCXBUTTONDBLCLK: 
+	INPUT_DEVICE_CHANGE: 
+	INPUT: 
+	KEYFIRST: 
+	KEYDOWN: 
+	KEYUP: 
+	CHAR: 
+	DEADCHAR: 
+	SYSKEYDOWN: 
+	SYSKEYUP: 
+	SYSCHAR: 
+	SYSDEADCHAR: 
+	UNICHAR: 
+	KEYLAST: 
+	INITDIALOG: 
+	COMMAND: 
+	SYSCOMMAND: 
+	TIMER: 
+	HSCROLL: 
+	VSCROLL: 
+	INITMENU: 
+	INITMENUPOPUP: 
+	MENUSELECT: 
+	MENUCHAR: 
+	ENTERIDLE: 
+	MENURBUTTONUP: 
+	MENUDRAG: 
+	MENUGETOBJECT: 
+	UNINITMENUPOPUP: 
+	MENUCOMMAND: 
+	CHANGEUISTATE: 
+	UPDATEUISTATE: 
+	QUERYUISTATE: 
+	CTLCOLORMSGBOX: 
+	CTLCOLOREDIT: 
+	CTLCOLORLISTBOX: 
+	CTLCOLORBTN: 
+	CTLCOLORDLG: 
+	CTLCOLORSCROLLBAR: 
+	CTLCOLORSTATIC: 
+	MOUSEFIRST: 
+	MOUSEMOVE: 
+	LBUTTONDOWN: 
+	LBUTTONUP: 
+	LBUTTONDBLCLK: 
+	RBUTTONDOWN: 
+	RBUTTONUP: 
+	RBUTTONDBLCLK: 
+	MBUTTONDOWN: 
+	MBUTTONUP: 
+	MBUTTONDBLCLK: 
+	MOUSEWHEEL: 
+	XBUTTONDOWN: 
+	XBUTTONUP: 
+	XBUTTONDBLCLK: 
+	MOUSEHWHEEL: 
+	MOUSELAST: 
+	PARENTNOTIFY: 
+	ENTERMENULOOP: 
+	EXITMENULOOP: 
+	NEXTMENU: 
+	SIZING: 
+	CAPTURECHANGED: 
+	MOVING: 
+	POWERBROADCAST: 
+	DEVICECHANGE: 
+	MDICREATE: 
+	MDIDESTROY: 
+	MDIACTIVATE: 
+	MDIRESTORE: 
+	MDINEXT: 
+	MDIMAXIMIZE: 
+	MDITILE: 
+	MDICASCADE: 
+	MDIICONARRANGE: 
+	MDIGETACTIVE: 
+	MDISETMENU: 
+	ENTERSIZEMOVE: 
+	EXITSIZEMOVE: 
+	DROPFILES: 
+	MDIREFRESHMENU: 
+	DPICHANGED: 
+	THEMECHANGED: 
+	CLIPBOARDUPDATE: 
+	USER: 
+	APP: 
+}
+enum CS{
+	VREDRAW: 
+	HREDRAW: 
+	DBLCLKS: 
+	OWNDC: 
+	CLASSDC: 
+	PARENTDC: 
+	NOCLOSE: 
+	SAVEBITS: 
+	BYTEALIGNCLIENT: 
+	BYTEALIGNWINDOW: 
+	GLOBALCLASS: 
+	IME: 
+	DROPSHADOW: 
+}
+enum WS{
+	OVERLAPPED: 
+	POPUP: 
+	CHILD: 
+	MINIMIZE: 
+	VISIBLE: 
+	DISABLED: 
+	CLIPSIBLINGS: 
+	CLIPCHILDREN: 
+	MAXIMIZE: 
+	CAPTION: 
+	BORDER: 
+	DLGFRAME: 
+	VSCROLL: 
+	HSCROLL: 
+	SYSMENU: 
+	THICKFRAME: 
+	GROUP: 
+	TABSTOP: 
+	MINIMIZEBOX: 
+	MAXIMIZEBOX: 
+	TILED: 
+	ICONIC: 
+	SIZEBOX: 
+	TILEDWINDOW: 
+	OVERLAPPEDWINDOW: 
+	POPUPWINDOW: 
+	CHILDWINDOW: 
+}
+enum WS_EX{
+	DLGMODALFRAME: 
+	NOPARENTNOTIFY: 
+	TOPMOST: 
+	ACCEPTFILES: 
+	TRANSPARENT: 
+	MDICHILD: 
+	TOOLWINDOW: 
+	WINDOWEDGE: 
+	CLIENTEDGE: 
+	CONTEXTHELP: 
+	RIGHT: 
+	LEFT: 
+	RTLREADING: 
+	LTRREADING: 
+	LEFTSCROLLBAR: 
+	RIGHTSCROLLBAR: 
+	CONTROLPARENT: 
+	STATICEDGE: 
+	APPWINDOW: 
+	LAYERED: 
+	NOINHERITLAYOUT: 
+	NOREDIRECTIONBITMAP: 
+	LAYOUTRTL: 
+	COMPOSITED: 
+	NOACTIVATE: 
+	OVERLAPPEDWINDOW: 
+	PALETTEWINDOW: 
+}
+enum SW{
+	HIDE: 
+	SHOWNORMAL: 
+	NORMAL: 
+	SHOWMINIMIZED: 
+	SHOWMAXIMIZED: 
+	MAXIMIZE: 
+	SHOWNOACTIVATE: 
+	SHOW: 
+	MINIMIZE: 
+	SHOWMINNOACTIVE: 
+	SHOWNA: 
+	RESTORE: 
+	SHOWDEFAULT: 
+	FORCEMINIMIZE: 
+	MAX: 
+}
+enum SYS_COLOR{
+	SCROLLBAR: 
+	BACKGROUND: 
+	DESKTOP: 
+	ACTIVECAPTION: 
+	INACTIVECAPTION: 
+	MENU: 
+	WINDOW: 
+	WINDOWFRAME: 
+	MENUTEXT: 
+	WINDOWTEXT: 
+	CAPTIONTEXT: 
+	ACTIVEBORDER: 
+	INACTIVEBORDER: 
+	APPWORKSPACE: 
+	HIGHLIGHT: 
+	HIGHLIGHTTEXT: 
+	BTNFACE: 
+	THREEDFACE: 
+	BTNSHADOW: 
+	THREEDSHADOW: 
+	GRAYTEXT: 
+	BTNTEXT: 
+	INACTIVECAPTIONTEXT: 
+	BTNHIGHLIGHT: 
+	THREEDHIGHLIGHT: 
+	BTNHILIGHT: 
+	THREEDHILIGHT: 
+	THREEDDKSHADOW: 
+	THREEDLIGHT: 
+	INFOTEXT: 
+	INFOBK: 
+	HOTLIGHT: 
+	GRADIENTACTIVECAPTION: 
+	GRADIENTINACTIVECAPTION: 
+	MENUHILIGHT: 
+	MENUBAR: 
+}
+#[DllImport("user32.dll")]
+fn RegisterClassA(lpWndClass: &WNDCLASSEXA)
+fn CreateWindowExA(dwExStyle: u32, lpClassName: &i8, lpWindowName: &i8, dwStyle: u32, x: i32, y: i32, nWidth: i32, nHeight: i32, hWndParent: &void, hMenu: &void, hInstance: &void, lpParam: &void)
+fn DefWindowProcA(hWnd: &void, Msg: u32, wParam: u64, lParam: u64)
+fn GetMessageA(lpMsg: &MSG, hWnd: &void, wMsgFilterMin: u32, wMsgFilterMax: u32)
+fn TranslateMessage(lpMsg: &MSG)
+fn DispatchMessageA(lpMsg: &MSG)
+fn PostQuitMessage(nExitCode: i32)
+fn BeginPaint(hWnd: &void, lpPaint: &PAINTSTRUCT)
+fn EndPaint(hWnd: &void, lpPaint: &PAINTSTRUCT)
+fn GetDC(hWnd: &void)
+fn ReleaseDC(hWnd: &void, hDC: &void)
+fn LoadCursorA(hInstance: &void, lpCursorName: &i8)
+fn LoadIconA(hInstance: &void, lpIconName: &i8)
+fn LoadImageA(hInst: &void, name: &i8, type: u32, cx: i32, cy: i32, fuLoad: u32)
+fn GetClientRect(hWnd: &void, lpRect: &RECT)
+fn InvalidateRect(hWnd: &void, lpRect: &RECT, bErase: i32)
+fn RegisterClassExA(lpwcx: &WNDCLASSEXA)
+fn ShowWindow(hWnd: &void, nCmdShow: i32)
+fn SetWindowLongPtrA(hWnd: &void, nIndex: i32, dwNewLong: &void)
+fn GetWindowLongPtrA(hWnd: &void, nIndex: i32)
+#[DllImport("kernel32.dll")]
+fn GetModuleHandleA(lpModuleName: &i8)
+#[DllImport("gdi32.dll")]
+fn CreateCompatibleDC(hdc: &void)
+fn SelectObject(hdc: &void, h: &void)
+fn BitBlt(hdc: &void, x: i32, y: i32, cx: i32, cy: i32, hdcSrc: &void, x1: i32, y1: i32, rop: u32)
+fn DeleteDC(hdc: &void)
+fn DeleteObject(hObject: &void)
+fn GetObjectA(h: &void, c: i32, pv: &BITMAP)
+fn SetStretchBltMode(hdc: &void, mode: i32)
+fn StretchBlt(hdcDest: &void, xDest: i32, yDest: i32, wDest: i32, hDest: i32, hdcSrc: &void, xSrc: i32, ySrc: i32, wSrc: i32, hSrc: i32, rop: u32)
+struct POINT{
+	x: i32
+	y: i32
+}
+struct MSG{
+	hwnd: &void
+	message: u32
+	wParam: u64
+	lParam: i64
+	time: u32
+	pt: POINT
+}
+struct WNDCLASSEXA{
+	cbSize: u32
+	style: u32
+	lpfnWndProc: &fn(&void, u32, u64, u64) : i64
+	cbClsExtra: i32
+	cbWndExtra: i32
+	hInstance: &void
+	hIcon: &void
+	hCursor: &void
+	hbrBackground: &void
+	lpszMenuName: &i8
+	lpszClassName: &i8
+	hIconSm: &void
+}
+struct RECT{
+	left: i32
+	top: i32
+	right: i32
+	bottom: i32
+}
+struct PAINTSTRUCT{
+	hdc: &void
+	fErase: i32
+	rcPaint: RECT
+	fRestore: i32
+	fIncUpdate: i32
+	rgbReserved: [i8; 32]
+}
+struct BITMAP{
+	bmType: i32
+	bmWidth: i32
+	bmHeight: i32
+	bmWidthBytes: i32
+	bmPlanes: u16
+	bmBitsPixel: u16
+	bmBits: &void
+}
+fn WindowProc(hWnd: &void, uMsg: u32, wParam: u64, lParam: u64){
+	return 
+}
+enum StartError{
+	Ok: 
+	GetModuleHandleFailed: 
+	RegisterClassFailed: 
+	CreateWindowFailed: 
+}
+fn load_bitmap_from_file(path: &i8){
+	return 
+}
+fn get_bitmap_dimensions(hBitmap: &void, width: &i32, height: &i32){
+	let bm : BITMAP
+>>>	
+>>>	
+>>>	
+}
+fn draw_bitmap(hdc: &void, hBitmap: &void, x: i32, y: i32){
+	let hMemDC : &void = 
+	let hOldBitmap : &void = 
+	let bm : BITMAP
+>>>	
+>>>	
+>>>	
+>>>	
+}
+fn draw_bitmap_stretched(hdc: &void, hBitmap: &void, x: i32, y: i32, width: i32, height: i32){
+	let hMemDC : &void = 
+	let hOldBitmap : &void = 
+	let bm : BITMAP
+>>>	
+>>>	
+>>>	
+>>>	
+>>>	
+}
+fn is_null(p: &void){
+	return 
+}
+fn start(){
+	let CW_USEDEFAULT : i32 = 0x80000000
+	let hInstance : &void = 
+	let className : &i8 = "MyWindowClass"
+	let wc : WNDCLASSEXA = 
+	let windowTitle : &i8 = "Hello, World!"
+	let hWnd : &void = 
+>>>	
+	let msg : MSG
+}
+fn start_image_window(imagePath: &i8){
+	let hInstance : &void = 
+	let local_hImage : &void = 
+	let imgW : i32 = 0
+	let imgH : i32 = 0
+>>>	
+	let className : &i8 = "BorderlessImageClass"
+	let wc : WNDCLASSEXA = 
+	let hWnd : &void = 
+>>>	
+>>>	
+	let rect : RECT
+>>>	
+>>>	
+	let msg : MSG
+}
+}
+enum TokenType{
+	LParen
+	RParen
+	LBrace
+	RBrace
+	LSquareBrace
+	RSquareBrace
+	Colon
+	DoubleColon
+	SemiColon
+	Comma
+	Dot
+	RangeDots
+	RangeDotsInclusive
+	FatArrow
+	Hint
+	Equal
+	Plus
+	Minus
+	Multiply
+	Divide
+	Modulo
+	LogicNot
+	LogicEqual
+	LogicNotEqual
+	LogicOr
+	LogicAnd
+	LogicGreater
+	LogicGreaterEqual
+	LogicLess
+	LogicLessEqual
+	BitNot
+	BitOr
+	BitAnd
+	BitXor
+	BitShiftL
+	BitShiftR
+	KeywordPub
+	KeywordInline
+	KeywordConst
+	KeywordExtern
+	KeywordMatch
+	KeywordFunction
+	KeywordLet
+	KeywordStatic
+	KeywordAs
+	KeywordIf
+	KeywordElse
+	KeywordTrait
+	KeywordImpl
+	KeywordStruct
+	KeywordEnum
+	KeywordLoop
+	KeywordFor
+	KeywordDo
+	KeywordIn
+	KeywordWhile
+	KeywordBreak
+	KeywordContinue
+	KeywordReturn
+	KeywordThis
+	KeywordOperator
+	KeywordNamespace
+	KeywordTrue
+	KeywordFalse
+	KeywordNull
+	Name
+	Integer
+	Decimal
+	String
+	Char
+	DummyToken
+}
+fn is_modifier(val: TokenType){
+	return 
+}
+fn token_type_to_string(val: &TokenData, symbol_vector: &vector::Vec<string::String>){
+	return 
+}
+struct TokenData{
+	token_type: TokenType
+	symbol_id: u16
+	file_offset: u32
+}
+fn insert_symbol(data: &i8, len: i32, symbols: &vector::Vec<string::String>){
+	let symbol_id : u16 = 
+>>>	
+	return symbol_id
+}
+fn handle_number(data: &i8, start: u32, end: u32, tokens: &vector::Vec<TokenData>, symbols: &vector::Vec<string::String>){
+	let symbol_id : u16 = 
+	let temp : TokenData = 
+>>>	
+}
+fn handle_decimal_number(data: &i8, start: u32, end: u32, tokens: &vector::Vec<TokenData>, symbols: &vector::Vec<string::String>){
+	let symbol_id : u16 = 
+	let temp : TokenData = 
+>>>	
+}
+fn handle_string(data: &i8, start: u32, end: u32, tokens: &vector::Vec<TokenData>, symbols: &vector::Vec<string::String>){
+	let len : i32 = 
+	let start_ptr : &i8 = 
+	let stack_buffer : &i8 = 
+	let index : u32 = 
+	let write_head : u32 = 0
+	let symbol_id : u16 = 
+	let temp : TokenData = 
+>>>	
+}
+fn handle_char(data: &i8, start: u32, end: u32, tokens: &vector::Vec<TokenData>, symbols: &vector::Vec<string::String>){
+	let len : i32 = 
+	let start_ptr : &i8 = 
+	let start_char : i8 = 
+	let temp : TokenData = 
+>>>	
+}
+fn handle_symbol(data: &i8, start: u32, end: u32, tokens: &vector::Vec<TokenData>, symbols: &vector::Vec<string::String>){
+	let len : i32 = 
+	let start_ptr : &i8 = 
+	let symbol_id : u16 = 
+	let temp : TokenData = 
+>>>	
+}
+fn lex(data: &string::String, token_vector: &vector::Vec<TokenData>, symbol_vector: &vector::Vec<string::String>){
+	let index : u32 = 0
+}
+struct IntegerExpr{
+	idx: u16
+}
+struct DecimalExpr{
+	idx: u16
+}
+struct CharExpr{
+	val: u16
+}
+struct NameExpr{
+	idx: u16
+}
+struct StringConstExpr{
+	idx: u16
+}
+struct TypeExpr{
+	val: Type
+}
+enum BinaryOp{
+	Add
+	Subtract
+	Multiply
+	Divide
+	Modulo
+	Assign
+	Equals
+	NotEqual
+	Less
+	LessEqual
+	Greater
+	GreaterEqual
+	And
+	Or
+	BitAnd
+	BitOr
+	BitXor
+	ShiftLeft
+	ShiftRight
+}
+struct BinaryOpExpr{
+	lval: Expression
+	rval: Expression
+	op: BinaryOp
+}
+enum UnaryOp{
+	Negate
+	Not
+	Deref
+	Pointer
+	BitFlip
+}
+struct UnaryOpExpr{
+	rval: Expression
+	op: UnaryOp
+}
+struct CastExpr{
+	rval: Expression
+	to: Type
+}
+struct MemberAccessExpr{
+	rval: Expression
+	member: u16
+}
+struct StaticAccessExpr{
+	rval: Expression
+	member: u16
+}
+struct NameWithGenericsExpr{
+	rval: Expression
+	generics: vector::Vec<Type>
+}
+struct CallExpr{
+	lval: Expression
+	expr: vector::Vec<Expression>
+	generics: vector::Vec<Type>
+}
+struct RangeExpr{
+	start: Expression
+	end: Expression
+	inclusive: bool
+}
+struct IndexExpr{
+	lval: Expression
+	index_expr: Expression
+}
+struct ArrayExpr{
+	expr: vector::Vec<Expression>
+}
+struct StructInitFieldExpr{
+	name: u16
+	expr: Expression
+}
+struct StructInitExpr{
+	type: Type
+	expr: vector::Vec<StructInitFieldExpr>
+}
+struct BoolExpr{
+	val: bool
+}
+enum ExpressionType{
+	Integer
+	Char
+	Decimal
+	Name
+	StringConst
+	Type
+	BinaryOp
+	UnaryOp
+	Cast
+	MemberAccess
+	StaticAccess
+	NameWithGenerics
+	Call
+	Index
+	Array
+	StructInit
+	Range
+	Boolean
+	NullPtr
+}
+struct Expression{
+	type: ExpressionType
+	val: &void
+}
+fn is_prefix_operator(token: TokenType){
+	return 
+}
+fn precedence(token: TokenType){
+	return 0
+}
+fn get_unary_op(token: TokenType){
+>>>	
+	return 
+}
+fn get_binary_op(token: TokenType){
+>>>	
+	return 
+}
+fn parse_expression_internal(tokens: &TokenData, index: &u32, len: u32, min_precedence: u8){
+	let expr : Expression
+	let tt : TokenType = 
+	return expr
+}
+fn parse_expression(token_array: &TokenData, index: &u32, len: u32){
+	return 
+}
+fn parse_expression_comma(token_array: &TokenData, index: &u32, len: u32){
+	let output : vector::Vec<Expression> = 
+	return output
+}
+struct Path{
+	data: [u16; 8]
+	len: u8
+}
+enum TypeType{
+	Named
+	Pointer
+	Function
+	NamespaceLink
+	Generic
+	ConstantSizeArray
+}
+struct NamedType{
+	idx: u16
+}
+struct PointerType{
+	deep: u8
+	inner: Type
+}
+struct FunctionType{
+	args: vector::Vec<Type>
+	return_type: Type
+}
+struct NamespaceLinkType{
+	path: Path
+	rval: Type
+}
+struct GenericType{
+	idx: u16
+	gen_args: vector::Vec<Type>
+}
+struct ConstantSizeArrayType{
+	inner: Type
+	size: Expression
+}
+struct Type{
+	type: TypeType
+	val: &void
+}
+fn wrap_in_pointers(base: Type, depth: u32){
+	let node : &PointerType = 
+>>>	
+>>>	
+	let wrapper : Type
+>>>	
+>>>	
+	return wrapper
+}
+fn parse_generic_args(token_array: &TokenData, index: &u32, len: u32){
+	let args : vector::Vec<Type> = 
+	return args
+}
+fn parse_types_comma(token_array: &TokenData, index: &u32, len: u32, stop: TokenType){
+	let output : vector::Vec<Type> = 
+	return output
+}
+fn parse_type_internal(token_array: &TokenData, index: &u32, len: u32){
+	let pointer_depth : u32 = 0
+	let t : Type
+	let tt : TokenType = 
+	return 
+}
+fn parse_type(token_array: &TokenData, index: &u32, len: u32){
+	return 
+}
+fn parse_types_comma_rparen(token_array: &TokenData, index: &u32, len: u32){
+	return 
+}
+fn free_type(t: Type){
+>>>	
+}
+struct Argument{
+	name: u16
+	type: Type
+}
+struct EnumField{
+	name: u16
+	has_value: bool
+	value: Expression
+}
+struct HintNode{
+	name: u16
+	expressions: vector::Vec<Expression>
+}
+struct FnNode{
+	name: u16
+	arguments: vector::Vec<Argument>
+	return_type: &Type
+	generic: vector::Vec<u16>
+	nodes: vector::Vec<Stmt>
+}
+struct EnumNode{
+	name: u16
+	enum_type: &Type
+	fields: vector::Vec<EnumField>
+}
+struct StructNode{
+	name: u16
+	fields: vector::Vec<Argument>
+	generic: vector::Vec<u16>
+}
+struct IfStmt{
+	cond: Expression
+	then_body: vector::Vec<Stmt>
+	else_body: vector::Vec<Stmt>
+}
+struct LoopStmt{
+	body: vector::Vec<Stmt>
+}
+struct WhileStmt{
+	cond: Expression
+	body: vector::Vec<Stmt>
+}
+struct DoWhileStmt{
+	cond: Expression
+	body: vector::Vec<Stmt>
+}
+struct ForStmt{
+	iter: Expression
+	in_expr: Expression
+	body: vector::Vec<Stmt>
+}
+struct NamespaceNode{
+	name: u16
+	nodes: vector::Vec<Stmt>
+}
+struct BlockStmt{
+	body: vector::Vec<Stmt>
+}
+struct ReturnNode{
+	has_value: bool
+	expression: Expression
+}
+struct ExpressionNode{
+	expression: Expression
+}
+enum VarType{
+	Stack
+	Static
+	Constant
+}
+struct DeclarationNode{
+	name: u16
+	has_value: bool
+	expression: Expression
+	var_type: Type
+	var_comp_type: VarType
+}
+enum StatementType{
+	CompilerHint
+	VarDec
+	Expression
+	If
+	Loop
+	WhileLoop
+	DoWhileLoop
+	ForLoop
+	Break
+	Continue
+	Return
+	Function
+	Struct
+	Enum
+	Namespace
+	Impl
+	TraitDeclaration
+	Block
+	Debug
+	CompilerDud
+	Attribute
+}
+struct Stmt{
+	statement_type: StatementType
+	node_ptr: &void
+}
+fn expect(tokens: &TokenData, index: &u32, len: u32, expected: TokenType, error_msg: &i8){
+>>>	
+}
+fn skip_nested(tokens: &TokenData, index: &u32, len: u32, open: TokenType, close: TokenType){
+>>>	
+	let nesting : i32 = 1
+}
+fn parse_argument_comma(token_array: &TokenData, index: &u32, len: u32){
+	let output : vector::Vec<Argument> = 
+	return output
+}
+fn parse_generic_params(token_array: &TokenData, index: &u32, len: u32){
+	let generics : vector::Vec<u16> = 
+	return generics
+}
+fn parse_struct_fields(token_array: &TokenData, index: &u32, len: u32){
+	let fields : vector::Vec<Argument> = 
+>>>	
+>>>	
+	return fields
+}
+fn parse_enum_fields(token_array: &TokenData, index: &u32, len: u32){
+	let fields : vector::Vec<EnumField> = 
+>>>	
+>>>	
+	return fields
+}
+fn is_expression_starter(token: TokenType){
+	return 
+}
+fn parse_body(token_array: &TokenData, token_len: u32, symbol_vector: &vector::Vec<string::String>, statement_vector: &vector::Vec<Stmt>){
+	let len : u32 = token_len
+	let tokens : &TokenData = token_array
+	let index : u32 = 0
+}
+fn parse(token_array: &TokenData, token_len: u32, symbol_vector: &vector::Vec<string::String>, statement_vector: &vector::Vec<Stmt>){
+	let index : u32 = 0
+	let mod_index : u32 = NO_MODIFIER
+	let len : u32 = token_len
+	let tokens : &TokenData = token_array
+}
+fn main(){
+>>>	
+}
+fn rcsharp_compile(input_file_path: &i8, output_file_path: &i8){
+	let buffer : &i8 = 
+	let file_name_start : &i8
+	let len : i32 = 
+	let env_path_len : i32 = 
+>>>	
+	let ilen : i32 = 
+	let olen : i32 = 
+	let base_env : string::String = 
+>>>	
+	let file_stack : vector::Vec<string::String> = 
+>>>	
+>>>	
+	let main_statement_vector : vector::Vec<Stmt> = 
+	let symbol_vector : vector::Vec<string::String> = 
+	let file_index : u32 = 0
+>>>	
+>>>	
+>>>	
+>>>	
+>>>	
+>>>	
+	let stdout : string::String = 
+>>>	
+>>>	
+>>>	
+}
+fn debug_dump_type(expr: &Type, symbol_vector: &vector::Vec<string::String>, stdout: &string::String){
+	let sym_array : &string::String = 
+}
+fn debug_dump_expression(expr: &Expression, symbol_vector: &vector::Vec<string::String>, stdout: &string::String)
+fn compile_body(statement_vector: &vector::Vec<Stmt>, symbol_vector: &vector::Vec<string::String>, stdout: &string::String){
+	let index : u32 = 0
+	let len : u32 = 
+	let sym_array : &string::String = 
+}
+fn compile(statement_vector: &vector::Vec<Stmt>, symbol_vector: &vector::Vec<string::String>, stdout: &string::String){
+	let index : u32 = 0
+	let len : u32 = 
+	let sym_array : &string::String = 
+}

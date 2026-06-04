@@ -639,6 +639,8 @@ namespace fs{
         fn CloseHandle(hObject: &void) : i32;
         fn DeleteFileA(lpFileName: &i8) : i32;
         fn GetFileAttributesA(lpFileName: &i8) : u32;
+        fn GetFullPathNameA(lpFileName: &i8, nBufferLength: i32, lpBuffer: &i8, lpFilePart: &i8) : i32;
+        fn PathCombineA(pszDest: &i8, pszDir: &i8, pszFile: &i8): &i8;
     }
     fn write_to_file(path: &i8, content: &i8, content_len: u32) : i32 {
         const CREATE_ALWAYS: u32 = 2;
