@@ -302,6 +302,9 @@ namespace console{
         }
     }
     fn write_string(str: &string::String){
+        if str.len == 0 {
+            return;
+        }
         let chars_written: i32;
         WriteConsoleA(get_stdout(), str.data, str.len, &chars_written, null);
         if str.len != chars_written{
@@ -391,112 +394,105 @@ namespace string{
     struct String{
         data: &i8,
         len: i32,
-    }
-    // USE ONLY WITH NULL TERMINATED STRINGS (from_c_string("...");)
-    fn from_c_string(c_string: &i8) : String{
-        const len: i32 = string_utils::c_str_len(c_string);
-        let x: String = String::{
-            len: len,
-            data: mem::malloc(size_of::<i8>() * (len + 1) as i64) as &i8
-        };
-        mem::copy(c_string, x.data, len as i64);
-        x.data[len] = 0;
-        return x;
+        capacity: i32,
     }
     fn from_data(data: &i8, len: i32) : String{
         let x: String = String::{
+            data: null,
             len: len,
-            data: mem::malloc(size_of::<i8>() * (len + 1) as i64) as &i8
+            capacity: len,
         };
-        mem::copy(data, x.data, len as i64);
-        x.data[len] = 0;
+        if len > 0 {
+            x.data = mem::malloc(len as i64) as &i8;
+            mem::copy(data, x.data, len as i64);
+            x.data[len] = 0;
+        }
         return x;
     }
+    // USE ONLY WITH NULL TERMINATED STRINGS (from_c_string("...");)
+    fn from_c_string(c_string: &i8) : String => from_data(c_string, string_utils::c_str_len(c_string));
     fn empty() : String {
         let x: String = String::{
             data: null,
-            len: 0
+            len: 0,
+            capacity: 0,
         };
         return x;
     }
     fn with_size(size: i32) : String{
         let x: String = String::{
-            len: size,
-            data: mem::malloc(size_of::<i8>() * (size + 1) as i64) as &i8,
+            data: null,
+            len: 0,
+            capacity: 0,
         };
-        mem::zero_fill(x.data, (size + 1) as i64);
+        if size > 0 {
+            x.data = mem::malloc((size + 1) as i64) as &i8;
+            mem::zero_fill(x.data, size as i64);
+        }
         return x;
     }
     #[ExtentionOf(String)]
     fn clone(src: &String) : String {
-        const len: i32 = src.len;
-        let x: String = String::{
-            len: src.len,
-            data: mem::malloc(size_of::<i8>() * (len + 1) as i64) as &i8
-        };
-        mem::copy(src.data, x.data, len as i64);
-        x.data[len] = 0;
-        return x;
-    }
-    #[ExtentionOf(String)]
-    fn concat_with_c_string(src_string: &String, c_string: &i8) : String {
-        const c_string_len : i32 = string_utils::c_str_len(c_string);
-        const new_len: i32 = c_string_len + src_string.len;
-        
-        const combined : &i8 = mem::malloc(size_of::<i8>() * (new_len + 1) as i64) as &i8;
-        
-        mem::copy(src_string.data, combined, src_string.len as i64);
-        mem::copy(c_string, (combined + src_string.len as i64), c_string_len as i64);
-        combined[new_len] = 0;
-
-        let str: String = String::{
-            data: combined,
-            len: new_len
-        };
-        return str;
+        return from_data(src.data, src.len);
     }
     #[ExtensionOf(String)]
-    fn append_str(src_string: &String, c_string: &i8, c_string_len: i32) {
-        const new_len: i32 = c_string_len + src_string.len;
+    fn reserve(str: &String, required_capacity: i32) {
+        if str.capacity >= required_capacity {
+            return;
+        }
+        let new_cap: i32 = 8;
+        if str.capacity != 0 { new_cap = str.capacity * 2; }
+        while new_cap < required_capacity {
+            new_cap = new_cap * 2;
+        }
+        let new_data: &i8 = mem::malloc(new_cap as i64) as &i8;
+        if str.len > 0 {
+            mem::copy(str.data, new_data, str.len as i64);
+        }
         
-        const combined: &i8 = mem::malloc(size_of::<i8>() * (new_len + 1) as i64) as &i8;
-        
-        mem::copy(src_string.data, combined, src_string.len as i64);
-        mem::copy(c_string, combined + src_string.len as i64, c_string_len as i64);
-        combined[new_len] = 0;
-        
-        mem::free(src_string.data as &void);
-        src_string.data = combined;
-        src_string.len = new_len;
+        if str.data != null {
+            mem::free(str.data as &void);
+        }
+        str.data = new_data;
+        str.capacity = new_cap;
+    }
+    #[ExtentionOf(String)]
+    fn append_c_string(src_string: &String, c_string: &i8) : String {
+        append_str(src_string, c_string, string_utils::c_str_len(c_string));
+    }
+    #[ExtensionOf(String)]
+    fn append_str(src_string: &String, buffer: &i8, buffer_len: i32) {
+        if buffer_len == 0 { return; }
+        reserve(src_string, src_string.len + buffer_len);
+        mem::copy(buffer, src_string.data + src_string.len as i64, buffer_len as i64);
+        src_string.len = src_string.len + buffer_len; 
     }
     #[ExtensionOf(String)]
     fn append(src_string: &String, ch: i8) {
-        const new_len: i32 = src_string.len + 1;
-        
-        const combined: &i8 = mem::malloc(size_of::<i8>() * (new_len + 1) as i64) as &i8;
-        
-        mem::copy(src_string.data, combined, src_string.len as i64);
-        combined[src_string.len as i64] = ch;
-        combined[new_len] = 0;
-        
-        mem::free(src_string.data as &void);
-        src_string.data = combined;
-        src_string.len = new_len;
+        reserve(src_string, src_string.len + 1);
+        src_string.data[src_string.len as i64] = ch;
+        src_string.len = src_string.len + 1; 
     }
     #[ExtentionOf(String)]
     fn equal(first: &String, second: &String) : bool{
         if first.len != second.len { return false; }
+        if first.len == 0 { return true; }
         return mem::compare(first.data, second.data, first.len as i64) == 0;
     }
     #[ExtentionOf(String)]
     fn free(str: &String){
-        mem::free(bitcast::<&void>(str.data));
+        if str.data != null {
+            mem::free(bitcast::<&void>(str.data));
+        }
         str.len = 0;
+        str.data = null;
     }
     // Use data only inside function where it was called, because stack will be "freed" upon leaving function and data will be corrupted
     #[ExtentionOf(String)]
     inline fn as_c_string_stalloc(string: &String, stallocd_buffer: &i8){
-        mem::copy(string.data, stallocd_buffer, string.len as i64);
+        if string.len > 0 {
+            mem::copy(string.data, stallocd_buffer, string.len as i64);
+        }
         stallocd_buffer[string.len] = 0;
     }
 }
@@ -781,7 +777,7 @@ namespace tests{
         if !string::equal(&s1, &s2) { process::throw("string_test: equal positive case failed"); }
         if string::equal(&s1, &s3) { process::throw("string_test: equal negative case failed"); }
 
-        let s4: string::String = string::concat_with_c_string(&s1, " world");
+        let s4: string::String = string::append_c_string(&s1, " world");
         let s5: string::String = string::from_c_string("hello world");
         
         if s4.len != 11 { process::throw("string_test: concat length failed"); }
@@ -897,7 +893,7 @@ namespace tests{
         console::write("fs_test: ", 9);
         let data : string::String = string::from_c_string("The quick brown fox jumps over crazy lost dog.");
         let env_path : string::String = process::get_executable_env_path();
-        let new_file_path: string::String = string::concat_with_c_string(&env_path, "test.txt");
+        let new_file_path: string::String = string::append_c_string(&env_path, "test.txt");
 
         const c_string : &i8 = stalloc::<i8>((new_file_path.len + 1) as i64);
         string::as_c_string_stalloc(&new_file_path, c_string);

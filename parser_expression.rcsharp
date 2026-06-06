@@ -34,7 +34,7 @@ pub struct IndexExpr { lval: Expression, index_expr: Expression }
 pub struct ArrayExpr { expr: vector::Vec<Expression> }
 
 pub struct StructInitFieldExpr { name: u16, expr: Expression }
-pub struct StructInitExpr { type: Type, expr: vector::Vec<StructInitFieldExpr> } // type::{x: 1, y: val::constant }
+pub struct StructInitExpr { type: Expression, expr: vector::Vec<StructInitFieldExpr> } // type::{x: 1, y: val::constant }
 pub struct BoolExpr { val: bool }
 
 pub enum ExpressionType { Integer, Char, Decimal, Name, StringConst, Type, BinaryOp, UnaryOp, Cast, MemberAccess, StaticAccess, NameWithGenerics, Call, Index, Array, StructInit, Range, Boolean, NullPtr }
@@ -269,6 +269,7 @@ fn parse_expression_internal(tokens: &TokenData, index: &u32, len: u32, min_prec
             } else if tokens[*index].token_type == TokenType::LBrace {
                 *index = *index + 1;
                 let struct_init: &StructInitExpr = mem::malloc(size_of::<StructInitExpr>()) as &StructInitExpr;
+                struct_init.type = expr;
                 struct_init.expr = vector::new::<StructInitFieldExpr>();
                 
                 while *index < len && tokens[*index].token_type != TokenType::RBrace {
