@@ -3,9 +3,22 @@
 #include("./parser_expression.rcsharp")
 #include("./src.rcsharp")
 pub const MAX_PATH_DEPTH: u32 = 8;
+pub const MAX_PATH_EX_DEPTH: u32 = 10;
 
-pub struct Path         { data: [u16; 8], len: u8 } 
-
+pub struct Path         { len: u8, data: [u16; 8] }
+pub struct PathEx         { len: u8, data: [u16; 12] }
+pub fn path_to_path_ex(path: &Path): PathEx {
+    let output: PathEx;
+    mem::copy(bitcast::<&i8>(&path.data), bitcast::<&i8>(&output.data), size_of::<u16>() * 8);
+    output.len = path.len;
+    return output;
+}
+pub fn path_to_path_ex_name(path: &Path, name: u16): PathEx {
+    let output: PathEx = path_to_path_ex(path);
+    output.data[output.len] = name;
+    output.len = output.len + 1;
+    return output;
+}
 pub enum TypeType       { Named, Pointer, Function, NamespaceLink, Generic, ConstantSizeArray }
 pub struct NamedType    { idx: u16 }                                        // type
 pub struct PointerType    { deep: u8, inner: Type }                          // &type

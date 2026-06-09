@@ -50,7 +50,7 @@ pub fn compile_to_file(args: &Args) -> CompileResult<()> {
 }
 pub fn compile(args: &Args) -> CompileResult<(CompilerContext, String)> {
     let mut ctx = CompilerContext::default();
-    //ctx.config.no_lazy_compile = true;
+    ctx.config.no_lazy_compile = true;
     if args.executable {
         ctx.config.compile_to = CompileOutputType::Executable;
     } else if args.is_dynamic_library {

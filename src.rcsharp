@@ -3,7 +3,63 @@
 #include("./parser_expression.rcsharp")
 #include("./parser_type.rcsharp")
 #include("./parser.rcsharp")
+fn main(){
+    rcsharp_compile("D:/Projects/rcsharp/src.rcsharp", "D:/Projects/rcsharp/output_v2.rcsharp");
+}
+struct Variable{
+    name: u32,
+}
+enum SymbolTableTag{ Function, Struct, Enum, Static, Constant }
+struct SymbolTableEntry {  tag: SymbolTableTag, path: PathEx, val: &void }
 
+struct EnumDefinedField    { name: u16, value: u64 }
+struct EnumSymbolTableEntry { representative_type: CompilerType, fields: vector::Vec<EnumDefinedField> }
+
+struct SymbolTable{
+    symbols: vector::Vec<SymbolTableEntry>,
+    symbol_vector: &vector::Vec<string::String>,
+}
+fn insert_symbol_into_table(table: &SymbolTable, entry: SymbolTableEntry){
+    vector::push::<SymbolTableEntry>(&table.symbols, entry);
+}
+struct Scope{
+    values: vector::Vec<Variable>,
+    scope_index: vector::Vec<u32>,
+}
+fn new_scope() : Scope{
+    let scope: Scope = Scope::{ 
+        values: vector::new::<Variable>(),
+        scope_index: vector::new::<u32>(),
+    };
+    return scope;
+}
+fn add_to_scope(val: Variable, scope: &Scope){
+    vector::push::<Variable>(&scope.values, val);
+}
+fn enter_scope(scope: &Scope){
+    vector::push::<u32>(&scope.scope_index, scope.values.length);
+}
+fn exit_scope(scope: &Scope){
+    let start_index: u32 = 0;
+    let end_index: u32 = scope.values.length;
+    if scope.scope_index.length != 0{
+        start_index = vector::pop::<u32>(&scope.scope_index);
+    }
+    let i: u32 = end_index - 1;
+    while i > start_index {
+        i = i - 1;
+        const var: Variable = vector::pop::<Variable>(&scope.values);
+    }
+}
+fn find_variable(name: u32, scope: &Scope) : &Variable{
+    const v_len: u32 = scope.values.length;
+    let i: u32 = scope.values.length - 1;
+    while i > 0{
+        i = i - 1;
+        const var: &Variable = &scope.values.array[i];
+    }
+    return null;
+}
 fn rcsharp_compile(input_file_path: &i8, output_file_path: &i8) {
     const buffer: &i8 = stalloc::<i8>(255);
     let file_name_start: &i8;
@@ -37,6 +93,7 @@ fn rcsharp_compile(input_file_path: &i8, output_file_path: &i8) {
         let statement_vector: vector::Vec<Stmt> = vector::new::<Stmt>();
         parse(token_vector.array, token_vector.length, &symbol_vector, &statement_vector);
         
+
         for idx in 0 as u32 .. statement_vector.length{
             const stmt: &Stmt = &statement_vector.array[idx];
             if stmt.statement_type == StatementType::CompilerHint{
@@ -309,7 +366,8 @@ fn debug_dump_expression(expr: &Expression, symbol_vector: &vector::Vec<string::
     }
     console::println_i64(expr.type as i64);
 }
-fn compile_body(statement_vector: &vector::Vec<Stmt>, symbol_vector: &vector::Vec<string::String>, stdout: &string::String) {
+
+fn compile_body(statement_vector: &vector::Vec<Stmt>, body_path: &Path, symbol_vector: &vector::Vec<string::String>, stdout: &string::String) {
     let index: u32 = 0;
     let len: u32 = statement_vector.length;
     const sym_array: &string::String = symbol_vector.array;
@@ -358,10 +416,10 @@ fn compile_body(statement_vector: &vector::Vec<Stmt>, symbol_vector: &vector::Ve
             string::append_str(stdout,"\tif ", 4);
             debug_dump_expression(&node.cond, symbol_vector, stdout);
             string::append_str(stdout," {\n", 3);
-            compile_body(&node.then_body, symbol_vector, stdout);
+            compile_body(&node.then_body, body_path, symbol_vector, stdout);
             if node.else_body.length != 0{
                 string::append_str(stdout,"\t} else {\n", 10);
-                compile_body(&node.else_body, symbol_vector, stdout);
+                compile_body(&node.else_body, body_path, symbol_vector, stdout);
                 string::append_str(stdout,"\t}\n", 3);
             }else{
                 string::append_str(stdout,"\t}\n", 3);
@@ -371,7 +429,7 @@ fn compile_body(statement_vector: &vector::Vec<Stmt>, symbol_vector: &vector::Ve
         } else if statement.statement_type == StatementType::Loop{
             const node: &LoopStmt = statement.node_ptr as &LoopStmt;
             string::append_str(stdout,"\tloop{\n", 7);
-            compile_body(&node.body, symbol_vector, stdout);
+            compile_body(&node.body, body_path, symbol_vector, stdout);
             string::append_str(stdout,"\t}\n", 3);
             index = index + 1;
             continue;
@@ -380,7 +438,7 @@ fn compile_body(statement_vector: &vector::Vec<Stmt>, symbol_vector: &vector::Ve
             string::append_str(stdout,"\twhile ", 7);
             debug_dump_expression(&node.cond, symbol_vector, stdout);
             string::append_str(stdout,"{\n", 2);
-            compile_body(&node.body, symbol_vector, stdout);
+            compile_body(&node.body, body_path, symbol_vector, stdout);
             string::append_str(stdout,"\t}\n", 3);
             index = index + 1;
             continue;
@@ -391,14 +449,14 @@ fn compile_body(statement_vector: &vector::Vec<Stmt>, symbol_vector: &vector::Ve
             string::append_str(stdout," in ", 4);
             debug_dump_expression(&node.in_expr, symbol_vector, stdout);
             string::append_str(stdout,"{\n", 2);
-            compile_body(&node.body, symbol_vector, stdout);
+            compile_body(&node.body, body_path, symbol_vector, stdout);
             string::append_str(stdout,"\t}\n", 3);
             index = index + 1;
             continue;
         } else if statement.statement_type == StatementType::DoWhileLoop{
             const node: &DoWhileStmt = statement.node_ptr as &DoWhileStmt;
             string::append_str(stdout,"\tdo{\n", 5);
-            compile_body(&node.body, symbol_vector, stdout);
+            compile_body(&node.body, body_path, symbol_vector, stdout);
             string::append_str(stdout,"\t}while ", 8);
             debug_dump_expression(&node.cond, symbol_vector, stdout);
             string::append_str(stdout,";\n", 2);
@@ -420,11 +478,11 @@ fn compile_body(statement_vector: &vector::Vec<Stmt>, symbol_vector: &vector::Ve
         process::throw("--UNEXPECTED STATEMENT-- BDOY");
     }
 }
-fn compile_internal(path: Path, statement_vector: &vector::Vec<Stmt>, symbol_vector: &vector::Vec<string::String>, stdout: &string::String) {
+fn compile_internal(path: Path, statement_vector: &vector::Vec<Stmt>, symbol_table: &SymbolTable, stdout: &string::String) {
     let index: u32 = 0;
     let len: u32 = statement_vector.length;
+    const symbol_vector: &vector::Vec<string::String> = symbol_table.symbol_vector;
     const sym_array: &string::String = symbol_vector.array;
-    
     let enums: vector::Vec<u64> = vector::new::<u64>();
     let structs: vector::Vec<u64> = vector::new::<u64>();
     let functions: vector::Vec<u64> = vector::new::<u64>();
@@ -469,8 +527,8 @@ fn compile_internal(path: Path, statement_vector: &vector::Vec<Stmt>, symbol_vec
             index = index + 1;
             continue;
         } else if statement.statement_type == StatementType::Function{
-            //index = index + 1;
-            //continue;
+            index = index + 1;
+            continue;
             const node: &FnNode = statement.node_ptr as &FnNode;
             string::append_str(stdout, "fn ", 3);
             string::append_str(stdout, sym_array[node.name].data, sym_array[node.name].len);
@@ -497,14 +555,15 @@ fn compile_internal(path: Path, statement_vector: &vector::Vec<Stmt>, symbol_vec
             string::append(stdout, ')');
             if node.nodes.length != 0{
                 string::append_str(stdout, "{\n", 2);
-                compile_body(&node.nodes, symbol_vector, stdout);
+                let path: Path = path;
+                compile_body(&node.nodes, &path, symbol_vector, stdout);
                 string::append(stdout, '}');
             }
             string::append(stdout, '\n');
             index = index + 1;
             continue;
         } else if statement.statement_type == StatementType::Struct{
-                        index = index + 1;
+            index = index + 1;
             continue;
             const node: &StructNode = statement.node_ptr as &StructNode;
             string::append_str(stdout, "struct ", 7);
@@ -533,20 +592,34 @@ fn compile_internal(path: Path, statement_vector: &vector::Vec<Stmt>, symbol_vec
             packed = packed | (q as u64);
             vector::push::<u64>(&enums, packed);
 
-            string::append_str(stdout, "enum ", 5);
-            string::append_str(stdout, sym_array[node.name].data, sym_array[node.name].len);
-            string::append_str(stdout, "{\n", 2);
+            let loc: Path = path;
+            let enum_path: PathEx = path_to_path_ex_name(&loc, node.name);
+            let sym_t_entry: SymbolTableEntry;
+            sym_t_entry.path = enum_path;
+            sym_t_entry.tag = SymbolTableTag::Enum;
+            let sym_entry: &EnumSymbolTableEntry = mem::malloc(size_of::<EnumSymbolTableEntry>()) as &EnumSymbolTableEntry;
+            sym_t_entry.val = bitcast::<&void>(sym_entry);
+
+            sym_entry.representative_type.kind = CompilerTypeKind::Primitive;
+            sym_entry.representative_type.data = DEFAULT_INTEGER_TYPE as &void;
+            if node.has_value{
+                sym_entry.representative_type = get_compiler_type(&node.enum_type, symbol_table);
+            }
+            sym_entry.fields = vector::new::<EnumDefinedField>();
+            let indexer: u64 = 0;
             for x in 0 as u32 .. node.fields.length{
                 const node: &EnumField = &node.fields.array[x];
-                string::append_str(stdout, "\t", 1);
-                string::append_str(stdout, sym_array[node.name].data, sym_array[node.name].len);
+                let edf: EnumDefinedField;
+                edf.name = node.name;
                 if node.has_value{
-                    string::append_str(stdout, ": ", 2);
-                    debug_dump_expression(&node.value, symbol_vector, stdout);
+                    indexer = constant_evaluate_expression(&node.value, symbol_table); // Is not as deep as i wanted yet TODO 
                 }
-                string::append(stdout, '\n');
+                edf.value = indexer;
+                indexer = indexer + 1;
+                vector::push::<EnumDefinedField>(&sym_entry.fields, edf);
             }
-            string::append_str(stdout, "}\n", 2);
+            insert_symbol_into_table(symbol_table, sym_t_entry);
+            
             index = index + 1;
             continue;
         } else if statement.statement_type == StatementType::Namespace{
@@ -560,7 +633,7 @@ fn compile_internal(path: Path, statement_vector: &vector::Vec<Stmt>, symbol_vec
             }
             path.data[path.len] = node.name;
             path.len = path.len + 1;
-            compile_internal(path, &node.nodes,symbol_vector, stdout);
+            compile_internal(path, &node.nodes, symbol_table, stdout);
             //string::append_str(stdout, "}\n", 2);
             index = index + 1;
             continue;
@@ -595,15 +668,95 @@ fn compile_internal(path: Path, statement_vector: &vector::Vec<Stmt>, symbol_vec
         process::throw("--UNEXPECTED STATEMENT--");
     }
 }
+fn constant_evaluate_expression(expr: &Expression, table: &SymbolTable) : u64{
+    return 1337;
+}
 fn compile(statement_vector: &vector::Vec<Stmt>, symbol_vector: &vector::Vec<string::String>, stdout: &string::String) {
-    FILL_STATIC_PRIMITIVE_TYPES_INFO();
-
+    STATIC_FILL_PRIMITIVE_TYPES_INFO();
+    let sym_table: SymbolTable;
+    sym_table.symbols = vector::new::<SymbolTableEntry>();
+    sym_table.symbol_vector = symbol_vector;
     let path: Path;
     path.len = 0;
-    compile_internal(path, statement_vector, symbol_vector, stdout);
+    compile_internal(path, statement_vector, &sym_table, stdout);
+
+    debug_dump_symbol_table(&sym_table, stdout);
 }
+fn debug_dump_path_ex(path: &PathEx, sym_array: &string::String, stdout: &string::String){
+    for i in 0 as u8 .. path.len{
+        string::append_str(stdout, sym_array[path.data[i]].data, sym_array[path.data[i]].len);
+        if i != path.len - 1{
+            string::append(stdout, '.');
+        }
+    }
+}
+fn debug_dump_path(path: &Path, sym_array: &string::String, stdout: &string::String){
+    for i in 0 as u8 .. path.len{
+        string::append_str(stdout, sym_array[path.data[i]].data, sym_array[path.data[i]].len);
+        if i != path.len - 1{
+            string::append(stdout, '.');
+        }
+    }
+}
+fn debug_dump_symbol_table(table: &SymbolTable, stdout: &string::String){
+    const len: u32 = table.symbols.length;
+    const ptr: &SymbolTableEntry = table.symbols.array;
+    const sym_array: &string::String = table.symbol_vector.array;
+    for i in 0 as u32 .. len{
+        if ptr[i].tag == SymbolTableTag::Enum{
+            continue;
+            const node: &EnumSymbolTableEntry = ptr[i].val as &EnumSymbolTableEntry;
+            let loc: PathEx = ptr[i].path;
+            loc.len = loc.len - 1;
+            string::append_str(stdout, "enum ", 5);
+            debug_dump_path_ex(&ptr[i].path, sym_array, stdout);
+            string::append_str(stdout, ": ", 2);
+            compiler_type_push(&node.representative_type, &loc, table, stdout);
+            string::append_str(stdout, "{\n", 2);
+            for x in 0 as u32 .. node.fields.length{
+                string::append_str(stdout, "\t", 1);
+                string::append_str(stdout, sym_array[node.fields.array[x].name].data, sym_array[node.fields.array[x].name].len);
+                string::append_str(stdout, "\n", 1);
+            }
+            string::append_str(stdout, "}\n", 2);
+            //string::append_str(stdout, sym_array[node.name].data, sym_array[node.name].len);
+            
+        }
+    }
+}
+fn get_compiler_type(type: &Type, table: &SymbolTable): CompilerType{
+    if type.type == TypeType::Named{
+        const node: &NamedType = type.val as &NamedType;
+        const str: &string::String = &table.symbol_vector.array[node.idx];
 
-
+        const p_idx: i32 = find_primitive_type(str.data, str.len);
+        if p_idx != -1{
+            let x: CompilerType = CompilerType::{
+                kind: CompilerTypeKind::Primitive,
+                data: bitcast::<&void>(&PRIMITIVE_TYPES_INFO[p_idx]),
+            };
+            return x;
+        }
+    }
+    let x: CompilerType = CompilerType::{
+        kind: CompilerTypeKind::Primitive,
+        data: bitcast::<&void>(DEFAULT_INTEGER_TYPE),
+    };
+    return x;
+}
+fn compiler_type_push(type: &CompilerType, path: &PathEx, symbol_table: &SymbolTable, stdout: &string::String){
+    if type.kind == CompilerTypeKind::Primitive{
+        const node: &PrimitiveTypeInfo = bitcast::<&PrimitiveTypeInfo>(type.data);
+        string::append_str(stdout, node.llvm_signature, string_utils::c_str_len(node.llvm_signature));
+    }
+}
+pub enum CompilerTypeKind{
+    Primitive,
+}
+pub struct CompilerType{
+    kind: CompilerTypeKind,
+    data: &void
+}
 
 
 pub struct Layout {
@@ -624,7 +777,7 @@ pub enum PrimitiveKind {
     UnsignedInt,
     Decimal,
 }
-struct PrimitiveTypeInfo{
+pub struct PrimitiveTypeInfo{
     name: &i8,
     llvm_signature: &i8,
     layout: Layout,
@@ -632,9 +785,11 @@ struct PrimitiveTypeInfo{
 }
 
 pub static POINTER_LAYOUT: Layout;
+pub static VOID_TYPE: &PrimitiveTypeInfo;
+pub static DEFAULT_INTEGER_TYPE: &PrimitiveTypeInfo;
 pub static PRIMITIVE_TYPES_INFO: [PrimitiveTypeInfo; 15];
 
-fn FILL_STATIC_PRIMITIVE_TYPES_INFO(){
+fn STATIC_FILL_PRIMITIVE_TYPES_INFO(){
     POINTER_LAYOUT = eight_layout();
     let x: PrimitiveTypeInfo = PrimitiveTypeInfo::{
         name: "void",llvm_signature: "void",
@@ -717,14 +872,63 @@ fn FILL_STATIC_PRIMITIVE_TYPES_INFO(){
         layout: eight_layout(),
         kind: PrimitiveKind::Decimal
     }; PRIMITIVE_TYPES_INFO[14] = x;
+
+
+    VOID_TYPE = &PRIMITIVE_TYPES_INFO[0];
+    DEFAULT_INTEGER_TYPE = &PRIMITIVE_TYPES_INFO[9];
 }
 fn find_primitive_type(name: &i8, len: i32) : i32{
+    if len == 2{
+        if mem::compare(name, "i8", 2) == 0{
+            return 2;
+        }
+        if mem::compare(name, "u8", 2) == 0{
+            return 7;
+        }
+    }
+    if len == 3{
+        if mem::compare(name, "i16", 3) == 0{
+            return 3;
+        }
+        if mem::compare(name, "i32", 3) == 0{
+            return 4;
+        }
+        if mem::compare(name, "i64", 3) == 0{
+            return 5;
+        }
+        if mem::compare(name, "u32", 3) == 0{
+            return 8;
+        }
+        if mem::compare(name, "u32", 3) == 0{
+            return 9;
+        }
+        if mem::compare(name, "u64", 3) == 0{
+            return 10;
+        }
+        if mem::compare(name, "f16", 3) == 0{
+            return 12;
+        }
+        if mem::compare(name, "f32", 3) == 0{
+            return 13;
+        }
+        if mem::compare(name, "f64", 3) == 0{
+            return 14;
+        }
+    }
     if len == 4{
-        if mem::equal(name, "void", 4) == 0{
+        if mem::compare(name, "void", 4) == 0{
             return 0;
         }
-        if mem::equal(name, "bool", 4) == 0{
+        if mem::compare(name, "bool", 4) == 0{
             return 1;
+        }
+    }
+    if len == 5{
+        if mem::compare(name, "usize", 5) == 0{
+            return 11;
+        }
+        if mem::compare(name, "isize", 5) == 0{
+            return 6;
         }
     }
 
@@ -739,6 +943,3 @@ fn find_primitive_type(name: &i8, len: i32) : i32{
 
 
 
-fn main(){
-    rcsharp_compile("D:/Projects/rcsharp/src.rcsharp", "D:/Projects/rcsharp/output_v2.rcsharp");
-}

@@ -10,13 +10,13 @@ pub struct CharExpr { val: u16 }
 pub struct NameExpr { idx: u16 }
 pub struct StringConstExpr { idx: u16 }
 pub struct TypeExpr { val: Type }
-pub enum BinaryOp {
+pub enum BinaryOp: u8 {
     Add,Subtract,Multiply,Divide,Modulo,Assign,
     Equals,NotEqual,Less,LessEqual,Greater,GreaterEqual,And,Or,
     BitAnd,BitOr,BitXor,ShiftLeft,ShiftRight,
 }
 pub struct BinaryOpExpr { lval: Expression, rval: Expression, op: BinaryOp }
-pub enum UnaryOp {
+pub enum UnaryOp : u8 {
     Negate, // -
     Not, // !
     Deref, // *

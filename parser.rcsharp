@@ -16,7 +16,7 @@ pub struct Argument     { name: u16, type: Type }
 pub struct EnumField    { name: u16, has_value: bool, value: Expression }
 pub struct HintNode     { name: u16, flags: u8, expressions: vector::Vec<Expression> }
 pub struct FnNode       { name: u16, flags: u8, arguments: vector::Vec<Argument>, return_type: &Type, generic: vector::Vec<u16>, nodes: vector::Vec<Stmt> }
-pub struct EnumNode     { name: u16, flags: u8, enum_type: &Type, fields: vector::Vec<EnumField> }
+pub struct EnumNode     { name: u16, flags: u8, has_value: bool, enum_type: Type, fields: vector::Vec<EnumField> }
 pub struct StructNode   { name: u16, flags: u8, fields: vector::Vec<Argument>, generic: vector::Vec<u16> }
 
 
@@ -486,7 +486,7 @@ fn get_flags(token_array: &TokenData, index: u32, mod_index: u32) : u8{
         return 0;
     }
     let output: u8 = 0;
-    console::writeln("XXX", 3);
+    //console::writeln("XXX", 3);
     for i in mod_index .. index{
         if token_array[i].token_type == TokenType::KeywordPub{
             output = output | Flags::Public;
@@ -499,7 +499,7 @@ fn get_flags(token_array: &TokenData, index: u32, mod_index: u32) : u8{
         }
 
     }
-    console::println_i64(output as i64);
+    //console::println_i64(output as i64);
     return output;
 }
 const NO_MODIFIER: u32 = 0xFFFFFFFF;
@@ -684,12 +684,12 @@ fn parse(token_array: &TokenData, token_len: u32, symbol_vector: &vector::Vec<st
             const enum_name: u16 = tokens[index].symbol_id;
             index = index + 1;
             
-            let enum_type: &Type = null;
+            let enum_type: Type;
+            let has_value: bool = false;
             if tokens[index].token_type == TokenType::Colon {
                 index = index + 1;
-                const parsed_type: Type = parse_type(tokens, &index, len);
-                enum_type = mem::malloc(size_of::<Type>()) as &Type;
-                *enum_type = parsed_type;
+                enum_type = parse_type(tokens, &index, len);
+                has_value = true;
             }
             
             let fields: vector::Vec<EnumField> = vector::new::<EnumField>();
@@ -698,13 +698,12 @@ fn parse(token_array: &TokenData, token_len: u32, symbol_vector: &vector::Vec<st
             } else {
                 process::throw("Expected '{' for enum body");
             }
-            
             const enum_node: &EnumNode = mem::malloc(size_of::<EnumNode>()) as &EnumNode;
             enum_node.name = enum_name;
+            enum_node.has_value = has_value;
             enum_node.enum_type = enum_type;
             enum_node.fields = fields;
             enum_node.flags = flags;
-
             let stmt: Stmt = Stmt::{
                 statement_type: StatementType::Enum,
                 node_ptr: bitcast::<&void>(enum_node)

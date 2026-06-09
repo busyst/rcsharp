@@ -208,6 +208,13 @@ impl CompilerType {
                     arg_reprs.join(", ")
                 ))
             }
+            Self::Primitive(x) => {
+                if x.is_unsigned_integer() {
+                    Ok(format!("u{}", x.llvm_name))
+                } else {
+                    Ok(x.llvm_name.to_string())
+                }
+            }
             _ => self.llvm_representation(symbols),
         }
     }
@@ -341,7 +348,10 @@ impl CompilerType {
                 let impl_idx = structure.ensure_generic_implementation(&compiled_args);
                 return Ok(Self::GenericStructInstance(id, impl_idx));
             }
-            panic!("Cannot handle non-concrete generic namespace resolution yet");
+            panic!(
+                "Cannot handle non-concrete generic namespace resolution yet at {}",
+                given_type
+            );
         }
 
         if let ParserType::Named(name) = given_type {

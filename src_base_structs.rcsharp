@@ -214,7 +214,7 @@ namespace vector{
     // Dynamicly expanding array
     struct Vec<T>{
         array: &T,
-        length: u32,
+        length: u32, 
         capacity: u32,
     }
     fn new<T>() : Vec<T>{
@@ -256,6 +256,14 @@ namespace vector{
             i = i + 1;
         }
         vec.length = vec.length - 1;
+    }
+    #[ExtentionOf(Vec)]
+    fn pop<T>(vec: &Vec<T>) : T {
+        if vec.length == 0 {
+            process::throw("Poping from vector of zero size");
+        }
+        vec.length = vec.length - 1;
+        return vec.array[vec.length];
     }
     #[ExtentionOf(Vec)]
     fn free<T>(vec: &Vec<T>) {
