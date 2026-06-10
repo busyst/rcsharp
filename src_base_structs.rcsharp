@@ -570,6 +570,25 @@ namespace string_utils{
         }
         return len;
     }
+    fn u64_to_string(n: u64) : string::String {
+        const buffer : &i8 = stalloc::<i8>(21);
+        let i: i32 = 20; 
+        if n == 0 {
+            buffer[0] = '0';
+            return string::from_data(buffer, 1);
+        }
+
+        let mut_n: u64 = n;
+        do {
+            buffer[i] = (mut_n % 10) as i8 + '0';
+            mut_n = mut_n / 10;
+            i = i - 1;
+        } while mut_n != 0;
+
+        const start_ptr : &i8 = &buffer[i + 1];
+        const len: i32 = 20 as i32 - i;
+        return string::from_data(start_ptr, len);
+    }
 }
 namespace stdlib { 
     pub fn atoi(str: &i8) : i32 {

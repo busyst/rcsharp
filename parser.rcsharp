@@ -275,7 +275,7 @@ fn parse_body(token_array: &TokenData, token_len: u32, symbol_vector: &vector::V
             declaration_node.expression = expr;
             declaration_node.var_comp_type = VarType::Stack;
             if token == TokenType::KeywordConst{
-                declaration_node.var_comp_type = VarType::Stack;
+                declaration_node.var_comp_type = VarType::Constant;
             }else if token == TokenType::KeywordStatic{
                 declaration_node.var_comp_type = VarType::Static;
             }
@@ -774,33 +774,39 @@ fn parse(token_array: &TokenData, token_len: u32, symbol_vector: &vector::Vec<st
         }
         if mod_index != NO_MODIFIER {
             if tokens[index - 1].token_type == TokenType::KeywordConst || tokens[index - 1].token_type == TokenType::KeywordStatic{
-                if tokens[index].token_type != TokenType::Name {
-                    process::throw("Expected this be a constant or static declaration");
-                }
-                const var_name: u16 = tokens[index].symbol_id;
-                index = index + 1;
-                let ret_type: &Type;
-                if tokens[index].token_type == TokenType::Colon {
-                    index = index + 1;
-                    const parsed_type: Type = parse_type(tokens, &index, len);
-                    ret_type = mem::malloc(size_of::<Type>()) as &Type;
-                    *ret_type = parsed_type;
-                }else{
-                    process::throw("Expected Colon and Type");
-                }
-                if tokens[index].token_type == TokenType::Equal {
-                    index = index + 1;
-                    parse_expression(tokens, &index, len);
+                const mod: TokenType = tokens[index - 1].token_type;
 
-                }else if tokens[index].token_type == TokenType::SemiColon{
-                    
-                }else{
-                    process::throw("Expected SemiColon or expression");
+                const var_name: u16 = tokens[index].symbol_id;
+                expect(tokens, &index, len, TokenType::Name, "Expected variable name after variable declaration keyword");
+                expect(tokens, &index, len, TokenType::Colon, "Expected ':' after variable deflaration to indicate type.");
+                let type: Type = parse_type(tokens, &index, len);
+                let has_value: bool = false;
+                let expr: Expression;
+                if tokens[index].token_type == TokenType::Equal{
+                    index = index + 1;
+                    let x: Expression = parse_expression(tokens, &index, len);
+                    expr = x;
+                    has_value = true;
                 }
-                if tokens[index].token_type != TokenType::SemiColon{
-                    process::throw("Expected SemiColon");
+                expect(tokens, &index, len, TokenType::SemiColon, "Expected ';' at the end of variable declaration.");
+                
+                const declaration_node: &DeclarationNode = mem::malloc(size_of::<DeclarationNode>()) as &DeclarationNode;
+                declaration_node.name = var_name;
+                declaration_node.var_type = type;
+                declaration_node.has_value = has_value;
+                declaration_node.expression = expr;
+                declaration_node.var_comp_type = VarType::Stack;
+                if mod == TokenType::KeywordConst{
+                    declaration_node.var_comp_type = VarType::Constant;
+                }else if mod == TokenType::KeywordStatic{
+                    declaration_node.var_comp_type = VarType::Static;
                 }
-                index = index + 1;
+
+                let stmt: Stmt = Stmt::{
+                    statement_type: StatementType::VarDec,
+                    node_ptr: bitcast::<&void>(declaration_node)
+                };
+                vector::push::<Stmt>(statement_vector, stmt);
                 mod_index = NO_MODIFIER;
                 continue;
             }
@@ -813,6 +819,6 @@ fn parse(token_array: &TokenData, token_len: u32, symbol_vector: &vector::Vec<st
             string::free(&q);
         }
 
-        process::throw("--UNEXPECTED TOKEN--");
+        process::throw("--UNEXPECTED TOKEN in TOP SCOPE--");
     }
 }
