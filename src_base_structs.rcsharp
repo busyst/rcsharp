@@ -27,7 +27,7 @@ fn __chkstk() : void {
 }
 
 #[no_lazy]
-pub fn _fltused() : i32 { return 0;}
+pub fn _fltused() : i32 { return 0; }
 
 namespace process{
     
@@ -471,6 +471,7 @@ namespace string{
     #[ExtensionOf(String)]
     fn append_str(src_string: &String, buffer: &i8, buffer_len: i32) {
         if buffer_len == 0 { return; }
+        if buffer_len == 1 { append(src_string, *buffer); return; }
         reserve(src_string, src_string.len + buffer_len);
         mem::copy(buffer, src_string.data + src_string.len as i64, buffer_len as i64);
         src_string.len = src_string.len + buffer_len; 
@@ -570,14 +571,14 @@ namespace string_utils{
         }
         return len;
     }
-    fn u64_to_string(n: u64) : string::String {
-        const buffer : &i8 = stalloc::<i8>(21);
+    pub fn u64_to_string(n: u64) : string::String {
         let i: i32 = 20; 
         if n == 0 {
-            buffer[0] = '0';
-            return string::from_data(buffer, 1);
+            let buffer : i8 = '0';
+            return string::from_data(&buffer, 1);
         }
 
+        const buffer : &i8 = stalloc::<i8>(21);
         let mut_n: u64 = n;
         do {
             buffer[i] = (mut_n % 10) as i8 + '0';

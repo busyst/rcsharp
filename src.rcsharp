@@ -26,6 +26,9 @@ struct EnumSymbolTableEntry { representative_type: CompilerType, fields: vector:
 struct StructDefinedField    { name: u16, type: CompilerType }
 struct StructSymbolTableEntry { fields: vector::Vec<StructDefinedField>, size_of: u32 }
 
+struct FunctionSymbolTableEntry { arguments: vector::Vec<StructDefinedField>, return_type: CompilerType, body: vector::Vec<Stmt> }
+struct GenericFunctionSymbolTableEntry { arguments: vector::Vec<StructDefinedField>, return_type: CompilerType, body: vector::Vec<Stmt>, generic_tokens: vector::Vec<u16>, implementations: vector::Vec<vector::Vec<CompilerType>> }
+
 struct GenericStructDefinedField    { name: u16, type: CompilerType, is_generic: bool }
 struct GenericStructSymbolTableEntry { fields: vector::Vec<StructDefinedField>, generic_tokens: vector::Vec<u16>, implementations: vector::Vec<vector::Vec<CompilerType>> }
 
@@ -38,6 +41,38 @@ struct SymbolTable{
 }
 fn insert_symbol_into_table(table: &SymbolTable, entry: SymbolTableEntry){
     vector::push::<SymbolTableEntry>(&table.symbols, entry);
+}
+fn get_symbol_from_table(table: &SymbolTable, path: PathEx): &SymbolTableEntry{
+    let path: PathEx = path;
+    if path.len == 0 { process::throw("Path with length zero"); }
+    let dbg: string::String = string::empty();
+    debug_dump_path_ex(&path, table.symbol_vector.array, &dbg);
+    console::write_string(&dbg);
+
+    const entries: &SymbolTableEntry = table.symbols.array;
+    const entries_len: u32 = table.symbols.length;
+    for i in 0 as u32 .. entries_len{ // TODO Handle enums differently
+        const entry: &SymbolTableEntry = &entries[i];
+        const entry_path_len: u8 = entry.path.len;
+        if entry_path_len != path.len{
+            continue;
+        }
+        if entry.path.data[0] != path.data[0]{
+            continue;
+        }
+        let same: bool = true;
+        for j in 1 as u8 .. entry_path_len{ 
+            if entry.path.data[j] != path.data[j]{
+                same = false;
+                break;
+            }
+        }
+        if !same{
+            continue;
+        }
+        return entry;
+    }
+    return null;
 }
 struct Variable{
     name: u32,
@@ -84,6 +119,12 @@ fn rcsharp_compile(input_file_path: &i8, output_file_path: &i8) {
     const buffer: &i8 = stalloc::<i8>(255);
     let file_name_start: &i8;
     const len: i32 = fs::GetFullPathNameA(input_file_path, 255, buffer, bitcast::<&i8>(&file_name_start));
+    for i in 0 as i32 .. len {
+        let c_ptr: &i8 = bitcast::<&i8>(bitcast::<usize>(buffer) + (i as usize));
+        if *c_ptr == 47 as i8 {
+            *c_ptr = 92 as i8;
+        }
+    }
     const env_path_len: i32 = (bitcast::<usize>(file_name_start) - bitcast::<usize>(buffer)) as i32;
     console::println_i64(env_path_len as i64);
     const ilen : i32 = string_utils::c_str_len(input_file_path);
@@ -94,7 +135,7 @@ fn rcsharp_compile(input_file_path: &i8, output_file_path: &i8) {
     console::write_string(&base_env);
 
     let file_stack: vector::Vec<string::String> = vector::new::<string::String>();
-    vector::push::<string::String>(&file_stack, string::from_c_string(input_file_path));
+    vector::push::<string::String>(&file_stack, string::from_c_string(buffer));
     
 
 
@@ -128,18 +169,25 @@ fn rcsharp_compile(input_file_path: &i8, output_file_path: &i8) {
                         process::throw("include directive must have only one path");
                     }
                     const str_expr: &StringConstExpr = expr.val as &StringConstExpr;
+
+                    const inc_buffer: &i8 = stalloc::<i8>(255);
+                    let inc_file_name_start: &i8;
+                    fs::GetFullPathNameA(sym_array[str_expr.idx].data, 255, inc_buffer, bitcast::<&i8>(&inc_file_name_start));
+                    let abs_inc_path: string::String = string::from_c_string(inc_buffer);
                     console::write("\t", 1);
-                    console::write_string(&sym_array[str_expr.idx]);
+                    console::write_string(&abs_inc_path);
                     console::write("\n\r", 2);
                     let found: bool = false;
                     for i in 0 as u32 .. file_stack.length{
-                        if string::equal(&sym_array[str_expr.idx], &file_stack.array[i]){
+                        if string::equal(&abs_inc_path, &file_stack.array[i]){
                             found = true;
                             break;
                         }
                     }
                     if !found{
-                        vector::push::<string::String>(&file_stack, string::clone(&sym_array[str_expr.idx]));
+                        vector::push::<string::String>(&file_stack, abs_inc_path);
+                    } else {
+                        string::free(&abs_inc_path); 
                     }
                     continue;
                 }else{
@@ -165,7 +213,19 @@ fn rcsharp_compile(input_file_path: &i8, output_file_path: &i8) {
     console::writeln("Compiling...", 12);
     let stdout: string::String = string::empty();
     compile(&main_statement_vector, &symbol_vector, &stdout);
-    fs::write_to_file(output_file_path, stdout.data, stdout.len as u32);
+
+    const out_buffer: &i8 = stalloc::<i8>(255);
+    let out_file_name_start: &i8;
+    const out_len: i32 = fs::GetFullPathNameA(output_file_path, 255, out_buffer, bitcast::<&i8>(&out_file_name_start));
+    
+    for i in 0 as i32 .. out_len {
+        let c_ptr: &i8 = bitcast::<&i8>(bitcast::<usize>(out_buffer) + (i as usize));
+        if *c_ptr == 47 as i8 {
+            *c_ptr = 92 as i8;
+        }
+    }
+
+    fs::write_to_file(out_buffer, stdout.data, stdout.len as u32);
 
     //console::write("\t---\n", 5);
     //console::write_string(&stdout);
@@ -498,6 +558,107 @@ fn compile_body(statement_vector: &vector::Vec<Stmt>, body_path: &Path, symbol_v
         process::throw("--UNEXPECTED STATEMENT-- BDOY");
     }
 }
+fn compile_internal_sym_table_prefill(path: Path, statement_vector: &vector::Vec<Stmt>, symbol_table: &SymbolTable, stdout: &string::String) {
+    let index: u32 = 0; 
+    let len: u32 = statement_vector.length;
+    const symbol_vector: &vector::Vec<string::String> = symbol_table.symbol_vector;
+    const sym_array: &string::String = symbol_vector.array;
+    
+    while index < len {
+        let statement: &Stmt = &statement_vector.array[index];
+        if statement.statement_type == StatementType::CompilerHint{
+            process::throw("INCLUDE ALREADY HANDLED, OTHERS ARE NOT IMPLEMENTED");
+        } else if statement.statement_type == StatementType::Attribute{
+            // Skip.
+            index = index + 1;
+            continue;
+        } else if statement.statement_type == StatementType::Function{
+            const node: &FnNode = statement.node_ptr as &FnNode;
+
+            let loc: Path = path;
+            let struct_path: PathEx = path_to_path_ex_name(&loc, node.name);
+            let sym_t_entry: SymbolTableEntry;
+            sym_t_entry.path = struct_path;
+            sym_t_entry.val = null;
+            if node.generic.length != 0{
+                sym_t_entry.tag = SymbolTableTag::GenericFunction;
+            }else{
+                sym_t_entry.tag = SymbolTableTag::Function;
+            }
+            insert_symbol_into_table(symbol_table, sym_t_entry);
+            index = index + 1;
+            continue;
+        } else if statement.statement_type == StatementType::Struct{
+            const node: &StructNode = statement.node_ptr as &StructNode;
+
+            let loc: Path = path;
+            let struct_path: PathEx = path_to_path_ex_name(&loc, node.name);
+            let sym_t_entry: SymbolTableEntry;
+            sym_t_entry.path = struct_path;
+            if node.generic.length != 0{
+                sym_t_entry.tag = SymbolTableTag::GenericStruct;
+            }else{
+                sym_t_entry.tag = SymbolTableTag::Struct;
+            }
+            sym_t_entry.val = null;
+            insert_symbol_into_table(symbol_table, sym_t_entry);
+            index = index + 1;
+            continue;
+        } else if statement.statement_type == StatementType::Enum{
+            const node: &EnumNode = statement.node_ptr as &EnumNode;
+            
+            let loc: Path = path;
+            let enum_path: PathEx = path_to_path_ex_name(&loc, node.name);
+            let sym_t_entry: SymbolTableEntry;
+            sym_t_entry.path = enum_path;
+            sym_t_entry.tag = SymbolTableTag::Enum;
+            sym_t_entry.val = null;
+            insert_symbol_into_table(symbol_table, sym_t_entry);
+            index = index + 1;
+            continue;
+        } else if statement.statement_type == StatementType::Namespace{
+            const node: &NamespaceNode = statement.node_ptr as &NamespaceNode;
+            let path: Path = path;
+            if path.len == 8{
+                process::throw("Nested namespaces too deep");
+            }
+            path.data[path.len] = node.name;
+            path.len = path.len + 1;
+            compile_internal_sym_table_prefill(path, &node.nodes, symbol_table, stdout);
+            index = index + 1;
+            continue;
+        } else if statement.statement_type == StatementType::VarDec{
+            const node: &DeclarationNode = statement.node_ptr as &DeclarationNode;
+
+            let loc: Path = path;
+            let dec_path: PathEx = path_to_path_ex_name(&loc, node.name);
+            let sym_t_entry: SymbolTableEntry;
+            sym_t_entry.path = dec_path;
+
+            if node.var_comp_type == VarType::Constant{
+                sym_t_entry.tag = SymbolTableTag::Constant;
+                if !node.has_value{
+                    process::throw("constant must have value");
+                }
+            }else if node.var_comp_type == VarType::Static{
+                sym_t_entry.tag = SymbolTableTag::Static;
+            }else if node.var_comp_type == VarType::Stack{
+                process::throw("let is not allowed in top scope");
+            }
+            sym_t_entry.val = null;
+            insert_symbol_into_table(symbol_table, sym_t_entry);
+            index = index + 1;
+            continue;
+        }
+
+        for i in 0 as u32 .. 3{
+            console::println_i64(statement_vector.array[index + i].statement_type as i64);
+            console::write("@@@@\n\r", 6);
+        }
+
+        process::throw("--UNEXPECTED STATEMENT--");
+    }
+}
 fn compile_internal(path: Path, statement_vector: &vector::Vec<Stmt>, symbol_table: &SymbolTable, stdout: &string::String) {
     let index: u32 = 0; 
     let len: u32 = statement_vector.length;
@@ -543,39 +704,51 @@ fn compile_internal(path: Path, statement_vector: &vector::Vec<Stmt>, symbol_tab
             index = index + 1;
             continue;
         } else if statement.statement_type == StatementType::Function{
-            index = index + 1;
-            continue;
             const node: &FnNode = statement.node_ptr as &FnNode;
-            string::append_str(stdout, "fn ", 3);
-            string::append_str(stdout, sym_array[node.name].data, sym_array[node.name].len);
+            let loc: Path = path;
+            let func_path: PathEx = path_to_path_ex_name(&loc, node.name);
+            const sym_t_entry: &SymbolTableEntry = get_symbol_from_table(symbol_table, func_path);
+
+            //string::append_str(stdout, "fn ", 3);
+            //string::append_str(stdout, sym_array[node.name].data, sym_array[node.name].len);
             if node.generic.length != 0{
-                string::append(stdout, '<');
-                for x in 0 as u32 .. node.generic.length{
-                    string::append_str(stdout, sym_array[node.generic.array[x]].data, sym_array[node.generic.array[x]].len);
-                    if x != node.generic.length - 1{
-                        string::append_str(stdout, ", ", 2);
-                    }
-                }
-                string::append(stdout, '>');
+                index = index + 1;
+                continue;
             }
-            string::append(stdout, '(');
+            let sym_entry: &FunctionSymbolTableEntry = mem::malloc(size_of::<FunctionSymbolTableEntry>()) as &FunctionSymbolTableEntry;
+            sym_t_entry.val = bitcast::<&void>(sym_entry);
+            sym_entry.arguments = vector::new::<StructDefinedField>();
+            if node.has_value{
+                sym_entry.return_type = get_compiler_type(&node.return_type, symbol_table);
+            }else{
+                let z: CompilerType = CompilerType::{
+                    kind: CompilerTypeKind::Primitive,
+                    data: bitcast::<&void>(VOID_TYPE),
+                };
+                sym_entry.return_type = z;
+            }
             for x in 0 as u32 .. node.arguments.length{
                 const arg: &Argument = &node.arguments.array[x];
-                string::append_str(stdout, sym_array[arg.name].data, sym_array[arg.name].len);
-                string::append_str(stdout, ": ", 2);
-                debug_dump_type(&arg.type, symbol_vector, stdout);
+                let sf: StructDefinedField;
+                sf.name = arg.name;
+                sf.type = get_compiler_type(&arg.type, symbol_table);
+                vector::push::<StructDefinedField>(&sym_entry.arguments, sf);
+                //string::append_str(stdout, sym_array[arg.name].data, sym_array[arg.name].len);
+                //string::append_str(stdout, ": ", 2);
+                //debug_dump_type(&arg.type, symbol_vector, stdout);
                 if x != node.arguments.length - 1{
-                    string::append_str(stdout, ", ", 2);
+                    //string::append_str(stdout, ", ", 2);
                 }
             }
-            string::append(stdout, ')');
+            //string::append(stdout, ')');
             if node.nodes.length != 0{
-                string::append_str(stdout, "{\n", 2);
+                //string::append_str(stdout, "{\n", 2);
                 let path: Path = path;
-                compile_body(&node.nodes, &path, symbol_vector, stdout);
-                string::append(stdout, '}');
+                //compile_body(&node.nodes, &path, symbol_vector, stdout);
+                //string::append(stdout, '}');
             }
-            string::append(stdout, '\n');
+            //string::append(stdout, '\n');
+            sym_t_entry.tag = sym_t_entry.tag | SymbolTableTag::Solved;
             index = index + 1;
             continue;
         } else if statement.statement_type == StatementType::Struct{
@@ -583,10 +756,8 @@ fn compile_internal(path: Path, statement_vector: &vector::Vec<Stmt>, symbol_tab
 
             let loc: Path = path;
             let struct_path: PathEx = path_to_path_ex_name(&loc, node.name);
-            let sym_t_entry: SymbolTableEntry;
-            sym_t_entry.path = struct_path;
+            const sym_t_entry: &SymbolTableEntry = get_symbol_from_table(symbol_table, struct_path);
             if node.generic.length != 0{
-                sym_t_entry.tag = SymbolTableTag::GenericStruct;
                 let sym_entry: &GenericStructSymbolTableEntry = mem::malloc(size_of::<GenericStructSymbolTableEntry>()) as &GenericStructSymbolTableEntry;
                 sym_t_entry.val = bitcast::<&void>(sym_entry);
                 sym_entry.fields = vector::new::<StructDefinedField>();
@@ -602,11 +773,10 @@ fn compile_internal(path: Path, statement_vector: &vector::Vec<Stmt>, symbol_tab
                     sdf.type = get_compiler_type(&node.type, symbol_table); // Generic sub
                     vector::push::<StructDefinedField>(&sym_entry.fields, sdf);
                 }
-                insert_symbol_into_table(symbol_table, sym_t_entry);
+                sym_t_entry.tag = sym_t_entry.tag | SymbolTableTag::Solved;
                 index = index + 1;
                 continue;
             }
-            sym_t_entry.tag = SymbolTableTag::Struct;
             let sym_entry: &StructSymbolTableEntry = mem::malloc(size_of::<StructSymbolTableEntry>()) as &StructSymbolTableEntry;
             sym_t_entry.val = bitcast::<&void>(sym_entry);
             sym_entry.fields = vector::new::<StructDefinedField>();
@@ -617,17 +787,15 @@ fn compile_internal(path: Path, statement_vector: &vector::Vec<Stmt>, symbol_tab
                 sdf.type = get_compiler_type(&node.type, symbol_table);
                 vector::push::<StructDefinedField>(&sym_entry.fields, sdf);
             }
-            insert_symbol_into_table(symbol_table, sym_t_entry);
+            sym_t_entry.tag = sym_t_entry.tag | SymbolTableTag::Solved;
             index = index + 1;
             continue;
         } else if statement.statement_type == StatementType::Enum{
             const node: &EnumNode = statement.node_ptr as &EnumNode;
             
             let loc: Path = path;
-            let enum_path: PathEx = path_to_path_ex_name(&loc, node.name);
-            let sym_t_entry: SymbolTableEntry;
-            sym_t_entry.path = enum_path;
-            sym_t_entry.tag = SymbolTableTag::Enum | SymbolTableTag::Solved;
+            let dec_path: PathEx = path_to_path_ex_name(&loc, node.name);
+            const sym_t_entry: &SymbolTableEntry = get_symbol_from_table(symbol_table, dec_path);
             const sym_entry: &EnumSymbolTableEntry = mem::malloc(size_of::<EnumSymbolTableEntry>()) as &EnumSymbolTableEntry;
             sym_t_entry.val = bitcast::<&void>(sym_entry);
 
@@ -653,7 +821,7 @@ fn compile_internal(path: Path, statement_vector: &vector::Vec<Stmt>, symbol_tab
                 indexer = indexer + 1;
                 vector::push::<EnumDefinedField>(&sym_entry.fields, edf);
             }
-            insert_symbol_into_table(symbol_table, sym_t_entry);
+            sym_t_entry.tag = sym_t_entry.tag | SymbolTableTag::Solved;
             
             index = index + 1;
             continue;
@@ -677,32 +845,28 @@ fn compile_internal(path: Path, statement_vector: &vector::Vec<Stmt>, symbol_tab
 
             let loc: Path = path;
             let dec_path: PathEx = path_to_path_ex_name(&loc, node.name);
-            let sym_t_entry: SymbolTableEntry;
-            sym_t_entry.path = dec_path;
-
+            const sym_t_entry: &SymbolTableEntry = get_symbol_from_table(symbol_table, dec_path);
+            if sym_t_entry == null{
+                process::throw("compile_internal_sym_table_prefill fucked up");
+            }
             if node.var_comp_type == VarType::Constant{
-                sym_t_entry.tag = SymbolTableTag::Constant;
-                let sym_entry: &ConstantSymbolTableEntry = mem::malloc(size_of::<ConstantSymbolTableEntry>()) as &ConstantSymbolTableEntry;
-                if !node.has_value{
-                    process::throw("constant must have value");
-                }
+                const sym_entry: &ConstantSymbolTableEntry = mem::malloc(size_of::<ConstantSymbolTableEntry>()) as &ConstantSymbolTableEntry;
                 sym_entry.type = get_compiler_type(&node.var_type, symbol_table); // Is not as deep as i wanted yet TODO 
                 sym_entry.defined_value = constant_evaluate_expression(&node.expression, symbol_table); // Is not as deep as i wanted yet TODO
-                insert_symbol_into_table(symbol_table, sym_t_entry);
-                //string::append_str(stdout,"const ", 6);
-            }else if node.var_comp_type == VarType::Static{
-                sym_t_entry.tag = SymbolTableTag::Static;
-                let sym_entry: &StaticSymbolTableEntry = mem::malloc(size_of::<StaticSymbolTableEntry>()) as &StaticSymbolTableEntry;
+                sym_t_entry.val = bitcast::<&void>(sym_entry);
+                sym_t_entry.tag = sym_t_entry.tag | SymbolTableTag::Solved;
+            } else if node.var_comp_type == VarType::Static{
+                const sym_entry: &StaticSymbolTableEntry = mem::malloc(size_of::<StaticSymbolTableEntry>()) as &StaticSymbolTableEntry;
                 let expr: Rvalue; 
+                sym_entry.has_initialized_value = false;
                 if node.has_value{
+                    sym_entry.has_initialized_value = true;
                     expr = constant_evaluate_expression(&node.expression, symbol_table); // Is not as deep as i wanted yet TODO
                 }
                 sym_entry.type = get_compiler_type(&node.var_type, symbol_table);
-                sym_entry.has_initialized_value = node.has_value;
                 sym_entry.initialized_value = expr;
-                insert_symbol_into_table(symbol_table, sym_t_entry);
-            }else if node.var_comp_type == VarType::Stack{
-                process::throw("let is not allowed in top scope");
+                sym_t_entry.val = bitcast::<&void>(sym_entry);
+                sym_t_entry.tag = sym_t_entry.tag | SymbolTableTag::Solved;
             }
             index = index + 1;
             continue;
@@ -730,6 +894,7 @@ fn compile(statement_vector: &vector::Vec<Stmt>, symbol_vector: &vector::Vec<str
     sym_table.symbol_vector = symbol_vector;
     let path: Path;
     path.len = 0;
+    compile_internal_sym_table_prefill(path, statement_vector, &sym_table, stdout);
     compile_internal(path, statement_vector, &sym_table, stdout);
 
     debug_dump_symbol_table(&sym_table, stdout);
@@ -755,6 +920,9 @@ fn debug_dump_symbol_table(table: &SymbolTable, stdout: &string::String){
     const ptr: &SymbolTableEntry = table.symbols.array;
     const sym_array: &string::String = table.symbol_vector.array;
     for i in 0 as u32 .. len{
+        if (ptr[i].tag & SymbolTableTag::Solved) == 0{
+            continue;
+        }
         if (ptr[i].tag & SymbolTableTag::OnlyTypesMask) == SymbolTableTag::Enum{
             const node: &EnumSymbolTableEntry = ptr[i].val as &EnumSymbolTableEntry;
             let loc: PathEx = ptr[i].path;
@@ -810,6 +978,53 @@ fn debug_dump_symbol_table(table: &SymbolTable, stdout: &string::String){
                 }
             }
             string::append_str(stdout, " }\n", 3);
+            //string::append_str(stdout, sym_array[node.name].data, sym_array[node.name].len);
+        } else if (ptr[i].tag & SymbolTableTag::OnlyTypesMask) == SymbolTableTag::Static{
+            const node: &StaticSymbolTableEntry = ptr[i].val as &StaticSymbolTableEntry;
+            let loc: PathEx = ptr[i].path;
+            loc.len = loc.len - 1;
+
+            string::append_str(stdout, "@", 1);
+            debug_dump_path_ex(&ptr[i].path, sym_array, stdout);
+            string::append_str(stdout, " = internal global ", 19);
+            compiler_type_push(&node.type, &loc, table, stdout);
+            if node.has_initialized_value{
+                string::append_str(stdout, " ; = ", 5);
+            }
+            string::append_str(stdout, "\n", 1);
+            //string::append_str(stdout, sym_array[node.name].data, sym_array[node.name].len);
+        } else if (ptr[i].tag & SymbolTableTag::OnlyTypesMask) == SymbolTableTag::Constant{
+            const node: &ConstantSymbolTableEntry = ptr[i].val as &ConstantSymbolTableEntry;
+            let loc: PathEx = ptr[i].path;
+            loc.len = loc.len - 1;
+
+            string::append_str(stdout, ";constant ", 10);
+            debug_dump_path_ex(&ptr[i].path, sym_array, stdout);
+            string::append_str(stdout, " = ", 3);
+            compiler_type_push(&node.type, &loc, table, stdout);
+            string::append_str(stdout, "\n", 1);
+            //string::append_str(stdout, sym_array[node.name].data, sym_array[node.name].len);
+        } else if (ptr[i].tag & SymbolTableTag::OnlyTypesMask) == SymbolTableTag::Function{
+            const node: &FunctionSymbolTableEntry = ptr[i].val as &FunctionSymbolTableEntry;
+            let loc: PathEx = ptr[i].path;
+            loc.len = loc.len - 1;
+            
+            string::append_str(stdout, "define ", 7);
+            compiler_type_push(&node.return_type, &loc, table, stdout);
+            string::append_str(stdout, " @", 2);
+            debug_dump_path_ex(&ptr[i].path, sym_array, stdout);
+            string::append_str(stdout, "(", 1);            
+            for x in 0 as u32 .. node.arguments.length{
+                const arg: &StructDefinedField = &node.arguments.array[x];
+                string::append_str(stdout, sym_array[arg.name].data, sym_array[arg.name].len);
+                string::append_str(stdout, ": ", 2);
+                compiler_type_push(&arg.type, &loc, table, stdout);
+                if x != node.arguments.length - 1{
+                    string::append_str(stdout, ", ", 2);
+                }
+            }
+            string::append_str(stdout, ")", 1);
+            string::append_str(stdout, "\n", 1);
             //string::append_str(stdout, sym_array[node.name].data, sym_array[node.name].len);
         }
     }
@@ -871,8 +1086,12 @@ pub struct CompilerType{
     data: &void
 }
 pub enum RvalueKind{
-    Unsolved,
+    Register,
     Integer,
+    Decimal,
+    Boolean,
+    Null,
+    Void,
 }
 pub struct Rvalue{
     kind: RvalueKind,

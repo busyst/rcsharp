@@ -15,7 +15,7 @@ pub struct Argument     { name: u16, type: Type }
 
 pub struct EnumField    { name: u16, has_value: bool, value: Expression }
 pub struct HintNode     { name: u16, flags: u8, expressions: vector::Vec<Expression> }
-pub struct FnNode       { name: u16, flags: u8, arguments: vector::Vec<Argument>, return_type: &Type, generic: vector::Vec<u16>, nodes: vector::Vec<Stmt> }
+pub struct FnNode       { name: u16, flags: u8, arguments: vector::Vec<Argument>, has_value: bool, return_type: Type, generic: vector::Vec<u16>, nodes: vector::Vec<Stmt> }
 pub struct EnumNode     { name: u16, flags: u8, has_value: bool, enum_type: Type, fields: vector::Vec<EnumField> }
 pub struct StructNode   { name: u16, flags: u8, fields: vector::Vec<Argument>, generic: vector::Vec<u16> }
 
@@ -596,13 +596,12 @@ fn parse(token_array: &TokenData, token_len: u32, symbol_vector: &vector::Vec<st
                 process::throw("Expected ')' after function arguments");
             }
             index = index + 1;
-
-            let ret_type: &Type = null;
+            let has_value: bool = false;
+            let ret_type: Type;
             if tokens[index].token_type == TokenType::Colon {
                 index = index + 1;
-                const parsed_type: Type = parse_type(tokens, &index, len);
-                ret_type = mem::malloc(size_of::<Type>()) as &Type;
-                *ret_type = parsed_type;
+                ret_type = parse_type(tokens, &index, len);
+                has_value = true;
             }
 
             
@@ -629,6 +628,7 @@ fn parse(token_array: &TokenData, token_len: u32, symbol_vector: &vector::Vec<st
             const fn_node: &FnNode = mem::malloc(size_of::<FnNode>()) as &FnNode;
             fn_node.name = fn_name;
             fn_node.arguments = args;
+            fn_node.has_value = has_value;
             fn_node.return_type = ret_type;
             fn_node.generic = generic;
             fn_node.nodes = nodes;
