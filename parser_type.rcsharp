@@ -19,6 +19,22 @@ pub fn path_to_path_ex_name(path: &Path, name: u16): PathEx {
     output.len = output.len + 1;
     return output;
 }
+fn append_path(path: &PathEx, sym_array: &string::String, stdout: &string::String){
+    for i in 0 as u8 .. path.len{
+        string::append_str(stdout, sym_array[path.data[i]].data, sym_array[path.data[i]].len);
+        if i != path.len - 1{
+            string::append(stdout, '.');
+        }
+    }
+}
+fn append_path_ex(path: &PathEx, sym_array: &string::String, stdout: &string::String){
+    for i in 0 as u8 .. path.len{
+        string::append_str(stdout, sym_array[path.data[i]].data, sym_array[path.data[i]].len);
+        if i != path.len - 1{
+            string::append(stdout, '.');
+        }
+    }
+}
 pub enum TypeType       { Named, Pointer, Function, NamespaceLink, Generic, ConstantSizeArray }
 pub struct NamedType    { idx: u16 }                                        // type
 pub struct PointerType    { deep: u8, inner: Type }                          // &type

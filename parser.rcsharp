@@ -14,7 +14,7 @@ pub enum Flags : u8 {
 pub struct Argument     { name: u16, type: Type }
 
 pub struct EnumField    { name: u16, has_value: bool, value: Expression }
-pub struct HintNode     { name: u16, flags: u8, expressions: vector::Vec<Expression> }
+pub struct HintNode     { name: u16, expressions: vector::Vec<Expression> }
 pub struct FnNode       { name: u16, flags: u8, arguments: vector::Vec<Argument>, has_value: bool, return_type: Type, generic: vector::Vec<u16>, nodes: vector::Vec<Stmt> }
 pub struct EnumNode     { name: u16, flags: u8, has_value: bool, enum_type: Type, fields: vector::Vec<EnumField> }
 pub struct StructNode   { name: u16, flags: u8, fields: vector::Vec<Argument>, generic: vector::Vec<u16> }
