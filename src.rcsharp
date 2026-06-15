@@ -596,10 +596,23 @@ fn compile_internal_sym_table_prefill(path: &Path, statement_vector: &vector::Ve
             sym_t_entry.path = struct_path;
             if node.generic.length != 0{
                 sym_t_entry.tag = SymbolTableTag::GenericStruct;
+                let sym_entry: &GenericStructSymbolTableEntry = mem::malloc(size_of::<GenericStructSymbolTableEntry>()) as &GenericStructSymbolTableEntry;
+                sym_t_entry.val = bitcast::<&void>(sym_entry);
+                sym_entry.flags = node.flags;
+                sym_entry.fields = vector::new::<GenericStructDefinedField>();
+                sym_entry.implementations = vector::new::<vector::Vec<CompilerType>>();
+                sym_entry.generic_tokens = vector::new::<u16>();
+                for x in 0 as u32 .. node.generic.length{
+                    vector::push::<u16>(&sym_entry.generic_tokens, node.generic.array[x]);
+                }
             }else{
                 sym_t_entry.tag = SymbolTableTag::Struct;
+                let sym_entry: &StructSymbolTableEntry = mem::malloc(size_of::<StructSymbolTableEntry>()) as &StructSymbolTableEntry;
+                sym_t_entry.val = bitcast::<&void>(sym_entry);
+                sym_entry.flags = node.flags;
+                sym_entry.fields = vector::new::<StructDefinedField>();
+                sym_entry.layout_of = invalid_layout();
             }
-            sym_t_entry.val = null;
             insert_symbol_into_table(symbol_table, sym_t_entry);
             index = index + 1;
             continue;
@@ -760,15 +773,7 @@ fn compile_internal_sym_table(path: &Path, statement_vector: &vector::Vec<Stmt>,
             let struct_path: PathEx = path_to_path_ex_name(path, node.name);
             const sym_t_entry: &SymbolTableEntry = get_symbol_from_table(symbol_table, struct_path);
             if node.generic.length != 0{
-                let sym_entry: &GenericStructSymbolTableEntry = mem::malloc(size_of::<GenericStructSymbolTableEntry>()) as &GenericStructSymbolTableEntry;
-                sym_t_entry.val = bitcast::<&void>(sym_entry);
-                sym_entry.flags = node.flags;
-                sym_entry.fields = vector::new::<GenericStructDefinedField>();
-                sym_entry.implementations = vector::new::<vector::Vec<CompilerType>>();
-                sym_entry.generic_tokens = vector::new::<u16>();
-                for x in 0 as u32 .. node.generic.length{
-                    vector::push::<u16>(&sym_entry.generic_tokens, node.generic.array[x]);
-                }
+                let sym_entry: &GenericStructSymbolTableEntry = sym_t_entry.val as &GenericStructSymbolTableEntry;
                 for x in 0 as u32 .. node.fields.length{
                     const arg: &Argument = &node.fields.array[x];
                     let sdf: GenericStructDefinedField;
@@ -783,11 +788,7 @@ fn compile_internal_sym_table(path: &Path, statement_vector: &vector::Vec<Stmt>,
                 index = index + 1;
                 continue;
             }
-            let sym_entry: &StructSymbolTableEntry = mem::malloc(size_of::<StructSymbolTableEntry>()) as &StructSymbolTableEntry;
-            sym_t_entry.val = bitcast::<&void>(sym_entry);
-            sym_entry.flags = node.flags;
-            sym_entry.fields = vector::new::<StructDefinedField>();
-            sym_entry.layout_of = invalid_layout();
+            let sym_entry: &StructSymbolTableEntry = sym_t_entry.val as &StructSymbolTableEntry;
             for x in 0 as u32 .. node.fields.length{
                 const node: &Argument = &node.fields.array[x];
                 let sdf: StructDefinedField;
@@ -1188,26 +1189,29 @@ fn get_compiler_type_internal(type: &Type, l_path: &Path, g_path: &Path, table: 
         if ptr == null{
             process::throw("Name not found");
         }
+        const index: u32 = ((bitcast::<usize>(ptr) - bitcast::<usize>(table.symbols.array)) / size_of::<SymbolTableEntry>()) as u32;
+        
         let c: vector::Vec<CompilerType> = vector::new::<CompilerType>();
         for i in 0 as u32 .. node.gen_args.length{
             vector::push::<CompilerType>(&c, get_compiler_type(&node.gen_args.array[i], g_path, table));
         }
-        const index: u32 = ((bitcast::<usize>(ptr) - bitcast::<usize>(table.symbols.array)) / size_of::<SymbolTableEntry>()) as u32;
-        const gi: &GenericFunctionSymbolTableEntry = &table.symbols.array[index] as &GenericFunctionSymbolTableEntry;
+        const gi: &GenericStructSymbolTableEntry = ptr.val as &GenericStructSymbolTableEntry;
+        
         let same: u32 = 65535;
         for i in 0 as u32 .. gi.implementations.length{
 
         }
         if same == 65535{
             same = gi.implementations.length;
-            //vector::push::<vector::Vec<CompilerType>>(&gi.implementations, c);
+            console::println_u64(same as u64); // TTTTTTTTTTTTTTTTTTTTTTTTTTTTTT
+            vector::push::<vector::Vec<CompilerType>>(&gi.implementations, c);
         }else{
             vector::free::<CompilerType>(&c);
         }
 
         const gicp: &GenericImplementationCompilerType = mem::malloc(size_of::<GenericImplementationCompilerType>()) as &GenericImplementationCompilerType;
         gicp.struct_index = index;
-        gicp.implementation_id = 0;
+        gicp.implementation_index = same;
         let x: CompilerType = CompilerType::{
             kind: CompilerTypeKind::GenericImplementation,
             data: bitcast::<&void>(gicp),
@@ -1328,12 +1332,16 @@ fn compiler_type_push(type: &CompilerType, path: &PathEx, symbol_table: &SymbolT
             const c: &GenericStructSymbolTableEntry = s.val as &GenericStructSymbolTableEntry;
             string::append(stdout, '%');
             string::append_str(stdout, c.llvm_signature.data, c.llvm_signature.len);
-            string::append(stdout, '.');
+            string::append(stdout, '_');
             const a: u32 = c.generic_tokens.length;
+            const f: &vector::Vec<CompilerType> = &c.implementations.array[node.implementation_index];
             for i in 0 as u32 .. a{
-                
+                compiler_type_push(&f.array[i], path, symbol_table, stdout);
+                if i != a - 1{
+                    string::append(stdout, '.');
+                }
             }
-            string::append(stdout, '.');
+            string::append(stdout, '_');
         } else{
             process::throw("Not expected!");
         }
@@ -1352,7 +1360,7 @@ pub struct PointerCompilerType{
 }
 pub struct GenericImplementationCompilerType{
     struct_index: u32,
-    implementation_id: u32,
+    implementation_index: u32,
 }
 pub struct CompilerType{
     kind: CompilerTypeKind,
