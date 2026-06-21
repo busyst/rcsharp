@@ -6,32 +6,30 @@
 %struct.CallExpr = type { %struct.Expression, %"struct.vector.Vec<%struct.Expression>", %"struct.vector.Vec<%struct.Type>" }
 %struct.CastExpr = type { %struct.Expression, %struct.Type }
 %struct.CharExpr = type { i16 }
-%struct.CompilerType = type { i32, i8* }
 %struct.ConstantSizeArrayType = type { %struct.Type, %struct.Expression }
-%struct.ConstantSymbolTableEntry = type { %struct.CompilerType, %struct.Rvalue }
+%struct.ConstantSymbolTableEntry = type { %struct.comp_type.CompilerType, %struct.rvalue.Rvalue }
 %struct.DecimalExpr = type { i16 }
 %struct.DeclarationNode = type { i16, i1, %struct.Expression, %struct.Type, i8 }
 %struct.DoWhileStmt = type { %struct.Expression, %"struct.vector.Vec<%struct.Stmt>" }
 %struct.EnumDefinedField = type { i16, i64 }
 %struct.EnumField = type { i16, i1, %struct.Expression }
 %struct.EnumNode = type { i16, i8, i1, %struct.Type, %"struct.vector.Vec<%struct.EnumField>" }
-%struct.EnumSymbolTableEntry = type { %struct.CompilerType, %"struct.vector.Vec<%struct.EnumDefinedField>", i8 }
+%struct.EnumSymbolTableEntry = type { %struct.comp_type.CompilerType, %"struct.vector.Vec<%struct.EnumDefinedField>", i8 }
 %struct.Expression = type { i32, i8* }
 %struct.ExpressionNode = type { %struct.Expression }
 %struct.FnNode = type { i16, i8, %"struct.vector.Vec<%struct.Argument>", i1, %struct.Type, %"struct.vector.Vec<ui16>", %"struct.vector.Vec<%struct.Stmt>" }
 %struct.ForStmt = type { %struct.Expression, %struct.Expression, %"struct.vector.Vec<%struct.Stmt>" }
-%struct.FunctionSymbolTableEntry = type { %"struct.vector.Vec<%struct.StructDefinedField>", %struct.CompilerType, %"struct.vector.Vec<%struct.Stmt>", i8 }
+%struct.FunctionSymbolTableEntry = type { %"struct.vector.Vec<%struct.StructDefinedField>", %struct.comp_type.CompilerType, %"struct.vector.Vec<%struct.Stmt>", %struct.string.String, i8 }
 %struct.FunctionType = type { %"struct.vector.Vec<%struct.Type>", %struct.Type }
-%struct.GenericFunctionSymbolTableEntry = type { %"struct.vector.Vec<%struct.GenericStructDefinedField>", i1, %struct.CompilerType, %"struct.vector.Vec<%struct.Stmt>", %"struct.vector.Vec<ui16>", %"struct.vector.Vec<%struct.vector.Vec<%struct.CompilerType>>", i8 }
-%struct.GenericImplementationCompilerType = type { i32, i32 }
-%struct.GenericStructDefinedField = type { i16, %struct.CompilerType, i1 }
-%struct.GenericStructSymbolTableEntry = type { %"struct.vector.Vec<%struct.GenericStructDefinedField>", %"struct.vector.Vec<ui16>", %"struct.vector.Vec<%struct.vector.Vec<%struct.CompilerType>>", %struct.string.String, i8 }
+%struct.GenericFunctionSymbolTableEntry = type { %"struct.vector.Vec<%struct.GenericStructDefinedField>", i1, %struct.comp_type.CompilerType, %"struct.vector.Vec<%struct.Stmt>", %"struct.vector.Vec<ui16>", %"struct.vector.Vec<%struct.Implementation>", %struct.string.String, i8 }
+%struct.GenericStructDefinedField = type { i16, %struct.comp_type.CompilerType, i1 }
+%struct.GenericStructSymbolTableEntry = type { %"struct.vector.Vec<%struct.GenericStructDefinedField>", %"struct.vector.Vec<ui16>", %"struct.vector.Vec<%struct.Implementation>", %struct.string.String, i8 }
 %struct.GenericType = type { i16, %"struct.vector.Vec<%struct.Type>" }
 %struct.HintNode = type { i16, %"struct.vector.Vec<%struct.Expression>" }
 %struct.IfStmt = type { %struct.Expression, %"struct.vector.Vec<%struct.Stmt>", %"struct.vector.Vec<%struct.Stmt>" }
+%struct.Implementation = type { %"struct.vector.Vec<%struct.comp_type.CompilerType>", %struct.string.String, %struct.layout.Layout }
 %struct.IndexExpr = type { %struct.Expression, %struct.Expression }
 %struct.IntegerExpr = type { i16 }
-%struct.Layout = type { i16, i16 }
 %struct.LoopStmt = type { %"struct.vector.Vec<%struct.Stmt>" }
 %struct.MemberAccessExpr = type { %struct.Expression, i16 }
 %struct.NameExpr = type { i16 }
@@ -41,31 +39,37 @@
 %struct.NamespaceNode = type { i16, %"struct.vector.Vec<%struct.Stmt>" }
 %struct.Path = type { i8, [8 x i16] }
 %struct.PathEx = type { i8, [12 x i16] }
-%struct.PointerCompilerType = type { i8, %struct.CompilerType }
 %struct.PointerType = type { i8, %struct.Type }
-%struct.PrimitiveTypeInfo = type { i8*, i8*, %struct.Layout, i32 }
 %struct.RangeExpr = type { %struct.Expression, %struct.Expression, i1 }
 %struct.ReturnNode = type { i1, %struct.Expression }
-%struct.Rvalue = type { i32, i8* }
-%struct.Scope = type { %"struct.vector.Vec<%struct.Variable>", %"struct.vector.Vec<ui32>" }
 %struct.StaticAccessExpr = type { %struct.Expression, i16 }
-%struct.StaticSymbolTableEntry = type { %struct.CompilerType, i1, %struct.Rvalue }
+%struct.StaticSymbolTableEntry = type { %struct.comp_type.CompilerType, i1, %struct.rvalue.Rvalue }
 %struct.Stmt = type { i8, i8* }
 %struct.StringConstExpr = type { i16 }
-%struct.StructDefinedField = type { i16, %struct.CompilerType }
+%struct.StructDefinedField = type { i16, %struct.comp_type.CompilerType }
 %struct.StructInitExpr = type { %struct.Expression, %"struct.vector.Vec<%struct.StructInitFieldExpr>" }
 %struct.StructInitFieldExpr = type { i16, %struct.Expression }
 %struct.StructNode = type { i16, i8, %"struct.vector.Vec<%struct.Argument>", %"struct.vector.Vec<ui16>" }
-%struct.StructSymbolTableEntry = type { %"struct.vector.Vec<%struct.StructDefinedField>", %struct.Layout, %struct.string.String, i8 }
+%struct.StructSymbolTableEntry = type { %"struct.vector.Vec<%struct.StructDefinedField>", %struct.layout.Layout, %struct.string.String, i8 }
 %struct.SymbolTable = type { %"struct.vector.Vec<%struct.SymbolTableEntry>", %"struct.vector.Vec<%struct.string.String>"* }
 %struct.SymbolTableEntry = type { i32, %struct.PathEx, i8* }
 %struct.TokenData = type { i8, i16, i32 }
 %struct.Type = type { i32, i8* }
 %struct.TypeExpr = type { %struct.Type }
 %struct.UnaryOpExpr = type { %struct.Expression, i8 }
-%struct.Variable = type { i32 }
 %struct.WhileStmt = type { %struct.Expression, %"struct.vector.Vec<%struct.Stmt>" }
+%struct.comp_type.CompilerType = type { i32, i64 }
+%struct.comp_type.ConstantArrayCompilerType = type { i32, %struct.comp_type.CompilerType }
+%struct.comp_type.PointerCompilerType = type { i8, %struct.comp_type.CompilerType }
+%struct.expression_compiler.CompiledValue = type { i32, %struct.comp_type.CompilerType, %struct.rvalue.Rvalue }
+%struct.expression_compiler.Expected = type { i32, %struct.comp_type.CompilerType* }
+%struct.layout.Layout = type { i16, i16 }
 %struct.mem.PROCESS_HEAP_ENTRY = type { i8*, i32, i8, i8, i16, i8*, i32, i32, i32 }
+%struct.output.LLVMInstruction = type { i32, i32, i32, i32 }
+%struct.primitives.PrimitiveTypeInfo = type { i8*, i8*, %struct.layout.Layout, i32 }
+%struct.rvalue.Rvalue = type { i32, i64 }
+%struct.scope.Scope = type { %"struct.vector.Vec<%struct.scope.Variable>", %"struct.vector.Vec<ui32>", i32, i32, i32 }
+%struct.scope.Variable = type { i16, %struct.comp_type.CompilerType, i1 }
 %struct.string.String = type { i8*, i32, i32 }
 %struct.window.BITMAP = type { i32, i32, i32, i32, i16, i16, i8* }
 %struct.window.MSG = type { i8*, i32, i64, i64, i32, %struct.window.POINT }
@@ -84,14 +88,15 @@
 %"struct.vector.Vec<ui16>" = type { i16*, i32, i32 }
 %"struct.vector.Vec<%struct.StructDefinedField>" = type { %struct.StructDefinedField*, i32, i32 }
 %"struct.vector.Vec<%struct.GenericStructDefinedField>" = type { %struct.GenericStructDefinedField*, i32, i32 }
-%"struct.vector.Vec<%struct.CompilerType>" = type { %struct.CompilerType*, i32, i32 }
-%"struct.vector.Vec<%struct.vector.Vec<%struct.CompilerType>>" = type { %"struct.vector.Vec<%struct.CompilerType>"*, i32, i32 }
-%"struct.vector.Vec<%struct.Variable>" = type { %struct.Variable*, i32, i32 }
-%"struct.vector.Vec<ui32>" = type { i32*, i32, i32 }
+%"struct.vector.Vec<%struct.Implementation>" = type { %struct.Implementation*, i32, i32 }
+%"struct.vector.Vec<%struct.comp_type.CompilerType>" = type { %struct.comp_type.CompilerType*, i32, i32 }
 %"struct.vector.Vec<%struct.StructInitFieldExpr>" = type { %struct.StructInitFieldExpr*, i32, i32 }
 %"struct.vector.Vec<%struct.SymbolTableEntry>" = type { %struct.SymbolTableEntry*, i32, i32 }
 %"struct.vector.Vec<%struct.string.String>" = type { %struct.string.String*, i32, i32 }
+%"struct.vector.Vec<%struct.scope.Variable>" = type { %struct.scope.Variable*, i32, i32 }
+%"struct.vector.Vec<ui32>" = type { i32*, i32, i32 }
 %"struct.vector.Vec<%struct.TokenData>" = type { %struct.TokenData*, i32, i32 }
+%"struct.vector.Vec<%struct.output.LLVMInstruction>" = type { %struct.output.LLVMInstruction*, i32, i32 }
 %"struct.vector.Vec<i8>" = type { i8*, i32, i32 }
 %"struct.vector.Vec<i64>" = type { i64*, i32, i32 }
 declare dllimport i32 @AllocConsole()
@@ -179,7 +184,7 @@ declare dllimport i32 @TranslateMessage(%struct.window.MSG* %lpMsg)
 @.str.28 = private unnamed_addr constant [28 x i8] c"char_utils: is_alpha failed\00"
 @.str.29 = private unnamed_addr constant [29 x i8] c"char_utils: is_xdigit failed\00"
 @.str.30 = private unnamed_addr constant [3 x i8] c"ac\00"
-@.str.31 = private unnamed_addr alias [2 x i8], [2 x i8]* bitcast (i8* getelementptr inbounds ([4 x i8], [4 x i8]* @.str.259, i64 0, i64 2) to [2 x i8]*)
+@.str.31 = private unnamed_addr alias [2 x i8], [2 x i8]* bitcast (i8* getelementptr inbounds ([4 x i8], [4 x i8]* @.str.301, i64 0, i64 2) to [2 x i8]*)
 @.str.32 = private unnamed_addr constant [4 x i8] c"abc\00"
 @.str.33 = private unnamed_addr constant [33 x i8] c"string_utils_test: insert failed\00"
 @.str.34 = private unnamed_addr constant [14 x i8] c"string_test: \00"
@@ -228,285 +233,282 @@ declare dllimport i32 @TranslateMessage(%struct.window.MSG* %lpMsg)
 @.str.77 = private unnamed_addr constant [27 x i8] c"Printing u64(9876543210): \00"
 @.str.78 = private unnamed_addr constant [24 x i8] c"--- VISUAL TEST END ---\00"
 @.str.79 = private unnamed_addr constant [12 x i8] c"Exception: \00"
-@.str.80 = private unnamed_addr constant [15 x i8] c"Realloc failed\00"
-@.str.81 = private unnamed_addr constant [14 x i8] c"Out of memory\00"
-@.str.82 = private unnamed_addr constant [33 x i8] c"Failed to lock heap for walking.\00"
-@.str.83 = private unnamed_addr constant [17 x i8] c"File not found: \00"
-@.str.84 = private unnamed_addr constant [17 x i8] c"File read failed\00"
-@.str.85 = private unnamed_addr constant [3 x i8] c"0\0A\00"
-@.str.86 = private unnamed_addr constant [26 x i8] c"stdout handle was invalid\00"
-@.str.87 = private unnamed_addr constant [9 x i8] c" = type \00"
-@.str.88 = private unnamed_addr constant [3 x i8] c"{ \00"
-@.str.89 = private unnamed_addr constant [3 x i8] c", \00"
-@.str.90 = private unnamed_addr constant [4 x i8] c" }\0A\00"
-@.str.91 = private unnamed_addr alias [2 x i8], [2 x i8]* bitcast (i8* getelementptr inbounds ([3 x i8], [3 x i8]* @.str.95, i64 0, i64 1) to [2 x i8]*)
-@.str.92 = private unnamed_addr constant [20 x i8] c" = internal global \00"
-@.str.93 = private unnamed_addr constant [18 x i8] c" zeroinitializer\0A\00"
-@.str.94 = private unnamed_addr constant [19 x i8] c"declare dllimport \00"
-@.str.95 = private unnamed_addr constant [3 x i8] c"\09@\00"
-@.str.96 = private unnamed_addr alias [2 x i8], [2 x i8]* bitcast (i8* getelementptr inbounds ([4 x i8], [4 x i8]* @.str.306, i64 0, i64 2) to [2 x i8]*)
-@.str.97 = private unnamed_addr constant [4 x i8] c" %t\00"
-@.str.98 = private unnamed_addr alias [2 x i8], [2 x i8]* bitcast (i8* getelementptr inbounds ([52 x i8], [52 x i8]* @.str.187, i64 0, i64 50) to [2 x i8]*)
-@.str.99 = private unnamed_addr alias [2 x i8], [2 x i8]* bitcast (i8* getelementptr inbounds ([3 x i8], [3 x i8]* @.str.85, i64 0, i64 1) to [2 x i8]*)
-@.str.100 = private unnamed_addr constant [37 x i8] c"Pointer depth exceeds maximum of 255\00"
-@.str.101 = private unnamed_addr constant [5 x i8] c"CHAR\00"
-@.str.102 = private unnamed_addr constant [5 x i8] c"NAME\00"
-@.str.103 = private unnamed_addr constant [7 x i8] c"STRING\00"
-@.str.104 = private unnamed_addr constant [8 x i8] c"INTEGER\00"
-@.str.105 = private unnamed_addr constant [8 x i8] c"DECIMAL\00"
-@.str.106 = private unnamed_addr constant [2 x i8] c"{\00"
-@.str.107 = private unnamed_addr constant [2 x i8] c"}\00"
-@.str.108 = private unnamed_addr constant [2 x i8] c"[\00"
-@.str.109 = private unnamed_addr constant [2 x i8] c"]\00"
-@.str.110 = private unnamed_addr alias [2 x i8], [2 x i8]* bitcast (i8* getelementptr inbounds ([15 x i8], [15 x i8]* @.str.72, i64 0, i64 13) to [2 x i8]*)
-@.str.111 = private unnamed_addr constant [3 x i8] c"::\00"
-@.str.112 = private unnamed_addr constant [2 x i8] c";\00"
-@.str.113 = private unnamed_addr constant [2 x i8] c",\00"
-@.str.114 = private unnamed_addr alias [2 x i8], [2 x i8]* bitcast (i8* getelementptr inbounds ([47 x i8], [47 x i8]* @.str.69, i64 0, i64 45) to [2 x i8]*)
-@.str.115 = private unnamed_addr alias [3 x i8], [3 x i8]* bitcast (i8* getelementptr inbounds ([11 x i8], [11 x i8]* @.str.168, i64 0, i64 8) to [3 x i8]*)
-@.str.116 = private unnamed_addr constant [4 x i8] c"..=\00"
-@.str.117 = private unnamed_addr constant [3 x i8] c"=>\00"
-@.str.118 = private unnamed_addr alias [2 x i8], [2 x i8]* bitcast (i8* getelementptr inbounds ([34 x i8], [34 x i8]* @.str.237, i64 0, i64 32) to [2 x i8]*)
-@.str.119 = private unnamed_addr alias [2 x i8], [2 x i8]* bitcast (i8* getelementptr inbounds ([4 x i8], [4 x i8]* @.str.116, i64 0, i64 2) to [2 x i8]*)
-@.str.120 = private unnamed_addr constant [2 x i8] c"+\00"
-@.str.121 = private unnamed_addr alias [2 x i8], [2 x i8]* bitcast (i8* getelementptr inbounds ([26 x i8], [26 x i8]* @.str.73, i64 0, i64 24) to [2 x i8]*)
-@.str.122 = private unnamed_addr constant [2 x i8] c"*\00"
-@.str.123 = private unnamed_addr constant [2 x i8] c"/\00"
-@.str.124 = private unnamed_addr alias [2 x i8], [2 x i8]* bitcast (i8* getelementptr inbounds ([3 x i8], [3 x i8]* @.str.317, i64 0, i64 1) to [2 x i8]*)
-@.str.125 = private unnamed_addr alias [2 x i8], [2 x i8]* bitcast (i8* getelementptr inbounds ([14 x i8], [14 x i8]* @.str.9, i64 0, i64 12) to [2 x i8]*)
-@.str.126 = private unnamed_addr constant [3 x i8] c"==\00"
-@.str.127 = private unnamed_addr constant [3 x i8] c"!=\00"
-@.str.128 = private unnamed_addr constant [3 x i8] c"||\00"
-@.str.129 = private unnamed_addr constant [3 x i8] c"&&\00"
-@.str.130 = private unnamed_addr alias [2 x i8], [2 x i8]* bitcast (i8* getelementptr inbounds ([3 x i8], [3 x i8]* @.str.117, i64 0, i64 1) to [2 x i8]*)
-@.str.131 = private unnamed_addr constant [3 x i8] c">=\00"
-@.str.132 = private unnamed_addr constant [2 x i8] c"<\00"
-@.str.133 = private unnamed_addr constant [3 x i8] c"<=\00"
-@.str.134 = private unnamed_addr constant [2 x i8] c"~\00"
-@.str.135 = private unnamed_addr alias [2 x i8], [2 x i8]* bitcast (i8* getelementptr inbounds ([3 x i8], [3 x i8]* @.str.128, i64 0, i64 1) to [2 x i8]*)
-@.str.136 = private unnamed_addr alias [2 x i8], [2 x i8]* bitcast (i8* getelementptr inbounds ([3 x i8], [3 x i8]* @.str.129, i64 0, i64 1) to [2 x i8]*)
-@.str.137 = private unnamed_addr constant [2 x i8] c"^\00"
-@.str.138 = private unnamed_addr constant [4 x i8] c"PUB\00"
-@.str.139 = private unnamed_addr constant [7 x i8] c"INLINE\00"
-@.str.140 = private unnamed_addr constant [6 x i8] c"CONST\00"
-@.str.141 = private unnamed_addr constant [7 x i8] c"EXTERN\00"
-@.str.142 = private unnamed_addr constant [6 x i8] c"MATCH\00"
-@.str.143 = private unnamed_addr constant [3 x i8] c"FN\00"
-@.str.144 = private unnamed_addr constant [4 x i8] c"LET\00"
-@.str.145 = private unnamed_addr constant [7 x i8] c"STATIC\00"
-@.str.146 = private unnamed_addr constant [3 x i8] c"AS\00"
-@.str.147 = private unnamed_addr constant [3 x i8] c"IF\00"
-@.str.148 = private unnamed_addr constant [5 x i8] c"ELSE\00"
-@.str.149 = private unnamed_addr constant [6 x i8] c"TRAIT\00"
-@.str.150 = private unnamed_addr constant [5 x i8] c"IMPL\00"
-@.str.151 = private unnamed_addr constant [7 x i8] c"STRUCT\00"
-@.str.152 = private unnamed_addr constant [5 x i8] c"ENUM\00"
-@.str.153 = private unnamed_addr constant [5 x i8] c"LOOP\00"
-@.str.154 = private unnamed_addr constant [4 x i8] c"FOR\00"
-@.str.155 = private unnamed_addr alias [3 x i8], [3 x i8]* bitcast (i8* getelementptr inbounds ([5 x i8], [5 x i8]* @.str.327, i64 0, i64 2) to [3 x i8]*)
-@.str.156 = private unnamed_addr constant [3 x i8] c"IN\00"
-@.str.157 = private unnamed_addr constant [6 x i8] c"WHILE\00"
-@.str.158 = private unnamed_addr constant [6 x i8] c"BREAK\00"
-@.str.159 = private unnamed_addr constant [9 x i8] c"CONTINUE\00"
-@.str.160 = private unnamed_addr constant [7 x i8] c"RETURN\00"
-@.str.161 = private unnamed_addr constant [5 x i8] c"THIS\00"
-@.str.162 = private unnamed_addr constant [9 x i8] c"OPERATOR\00"
-@.str.163 = private unnamed_addr constant [10 x i8] c"NAMESPACE\00"
-@.str.164 = private unnamed_addr constant [5 x i8] c"TRUE\00"
-@.str.165 = private unnamed_addr constant [6 x i8] c"FALSE\00"
-@.str.166 = private unnamed_addr constant [5 x i8] c"NULL\00"
-@.str.167 = private unnamed_addr constant [14 x i8] c"UNKNOWN_TOKEN\00"
-@.str.168 = private unnamed_addr constant [11 x i8] c"Loading...\00"
-@.str.169 = private unnamed_addr constant [16 x i8] c"Reading File...\00"
-@.str.170 = private unnamed_addr constant [8 x i8] c"include\00"
-@.str.171 = private unnamed_addr constant [42 x i8] c"include directive must have only one path\00"
-@.str.172 = private unnamed_addr alias [2 x i8], [2 x i8]* bitcast (i8* getelementptr inbounds ([5 x i8], [5 x i8]* @.str.202, i64 0, i64 3) to [2 x i8]*)
-@.str.173 = private unnamed_addr alias [3 x i8], [3 x i8]* bitcast (i8* getelementptr inbounds ([7 x i8], [7 x i8]* @.str.324, i64 0, i64 4) to [3 x i8]*)
-@.str.174 = private unnamed_addr constant [23 x i8] c"Unrecognized directive\00"
-@.str.175 = private unnamed_addr constant [10 x i8] c"Loaded...\00"
-@.str.176 = private unnamed_addr constant [17 x i8] c"Project Files...\00"
-@.str.177 = private unnamed_addr constant [14 x i8] c"Sym Vec Len: \00"
-@.str.178 = private unnamed_addr constant [13 x i8] c"Compiling...\00"
-@.str.179 = private unnamed_addr constant [44 x i8] c"Unexpected end of tokens while parsing type\00"
-@.str.180 = private unnamed_addr constant [41 x i8] c"Expected '(' after 'fn' in function type\00"
-@.str.181 = private unnamed_addr constant [50 x i8] c"Expected ')' to close function type argument list\00"
-@.str.182 = private unnamed_addr constant [49 x i8] c"Expected ':' before return type in function type\00"
-@.str.183 = private unnamed_addr constant [38 x i8] c"Expected ';' in fixed-size array type\00"
-@.str.184 = private unnamed_addr constant [44 x i8] c"Expected ']' to close fixed-size array type\00"
-@.str.185 = private unnamed_addr constant [56 x i8] c"Qualified type path exceeds maximum depth of 8 segments\00"
-@.str.186 = private unnamed_addr constant [49 x i8] c"Expected identifier after '::' in qualified type\00"
-@.str.187 = private unnamed_addr constant [52 x i8] c"Expected a type (unexpected token in type position)\00"
-@.str.188 = private unnamed_addr constant [29 x i8] c"Expected '{' for struct body\00"
-@.str.189 = private unnamed_addr constant [20 x i8] c"Expected field name\00"
-@.str.190 = private unnamed_addr constant [30 x i8] c"Expected ':' after field name\00"
-@.str.191 = private unnamed_addr constant [39 x i8] c"Expected ',' or '}' after struct field\00"
-@.str.192 = private unnamed_addr constant [31 x i8] c"Expected '}' after struct body\00"
-@.str.193 = private unnamed_addr constant [36 x i8] c"Expected generic type name or comma\00"
-@.str.194 = private unnamed_addr constant [38 x i8] c"Expected '>' after generic parameters\00"
-@.str.195 = private unnamed_addr constant [13 x i8] c"Not expected\00"
-@.str.196 = private unnamed_addr constant [55 x i8] c"Unexpected end of tokens inside generic type arguments\00"
-@.str.197 = private unnamed_addr constant [51 x i8] c"Expected ',' or '>' between generic type arguments\00"
-@.str.198 = private unnamed_addr constant [39 x i8] c"Unexpected end of tokens in expression\00"
-@.str.199 = private unnamed_addr constant [44 x i8] c"Expected ')' after parenthesized expression\00"
-@.str.200 = private unnamed_addr constant [37 x i8] c"Expected ',' or ']' in array literal\00"
-@.str.201 = private unnamed_addr constant [33 x i8] c"Expected ']' after array literal\00"
-@.str.202 = private unnamed_addr constant [5 x i8] c"---\09\00"
-@.str.203 = private unnamed_addr constant [6 x i8] c"\09---\0A\00"
-@.str.204 = private unnamed_addr constant [51 x i8] c"Invalid expression syntax: Unexpected prefix token\00"
-@.str.205 = private unnamed_addr constant [42 x i8] c"Expected ',' or ')' in function arguments\00"
-@.str.206 = private unnamed_addr constant [38 x i8] c"Expected ')' after function arguments\00"
-@.str.207 = private unnamed_addr constant [31 x i8] c"Expected ']' after array index\00"
-@.str.208 = private unnamed_addr constant [41 x i8] c"Expected ',' or '>' in generic arguments\00"
-@.str.209 = private unnamed_addr constant [37 x i8] c"Expected '>' after generic arguments\00"
-@.str.210 = private unnamed_addr constant [45 x i8] c"Expected field name in struct initialization\00"
-@.str.211 = private unnamed_addr constant [45 x i8] c"Expected ',' or '}' in struct initialization\00"
-@.str.212 = private unnamed_addr constant [41 x i8] c"Expected '}' after struct initialization\00"
-@.str.213 = private unnamed_addr constant [32 x i8] c"Expected member name after '::'\00"
-@.str.214 = private unnamed_addr constant [31 x i8] c"Expected member name after '.'\00"
-@.str.215 = private unnamed_addr constant [27 x i8] c"Expected '{' for enum body\00"
-@.str.216 = private unnamed_addr constant [27 x i8] c"Expected enum variant name\00"
-@.str.217 = private unnamed_addr constant [39 x i8] c"Expected ',' or '}' after enum variant\00"
-@.str.218 = private unnamed_addr constant [29 x i8] c"Expected '}' after enum body\00"
-@.str.219 = private unnamed_addr constant [37 x i8] c"Expected ';' after return expression\00"
-@.str.220 = private unnamed_addr constant [58 x i8] c"Expected variable name after variable declaration keyword\00"
-@.str.221 = private unnamed_addr constant [58 x i8] c"Expected ':' after variable deflaration to indicate type.\00"
-@.str.222 = private unnamed_addr constant [49 x i8] c"Expected ';' at the end of variable declaration.\00"
-@.str.223 = private unnamed_addr constant [25 x i8] c"Expected ';' after break\00"
-@.str.224 = private unnamed_addr constant [28 x i8] c"Expected ';' after continue\00"
-@.str.225 = private unnamed_addr constant [41 x i8] c"Expected '{' as the begining of if body.\00"
-@.str.226 = private unnamed_addr constant [24 x i8] c"Expected '{' after else\00"
-@.str.227 = private unnamed_addr constant [44 x i8] c"Expected '{' as the begining of while body.\00"
-@.str.228 = private unnamed_addr constant [31 x i8] c"Expected while after do block.\00"
-@.str.229 = private unnamed_addr constant [49 x i8] c"Expected semicolon after do {} while expression.\00"
-@.str.230 = private unnamed_addr constant [41 x i8] c"Expected in after name in for structure.\00"
-@.str.231 = private unnamed_addr constant [42 x i8] c"Expected '{' as the begining of for body.\00"
-@.str.232 = private unnamed_addr constant [39 x i8] c"Expected ';' at the end of expression.\00"
-@.str.233 = private unnamed_addr constant [6 x i8] c"todo!\00"
-@.str.234 = private unnamed_addr constant [23 x i8] c"Expected argument name\00"
-@.str.235 = private unnamed_addr constant [33 x i8] c"Expected ':' after argument name\00"
-@.str.236 = private unnamed_addr constant [35 x i8] c"Expected ',' or ')' after argument\00"
-@.str.237 = private unnamed_addr constant [34 x i8] c"Expected name after hint symbol #\00"
-@.str.238 = private unnamed_addr constant [37 x i8] c"Expected ')' after arguments in hint\00"
-@.str.239 = private unnamed_addr constant [42 x i8] c"Expected ']' after arguments in attribute\00"
-@.str.240 = private unnamed_addr constant [34 x i8] c"Expected function name after 'fn'\00"
-@.str.241 = private unnamed_addr constant [40 x i8] c"Expected '(' or '<' after function name\00"
-@.str.242 = private unnamed_addr constant [11 x i8] c"TODO ERROR\00"
-@.str.243 = private unnamed_addr constant [39 x i8] c"Expected ';' after expression function\00"
-@.str.244 = private unnamed_addr constant [24 x i8] c"Expected namespace name\00"
-@.str.245 = private unnamed_addr constant [40 x i8] c"Expected namespace body after namespace\00"
-@.str.246 = private unnamed_addr constant [19 x i8] c"Expected enum name\00"
-@.str.247 = private unnamed_addr constant [21 x i8] c"Expected struct name\00"
-@.str.248 = private unnamed_addr constant [6 x i8] c"@@@@\0A\00"
-@.str.249 = private unnamed_addr constant [34 x i8] c"--UNEXPECTED TOKEN in TOP SCOPE--\00"
-@.str.250 = private unnamed_addr constant [9 x i8] c"ACHTUNG:\00"
-@.str.251 = private unnamed_addr constant [24 x i8] c"Character not expected!\00"
-@.str.252 = private unnamed_addr constant [27 x i8] c"Duplicate symbols detected\00"
-@.str.253 = private unnamed_addr constant [3 x i8] c"if\00"
-@.str.254 = private unnamed_addr constant [3 x i8] c"do\00"
-@.str.255 = private unnamed_addr constant [3 x i8] c"as\00"
-@.str.256 = private unnamed_addr constant [3 x i8] c"in\00"
-@.str.257 = private unnamed_addr constant [3 x i8] c"fn\00"
-@.str.258 = private unnamed_addr constant [4 x i8] c"let\00"
-@.str.259 = private unnamed_addr constant [4 x i8] c"pub\00"
-@.str.260 = private unnamed_addr constant [4 x i8] c"for\00"
-@.str.261 = private unnamed_addr constant [5 x i8] c"true\00"
-@.str.262 = private unnamed_addr constant [5 x i8] c"loop\00"
-@.str.263 = private unnamed_addr constant [5 x i8] c"this\00"
-@.str.264 = private unnamed_addr constant [5 x i8] c"null\00"
-@.str.265 = private unnamed_addr alias [5 x i8], [5 x i8]* bitcast (i8* getelementptr inbounds ([24 x i8], [24 x i8]* @.str.226, i64 0, i64 19) to [5 x i8]*)
-@.str.266 = private unnamed_addr constant [5 x i8] c"enum\00"
-@.str.267 = private unnamed_addr constant [5 x i8] c"impl\00"
-@.str.268 = private unnamed_addr constant [6 x i8] c"const\00"
-@.str.269 = private unnamed_addr alias [6 x i8], [6 x i8]* bitcast (i8* getelementptr inbounds ([33 x i8], [33 x i8]* @.str.65, i64 0, i64 27) to [6 x i8]*)
-@.str.270 = private unnamed_addr constant [6 x i8] c"trait\00"
-@.str.271 = private unnamed_addr constant [6 x i8] c"while\00"
-@.str.272 = private unnamed_addr alias [6 x i8], [6 x i8]* bitcast (i8* getelementptr inbounds ([25 x i8], [25 x i8]* @.str.223, i64 0, i64 19) to [6 x i8]*)
-@.str.273 = private unnamed_addr constant [6 x i8] c"false\00"
-@.str.274 = private unnamed_addr constant [7 x i8] c"inline\00"
-@.str.275 = private unnamed_addr constant [7 x i8] c"extern\00"
-@.str.276 = private unnamed_addr constant [7 x i8] c"static\00"
-@.str.277 = private unnamed_addr constant [7 x i8] c"struct\00"
-@.str.278 = private unnamed_addr constant [7 x i8] c"return\00"
-@.str.279 = private unnamed_addr alias [9 x i8], [9 x i8]* bitcast (i8* getelementptr inbounds ([28 x i8], [28 x i8]* @.str.224, i64 0, i64 19) to [9 x i8]*)
-@.str.280 = private unnamed_addr alias [9 x i8], [9 x i8]* bitcast (i8* getelementptr inbounds ([23 x i8], [23 x i8]* @.str.284, i64 0, i64 14) to [9 x i8]*)
-@.str.281 = private unnamed_addr alias [10 x i8], [10 x i8]* bitcast (i8* getelementptr inbounds ([40 x i8], [40 x i8]* @.str.245, i64 0, i64 30) to [10 x i8]*)
-@.str.282 = private unnamed_addr constant [26 x i8] c"Invalid escape character!\00"
-@.str.283 = private unnamed_addr constant [17 x i8] c"Char is too long\00"
-@.str.284 = private unnamed_addr constant [23 x i8] c"Invalid unary operator\00"
-@.str.285 = private unnamed_addr constant [22 x i8] c"Path with length zero\00"
-@.str.286 = private unnamed_addr constant [13 x i8] c"TODO GENERIC\00"
-@.str.287 = private unnamed_addr constant [15 x i8] c"Name not found\00"
-@.str.288 = private unnamed_addr constant [24 x i8] c"Invalid binary operator\00"
-@.str.289 = private unnamed_addr constant [15 x i8] c"TODO free_type\00"
-@.str.290 = private unnamed_addr constant [3 x i8] c"i8\00"
-@.str.291 = private unnamed_addr constant [3 x i8] c"u8\00"
-@.str.292 = private unnamed_addr constant [4 x i8] c"i16\00"
-@.str.293 = private unnamed_addr constant [4 x i8] c"i32\00"
-@.str.294 = private unnamed_addr constant [4 x i8] c"i64\00"
-@.str.295 = private unnamed_addr constant [4 x i8] c"u32\00"
-@.str.296 = private unnamed_addr constant [4 x i8] c"u64\00"
-@.str.297 = private unnamed_addr constant [4 x i8] c"f16\00"
-@.str.298 = private unnamed_addr constant [4 x i8] c"f32\00"
-@.str.299 = private unnamed_addr constant [4 x i8] c"f64\00"
-@.str.300 = private unnamed_addr constant [5 x i8] c"void\00"
-@.str.301 = private unnamed_addr constant [5 x i8] c"bool\00"
-@.str.302 = private unnamed_addr constant [6 x i8] c"usize\00"
-@.str.303 = private unnamed_addr constant [6 x i8] c"isize\00"
-@.str.304 = private unnamed_addr constant [5 x i8] c"-->\09\00"
-@.str.305 = private unnamed_addr constant [6 x i8] c"\09<--\0A\00"
-@.str.306 = private unnamed_addr constant [4 x i8] c"fn(\00"
-@.str.307 = private unnamed_addr constant [5 x i8] c") : \00"
-@.str.308 = private unnamed_addr constant [3 x i8] c"; \00"
-@.str.309 = private unnamed_addr constant [7 x i8] c";enum \00"
-@.str.310 = private unnamed_addr alias [3 x i8], [3 x i8]* bitcast (i8* getelementptr inbounds ([14 x i8], [14 x i8]* @.str.11, i64 0, i64 11) to [3 x i8]*)
-@.str.311 = private unnamed_addr constant [9 x i8] c";struct \00"
-@.str.312 = private unnamed_addr constant [11 x i8] c";constant \00"
-@.str.313 = private unnamed_addr constant [4 x i8] c" = \00"
-@.str.314 = private unnamed_addr constant [8 x i8] c"define \00"
-@.str.315 = private unnamed_addr alias [11 x i8], [11 x i8]* bitcast (i8* getelementptr inbounds ([19 x i8], [19 x i8]* @.str.94, i64 0, i64 8) to [11 x i8]*)
-@.str.316 = private unnamed_addr constant [3 x i8] c" @\00"
-@.str.317 = private unnamed_addr constant [3 x i8] c" %\00"
-@.str.318 = private unnamed_addr constant [5 x i8] c" as \00"
-@.str.319 = private unnamed_addr constant [14 x i8] c"Not expected!\00"
-@.str.320 = private unnamed_addr constant [52 x i8] c"INCLUDE ALREADY HANDLED, OTHERS ARE NOT IMPLEMENTED\00"
-@.str.321 = private unnamed_addr constant [27 x i8] c"Nested namespaces too deep\00"
-@.str.322 = private unnamed_addr constant [25 x i8] c"constant must have value\00"
-@.str.323 = private unnamed_addr constant [32 x i8] c"let is not allowed in top scope\00"
-@.str.324 = private unnamed_addr constant [7 x i8] c"@@@@\0A\0D\00"
-@.str.325 = private unnamed_addr constant [25 x i8] c"--UNEXPECTED STATEMENT--\00"
-@.str.326 = private unnamed_addr constant [8 x i8] c"struct.\00"
-@.str.327 = private unnamed_addr constant [5 x i8] c"TODO\00"
-@.str.328 = private unnamed_addr constant [45 x i8] c"compile_internal_sym_table_prefill fucked up\00"
-@.str.329 = private unnamed_addr constant [8 x i8] c"\09const \00"
-@.str.330 = private unnamed_addr constant [9 x i8] c"\09static \00"
-@.str.331 = private unnamed_addr constant [6 x i8] c"\09let \00"
-@.str.332 = private unnamed_addr alias [4 x i8], [4 x i8]* bitcast (i8* getelementptr inbounds ([5 x i8], [5 x i8]* @.str.307, i64 0, i64 1) to [4 x i8]*)
-@.str.333 = private unnamed_addr constant [9 x i8] c"\09return \00"
-@.str.334 = private unnamed_addr constant [5 x i8] c"\09if \00"
-@.str.335 = private unnamed_addr alias [4 x i8], [4 x i8]* bitcast (i8* getelementptr inbounds ([11 x i8], [11 x i8]* @.str.336, i64 0, i64 7) to [4 x i8]*)
-@.str.336 = private unnamed_addr constant [11 x i8] c"\09} else {\0A\00"
-@.str.337 = private unnamed_addr constant [4 x i8] c"\09}\0A\00"
-@.str.338 = private unnamed_addr constant [8 x i8] c"\09loop{\0A\00"
-@.str.339 = private unnamed_addr constant [8 x i8] c"\09while \00"
-@.str.340 = private unnamed_addr alias [3 x i8], [3 x i8]* bitcast (i8* getelementptr inbounds ([11 x i8], [11 x i8]* @.str.336, i64 0, i64 8) to [3 x i8]*)
-@.str.341 = private unnamed_addr constant [6 x i8] c"\09for \00"
-@.str.342 = private unnamed_addr constant [5 x i8] c" in \00"
-@.str.343 = private unnamed_addr constant [6 x i8] c"\09do{\0A\00"
-@.str.344 = private unnamed_addr constant [9 x i8] c"\09}while \00"
-@.str.345 = private unnamed_addr constant [3 x i8] c";\0A\00"
-@.str.346 = private unnamed_addr constant [12 x i8] c"\09\09continue\0A\00"
-@.str.347 = private unnamed_addr constant [9 x i8] c"\09\09break\0A\00"
-@.str.348 = private unnamed_addr constant [30 x i8] c"--UNEXPECTED STATEMENT-- BDOY\00"
-@.str.349 = private unnamed_addr constant [3 x i8] c"i1\00"
-@.str.350 = private unnamed_addr constant [4 x i8] c"u16\00"
-@.str.351 = private unnamed_addr constant [5 x i8] c"half\00"
-@.str.352 = private unnamed_addr constant [6 x i8] c"float\00"
-@.str.353 = private unnamed_addr constant [7 x i8] c"double\00"
-@.str.354 = private unnamed_addr constant [32 x i8] c"Poping from vector of zero size\00"
-@DEFAULT_INTEGER_TYPE = internal global %struct.PrimitiveTypeInfo* zeroinitializer
-@POINTER_LAYOUT = internal global %struct.Layout zeroinitializer
-@PRIMITIVE_TYPES_INFO = internal global [15 x %struct.PrimitiveTypeInfo] zeroinitializer
-@VOID_TYPE = internal global %struct.PrimitiveTypeInfo* zeroinitializer
+@.str.80 = private unnamed_addr constant [3 x i8] c"i8\00"
+@.str.81 = private unnamed_addr constant [3 x i8] c"u8\00"
+@.str.82 = private unnamed_addr constant [4 x i8] c"i16\00"
+@.str.83 = private unnamed_addr constant [4 x i8] c"i32\00"
+@.str.84 = private unnamed_addr constant [4 x i8] c"i64\00"
+@.str.85 = private unnamed_addr constant [4 x i8] c"u16\00"
+@.str.86 = private unnamed_addr constant [4 x i8] c"u32\00"
+@.str.87 = private unnamed_addr constant [4 x i8] c"u64\00"
+@.str.88 = private unnamed_addr constant [4 x i8] c"f16\00"
+@.str.89 = private unnamed_addr constant [4 x i8] c"f32\00"
+@.str.90 = private unnamed_addr constant [4 x i8] c"f64\00"
+@.str.91 = private unnamed_addr constant [5 x i8] c"void\00"
+@.str.92 = private unnamed_addr constant [5 x i8] c"bool\00"
+@.str.93 = private unnamed_addr constant [6 x i8] c"usize\00"
+@.str.94 = private unnamed_addr constant [6 x i8] c"isize\00"
+@.str.95 = private unnamed_addr constant [3 x i8] c"i1\00"
+@.str.96 = private unnamed_addr constant [5 x i8] c"half\00"
+@.str.97 = private unnamed_addr constant [6 x i8] c"float\00"
+@.str.98 = private unnamed_addr constant [7 x i8] c"double\00"
+@.str.99 = private unnamed_addr constant [11 x i8] c"\09ret void\0A\00"
+@.str.100 = private unnamed_addr constant [14 x i8] c"\09unreachable\0A\00"
+@.str.101 = private unnamed_addr constant [15 x i8] c"\09add i32 0, 0\0A\00"
+@.str.102 = private unnamed_addr constant [3 x i8] c":\0A\00"
+@.str.103 = private unnamed_addr constant [13 x i8] c"\09br label %l\00"
+@.str.104 = private unnamed_addr constant [10 x i8] c"\09br i1 %t\00"
+@.str.105 = private unnamed_addr constant [11 x i8] c", label %l\00"
+@.str.106 = private unnamed_addr constant [8 x i8] c"\09ret %t\00"
+@.str.107 = private unnamed_addr constant [15 x i8] c"Realloc failed\00"
+@.str.108 = private unnamed_addr constant [14 x i8] c"Out of memory\00"
+@.str.109 = private unnamed_addr constant [33 x i8] c"Failed to lock heap for walking.\00"
+@.str.110 = private unnamed_addr constant [17 x i8] c"File not found: \00"
+@.str.111 = private unnamed_addr constant [17 x i8] c"File read failed\00"
+@.str.112 = private unnamed_addr alias [3 x i8], [3 x i8]* bitcast (i8* getelementptr inbounds ([15 x i8], [15 x i8]* @.str.101, i64 0, i64 12) to [3 x i8]*)
+@.str.113 = private unnamed_addr constant [26 x i8] c"stdout handle was invalid\00"
+@.str.114 = private unnamed_addr constant [11 x i8] c" = type { \00"
+@.str.115 = private unnamed_addr constant [3 x i8] c", \00"
+@.str.116 = private unnamed_addr constant [4 x i8] c" }\0A\00"
+@.str.117 = private unnamed_addr constant [9 x i8] c" = type \00"
+@.str.118 = private unnamed_addr alias [3 x i8], [3 x i8]* bitcast (i8* getelementptr inbounds ([11 x i8], [11 x i8]* @.str.114, i64 0, i64 8) to [3 x i8]*)
+@.str.119 = private unnamed_addr alias [2 x i8], [2 x i8]* bitcast (i8* getelementptr inbounds ([3 x i8], [3 x i8]* @.str.123, i64 0, i64 1) to [2 x i8]*)
+@.str.120 = private unnamed_addr constant [20 x i8] c" = internal global \00"
+@.str.121 = private unnamed_addr constant [18 x i8] c" zeroinitializer\0A\00"
+@.str.122 = private unnamed_addr constant [8 x i8] c"define \00"
+@.str.123 = private unnamed_addr constant [3 x i8] c" @\00"
+@.str.124 = private unnamed_addr constant [4 x i8] c" %a\00"
+@.str.125 = private unnamed_addr constant [3 x i8] c"{\0A\00"
+@.str.126 = private unnamed_addr alias [3 x i8], [3 x i8]* bitcast (i8* getelementptr inbounds ([4 x i8], [4 x i8]* @.str.116, i64 0, i64 1) to [3 x i8]*)
+@.str.127 = private unnamed_addr constant [19 x i8] c"declare dllimport \00"
+@.str.128 = private unnamed_addr constant [3 x i8] c"\09@\00"
+@.str.129 = private unnamed_addr alias [2 x i8], [2 x i8]* bitcast (i8* getelementptr inbounds ([4 x i8], [4 x i8]* @.str.332, i64 0, i64 2) to [2 x i8]*)
+@.str.130 = private unnamed_addr alias [2 x i8], [2 x i8]* bitcast (i8* getelementptr inbounds ([52 x i8], [52 x i8]* @.str.229, i64 0, i64 50) to [2 x i8]*)
+@.str.131 = private unnamed_addr alias [2 x i8], [2 x i8]* bitcast (i8* getelementptr inbounds ([11 x i8], [11 x i8]* @.str.99, i64 0, i64 9) to [2 x i8]*)
+@.str.132 = private unnamed_addr constant [25 x i8] c"Continue outside of loop\00"
+@.str.133 = private unnamed_addr constant [22 x i8] c"Break outside of loop\00"
+@.str.134 = private unnamed_addr constant [13 x i8] c"TODO GENERIC\00"
+@.str.135 = private unnamed_addr constant [15 x i8] c"Name not found\00"
+@.str.136 = private unnamed_addr constant [12 x i8] c"TODO, ERROR\00"
+@.str.137 = private unnamed_addr constant [14 x i8] c"Not expected!\00"
+@.str.138 = private unnamed_addr constant [4 x i8] c"ptr\00"
+@.str.139 = private unnamed_addr constant [16 x i8] c"Not expected! S\00"
+@.str.140 = private unnamed_addr constant [4 x i8] c" x \00"
+@.str.141 = private unnamed_addr constant [37 x i8] c"Pointer depth exceeds maximum of 255\00"
+@.str.142 = private unnamed_addr constant [5 x i8] c"CHAR\00"
+@.str.143 = private unnamed_addr constant [5 x i8] c"NAME\00"
+@.str.144 = private unnamed_addr constant [7 x i8] c"STRING\00"
+@.str.145 = private unnamed_addr constant [8 x i8] c"INTEGER\00"
+@.str.146 = private unnamed_addr constant [8 x i8] c"DECIMAL\00"
+@.str.147 = private unnamed_addr constant [2 x i8] c"{\00"
+@.str.148 = private unnamed_addr constant [2 x i8] c"}\00"
+@.str.149 = private unnamed_addr constant [2 x i8] c"[\00"
+@.str.150 = private unnamed_addr constant [2 x i8] c"]\00"
+@.str.151 = private unnamed_addr alias [2 x i8], [2 x i8]* bitcast (i8* getelementptr inbounds ([15 x i8], [15 x i8]* @.str.72, i64 0, i64 13) to [2 x i8]*)
+@.str.152 = private unnamed_addr constant [3 x i8] c"::\00"
+@.str.153 = private unnamed_addr constant [2 x i8] c";\00"
+@.str.154 = private unnamed_addr constant [2 x i8] c",\00"
+@.str.155 = private unnamed_addr alias [2 x i8], [2 x i8]* bitcast (i8* getelementptr inbounds ([47 x i8], [47 x i8]* @.str.69, i64 0, i64 45) to [2 x i8]*)
+@.str.156 = private unnamed_addr alias [3 x i8], [3 x i8]* bitcast (i8* getelementptr inbounds ([11 x i8], [11 x i8]* @.str.209, i64 0, i64 8) to [3 x i8]*)
+@.str.157 = private unnamed_addr constant [4 x i8] c"..=\00"
+@.str.158 = private unnamed_addr constant [3 x i8] c"=>\00"
+@.str.159 = private unnamed_addr alias [2 x i8], [2 x i8]* bitcast (i8* getelementptr inbounds ([34 x i8], [34 x i8]* @.str.279, i64 0, i64 32) to [2 x i8]*)
+@.str.160 = private unnamed_addr alias [2 x i8], [2 x i8]* bitcast (i8* getelementptr inbounds ([4 x i8], [4 x i8]* @.str.157, i64 0, i64 2) to [2 x i8]*)
+@.str.161 = private unnamed_addr constant [2 x i8] c"+\00"
+@.str.162 = private unnamed_addr alias [2 x i8], [2 x i8]* bitcast (i8* getelementptr inbounds ([26 x i8], [26 x i8]* @.str.73, i64 0, i64 24) to [2 x i8]*)
+@.str.163 = private unnamed_addr constant [2 x i8] c"*\00"
+@.str.164 = private unnamed_addr constant [2 x i8] c"/\00"
+@.str.165 = private unnamed_addr alias [2 x i8], [2 x i8]* bitcast (i8* getelementptr inbounds ([3 x i8], [3 x i8]* @.str.340, i64 0, i64 1) to [2 x i8]*)
+@.str.166 = private unnamed_addr alias [2 x i8], [2 x i8]* bitcast (i8* getelementptr inbounds ([14 x i8], [14 x i8]* @.str.9, i64 0, i64 12) to [2 x i8]*)
+@.str.167 = private unnamed_addr constant [3 x i8] c"==\00"
+@.str.168 = private unnamed_addr constant [3 x i8] c"!=\00"
+@.str.169 = private unnamed_addr constant [3 x i8] c"||\00"
+@.str.170 = private unnamed_addr constant [3 x i8] c"&&\00"
+@.str.171 = private unnamed_addr alias [2 x i8], [2 x i8]* bitcast (i8* getelementptr inbounds ([3 x i8], [3 x i8]* @.str.158, i64 0, i64 1) to [2 x i8]*)
+@.str.172 = private unnamed_addr constant [3 x i8] c">=\00"
+@.str.173 = private unnamed_addr constant [2 x i8] c"<\00"
+@.str.174 = private unnamed_addr constant [3 x i8] c"<=\00"
+@.str.175 = private unnamed_addr constant [2 x i8] c"~\00"
+@.str.176 = private unnamed_addr alias [2 x i8], [2 x i8]* bitcast (i8* getelementptr inbounds ([3 x i8], [3 x i8]* @.str.169, i64 0, i64 1) to [2 x i8]*)
+@.str.177 = private unnamed_addr alias [2 x i8], [2 x i8]* bitcast (i8* getelementptr inbounds ([3 x i8], [3 x i8]* @.str.170, i64 0, i64 1) to [2 x i8]*)
+@.str.178 = private unnamed_addr constant [2 x i8] c"^\00"
+@.str.179 = private unnamed_addr constant [4 x i8] c"PUB\00"
+@.str.180 = private unnamed_addr constant [7 x i8] c"INLINE\00"
+@.str.181 = private unnamed_addr constant [6 x i8] c"CONST\00"
+@.str.182 = private unnamed_addr constant [7 x i8] c"EXTERN\00"
+@.str.183 = private unnamed_addr constant [6 x i8] c"MATCH\00"
+@.str.184 = private unnamed_addr constant [3 x i8] c"FN\00"
+@.str.185 = private unnamed_addr constant [4 x i8] c"LET\00"
+@.str.186 = private unnamed_addr constant [7 x i8] c"STATIC\00"
+@.str.187 = private unnamed_addr constant [3 x i8] c"AS\00"
+@.str.188 = private unnamed_addr constant [3 x i8] c"IF\00"
+@.str.189 = private unnamed_addr constant [5 x i8] c"ELSE\00"
+@.str.190 = private unnamed_addr constant [6 x i8] c"TRAIT\00"
+@.str.191 = private unnamed_addr constant [5 x i8] c"IMPL\00"
+@.str.192 = private unnamed_addr constant [7 x i8] c"STRUCT\00"
+@.str.193 = private unnamed_addr constant [5 x i8] c"ENUM\00"
+@.str.194 = private unnamed_addr constant [5 x i8] c"LOOP\00"
+@.str.195 = private unnamed_addr constant [4 x i8] c"FOR\00"
+@.str.196 = private unnamed_addr alias [3 x i8], [3 x i8]* bitcast (i8* getelementptr inbounds ([5 x i8], [5 x i8]* @.str.349, i64 0, i64 2) to [3 x i8]*)
+@.str.197 = private unnamed_addr constant [3 x i8] c"IN\00"
+@.str.198 = private unnamed_addr constant [6 x i8] c"WHILE\00"
+@.str.199 = private unnamed_addr constant [6 x i8] c"BREAK\00"
+@.str.200 = private unnamed_addr constant [9 x i8] c"CONTINUE\00"
+@.str.201 = private unnamed_addr constant [7 x i8] c"RETURN\00"
+@.str.202 = private unnamed_addr constant [5 x i8] c"THIS\00"
+@.str.203 = private unnamed_addr constant [9 x i8] c"OPERATOR\00"
+@.str.204 = private unnamed_addr constant [10 x i8] c"NAMESPACE\00"
+@.str.205 = private unnamed_addr constant [5 x i8] c"TRUE\00"
+@.str.206 = private unnamed_addr constant [6 x i8] c"FALSE\00"
+@.str.207 = private unnamed_addr constant [5 x i8] c"NULL\00"
+@.str.208 = private unnamed_addr constant [14 x i8] c"UNKNOWN_TOKEN\00"
+@.str.209 = private unnamed_addr constant [11 x i8] c"Loading...\00"
+@.str.210 = private unnamed_addr constant [14 x i8] c"Reading File\09\00"
+@.str.211 = private unnamed_addr constant [8 x i8] c"include\00"
+@.str.212 = private unnamed_addr constant [42 x i8] c"include directive must have only one path\00"
+@.str.213 = private unnamed_addr constant [15 x i8] c"Found include\09\00"
+@.str.214 = private unnamed_addr alias [3 x i8], [3 x i8]* bitcast (i8* getelementptr inbounds ([7 x i8], [7 x i8]* @.str.347, i64 0, i64 4) to [3 x i8]*)
+@.str.215 = private unnamed_addr constant [23 x i8] c"Unrecognized directive\00"
+@.str.216 = private unnamed_addr constant [10 x i8] c"Loaded...\00"
+@.str.217 = private unnamed_addr constant [17 x i8] c"Project Files...\00"
+@.str.218 = private unnamed_addr constant [14 x i8] c"Sym Vec Len: \00"
+@.str.219 = private unnamed_addr alias [2 x i8], [2 x i8]* bitcast (i8* getelementptr inbounds ([14 x i8], [14 x i8]* @.str.210, i64 0, i64 12) to [2 x i8]*)
+@.str.220 = private unnamed_addr constant [13 x i8] c"Compiling...\00"
+@.str.221 = private unnamed_addr constant [44 x i8] c"Unexpected end of tokens while parsing type\00"
+@.str.222 = private unnamed_addr constant [41 x i8] c"Expected '(' after 'fn' in function type\00"
+@.str.223 = private unnamed_addr constant [50 x i8] c"Expected ')' to close function type argument list\00"
+@.str.224 = private unnamed_addr constant [49 x i8] c"Expected ':' before return type in function type\00"
+@.str.225 = private unnamed_addr constant [38 x i8] c"Expected ';' in fixed-size array type\00"
+@.str.226 = private unnamed_addr constant [44 x i8] c"Expected ']' to close fixed-size array type\00"
+@.str.227 = private unnamed_addr constant [56 x i8] c"Qualified type path exceeds maximum depth of 8 segments\00"
+@.str.228 = private unnamed_addr constant [49 x i8] c"Expected identifier after '::' in qualified type\00"
+@.str.229 = private unnamed_addr constant [52 x i8] c"Expected a type (unexpected token in type position)\00"
+@.str.230 = private unnamed_addr constant [29 x i8] c"Expected '{' for struct body\00"
+@.str.231 = private unnamed_addr constant [20 x i8] c"Expected field name\00"
+@.str.232 = private unnamed_addr constant [30 x i8] c"Expected ':' after field name\00"
+@.str.233 = private unnamed_addr constant [39 x i8] c"Expected ',' or '}' after struct field\00"
+@.str.234 = private unnamed_addr constant [31 x i8] c"Expected '}' after struct body\00"
+@.str.235 = private unnamed_addr constant [36 x i8] c"Expected generic type name or comma\00"
+@.str.236 = private unnamed_addr constant [38 x i8] c"Expected '>' after generic parameters\00"
+@.str.237 = private unnamed_addr constant [13 x i8] c"Not expected\00"
+@.str.238 = private unnamed_addr constant [55 x i8] c"Unexpected end of tokens inside generic type arguments\00"
+@.str.239 = private unnamed_addr constant [51 x i8] c"Expected ',' or '>' between generic type arguments\00"
+@.str.240 = private unnamed_addr constant [39 x i8] c"Unexpected end of tokens in expression\00"
+@.str.241 = private unnamed_addr constant [44 x i8] c"Expected ')' after parenthesized expression\00"
+@.str.242 = private unnamed_addr constant [37 x i8] c"Expected ',' or ']' in array literal\00"
+@.str.243 = private unnamed_addr constant [33 x i8] c"Expected ']' after array literal\00"
+@.str.244 = private unnamed_addr constant [5 x i8] c"---\09\00"
+@.str.245 = private unnamed_addr constant [6 x i8] c"\09---\0A\00"
+@.str.246 = private unnamed_addr constant [51 x i8] c"Invalid expression syntax: Unexpected prefix token\00"
+@.str.247 = private unnamed_addr constant [42 x i8] c"Expected ',' or ')' in function arguments\00"
+@.str.248 = private unnamed_addr constant [38 x i8] c"Expected ')' after function arguments\00"
+@.str.249 = private unnamed_addr constant [31 x i8] c"Expected ']' after array index\00"
+@.str.250 = private unnamed_addr constant [41 x i8] c"Expected ',' or '>' in generic arguments\00"
+@.str.251 = private unnamed_addr constant [37 x i8] c"Expected '>' after generic arguments\00"
+@.str.252 = private unnamed_addr constant [45 x i8] c"Expected field name in struct initialization\00"
+@.str.253 = private unnamed_addr constant [45 x i8] c"Expected ',' or '}' in struct initialization\00"
+@.str.254 = private unnamed_addr constant [41 x i8] c"Expected '}' after struct initialization\00"
+@.str.255 = private unnamed_addr constant [32 x i8] c"Expected member name after '::'\00"
+@.str.256 = private unnamed_addr constant [31 x i8] c"Expected member name after '.'\00"
+@.str.257 = private unnamed_addr constant [27 x i8] c"Expected '{' for enum body\00"
+@.str.258 = private unnamed_addr constant [27 x i8] c"Expected enum variant name\00"
+@.str.259 = private unnamed_addr constant [39 x i8] c"Expected ',' or '}' after enum variant\00"
+@.str.260 = private unnamed_addr constant [29 x i8] c"Expected '}' after enum body\00"
+@.str.261 = private unnamed_addr constant [37 x i8] c"Expected ';' after return expression\00"
+@.str.262 = private unnamed_addr constant [58 x i8] c"Expected variable name after variable declaration keyword\00"
+@.str.263 = private unnamed_addr constant [58 x i8] c"Expected ':' after variable deflaration to indicate type.\00"
+@.str.264 = private unnamed_addr constant [49 x i8] c"Expected ';' at the end of variable declaration.\00"
+@.str.265 = private unnamed_addr constant [25 x i8] c"Expected ';' after break\00"
+@.str.266 = private unnamed_addr constant [28 x i8] c"Expected ';' after continue\00"
+@.str.267 = private unnamed_addr constant [41 x i8] c"Expected '{' as the begining of if body.\00"
+@.str.268 = private unnamed_addr constant [24 x i8] c"Expected '{' after else\00"
+@.str.269 = private unnamed_addr constant [44 x i8] c"Expected '{' as the begining of while body.\00"
+@.str.270 = private unnamed_addr constant [31 x i8] c"Expected while after do block.\00"
+@.str.271 = private unnamed_addr constant [49 x i8] c"Expected semicolon after do {} while expression.\00"
+@.str.272 = private unnamed_addr constant [41 x i8] c"Expected in after name in for structure.\00"
+@.str.273 = private unnamed_addr constant [42 x i8] c"Expected '{' as the begining of for body.\00"
+@.str.274 = private unnamed_addr constant [39 x i8] c"Expected ';' at the end of expression.\00"
+@.str.275 = private unnamed_addr constant [6 x i8] c"todo!\00"
+@.str.276 = private unnamed_addr constant [23 x i8] c"Expected argument name\00"
+@.str.277 = private unnamed_addr constant [33 x i8] c"Expected ':' after argument name\00"
+@.str.278 = private unnamed_addr constant [35 x i8] c"Expected ',' or ')' after argument\00"
+@.str.279 = private unnamed_addr constant [34 x i8] c"Expected name after hint symbol #\00"
+@.str.280 = private unnamed_addr constant [37 x i8] c"Expected ')' after arguments in hint\00"
+@.str.281 = private unnamed_addr constant [42 x i8] c"Expected ']' after arguments in attribute\00"
+@.str.282 = private unnamed_addr constant [34 x i8] c"Expected function name after 'fn'\00"
+@.str.283 = private unnamed_addr constant [40 x i8] c"Expected '(' or '<' after function name\00"
+@.str.284 = private unnamed_addr constant [11 x i8] c"TODO ERROR\00"
+@.str.285 = private unnamed_addr constant [39 x i8] c"Expected ';' after expression function\00"
+@.str.286 = private unnamed_addr constant [24 x i8] c"Expected namespace name\00"
+@.str.287 = private unnamed_addr constant [40 x i8] c"Expected namespace body after namespace\00"
+@.str.288 = private unnamed_addr constant [19 x i8] c"Expected enum name\00"
+@.str.289 = private unnamed_addr constant [21 x i8] c"Expected struct name\00"
+@.str.290 = private unnamed_addr constant [6 x i8] c"@@@@\0A\00"
+@.str.291 = private unnamed_addr constant [34 x i8] c"--UNEXPECTED TOKEN in TOP SCOPE--\00"
+@.str.292 = private unnamed_addr constant [9 x i8] c"ACHTUNG:\00"
+@.str.293 = private unnamed_addr constant [24 x i8] c"Character not expected!\00"
+@.str.294 = private unnamed_addr constant [27 x i8] c"Duplicate symbols detected\00"
+@.str.295 = private unnamed_addr constant [3 x i8] c"if\00"
+@.str.296 = private unnamed_addr constant [3 x i8] c"do\00"
+@.str.297 = private unnamed_addr constant [3 x i8] c"as\00"
+@.str.298 = private unnamed_addr constant [3 x i8] c"in\00"
+@.str.299 = private unnamed_addr constant [3 x i8] c"fn\00"
+@.str.300 = private unnamed_addr constant [4 x i8] c"let\00"
+@.str.301 = private unnamed_addr constant [4 x i8] c"pub\00"
+@.str.302 = private unnamed_addr constant [4 x i8] c"for\00"
+@.str.303 = private unnamed_addr constant [5 x i8] c"true\00"
+@.str.304 = private unnamed_addr alias [5 x i8], [5 x i8]* bitcast (i8* getelementptr inbounds ([25 x i8], [25 x i8]* @.str.132, i64 0, i64 20) to [5 x i8]*)
+@.str.305 = private unnamed_addr constant [5 x i8] c"this\00"
+@.str.306 = private unnamed_addr constant [5 x i8] c"null\00"
+@.str.307 = private unnamed_addr alias [5 x i8], [5 x i8]* bitcast (i8* getelementptr inbounds ([24 x i8], [24 x i8]* @.str.268, i64 0, i64 19) to [5 x i8]*)
+@.str.308 = private unnamed_addr constant [5 x i8] c"enum\00"
+@.str.309 = private unnamed_addr constant [5 x i8] c"impl\00"
+@.str.310 = private unnamed_addr constant [6 x i8] c"const\00"
+@.str.311 = private unnamed_addr alias [6 x i8], [6 x i8]* bitcast (i8* getelementptr inbounds ([33 x i8], [33 x i8]* @.str.65, i64 0, i64 27) to [6 x i8]*)
+@.str.312 = private unnamed_addr constant [6 x i8] c"trait\00"
+@.str.313 = private unnamed_addr constant [6 x i8] c"while\00"
+@.str.314 = private unnamed_addr alias [6 x i8], [6 x i8]* bitcast (i8* getelementptr inbounds ([25 x i8], [25 x i8]* @.str.265, i64 0, i64 19) to [6 x i8]*)
+@.str.315 = private unnamed_addr constant [6 x i8] c"false\00"
+@.str.316 = private unnamed_addr constant [7 x i8] c"inline\00"
+@.str.317 = private unnamed_addr constant [7 x i8] c"extern\00"
+@.str.318 = private unnamed_addr constant [7 x i8] c"static\00"
+@.str.319 = private unnamed_addr constant [7 x i8] c"struct\00"
+@.str.320 = private unnamed_addr constant [7 x i8] c"return\00"
+@.str.321 = private unnamed_addr alias [9 x i8], [9 x i8]* bitcast (i8* getelementptr inbounds ([28 x i8], [28 x i8]* @.str.266, i64 0, i64 19) to [9 x i8]*)
+@.str.322 = private unnamed_addr alias [9 x i8], [9 x i8]* bitcast (i8* getelementptr inbounds ([23 x i8], [23 x i8]* @.str.326, i64 0, i64 14) to [9 x i8]*)
+@.str.323 = private unnamed_addr alias [10 x i8], [10 x i8]* bitcast (i8* getelementptr inbounds ([40 x i8], [40 x i8]* @.str.287, i64 0, i64 30) to [10 x i8]*)
+@.str.324 = private unnamed_addr constant [26 x i8] c"Invalid escape character!\00"
+@.str.325 = private unnamed_addr constant [17 x i8] c"Char is too long\00"
+@.str.326 = private unnamed_addr constant [23 x i8] c"Invalid unary operator\00"
+@.str.327 = private unnamed_addr constant [22 x i8] c"Path with length zero\00"
+@.str.328 = private unnamed_addr constant [24 x i8] c"Invalid binary operator\00"
+@.str.329 = private unnamed_addr constant [15 x i8] c"TODO free_type\00"
+@.str.330 = private unnamed_addr constant [5 x i8] c"-->\09\00"
+@.str.331 = private unnamed_addr constant [6 x i8] c"\09<--\0A\00"
+@.str.332 = private unnamed_addr constant [4 x i8] c"fn(\00"
+@.str.333 = private unnamed_addr constant [5 x i8] c") : \00"
+@.str.334 = private unnamed_addr constant [3 x i8] c"; \00"
+@.str.335 = private unnamed_addr constant [7 x i8] c";enum \00"
+@.str.336 = private unnamed_addr alias [3 x i8], [3 x i8]* bitcast (i8* getelementptr inbounds ([14 x i8], [14 x i8]* @.str.11, i64 0, i64 11) to [3 x i8]*)
+@.str.337 = private unnamed_addr constant [11 x i8] c";constant \00"
+@.str.338 = private unnamed_addr constant [4 x i8] c" = \00"
+@.str.339 = private unnamed_addr alias [11 x i8], [11 x i8]* bitcast (i8* getelementptr inbounds ([19 x i8], [19 x i8]* @.str.127, i64 0, i64 8) to [11 x i8]*)
+@.str.340 = private unnamed_addr constant [3 x i8] c" %\00"
+@.str.341 = private unnamed_addr constant [5 x i8] c" as \00"
+@.str.342 = private unnamed_addr constant [52 x i8] c"INCLUDE ALREADY HANDLED, OTHERS ARE NOT IMPLEMENTED\00"
+@.str.343 = private unnamed_addr constant [8 x i8] c"struct.\00"
+@.str.344 = private unnamed_addr constant [27 x i8] c"Nested namespaces too deep\00"
+@.str.345 = private unnamed_addr constant [25 x i8] c"constant must have value\00"
+@.str.346 = private unnamed_addr constant [32 x i8] c"let is not allowed in top scope\00"
+@.str.347 = private unnamed_addr constant [7 x i8] c"@@@@\0A\0D\00"
+@.str.348 = private unnamed_addr constant [25 x i8] c"--UNEXPECTED STATEMENT--\00"
+@.str.349 = private unnamed_addr constant [5 x i8] c"TODO\00"
+@.str.350 = private unnamed_addr constant [45 x i8] c"compile_internal_sym_table_prefill fucked up\00"
+@.str.351 = private unnamed_addr constant [32 x i8] c"Poping from vector of zero size\00"
+@layout.POINTER_LAYOUT = internal global %struct.layout.Layout zeroinitializer
+@primitives.DEFAULT_INTEGER_TYPE = internal global %struct.primitives.PrimitiveTypeInfo* zeroinitializer
+@primitives.PRIMITIVE_TYPES_INFO = internal global [15 x %struct.primitives.PrimitiveTypeInfo] zeroinitializer
+@primitives.VOID_TYPE = internal global %struct.primitives.PrimitiveTypeInfo* zeroinitializer
 @stdlib.rand_seed = internal global i32 zeroinitializer
 
 define void @mainCRTStartup(){
@@ -2507,30 +2509,32 @@ endif1:
 	store i32 %tmp10, i32* %v0
 	br label %loop_start0
 loop_body0_exit:
+	%tmp11 = load i32, i32* %v0
+	%tmp12 = getelementptr inbounds i8, i8* %dest, i32 %tmp11
+	store i8 0, i8* %tmp12
 	ret i8* %dest
 }
 define %struct.string.String @string.with_size(i32 %size){
 	%v0 = alloca %struct.string.String
 	store i8* null, i8** %v0
 	%tmp0 = getelementptr inbounds %struct.string.String, %struct.string.String* %v0, i32 0, i32 1
-	store i32 0, i32* %tmp0
+	store i32 %size, i32* %tmp0
 	%tmp1 = getelementptr inbounds %struct.string.String, %struct.string.String* %v0, i32 0, i32 2
-	store i32 0, i32* %tmp1
+	store i32 %size, i32* %tmp1
 	%tmp2 = icmp sgt i32 %size, 0
 	br i1 %tmp2, label %then0, label %endif0
 then0:
-	%tmp3 = add i32 %size, 1
-	%tmp4 = sext i32 %tmp3 to i64
-	%tmp5 = call i8* @mem.malloc(i64 %tmp4)
-	store i8* %tmp5, i8** %v0
-	%tmp6 = load i8*, i8** %v0
-	%tmp7 = sext i32 %size to i64
-	call void @mem.zero_fill(i8* %tmp6, i64 %tmp7)
+	%tmp3 = sext i32 %size to i64
+	%tmp4 = call i8* @mem.malloc(i64 %tmp3)
+	store i8* %tmp4, i8** %v0
+	%tmp5 = load i8*, i8** %v0
+	%tmp6 = sext i32 %size to i64
+	call void @mem.zero_fill(i8* %tmp5, i64 %tmp6)
 	br label %endif0
 endif0:
-	%tmp8 = load %struct.string.String, %struct.string.String* %v0
+	%tmp7 = load %struct.string.String, %struct.string.String* %v0
 ; Variable x is out.
-	ret %struct.string.String %tmp8
+	ret %struct.string.String %tmp7
 }
 define void @string.reserve(%struct.string.String* %str, i32 %required_capacity){
 	%v0 = alloca i32
@@ -2617,14 +2621,11 @@ then0:
 	%tmp5 = load i8*, i8** %v0
 	%tmp6 = sext i32 %len to i64
 	call void @mem.copy(i8* %data, i8* %tmp5, i64 %tmp6)
-	%tmp7 = load i8*, i8** %v0
-	%tmp8 = getelementptr inbounds i8, i8* %tmp7, i32 %len
-	store i8 0, i8* %tmp8
 	br label %endif0
 endif0:
-	%tmp9 = load %struct.string.String, %struct.string.String* %v0
+	%tmp7 = load %struct.string.String, %struct.string.String* %v0
 ; Variable x is out.
-	ret %struct.string.String %tmp9
+	ret %struct.string.String %tmp7
 }
 define %struct.string.String @string.from_c_string(i8* %c_string){
 	%tmp0 = call i32 @string_utils.c_str_len(i8* %c_string)
@@ -2642,6 +2643,8 @@ then0:
 endif0:
 	%tmp3 = getelementptr inbounds %struct.string.String, %struct.string.String* %str, i32 0, i32 1
 	store i32 0, i32* %tmp3
+	%tmp4 = getelementptr inbounds %struct.string.String, %struct.string.String* %str, i32 0, i32 2
+	store i32 0, i32* %tmp4
 	store i8* null, i8** %str
 	ret void
 }
@@ -2692,6 +2695,51 @@ define %struct.string.String @string.clone(%struct.string.String* %src){
 	%tmp3 = call %struct.string.String @string.from_data(i8* %tmp0, i32 %tmp2)
 	ret %struct.string.String %tmp3
 }
+define void @string.append_u64(%struct.string.String* %src_string, i64 %n){
+	%v0 = alloca i32
+	%v1 = alloca i64
+	%tmp0 = icmp eq i64 %n, 0
+	br i1 %tmp0, label %then0, label %endif0
+then0:
+	call void @string.append(%struct.string.String* %src_string, i8 48)
+	br label %func_exit
+endif0:
+	store i32 20, i32* %v0
+	%tmp1 = alloca i8, i64 21
+	store i64 %n, i64* %v1
+	br label %loop_start1
+loop_start1:
+	%tmp2 = load i32, i32* %v0
+	%tmp3 = getelementptr inbounds i8, i8* %tmp1, i32 %tmp2
+	%tmp4 = load i64, i64* %v1
+	%tmp5 = urem i64 %tmp4, 10
+	%tmp6 = trunc i64 %tmp5 to i8
+	%tmp7 = add i8 %tmp6, 48
+	store i8 %tmp7, i8* %tmp3
+	%tmp8 = load i64, i64* %v1
+	%tmp9 = udiv i64 %tmp8, 10
+	store i64 %tmp9, i64* %v1
+	%tmp10 = load i32, i32* %v0
+	%tmp11 = sub i32 %tmp10, 1
+	store i32 %tmp11, i32* %v0
+	%tmp12 = load i64, i64* %v1
+	%tmp13 = icmp ne i64 %tmp12, 0
+	br i1 %tmp13, label %endif2, label %else2
+else2:
+	br label %loop_body1_exit
+endif2:
+	br label %loop_start1
+loop_body1_exit:
+	%tmp14 = load i32, i32* %v0
+	%tmp15 = add i32 %tmp14, 1
+	%tmp16 = getelementptr inbounds i8, i8* %tmp1, i32 %tmp15
+	%tmp17 = load i32, i32* %v0
+	%tmp18 = sub i32 20, %tmp17
+	call void @string.append_str(%struct.string.String* %src_string, i8* %tmp16, i32 %tmp18)
+	br label %func_exit
+func_exit:
+	ret void
+}
 define void @string.append_str(%struct.string.String* %src_string, i8* %buffer, i32 %buffer_len){
 	%tmp0 = icmp eq i32 %buffer_len, 0
 	br i1 %tmp0, label %then0, label %endif0
@@ -2726,9 +2774,46 @@ func_exit:
 	ret void
 }
 define %struct.string.String @string.append_c_string(%struct.string.String* %src_string, i8* %c_string){
+	%v0 = alloca i32
+	%v1 = alloca %struct.string.String
 	%tmp0 = call i32 @string_utils.c_str_len(i8* %c_string)
-	call void @string.append_str(%struct.string.String* %src_string, i8* %c_string, i32 %tmp0)
-	unreachable
+	store i32 %tmp0, i32* %v0
+	%tmp1 = getelementptr inbounds %struct.string.String, %struct.string.String* %src_string, i32 0, i32 1
+	%tmp2 = load i32, i32* %tmp1
+	%tmp3 = load i32, i32* %v0
+	%tmp4 = add i32 %tmp2, %tmp3
+	%tmp5 = call %struct.string.String @string.with_size(i32 %tmp4)
+	store %struct.string.String %tmp5, %struct.string.String* %v1
+	%tmp6 = getelementptr inbounds %struct.string.String, %struct.string.String* %src_string, i32 0, i32 1
+	%tmp7 = load i32, i32* %tmp6
+	%tmp8 = icmp sgt i32 %tmp7, 0
+	br i1 %tmp8, label %then0, label %endif0
+then0:
+	%tmp9 = load i8*, i8** %src_string
+	%tmp10 = load i8*, i8** %v1
+	%tmp11 = getelementptr inbounds %struct.string.String, %struct.string.String* %src_string, i32 0, i32 1
+	%tmp12 = load i32, i32* %tmp11
+	%tmp13 = sext i32 %tmp12 to i64
+	call void @mem.copy(i8* %tmp9, i8* %tmp10, i64 %tmp13)
+	br label %endif0
+endif0:
+	%tmp14 = load i32, i32* %v0
+	%tmp15 = icmp sgt i32 %tmp14, 0
+	br i1 %tmp15, label %then1, label %endif1
+then1:
+	%tmp16 = load i8*, i8** %v1
+	%tmp17 = getelementptr inbounds %struct.string.String, %struct.string.String* %src_string, i32 0, i32 1
+	%tmp18 = load i32, i32* %tmp17
+	%tmp19 = sext i32 %tmp18 to i64
+	%tmp20 = getelementptr inbounds i8, i8* %tmp16, i64 %tmp19
+	%tmp21 = load i32, i32* %v0
+	%tmp22 = sext i32 %tmp21 to i64
+	call void @mem.copy(i8* %c_string, i8* %tmp20, i64 %tmp22)
+	br label %endif1
+endif1:
+	%tmp23 = load %struct.string.String, %struct.string.String* %v1
+; Variable new_str is out.
+	ret %struct.string.String %tmp23
 }
 define void @string.append(%struct.string.String* %src_string, i8 %ch){
 	%tmp0 = getelementptr inbounds %struct.string.String, %struct.string.String* %src_string, i32 0, i32 1
@@ -3157,6 +3242,182 @@ loop_body10_exit:
 	%tmp46 = mul i32 %tmp44, %tmp45
 	ret i32 %tmp46
 }
+define %struct.scope.Scope @scope.new(){
+	%v0 = alloca %struct.scope.Scope
+	%tmp0 = call %"struct.vector.Vec<%struct.scope.Variable>" @"vector.new<%struct.scope.Variable>"()
+	%tmp1 = call %"struct.vector.Vec<ui32>" @"vector.new<ui32>"()
+	store %"struct.vector.Vec<%struct.scope.Variable>" %tmp0, %"struct.vector.Vec<%struct.scope.Variable>"* %v0
+	%tmp2 = getelementptr inbounds %struct.scope.Scope, %struct.scope.Scope* %v0, i32 0, i32 1
+	store %"struct.vector.Vec<ui32>" %tmp1, %"struct.vector.Vec<ui32>"* %tmp2
+	%tmp3 = getelementptr inbounds %struct.scope.Scope, %struct.scope.Scope* %v0, i32 0, i32 2
+	store i32 0, i32* %tmp3
+	%tmp4 = getelementptr inbounds %struct.scope.Scope, %struct.scope.Scope* %v0, i32 0, i32 3
+	store i32 0, i32* %tmp4
+	%tmp5 = getelementptr inbounds %struct.scope.Scope, %struct.scope.Scope* %v0, i32 0, i32 4
+	store i32 -1, i32* %tmp5
+	%tmp6 = load %struct.scope.Scope, %struct.scope.Scope* %v0
+; Variable scope is out.
+	ret %struct.scope.Scope %tmp6
+}
+define void @scope.free(%struct.scope.Scope* %scope){
+	%v0 = alloca i32
+	%tmp0 = getelementptr inbounds %"struct.vector.Vec<%struct.scope.Variable>", %"struct.vector.Vec<%struct.scope.Variable>"* %scope, i32 0, i32 1
+	%tmp1 = load i32, i32* %tmp0
+	store i32 0, i32* %v0
+	br label %loop_cond0
+loop_cond0:
+	%tmp2 = load i32, i32* %v0
+	%tmp3 = getelementptr inbounds %"struct.vector.Vec<%struct.scope.Variable>", %"struct.vector.Vec<%struct.scope.Variable>"* %scope, i32 0, i32 1
+	%tmp4 = load i32, i32* %tmp3
+	%tmp5 = icmp uge i32 %tmp2, %tmp4
+	br i1 %tmp5, label %then1, label %endif1
+then1:
+	br label %loop_body0_exit
+endif1:
+	%tmp6 = load i32, i32* %v0
+	%tmp7 = load %struct.scope.Variable*, %struct.scope.Variable** %scope
+	%tmp8 = getelementptr inbounds %struct.scope.Variable, %struct.scope.Variable* %tmp7, i32 %tmp6
+	%tmp9 = getelementptr inbounds %struct.scope.Variable, %struct.scope.Variable* %tmp8, i32 0, i32 1
+	call void @comp_type.free(%struct.comp_type.CompilerType* %tmp9)
+	%tmp10 = load i32, i32* %v0
+	%tmp11 = add i32 %tmp10, 1
+	store i32 %tmp11, i32* %v0
+	br label %loop_cond0
+loop_body0_exit:
+	call void @"vector.free<%struct.scope.Variable>"(%"struct.vector.Vec<%struct.scope.Variable>"* %scope)
+	%tmp12 = getelementptr inbounds %struct.scope.Scope, %struct.scope.Scope* %scope, i32 0, i32 1
+	call void @"vector.free<ui32>"(%"struct.vector.Vec<ui32>"* %tmp12)
+	ret void
+}
+define %struct.scope.Variable* @scope.find_variable(i16 %name, %struct.scope.Scope* %scope){
+	%v0 = alloca i32
+	%tmp0 = getelementptr inbounds %"struct.vector.Vec<%struct.scope.Variable>", %"struct.vector.Vec<%struct.scope.Variable>"* %scope, i32 0, i32 1
+	%tmp1 = load i32, i32* %tmp0
+	%tmp2 = getelementptr inbounds %"struct.vector.Vec<%struct.scope.Variable>", %"struct.vector.Vec<%struct.scope.Variable>"* %scope, i32 0, i32 1
+	%tmp3 = load i32, i32* %tmp2
+	store i32 %tmp3, i32* %v0
+	br label %loop_start0
+loop_start0:
+	%tmp4 = load i32, i32* %v0
+	%tmp5 = icmp ugt i32 %tmp4, 0
+	br i1 %tmp5, label %endif1, label %else1
+else1:
+	br label %loop_body0_exit
+endif1:
+	%tmp6 = load i32, i32* %v0
+	%tmp7 = sub i32 %tmp6, 1
+	store i32 %tmp7, i32* %v0
+	%tmp8 = load i32, i32* %v0
+	%tmp9 = load %struct.scope.Variable*, %struct.scope.Variable** %scope
+	%tmp10 = getelementptr inbounds %struct.scope.Variable, %struct.scope.Variable* %tmp9, i32 %tmp8
+	%tmp11 = load i16, i16* %tmp10
+	%tmp12 = icmp eq i16 %tmp11, %name
+	br i1 %tmp12, label %then2, label %endif2
+then2:
+	br label %func_exit
+endif2:
+	br label %loop_start0
+loop_body0_exit:
+	br label %func_exit
+func_exit:
+	%tmp13 = phi %struct.scope.Variable* [%tmp10, %then2], [null, %loop_body0_exit]
+	ret %struct.scope.Variable* %tmp13
+}
+define void @scope.exit_scope(%struct.scope.Scope* %scope){
+	%v0 = alloca i32
+	store i32 0, i32* %v0
+	%tmp0 = getelementptr inbounds %struct.scope.Scope, %struct.scope.Scope* %scope, i32 0, i32 1
+	%tmp1 = getelementptr inbounds %"struct.vector.Vec<ui32>", %"struct.vector.Vec<ui32>"* %tmp0, i32 0, i32 1
+	%tmp2 = load i32, i32* %tmp1
+	%tmp3 = icmp ne i32 %tmp2, 0
+	br i1 %tmp3, label %then0, label %endif0
+then0:
+	%tmp4 = getelementptr inbounds %struct.scope.Scope, %struct.scope.Scope* %scope, i32 0, i32 1
+	%tmp5 = call i32 @"vector.pop<ui32>"(%"struct.vector.Vec<ui32>"* %tmp4)
+	store i32 %tmp5, i32* %v0
+	br label %endif0
+endif0:
+	br label %loop_start1
+loop_start1:
+	%tmp6 = getelementptr inbounds %"struct.vector.Vec<%struct.scope.Variable>", %"struct.vector.Vec<%struct.scope.Variable>"* %scope, i32 0, i32 1
+	%tmp7 = load i32, i32* %tmp6
+	%tmp8 = load i32, i32* %v0
+	%tmp9 = icmp ugt i32 %tmp7, %tmp8
+	br i1 %tmp9, label %endif2, label %else2
+else2:
+	br label %loop_body1_exit
+endif2:
+	%tmp10 = call %struct.scope.Variable @"vector.pop<%struct.scope.Variable>"(%"struct.vector.Vec<%struct.scope.Variable>"* %scope)
+	br label %loop_start1
+loop_body1_exit:
+; Variable var is out.
+	ret void
+}
+define void @scope.enter_scope(%struct.scope.Scope* %scope){
+	%tmp0 = getelementptr inbounds %struct.scope.Scope, %struct.scope.Scope* %scope, i32 0, i32 1
+	%tmp1 = getelementptr inbounds %"struct.vector.Vec<%struct.scope.Variable>", %"struct.vector.Vec<%struct.scope.Variable>"* %scope, i32 0, i32 1
+	%tmp2 = load i32, i32* %tmp1
+	call void @"vector.push<ui32>"(%"struct.vector.Vec<ui32>"* %tmp0, i32 %tmp2)
+	ret void
+}
+define void @scope.add_to_scope(%struct.scope.Variable %val, %struct.scope.Scope* %scope){
+	call void @"vector.push<%struct.scope.Variable>"(%"struct.vector.Vec<%struct.scope.Variable>"* %scope, %struct.scope.Variable %val)
+; Variable val is out.
+	ret void
+}
+define %struct.rvalue.Rvalue @rvalue.void(){
+	%v0 = alloca %struct.rvalue.Rvalue
+	store i32 5, i32* %v0
+	%tmp0 = load %struct.rvalue.Rvalue, %struct.rvalue.Rvalue* %v0
+; Variable x is out.
+	ret %struct.rvalue.Rvalue %tmp0
+}
+define %struct.rvalue.Rvalue @rvalue.register(i32 %val){
+	%v0 = alloca %struct.rvalue.Rvalue
+	store i32 0, i32* %v0
+	%tmp0 = getelementptr inbounds %struct.rvalue.Rvalue, %struct.rvalue.Rvalue* %v0, i32 0, i32 1
+	%tmp1 = zext i32 %val to i64
+	store i64 %tmp1, i64* %tmp0
+	%tmp2 = load %struct.rvalue.Rvalue, %struct.rvalue.Rvalue* %v0
+; Variable x is out.
+	ret %struct.rvalue.Rvalue %tmp2
+}
+define %struct.rvalue.Rvalue @rvalue.nil(){
+	%v0 = alloca %struct.rvalue.Rvalue
+	store i32 4, i32* %v0
+	%tmp0 = load %struct.rvalue.Rvalue, %struct.rvalue.Rvalue* %v0
+; Variable x is out.
+	ret %struct.rvalue.Rvalue %tmp0
+}
+define %struct.rvalue.Rvalue @rvalue.integer(i64 %val){
+	%v0 = alloca %struct.rvalue.Rvalue
+	store i32 1, i32* %v0
+	%tmp0 = getelementptr inbounds %struct.rvalue.Rvalue, %struct.rvalue.Rvalue* %v0, i32 0, i32 1
+	store i64 %val, i64* %tmp0
+	%tmp1 = load %struct.rvalue.Rvalue, %struct.rvalue.Rvalue* %v0
+; Variable x is out.
+	ret %struct.rvalue.Rvalue %tmp1
+}
+define %struct.rvalue.Rvalue @rvalue.decimal(double %val){
+	%v0 = alloca %struct.rvalue.Rvalue
+	store i32 2, i32* %v0
+	%tmp0 = getelementptr inbounds %struct.rvalue.Rvalue, %struct.rvalue.Rvalue* %v0, i32 0, i32 1
+	%tmp1 = bitcast double %val to i64
+	store i64 %tmp1, i64* %tmp0
+	%tmp2 = load %struct.rvalue.Rvalue, %struct.rvalue.Rvalue* %v0
+; Variable x is out.
+	ret %struct.rvalue.Rvalue %tmp2
+}
+define %struct.rvalue.Rvalue @rvalue.boolean(i1 %val){
+	%v0 = alloca %struct.rvalue.Rvalue
+	store i32 3, i32* %v0
+	%tmp0 = getelementptr inbounds %struct.rvalue.Rvalue, %struct.rvalue.Rvalue* %v0, i32 0, i32 1
+	%tmp1 = zext i1 %val to i64
+	store i64 %tmp1, i64* %tmp0
+	%tmp2 = load %struct.rvalue.Rvalue, %struct.rvalue.Rvalue* %v0
+; Variable x is out.
+	ret %struct.rvalue.Rvalue %tmp2
+}
 define void @process.throw(i8* %exception){
 	%tmp0 = call i32 @string_utils.c_str_len(i8* %exception)
 	call i32 @AllocConsole()
@@ -3171,7 +3432,7 @@ define %struct.string.String @process.get_executable_path(){
 	%tmp0 = call %struct.string.String @string.with_size(i32 260)
 	store %struct.string.String %tmp0, %struct.string.String* %v0
 	%tmp1 = load i8*, i8** %v0
-	%tmp2 = getelementptr inbounds %struct.string.String, %struct.string.String* %v0, i32 0, i32 1
+	%tmp2 = getelementptr inbounds %struct.string.String, %struct.string.String* %v0, i32 0, i32 2
 	%tmp3 = load i32, i32* %tmp2
 	%tmp4 = call i32 @GetModuleFileNameA(i8* null, i8* %tmp1, i32 %tmp3)
 	%tmp5 = getelementptr inbounds %struct.string.String, %struct.string.String* %v0, i32 0, i32 1
@@ -3220,6 +3481,569 @@ loop_body0_exit:
 ; Variable string is out.
 	ret %struct.string.String %tmp17
 }
+define i32 @primitives.find_primitive_type_index(i8* %name, i32 %len){
+	%tmp0 = icmp eq i32 %len, 2
+	br i1 %tmp0, label %then0, label %endif0
+then0:
+	%tmp1 = call i32 @mem.compare(i8* %name, i8* @.str.80, i64 2)
+	%tmp2 = icmp eq i32 %tmp1, 0
+	br i1 %tmp2, label %then1, label %endif1
+then1:
+	br label %func_exit
+endif1:
+	%tmp3 = call i32 @mem.compare(i8* %name, i8* @.str.81, i64 2)
+	%tmp4 = icmp eq i32 %tmp3, 0
+	br i1 %tmp4, label %then2, label %endif2
+then2:
+	br label %func_exit
+endif2:
+	br label %endif0
+endif0:
+	%tmp5 = icmp eq i32 %len, 3
+	br i1 %tmp5, label %then3, label %endif3
+then3:
+	%tmp6 = call i32 @mem.compare(i8* %name, i8* @.str.82, i64 3)
+	%tmp7 = icmp eq i32 %tmp6, 0
+	br i1 %tmp7, label %then4, label %endif4
+then4:
+	br label %func_exit
+endif4:
+	%tmp8 = call i32 @mem.compare(i8* %name, i8* @.str.83, i64 3)
+	%tmp9 = icmp eq i32 %tmp8, 0
+	br i1 %tmp9, label %then5, label %endif5
+then5:
+	br label %func_exit
+endif5:
+	%tmp10 = call i32 @mem.compare(i8* %name, i8* @.str.84, i64 3)
+	%tmp11 = icmp eq i32 %tmp10, 0
+	br i1 %tmp11, label %then6, label %endif6
+then6:
+	br label %func_exit
+endif6:
+	%tmp12 = call i32 @mem.compare(i8* %name, i8* @.str.85, i64 3)
+	%tmp13 = icmp eq i32 %tmp12, 0
+	br i1 %tmp13, label %then7, label %endif7
+then7:
+	br label %func_exit
+endif7:
+	%tmp14 = call i32 @mem.compare(i8* %name, i8* @.str.86, i64 3)
+	%tmp15 = icmp eq i32 %tmp14, 0
+	br i1 %tmp15, label %then8, label %endif8
+then8:
+	br label %func_exit
+endif8:
+	%tmp16 = call i32 @mem.compare(i8* %name, i8* @.str.87, i64 3)
+	%tmp17 = icmp eq i32 %tmp16, 0
+	br i1 %tmp17, label %then9, label %endif9
+then9:
+	br label %func_exit
+endif9:
+	%tmp18 = call i32 @mem.compare(i8* %name, i8* @.str.88, i64 3)
+	%tmp19 = icmp eq i32 %tmp18, 0
+	br i1 %tmp19, label %then10, label %endif10
+then10:
+	br label %func_exit
+endif10:
+	%tmp20 = call i32 @mem.compare(i8* %name, i8* @.str.89, i64 3)
+	%tmp21 = icmp eq i32 %tmp20, 0
+	br i1 %tmp21, label %then11, label %endif11
+then11:
+	br label %func_exit
+endif11:
+	%tmp22 = call i32 @mem.compare(i8* %name, i8* @.str.90, i64 3)
+	%tmp23 = icmp eq i32 %tmp22, 0
+	br i1 %tmp23, label %then12, label %endif12
+then12:
+	br label %func_exit
+endif12:
+	br label %endif3
+endif3:
+	%tmp24 = icmp eq i32 %len, 4
+	br i1 %tmp24, label %then13, label %endif13
+then13:
+	%tmp25 = call i32 @mem.compare(i8* %name, i8* @.str.91, i64 4)
+	%tmp26 = icmp eq i32 %tmp25, 0
+	br i1 %tmp26, label %then14, label %endif14
+then14:
+	br label %func_exit
+endif14:
+	%tmp27 = call i32 @mem.compare(i8* %name, i8* @.str.92, i64 4)
+	%tmp28 = icmp eq i32 %tmp27, 0
+	br i1 %tmp28, label %then15, label %endif15
+then15:
+	br label %func_exit
+endif15:
+	br label %endif13
+endif13:
+	%tmp29 = icmp eq i32 %len, 5
+	br i1 %tmp29, label %then16, label %endif16
+then16:
+	%tmp30 = call i32 @mem.compare(i8* %name, i8* @.str.93, i64 5)
+	%tmp31 = icmp eq i32 %tmp30, 0
+	br i1 %tmp31, label %then17, label %endif17
+then17:
+	br label %func_exit
+endif17:
+	%tmp32 = call i32 @mem.compare(i8* %name, i8* @.str.94, i64 5)
+	%tmp33 = icmp eq i32 %tmp32, 0
+	br i1 %tmp33, label %then18, label %endif18
+then18:
+	br label %func_exit
+endif18:
+	br label %endif16
+endif16:
+	br label %func_exit
+func_exit:
+	%tmp34 = phi i32 [2, %then1], [7, %then2], [3, %then4], [4, %then5], [5, %then6], [8, %then7], [9, %then8], [10, %then9], [12, %then10], [13, %then11], [14, %then12], [0, %then14], [1, %then15], [11, %then17], [6, %then18], [-1, %endif16]
+	ret i32 %tmp34
+}
+define %struct.primitives.PrimitiveTypeInfo* @primitives.find_primitive_type(i8* %name, i32 %len){
+	%tmp0 = call i32 @primitives.find_primitive_type_index(i8* %name, i32 %len)
+	%tmp1 = icmp eq i32 %tmp0, -1
+	br i1 %tmp1, label %then0, label %endif0
+then0:
+	br label %func_exit
+endif0:
+	%tmp2 = getelementptr inbounds [15 x %struct.primitives.PrimitiveTypeInfo], [15 x %struct.primitives.PrimitiveTypeInfo]* @primitives.PRIMITIVE_TYPES_INFO, i32 0, i32 %tmp0
+	br label %func_exit
+func_exit:
+	%tmp3 = phi %struct.primitives.PrimitiveTypeInfo* [null, %then0], [%tmp2, %endif0]
+	ret %struct.primitives.PrimitiveTypeInfo* %tmp3
+}
+define void @primitives.STATIC_primitives(){
+	%v0 = alloca %struct.primitives.PrimitiveTypeInfo
+	%v1 = alloca %struct.layout.Layout
+	%v2 = alloca %struct.primitives.PrimitiveTypeInfo
+	%v3 = alloca %struct.layout.Layout
+	%v4 = alloca %struct.primitives.PrimitiveTypeInfo
+	%v5 = alloca %struct.layout.Layout
+	%v6 = alloca %struct.primitives.PrimitiveTypeInfo
+	%v7 = alloca %struct.layout.Layout
+	%v8 = alloca %struct.primitives.PrimitiveTypeInfo
+	%v9 = alloca %struct.layout.Layout
+	%v10 = alloca %struct.primitives.PrimitiveTypeInfo
+	%v11 = alloca %struct.layout.Layout
+	%v12 = alloca %struct.primitives.PrimitiveTypeInfo
+	%v13 = alloca %struct.layout.Layout
+	%v14 = alloca %struct.primitives.PrimitiveTypeInfo
+	%v15 = alloca %struct.layout.Layout
+	%v16 = alloca %struct.primitives.PrimitiveTypeInfo
+	%v17 = alloca %struct.layout.Layout
+	%v18 = alloca %struct.primitives.PrimitiveTypeInfo
+	%v19 = alloca %struct.layout.Layout
+	%v20 = alloca %struct.primitives.PrimitiveTypeInfo
+	%v21 = alloca %struct.layout.Layout
+	%v22 = alloca %struct.primitives.PrimitiveTypeInfo
+	%v23 = alloca %struct.layout.Layout
+	%v24 = alloca %struct.primitives.PrimitiveTypeInfo
+	%v25 = alloca %struct.layout.Layout
+	%v26 = alloca %struct.primitives.PrimitiveTypeInfo
+	%v27 = alloca %struct.layout.Layout
+	%v28 = alloca %struct.primitives.PrimitiveTypeInfo
+	%v29 = alloca %struct.layout.Layout
+	store i16 0, i16* %v1
+	%tmp0 = getelementptr inbounds %struct.layout.Layout, %struct.layout.Layout* %v1, i32 0, i32 1
+	store i16 1, i16* %tmp0
+	%tmp1 = load %struct.layout.Layout, %struct.layout.Layout* %v1
+	store i8* @.str.91, i8** %v0
+	%tmp2 = getelementptr inbounds %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v0, i32 0, i32 1
+	store i8* @.str.91, i8** %tmp2
+	%tmp3 = getelementptr inbounds %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v0, i32 0, i32 2
+	store %struct.layout.Layout %tmp1, %struct.layout.Layout* %tmp3
+	%tmp4 = getelementptr inbounds %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v0, i32 0, i32 3
+	store i32 0, i32* %tmp4
+	%tmp5 = load %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v0
+	store %struct.primitives.PrimitiveTypeInfo %tmp5, %struct.primitives.PrimitiveTypeInfo* @primitives.PRIMITIVE_TYPES_INFO
+	store i16 1, i16* %v3
+	%tmp6 = getelementptr inbounds %struct.layout.Layout, %struct.layout.Layout* %v3, i32 0, i32 1
+	store i16 1, i16* %tmp6
+	%tmp7 = load %struct.layout.Layout, %struct.layout.Layout* %v3
+; Variable x is out.
+	store i8* @.str.92, i8** %v2
+	%tmp8 = getelementptr inbounds %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v2, i32 0, i32 1
+	store i8* @.str.95, i8** %tmp8
+	%tmp9 = getelementptr inbounds %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v2, i32 0, i32 2
+	store %struct.layout.Layout %tmp7, %struct.layout.Layout* %tmp9
+	%tmp10 = getelementptr inbounds %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v2, i32 0, i32 3
+	store i32 1, i32* %tmp10
+	%tmp11 = getelementptr inbounds [15 x %struct.primitives.PrimitiveTypeInfo], [15 x %struct.primitives.PrimitiveTypeInfo]* @primitives.PRIMITIVE_TYPES_INFO, i32 0, i64 1
+	%tmp12 = load %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v2
+	store %struct.primitives.PrimitiveTypeInfo %tmp12, %struct.primitives.PrimitiveTypeInfo* %tmp11
+	store i16 1, i16* %v5
+	%tmp13 = getelementptr inbounds %struct.layout.Layout, %struct.layout.Layout* %v5, i32 0, i32 1
+	store i16 1, i16* %tmp13
+	%tmp14 = load %struct.layout.Layout, %struct.layout.Layout* %v5
+; Variable x is out.
+	store i8* @.str.80, i8** %v4
+	%tmp15 = getelementptr inbounds %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v4, i32 0, i32 1
+	store i8* @.str.80, i8** %tmp15
+	%tmp16 = getelementptr inbounds %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v4, i32 0, i32 2
+	store %struct.layout.Layout %tmp14, %struct.layout.Layout* %tmp16
+	%tmp17 = getelementptr inbounds %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v4, i32 0, i32 3
+	store i32 2, i32* %tmp17
+	%tmp18 = getelementptr inbounds [15 x %struct.primitives.PrimitiveTypeInfo], [15 x %struct.primitives.PrimitiveTypeInfo]* @primitives.PRIMITIVE_TYPES_INFO, i32 0, i64 2
+	%tmp19 = load %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v4
+	store %struct.primitives.PrimitiveTypeInfo %tmp19, %struct.primitives.PrimitiveTypeInfo* %tmp18
+	store i16 2, i16* %v7
+	%tmp20 = getelementptr inbounds %struct.layout.Layout, %struct.layout.Layout* %v7, i32 0, i32 1
+	store i16 2, i16* %tmp20
+	%tmp21 = load %struct.layout.Layout, %struct.layout.Layout* %v7
+; Variable x is out.
+	store i8* @.str.82, i8** %v6
+	%tmp22 = getelementptr inbounds %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v6, i32 0, i32 1
+	store i8* @.str.82, i8** %tmp22
+	%tmp23 = getelementptr inbounds %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v6, i32 0, i32 2
+	store %struct.layout.Layout %tmp21, %struct.layout.Layout* %tmp23
+	%tmp24 = getelementptr inbounds %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v6, i32 0, i32 3
+	store i32 2, i32* %tmp24
+	%tmp25 = getelementptr inbounds [15 x %struct.primitives.PrimitiveTypeInfo], [15 x %struct.primitives.PrimitiveTypeInfo]* @primitives.PRIMITIVE_TYPES_INFO, i32 0, i64 3
+	%tmp26 = load %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v6
+	store %struct.primitives.PrimitiveTypeInfo %tmp26, %struct.primitives.PrimitiveTypeInfo* %tmp25
+	store i16 4, i16* %v9
+	%tmp27 = getelementptr inbounds %struct.layout.Layout, %struct.layout.Layout* %v9, i32 0, i32 1
+	store i16 4, i16* %tmp27
+	%tmp28 = load %struct.layout.Layout, %struct.layout.Layout* %v9
+; Variable x is out.
+	store i8* @.str.83, i8** %v8
+	%tmp29 = getelementptr inbounds %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v8, i32 0, i32 1
+	store i8* @.str.83, i8** %tmp29
+	%tmp30 = getelementptr inbounds %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v8, i32 0, i32 2
+	store %struct.layout.Layout %tmp28, %struct.layout.Layout* %tmp30
+	%tmp31 = getelementptr inbounds %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v8, i32 0, i32 3
+	store i32 2, i32* %tmp31
+	%tmp32 = getelementptr inbounds [15 x %struct.primitives.PrimitiveTypeInfo], [15 x %struct.primitives.PrimitiveTypeInfo]* @primitives.PRIMITIVE_TYPES_INFO, i32 0, i64 4
+	%tmp33 = load %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v8
+	store %struct.primitives.PrimitiveTypeInfo %tmp33, %struct.primitives.PrimitiveTypeInfo* %tmp32
+	store i16 8, i16* %v11
+	%tmp34 = getelementptr inbounds %struct.layout.Layout, %struct.layout.Layout* %v11, i32 0, i32 1
+	store i16 8, i16* %tmp34
+	%tmp35 = load %struct.layout.Layout, %struct.layout.Layout* %v11
+; Variable x is out.
+	store i8* @.str.84, i8** %v10
+	%tmp36 = getelementptr inbounds %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v10, i32 0, i32 1
+	store i8* @.str.84, i8** %tmp36
+	%tmp37 = getelementptr inbounds %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v10, i32 0, i32 2
+	store %struct.layout.Layout %tmp35, %struct.layout.Layout* %tmp37
+	%tmp38 = getelementptr inbounds %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v10, i32 0, i32 3
+	store i32 2, i32* %tmp38
+	%tmp39 = getelementptr inbounds [15 x %struct.primitives.PrimitiveTypeInfo], [15 x %struct.primitives.PrimitiveTypeInfo]* @primitives.PRIMITIVE_TYPES_INFO, i32 0, i64 5
+	%tmp40 = load %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v10
+	store %struct.primitives.PrimitiveTypeInfo %tmp40, %struct.primitives.PrimitiveTypeInfo* %tmp39
+	store i16 8, i16* %v13
+	%tmp41 = getelementptr inbounds %struct.layout.Layout, %struct.layout.Layout* %v13, i32 0, i32 1
+	store i16 8, i16* %tmp41
+	%tmp42 = load %struct.layout.Layout, %struct.layout.Layout* %v13
+; Variable x is out.
+	store i8* @.str.94, i8** %v12
+	%tmp43 = getelementptr inbounds %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v12, i32 0, i32 1
+	store i8* @.str.84, i8** %tmp43
+	%tmp44 = getelementptr inbounds %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v12, i32 0, i32 2
+	store %struct.layout.Layout %tmp42, %struct.layout.Layout* %tmp44
+	%tmp45 = getelementptr inbounds %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v12, i32 0, i32 3
+	store i32 2, i32* %tmp45
+	%tmp46 = getelementptr inbounds [15 x %struct.primitives.PrimitiveTypeInfo], [15 x %struct.primitives.PrimitiveTypeInfo]* @primitives.PRIMITIVE_TYPES_INFO, i32 0, i64 6
+	%tmp47 = load %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v12
+	store %struct.primitives.PrimitiveTypeInfo %tmp47, %struct.primitives.PrimitiveTypeInfo* %tmp46
+	store i16 1, i16* %v15
+	%tmp48 = getelementptr inbounds %struct.layout.Layout, %struct.layout.Layout* %v15, i32 0, i32 1
+	store i16 1, i16* %tmp48
+	%tmp49 = load %struct.layout.Layout, %struct.layout.Layout* %v15
+; Variable x is out.
+	store i8* @.str.81, i8** %v14
+	%tmp50 = getelementptr inbounds %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v14, i32 0, i32 1
+	store i8* @.str.80, i8** %tmp50
+	%tmp51 = getelementptr inbounds %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v14, i32 0, i32 2
+	store %struct.layout.Layout %tmp49, %struct.layout.Layout* %tmp51
+	%tmp52 = getelementptr inbounds %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v14, i32 0, i32 3
+	store i32 3, i32* %tmp52
+	%tmp53 = getelementptr inbounds [15 x %struct.primitives.PrimitiveTypeInfo], [15 x %struct.primitives.PrimitiveTypeInfo]* @primitives.PRIMITIVE_TYPES_INFO, i32 0, i64 7
+	%tmp54 = load %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v14
+	store %struct.primitives.PrimitiveTypeInfo %tmp54, %struct.primitives.PrimitiveTypeInfo* %tmp53
+	store i16 2, i16* %v17
+	%tmp55 = getelementptr inbounds %struct.layout.Layout, %struct.layout.Layout* %v17, i32 0, i32 1
+	store i16 2, i16* %tmp55
+	%tmp56 = load %struct.layout.Layout, %struct.layout.Layout* %v17
+; Variable x is out.
+	store i8* @.str.85, i8** %v16
+	%tmp57 = getelementptr inbounds %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v16, i32 0, i32 1
+	store i8* @.str.82, i8** %tmp57
+	%tmp58 = getelementptr inbounds %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v16, i32 0, i32 2
+	store %struct.layout.Layout %tmp56, %struct.layout.Layout* %tmp58
+	%tmp59 = getelementptr inbounds %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v16, i32 0, i32 3
+	store i32 3, i32* %tmp59
+	%tmp60 = getelementptr inbounds [15 x %struct.primitives.PrimitiveTypeInfo], [15 x %struct.primitives.PrimitiveTypeInfo]* @primitives.PRIMITIVE_TYPES_INFO, i32 0, i64 8
+	%tmp61 = load %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v16
+	store %struct.primitives.PrimitiveTypeInfo %tmp61, %struct.primitives.PrimitiveTypeInfo* %tmp60
+	store i16 4, i16* %v19
+	%tmp62 = getelementptr inbounds %struct.layout.Layout, %struct.layout.Layout* %v19, i32 0, i32 1
+	store i16 4, i16* %tmp62
+	%tmp63 = load %struct.layout.Layout, %struct.layout.Layout* %v19
+; Variable x is out.
+	store i8* @.str.86, i8** %v18
+	%tmp64 = getelementptr inbounds %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v18, i32 0, i32 1
+	store i8* @.str.83, i8** %tmp64
+	%tmp65 = getelementptr inbounds %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v18, i32 0, i32 2
+	store %struct.layout.Layout %tmp63, %struct.layout.Layout* %tmp65
+	%tmp66 = getelementptr inbounds %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v18, i32 0, i32 3
+	store i32 3, i32* %tmp66
+	%tmp67 = getelementptr inbounds [15 x %struct.primitives.PrimitiveTypeInfo], [15 x %struct.primitives.PrimitiveTypeInfo]* @primitives.PRIMITIVE_TYPES_INFO, i32 0, i64 9
+	%tmp68 = load %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v18
+	store %struct.primitives.PrimitiveTypeInfo %tmp68, %struct.primitives.PrimitiveTypeInfo* %tmp67
+	store i16 8, i16* %v21
+	%tmp69 = getelementptr inbounds %struct.layout.Layout, %struct.layout.Layout* %v21, i32 0, i32 1
+	store i16 8, i16* %tmp69
+	%tmp70 = load %struct.layout.Layout, %struct.layout.Layout* %v21
+; Variable x is out.
+	store i8* @.str.87, i8** %v20
+	%tmp71 = getelementptr inbounds %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v20, i32 0, i32 1
+	store i8* @.str.84, i8** %tmp71
+	%tmp72 = getelementptr inbounds %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v20, i32 0, i32 2
+	store %struct.layout.Layout %tmp70, %struct.layout.Layout* %tmp72
+	%tmp73 = getelementptr inbounds %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v20, i32 0, i32 3
+	store i32 3, i32* %tmp73
+	%tmp74 = getelementptr inbounds [15 x %struct.primitives.PrimitiveTypeInfo], [15 x %struct.primitives.PrimitiveTypeInfo]* @primitives.PRIMITIVE_TYPES_INFO, i32 0, i64 10
+	%tmp75 = load %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v20
+	store %struct.primitives.PrimitiveTypeInfo %tmp75, %struct.primitives.PrimitiveTypeInfo* %tmp74
+	store i16 8, i16* %v23
+	%tmp76 = getelementptr inbounds %struct.layout.Layout, %struct.layout.Layout* %v23, i32 0, i32 1
+	store i16 8, i16* %tmp76
+	%tmp77 = load %struct.layout.Layout, %struct.layout.Layout* %v23
+; Variable x is out.
+	store i8* @.str.93, i8** %v22
+	%tmp78 = getelementptr inbounds %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v22, i32 0, i32 1
+	store i8* @.str.84, i8** %tmp78
+	%tmp79 = getelementptr inbounds %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v22, i32 0, i32 2
+	store %struct.layout.Layout %tmp77, %struct.layout.Layout* %tmp79
+	%tmp80 = getelementptr inbounds %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v22, i32 0, i32 3
+	store i32 3, i32* %tmp80
+	%tmp81 = getelementptr inbounds [15 x %struct.primitives.PrimitiveTypeInfo], [15 x %struct.primitives.PrimitiveTypeInfo]* @primitives.PRIMITIVE_TYPES_INFO, i32 0, i64 11
+	%tmp82 = load %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v22
+	store %struct.primitives.PrimitiveTypeInfo %tmp82, %struct.primitives.PrimitiveTypeInfo* %tmp81
+	store i16 2, i16* %v25
+	%tmp83 = getelementptr inbounds %struct.layout.Layout, %struct.layout.Layout* %v25, i32 0, i32 1
+	store i16 2, i16* %tmp83
+	%tmp84 = load %struct.layout.Layout, %struct.layout.Layout* %v25
+; Variable x is out.
+	store i8* @.str.88, i8** %v24
+	%tmp85 = getelementptr inbounds %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v24, i32 0, i32 1
+	store i8* @.str.96, i8** %tmp85
+	%tmp86 = getelementptr inbounds %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v24, i32 0, i32 2
+	store %struct.layout.Layout %tmp84, %struct.layout.Layout* %tmp86
+	%tmp87 = getelementptr inbounds %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v24, i32 0, i32 3
+	store i32 4, i32* %tmp87
+	%tmp88 = getelementptr inbounds [15 x %struct.primitives.PrimitiveTypeInfo], [15 x %struct.primitives.PrimitiveTypeInfo]* @primitives.PRIMITIVE_TYPES_INFO, i32 0, i64 12
+	%tmp89 = load %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v24
+	store %struct.primitives.PrimitiveTypeInfo %tmp89, %struct.primitives.PrimitiveTypeInfo* %tmp88
+	store i16 4, i16* %v27
+	%tmp90 = getelementptr inbounds %struct.layout.Layout, %struct.layout.Layout* %v27, i32 0, i32 1
+	store i16 4, i16* %tmp90
+	%tmp91 = load %struct.layout.Layout, %struct.layout.Layout* %v27
+; Variable x is out.
+	store i8* @.str.89, i8** %v26
+	%tmp92 = getelementptr inbounds %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v26, i32 0, i32 1
+	store i8* @.str.97, i8** %tmp92
+	%tmp93 = getelementptr inbounds %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v26, i32 0, i32 2
+	store %struct.layout.Layout %tmp91, %struct.layout.Layout* %tmp93
+	%tmp94 = getelementptr inbounds %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v26, i32 0, i32 3
+	store i32 4, i32* %tmp94
+	%tmp95 = getelementptr inbounds [15 x %struct.primitives.PrimitiveTypeInfo], [15 x %struct.primitives.PrimitiveTypeInfo]* @primitives.PRIMITIVE_TYPES_INFO, i32 0, i64 13
+	%tmp96 = load %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v26
+	store %struct.primitives.PrimitiveTypeInfo %tmp96, %struct.primitives.PrimitiveTypeInfo* %tmp95
+	store i16 8, i16* %v29
+	%tmp97 = getelementptr inbounds %struct.layout.Layout, %struct.layout.Layout* %v29, i32 0, i32 1
+	store i16 8, i16* %tmp97
+	%tmp98 = load %struct.layout.Layout, %struct.layout.Layout* %v29
+; Variable x is out.
+	store i8* @.str.90, i8** %v28
+	%tmp99 = getelementptr inbounds %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v28, i32 0, i32 1
+	store i8* @.str.98, i8** %tmp99
+	%tmp100 = getelementptr inbounds %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v28, i32 0, i32 2
+	store %struct.layout.Layout %tmp98, %struct.layout.Layout* %tmp100
+	%tmp101 = getelementptr inbounds %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v28, i32 0, i32 3
+	store i32 4, i32* %tmp101
+	%tmp102 = getelementptr inbounds [15 x %struct.primitives.PrimitiveTypeInfo], [15 x %struct.primitives.PrimitiveTypeInfo]* @primitives.PRIMITIVE_TYPES_INFO, i32 0, i64 14
+	%tmp103 = load %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %v28
+	store %struct.primitives.PrimitiveTypeInfo %tmp103, %struct.primitives.PrimitiveTypeInfo* %tmp102
+	store %struct.primitives.PrimitiveTypeInfo* @primitives.PRIMITIVE_TYPES_INFO, %struct.primitives.PrimitiveTypeInfo** @primitives.VOID_TYPE
+	%tmp104 = getelementptr inbounds [15 x %struct.primitives.PrimitiveTypeInfo], [15 x %struct.primitives.PrimitiveTypeInfo]* @primitives.PRIMITIVE_TYPES_INFO, i32 0, i64 9
+	store %struct.primitives.PrimitiveTypeInfo* %tmp104, %struct.primitives.PrimitiveTypeInfo** @primitives.DEFAULT_INTEGER_TYPE
+; Variable x is out.
+	ret void
+}
+define %struct.output.LLVMInstruction @output.unreachable(){
+	%v0 = alloca %struct.output.LLVMInstruction
+	store i32 1, i32* %v0
+	%tmp0 = load %struct.output.LLVMInstruction, %struct.output.LLVMInstruction* %v0
+; Variable x is out.
+	ret %struct.output.LLVMInstruction %tmp0
+}
+define %struct.output.LLVMInstruction @output.ret_void(){
+	%v0 = alloca %struct.output.LLVMInstruction
+	store i32 0, i32* %v0
+	%tmp0 = load %struct.output.LLVMInstruction, %struct.output.LLVMInstruction* %v0
+; Variable x is out.
+	ret %struct.output.LLVMInstruction %tmp0
+}
+define %struct.output.LLVMInstruction @output.ret(i32 %register){
+	%v0 = alloca %struct.output.LLVMInstruction
+	store i32 5, i32* %v0
+	%tmp0 = getelementptr inbounds %struct.output.LLVMInstruction, %struct.output.LLVMInstruction* %v0, i32 0, i32 1
+	store i32 %register, i32* %tmp0
+	%tmp1 = load %struct.output.LLVMInstruction, %struct.output.LLVMInstruction* %v0
+; Variable x is out.
+	ret %struct.output.LLVMInstruction %tmp1
+}
+define void @output.push_instructions(%"struct.vector.Vec<%struct.output.LLVMInstruction>"* %instructions, %struct.SymbolTable* %sym_table, %struct.string.String* %output){
+	%v0 = alloca i32
+	%tmp0 = getelementptr inbounds %"struct.vector.Vec<%struct.output.LLVMInstruction>", %"struct.vector.Vec<%struct.output.LLVMInstruction>"* %instructions, i32 0, i32 1
+	%tmp1 = load i32, i32* %tmp0
+	store i32 0, i32* %v0
+	br label %loop_cond0
+loop_cond0:
+	%tmp2 = load i32, i32* %v0
+	%tmp3 = getelementptr inbounds %"struct.vector.Vec<%struct.output.LLVMInstruction>", %"struct.vector.Vec<%struct.output.LLVMInstruction>"* %instructions, i32 0, i32 1
+	%tmp4 = load i32, i32* %tmp3
+	%tmp5 = icmp uge i32 %tmp2, %tmp4
+	br i1 %tmp5, label %then1, label %endif1
+then1:
+	br label %loop_body0_exit
+endif1:
+	%tmp6 = load i32, i32* %v0
+	%tmp7 = load %struct.output.LLVMInstruction*, %struct.output.LLVMInstruction** %instructions
+	%tmp8 = getelementptr inbounds %struct.output.LLVMInstruction, %struct.output.LLVMInstruction* %tmp7, i32 %tmp6
+	call void @output.push_instruction(%struct.output.LLVMInstruction* %tmp8, %struct.SymbolTable* %sym_table, %struct.string.String* %output)
+	%tmp9 = load i32, i32* %v0
+	%tmp10 = add i32 %tmp9, 1
+	store i32 %tmp10, i32* %v0
+	br label %loop_cond0
+loop_body0_exit:
+	ret void
+}
+define void @output.push_instruction(%struct.output.LLVMInstruction* %instruction, %struct.SymbolTable* %sym_table, %struct.string.String* %output){
+	%tmp0 = load i32, i32* %instruction
+	%tmp1 = icmp eq i32 %tmp0, 0
+	br i1 %tmp1, label %then0, label %else0
+then0:
+	call void @string.append_str(%struct.string.String* %output, i8* @.str.99, i32 10)
+	br label %endif0
+else0:
+	%tmp2 = load i32, i32* %instruction
+	%tmp3 = icmp eq i32 %tmp2, 1
+	br i1 %tmp3, label %then1, label %else1
+then1:
+	call void @string.append_str(%struct.string.String* %output, i8* @.str.100, i32 13)
+	br label %endif1
+else1:
+	%tmp4 = load i32, i32* %instruction
+	%tmp5 = icmp eq i32 %tmp4, 2
+	br i1 %tmp5, label %then2, label %else2
+then2:
+	call void @string.append_str(%struct.string.String* %output, i8* @.str.101, i32 14)
+	br label %endif2
+else2:
+	%tmp6 = load i32, i32* %instruction
+	%tmp7 = icmp eq i32 %tmp6, 3
+	br i1 %tmp7, label %then3, label %else3
+then3:
+	%tmp8 = getelementptr inbounds %struct.output.LLVMInstruction, %struct.output.LLVMInstruction* %instruction, i32 0, i32 1
+	%tmp9 = load i32, i32* %tmp8
+	call void @string.append(%struct.string.String* %output, i8 108)
+	%tmp10 = zext i32 %tmp9 to i64
+	call void @string.append_u64(%struct.string.String* %output, i64 %tmp10)
+	call void @string.append_str(%struct.string.String* %output, i8* @.str.102, i32 2)
+	br label %endif3
+else3:
+	%tmp11 = load i32, i32* %instruction
+	%tmp12 = icmp eq i32 %tmp11, 4
+	br i1 %tmp12, label %then4, label %else4
+then4:
+	%tmp13 = getelementptr inbounds %struct.output.LLVMInstruction, %struct.output.LLVMInstruction* %instruction, i32 0, i32 1
+	%tmp14 = load i32, i32* %tmp13
+	call void @string.append_str(%struct.string.String* %output, i8* @.str.103, i32 12)
+	%tmp15 = zext i32 %tmp14 to i64
+	call void @string.append_u64(%struct.string.String* %output, i64 %tmp15)
+	call void @string.append(%struct.string.String* %output, i8 10)
+	br label %endif4
+else4:
+	%tmp16 = load i32, i32* %instruction
+	%tmp17 = icmp eq i32 %tmp16, 6
+	br i1 %tmp17, label %then5, label %else5
+then5:
+	%tmp18 = getelementptr inbounds %struct.output.LLVMInstruction, %struct.output.LLVMInstruction* %instruction, i32 0, i32 1
+	%tmp19 = load i32, i32* %tmp18
+	%tmp20 = getelementptr inbounds %struct.output.LLVMInstruction, %struct.output.LLVMInstruction* %instruction, i32 0, i32 2
+	%tmp21 = load i32, i32* %tmp20
+	%tmp22 = getelementptr inbounds %struct.output.LLVMInstruction, %struct.output.LLVMInstruction* %instruction, i32 0, i32 3
+	%tmp23 = load i32, i32* %tmp22
+	call void @string.append_str(%struct.string.String* %output, i8* @.str.104, i32 9)
+	%tmp24 = zext i32 %tmp19 to i64
+	call void @string.append_u64(%struct.string.String* %output, i64 %tmp24)
+	call void @string.append_str(%struct.string.String* %output, i8* @.str.105, i32 10)
+	%tmp25 = zext i32 %tmp21 to i64
+	call void @string.append_u64(%struct.string.String* %output, i64 %tmp25)
+	call void @string.append_str(%struct.string.String* %output, i8* @.str.105, i32 10)
+	%tmp26 = zext i32 %tmp23 to i64
+	call void @string.append_u64(%struct.string.String* %output, i64 %tmp26)
+	call void @string.append(%struct.string.String* %output, i8 10)
+	br label %endif5
+else5:
+	%tmp27 = load i32, i32* %instruction
+	%tmp28 = icmp eq i32 %tmp27, 5
+	br i1 %tmp28, label %then6, label %endif6
+then6:
+	%tmp29 = getelementptr inbounds %struct.output.LLVMInstruction, %struct.output.LLVMInstruction* %instruction, i32 0, i32 1
+	%tmp30 = load i32, i32* %tmp29
+	call void @string.append_str(%struct.string.String* %output, i8* @.str.106, i32 7)
+	%tmp31 = zext i32 %tmp30 to i64
+	call void @string.append_u64(%struct.string.String* %output, i64 %tmp31)
+	call void @string.append(%struct.string.String* %output, i8 10)
+	br label %endif6
+endif6:
+	br label %endif5
+endif5:
+	br label %endif4
+endif4:
+	br label %endif3
+endif3:
+	br label %endif2
+endif2:
+	br label %endif1
+endif1:
+	br label %endif0
+endif0:
+	ret void
+}
+define %struct.output.LLVMInstruction @output.label(i32 %label_id){
+	%v0 = alloca %struct.output.LLVMInstruction
+	store i32 3, i32* %v0
+	%tmp0 = getelementptr inbounds %struct.output.LLVMInstruction, %struct.output.LLVMInstruction* %v0, i32 0, i32 1
+	store i32 %label_id, i32* %tmp0
+	%tmp1 = load %struct.output.LLVMInstruction, %struct.output.LLVMInstruction* %v0
+; Variable x is out.
+	ret %struct.output.LLVMInstruction %tmp1
+}
+define %struct.output.LLVMInstruction @output.jump_to(i32 %label_id){
+	%v0 = alloca %struct.output.LLVMInstruction
+	store i32 4, i32* %v0
+	%tmp0 = getelementptr inbounds %struct.output.LLVMInstruction, %struct.output.LLVMInstruction* %v0, i32 0, i32 1
+	store i32 %label_id, i32* %tmp0
+	%tmp1 = load %struct.output.LLVMInstruction, %struct.output.LLVMInstruction* %v0
+; Variable x is out.
+	ret %struct.output.LLVMInstruction %tmp1
+}
+define %struct.output.LLVMInstruction @output.branch(i32 %condition_register, i32 %then_label, i32 %else_label){
+	%v0 = alloca %struct.output.LLVMInstruction
+	store i32 6, i32* %v0
+	%tmp0 = getelementptr inbounds %struct.output.LLVMInstruction, %struct.output.LLVMInstruction* %v0, i32 0, i32 1
+	store i32 %condition_register, i32* %tmp0
+	%tmp1 = getelementptr inbounds %struct.output.LLVMInstruction, %struct.output.LLVMInstruction* %v0, i32 0, i32 2
+	store i32 %then_label, i32* %tmp1
+	%tmp2 = getelementptr inbounds %struct.output.LLVMInstruction, %struct.output.LLVMInstruction* %v0, i32 0, i32 3
+	store i32 %else_label, i32* %tmp2
+	%tmp3 = load %struct.output.LLVMInstruction, %struct.output.LLVMInstruction* %v0
+; Variable x is out.
+	ret %struct.output.LLVMInstruction %tmp3
+}
 define void @mem.zero_fill(i8* %dest, i64 %len){
 	call void @mem.fill(i8 0, i8* %dest, i64 %len)
 	ret void
@@ -3236,7 +4060,7 @@ endif0:
 	%tmp4 = icmp eq i8* %tmp3, null
 	br i1 %tmp4, label %then1, label %endif1
 then1:
-	call void @process.throw(i8* @.str.80)
+	call void @process.throw(i8* @.str.107)
 	br label %endif1
 endif1:
 	br label %func_exit
@@ -3250,7 +4074,7 @@ define i8* @mem.malloc(i64 %size){
 	%tmp2 = icmp eq i8* %tmp1, null
 	br i1 %tmp2, label %then0, label %endif0
 then0:
-	call void @process.throw(i8* @.str.81)
+	call void @process.throw(i8* @.str.108)
 	br label %endif0
 endif0:
 	ret i8* %tmp1
@@ -3265,7 +4089,7 @@ define i64 @mem.get_total_allocated_memory_external(){
 	%tmp2 = icmp eq i32 %tmp1, 0
 	br i1 %tmp2, label %then0, label %endif0
 then0:
-	call void @process.throw(i8* @.str.82)
+	call void @process.throw(i8* @.str.109)
 	br label %endif0
 endif0:
 	br label %loop_start1
@@ -3378,6 +4202,15 @@ func_exit:
 	%tmp18 = phi i32 [-1, %then2], [1, %then3], [0, %loop_body0_exit]
 	ret i32 %tmp18
 }
+define void @layout.STATIC_layout(){
+	%v0 = alloca %struct.layout.Layout
+	store i16 8, i16* %v0
+	%tmp0 = getelementptr inbounds %struct.layout.Layout, %struct.layout.Layout* %v0, i32 0, i32 1
+	store i16 8, i16* %tmp0
+	%tmp1 = load %struct.layout.Layout, %struct.layout.Layout* %v0
+	store %struct.layout.Layout %tmp1, %struct.layout.Layout* @layout.POINTER_LAYOUT
+	ret void
+}
 define i32 @fs.write_to_file(i8* %path, i8* %content, i32 %content_len){
 	%v0 = alloca i32
 	%tmp0 = call i8* @CreateFileA(i8* %path, i32 1073741824, i32 0, i8* null, i32 2, i32 128, i8* null)
@@ -3404,6 +4237,30 @@ func_exit:
 	%tmp9 = phi i32 [0, %then0], [%tmp8, %logic_end_1]
 	ret i32 %tmp9
 }
+define %struct.string.String @fs.read_full_file_as_string_string(%struct.string.String* %path){
+	%tmp0 = getelementptr inbounds %struct.string.String, %struct.string.String* %path, i32 0, i32 1
+	%tmp1 = load i32, i32* %tmp0
+	%tmp2 = add i32 %tmp1, 1
+	%tmp3 = alloca i8, i32 %tmp2
+	%tmp4 = getelementptr inbounds %struct.string.String, %struct.string.String* %path, i32 0, i32 1
+	%tmp5 = load i32, i32* %tmp4
+	%tmp6 = icmp sgt i32 %tmp5, 0
+	br i1 %tmp6, label %then1, label %endif1
+then1:
+	%tmp7 = load i8*, i8** %path
+	%tmp8 = getelementptr inbounds %struct.string.String, %struct.string.String* %path, i32 0, i32 1
+	%tmp9 = load i32, i32* %tmp8
+	%tmp10 = sext i32 %tmp9 to i64
+	call void @mem.copy(i8* %tmp7, i8* %tmp3, i64 %tmp10)
+	br label %endif1
+endif1:
+	%tmp11 = getelementptr inbounds %struct.string.String, %struct.string.String* %path, i32 0, i32 1
+	%tmp12 = load i32, i32* %tmp11
+	%tmp13 = getelementptr inbounds i8, i8* %tmp3, i32 %tmp12
+	store i8 0, i8* %tmp13
+	%tmp14 = call %struct.string.String @fs.read_full_file_as_string(i8* %tmp3)
+	ret %struct.string.String %tmp14
+}
 define %struct.string.String @fs.read_full_file_as_string(i8* %path){
 	%v0 = alloca i64
 	%v1 = alloca %struct.string.String
@@ -3413,7 +4270,7 @@ define %struct.string.String @fs.read_full_file_as_string(i8* %path){
 	%tmp2 = icmp eq i8* %tmp0, %tmp1
 	br i1 %tmp2, label %then0, label %endif0
 then0:
-	%tmp3 = call i8* @string_utils.insert(i8* @.str.83, i8* %path, i32 16)
+	%tmp3 = call i8* @string_utils.insert(i8* @.str.110, i8* %path, i32 16)
 	call void @process.throw(i8* %tmp3)
 	br label %endif0
 endif0:
@@ -3440,24 +4297,19 @@ endif1:
 	br i1 %tmp14, label %then2, label %endif2
 then2:
 	call void @string.free(%struct.string.String* %v1)
-	call void @process.throw(i8* @.str.84)
+	call void @process.throw(i8* @.str.111)
 	br label %endif2
 endif2:
 	%tmp15 = getelementptr inbounds %struct.string.String, %struct.string.String* %v1, i32 0, i32 1
 	%tmp16 = load i64, i64* %v0
 	%tmp17 = trunc i64 %tmp16 to i32
 	store i32 %tmp17, i32* %tmp15
-	%tmp18 = getelementptr inbounds %struct.string.String, %struct.string.String* %v1, i32 0, i32 1
-	%tmp19 = load i32, i32* %tmp18
-	%tmp20 = load i8*, i8** %v1
-	%tmp21 = getelementptr inbounds i8, i8* %tmp20, i32 %tmp19
-	store i8 0, i8* %tmp21
-	%tmp22 = load %struct.string.String, %struct.string.String* %v1
+	%tmp18 = load %struct.string.String, %struct.string.String* %v1
 	br label %func_exit
 func_exit:
 ; Variable buffer is out.
-	%tmp23 = phi %struct.string.String [%tmp6, %then1], [%tmp22, %endif2]
-	ret %struct.string.String %tmp23
+	%tmp19 = phi %struct.string.String [%tmp6, %then1], [%tmp18, %endif2]
+	ret %struct.string.String %tmp19
 }
 define i1 @fs.file_exists(i8* %path){
 	%tmp0 = call i32 @GetFileAttributesA(i8* %path)
@@ -3481,6 +4333,60 @@ endif0:
 func_exit:
 	%tmp3 = phi i32 [0, %then0], [1, %endif0]
 	ret i32 %tmp3
+}
+define %struct.expression_compiler.Expected @expression_compiler.expect_nothing(){
+	%v0 = alloca %struct.expression_compiler.Expected
+	store i32 0, i32* %v0
+	%tmp0 = load %struct.expression_compiler.Expected, %struct.expression_compiler.Expected* %v0
+; Variable x is out.
+	ret %struct.expression_compiler.Expected %tmp0
+}
+define %struct.expression_compiler.Expected @expression_compiler.expect_compiler_type(%struct.comp_type.CompilerType* %ct){
+	%v0 = alloca %struct.expression_compiler.Expected
+	store i32 1, i32* %v0
+	%tmp0 = getelementptr inbounds %struct.expression_compiler.Expected, %struct.expression_compiler.Expected* %v0, i32 0, i32 1
+	store %struct.comp_type.CompilerType* %ct, %struct.comp_type.CompilerType** %tmp0
+	%tmp1 = load %struct.expression_compiler.Expected, %struct.expression_compiler.Expected* %v0
+; Variable x is out.
+	ret %struct.expression_compiler.Expected %tmp1
+}
+define %struct.expression_compiler.Expected @expression_compiler.expect_anything(){
+	%v0 = alloca %struct.expression_compiler.Expected
+	store i32 2, i32* %v0
+	%tmp0 = load %struct.expression_compiler.Expected, %struct.expression_compiler.Expected* %v0
+; Variable x is out.
+	ret %struct.expression_compiler.Expected %tmp0
+}
+define i32 @expression_compiler.cv_to_register(%struct.expression_compiler.CompiledValue* %cv, %struct.scope.Scope* %scope, %struct.SymbolTable* %symbol_table, %"struct.vector.Vec<%struct.output.LLVMInstruction>"* %output){
+	ret i32 555
+}
+define %struct.expression_compiler.CompiledValue @expression_compiler.cv_integer(i64 %integer){
+	%v0 = alloca %struct.expression_compiler.CompiledValue
+	%v1 = alloca %struct.comp_type.CompilerType
+	store i32 0, i32* %v0
+	%tmp0 = getelementptr inbounds %struct.expression_compiler.CompiledValue, %struct.expression_compiler.CompiledValue* %v0, i32 0, i32 1
+	%tmp1 = load %struct.primitives.PrimitiveTypeInfo*, %struct.primitives.PrimitiveTypeInfo** @primitives.DEFAULT_INTEGER_TYPE
+	store i32 2, i32* %v1
+	%tmp2 = getelementptr inbounds %struct.comp_type.CompilerType, %struct.comp_type.CompilerType* %v1, i32 0, i32 1
+	%tmp3 = ptrtoint %struct.primitives.PrimitiveTypeInfo* %tmp1 to i64
+	store i64 %tmp3, i64* %tmp2
+	%tmp4 = load %struct.comp_type.CompilerType, %struct.comp_type.CompilerType* %v1
+	store %struct.comp_type.CompilerType %tmp4, %struct.comp_type.CompilerType* %tmp0
+	%tmp5 = getelementptr inbounds %struct.expression_compiler.CompiledValue, %struct.expression_compiler.CompiledValue* %v0, i32 0, i32 2
+	%tmp6 = call %struct.rvalue.Rvalue @rvalue.integer(i64 %integer)
+	store %struct.rvalue.Rvalue %tmp6, %struct.rvalue.Rvalue* %tmp5
+	%tmp7 = load %struct.expression_compiler.CompiledValue, %struct.expression_compiler.CompiledValue* %v0
+; Variable x is out.
+	ret %struct.expression_compiler.CompiledValue %tmp7
+}
+define %struct.rvalue.Rvalue @expression_compiler.constant_expression_evaluation(%struct.Expression* %expr, %struct.SymbolTable* %table){
+	%tmp0 = call %struct.rvalue.Rvalue @rvalue.integer(i64 19999991)
+	ret %struct.rvalue.Rvalue %tmp0
+}
+define %struct.expression_compiler.CompiledValue @expression_compiler.compile(%struct.Expression* %expression, %struct.expression_compiler.Expected %expect, %struct.scope.Scope* %scope, %struct.SymbolTable* %symbol_table, %"struct.vector.Vec<%struct.output.LLVMInstruction>"* %output){
+	%tmp0 = call %struct.expression_compiler.CompiledValue @expression_compiler.cv_integer(i64 1337)
+; Variable expect is out.
+	ret %struct.expression_compiler.CompiledValue %tmp0
 }
 define void @console.writeln(i8* %buffer, i32 %len){
 	%v0 = alloca i32
@@ -3546,7 +4452,7 @@ define void @console.println_u64(i64 %n){
 	%tmp1 = icmp eq i64 %n, 0
 	br i1 %tmp1, label %then0, label %endif0
 then0:
-	call void @console.write(i8* @.str.85, i32 2)
+	call void @console.write(i8* @.str.112, i32 2)
 	br label %func_exit
 endif0:
 	store i64 %n, i64* %v1
@@ -3744,7 +4650,7 @@ define i8* @console.get_stdout(){
 	%tmp3 = icmp eq i8* %tmp1, %tmp2
 	br i1 %tmp3, label %then0, label %endif0
 then0:
-	call void @process.throw(i8* @.str.86)
+	call void @process.throw(i8* @.str.113)
 	br label %endif0
 endif0:
 	%tmp4 = load i8*, i8** %v0
@@ -3753,6 +4659,7 @@ endif0:
 define void @compile_internals.sym_table_push_structs_generic(%struct.SymbolTable* %symbol_table, %struct.string.String* %stdout){
 	%v0 = alloca i32
 	%v1 = alloca i32
+	%v2 = alloca i32
 	%tmp0 = getelementptr inbounds %"struct.vector.Vec<%struct.SymbolTableEntry>", %"struct.vector.Vec<%struct.SymbolTableEntry>"* %symbol_table, i32 0, i32 1
 	%tmp1 = load i32, i32* %tmp0
 	%tmp2 = load %struct.SymbolTableEntry*, %struct.SymbolTableEntry** %symbol_table
@@ -3780,57 +4687,87 @@ then2:
 	%tmp15 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp2, i32 %tmp14
 	%tmp16 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp15, i32 0, i32 2
 	%tmp17 = load i8*, i8** %tmp16
-	call void @string.append(%struct.string.String* %stdout, i8 37)
-	%tmp18 = getelementptr inbounds %struct.GenericStructSymbolTableEntry, %struct.GenericStructSymbolTableEntry* %tmp17, i32 0, i32 3
-	%tmp19 = load i8*, i8** %tmp18
-	%tmp20 = getelementptr inbounds %struct.GenericStructSymbolTableEntry, %struct.GenericStructSymbolTableEntry* %tmp17, i32 0, i32 3
-	%tmp21 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp20, i32 0, i32 1
-	%tmp22 = load i32, i32* %tmp21
-	call void @string.append_str(%struct.string.String* %stdout, i8* %tmp19, i32 %tmp22)
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.87, i32 8)
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.88, i32 2)
-	%tmp23 = getelementptr inbounds %"struct.vector.Vec<%struct.GenericStructDefinedField>", %"struct.vector.Vec<%struct.GenericStructDefinedField>"* %tmp17, i32 0, i32 1
-	%tmp24 = load i32, i32* %tmp23
+	%tmp18 = getelementptr inbounds %struct.GenericStructSymbolTableEntry, %struct.GenericStructSymbolTableEntry* %tmp17, i32 0, i32 2
+	%tmp19 = getelementptr inbounds %"struct.vector.Vec<%struct.Implementation>", %"struct.vector.Vec<%struct.Implementation>"* %tmp18, i32 0, i32 1
+	%tmp20 = load i32, i32* %tmp19
+	%tmp21 = getelementptr inbounds %struct.GenericStructSymbolTableEntry, %struct.GenericStructSymbolTableEntry* %tmp17, i32 0, i32 2
+	%tmp22 = load %struct.Implementation*, %struct.Implementation** %tmp21
+	%tmp23 = getelementptr inbounds %struct.GenericStructSymbolTableEntry, %struct.GenericStructSymbolTableEntry* %tmp17, i32 0, i32 2
+	%tmp24 = getelementptr inbounds %"struct.vector.Vec<%struct.Implementation>", %"struct.vector.Vec<%struct.Implementation>"* %tmp23, i32 0, i32 1
+	%tmp25 = load i32, i32* %tmp24
+	%tmp26 = icmp eq i32 %tmp25, 0
+	br i1 %tmp26, label %then3, label %endif3
+then3:
+	br label %loop_body0
+endif3:
 	store i32 0, i32* %v1
-	br label %loop_cond3
-loop_cond3:
-	%tmp25 = load i32, i32* %v1
-	%tmp26 = getelementptr inbounds %"struct.vector.Vec<%struct.GenericStructDefinedField>", %"struct.vector.Vec<%struct.GenericStructDefinedField>"* %tmp17, i32 0, i32 1
-	%tmp27 = load i32, i32* %tmp26
-	%tmp28 = icmp uge i32 %tmp25, %tmp27
-	br i1 %tmp28, label %then4, label %endif4
-then4:
-	br label %loop_body3_exit
-endif4:
-	%tmp29 = load i32, i32* %v1
-	%tmp30 = load %struct.GenericStructDefinedField*, %struct.GenericStructDefinedField** %tmp17
-	%tmp31 = getelementptr inbounds %struct.GenericStructDefinedField, %struct.GenericStructDefinedField* %tmp30, i32 %tmp29
-	%tmp32 = getelementptr inbounds %struct.GenericStructDefinedField, %struct.GenericStructDefinedField* %tmp31, i32 0, i32 1
-	%tmp33 = load i32, i32* %v0
-	%tmp34 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp2, i32 %tmp33
-	%tmp35 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp34, i32 0, i32 1
-	call void @compiler_type_push(%struct.CompilerType* %tmp32, %struct.PathEx* %tmp35, %struct.SymbolTable* %symbol_table, %struct.string.String* %stdout)
-	%tmp36 = load i32, i32* %v1
-	%tmp37 = getelementptr inbounds %"struct.vector.Vec<%struct.GenericStructDefinedField>", %"struct.vector.Vec<%struct.GenericStructDefinedField>"* %tmp17, i32 0, i32 1
-	%tmp38 = load i32, i32* %tmp37
-	%tmp39 = sub i32 %tmp38, 1
-	%tmp40 = icmp ne i32 %tmp36, %tmp39
-	br i1 %tmp40, label %then5, label %endif5
+	br label %loop_cond4
+loop_cond4:
+	%tmp27 = load i32, i32* %v1
+	%tmp28 = icmp uge i32 %tmp27, %tmp20
+	br i1 %tmp28, label %then5, label %endif5
 then5:
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.89, i32 2)
-	br label %endif5
+	br label %loop_body4_exit
 endif5:
-	%tmp41 = load i32, i32* %v1
-	%tmp42 = add i32 %tmp41, 1
-	store i32 %tmp42, i32* %v1
-	br label %loop_cond3
-loop_body3_exit:
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.90, i32 3)
+	%tmp29 = load i32, i32* %v1
+	%tmp30 = getelementptr inbounds %struct.Implementation, %struct.Implementation* %tmp22, i32 %tmp29
+	call void @string.append(%struct.string.String* %stdout, i8 37)
+	%tmp31 = getelementptr inbounds %struct.Implementation, %struct.Implementation* %tmp30, i32 0, i32 1
+	%tmp32 = load i8*, i8** %tmp31
+	%tmp33 = getelementptr inbounds %struct.Implementation, %struct.Implementation* %tmp30, i32 0, i32 1
+	%tmp34 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp33, i32 0, i32 1
+	%tmp35 = load i32, i32* %tmp34
+	call void @string.append_str(%struct.string.String* %stdout, i8* %tmp32, i32 %tmp35)
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.114, i32 10)
+	%tmp36 = getelementptr inbounds %"struct.vector.Vec<%struct.GenericStructDefinedField>", %"struct.vector.Vec<%struct.GenericStructDefinedField>"* %tmp17, i32 0, i32 1
+	%tmp37 = load i32, i32* %tmp36
+	store i32 0, i32* %v2
+	br label %loop_cond6
+loop_cond6:
+	%tmp38 = load i32, i32* %v2
+	%tmp39 = getelementptr inbounds %"struct.vector.Vec<%struct.GenericStructDefinedField>", %"struct.vector.Vec<%struct.GenericStructDefinedField>"* %tmp17, i32 0, i32 1
+	%tmp40 = load i32, i32* %tmp39
+	%tmp41 = icmp uge i32 %tmp38, %tmp40
+	br i1 %tmp41, label %then7, label %endif7
+then7:
+	br label %loop_body6_exit
+endif7:
+	%tmp42 = load i32, i32* %v2
+	%tmp43 = load %struct.GenericStructDefinedField*, %struct.GenericStructDefinedField** %tmp17
+	%tmp44 = getelementptr inbounds %struct.GenericStructDefinedField, %struct.GenericStructDefinedField* %tmp43, i32 %tmp42
+	%tmp45 = getelementptr inbounds %struct.GenericStructDefinedField, %struct.GenericStructDefinedField* %tmp44, i32 0, i32 1
+	%tmp46 = load i32, i32* %v0
+	%tmp47 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp2, i32 %tmp46
+	%tmp48 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp47, i32 0, i32 1
+	call void @comp_type.compiler_type_push(%struct.comp_type.CompilerType* %tmp45, %struct.PathEx* %tmp48, %struct.SymbolTable* %symbol_table, %struct.string.String* %stdout)
+	%tmp49 = load i32, i32* %v2
+	%tmp50 = getelementptr inbounds %"struct.vector.Vec<%struct.GenericStructDefinedField>", %"struct.vector.Vec<%struct.GenericStructDefinedField>"* %tmp17, i32 0, i32 1
+	%tmp51 = load i32, i32* %tmp50
+	%tmp52 = sub i32 %tmp51, 1
+	%tmp53 = icmp ne i32 %tmp49, %tmp52
+	br i1 %tmp53, label %then8, label %endif8
+then8:
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.115, i32 2)
+	br label %endif8
+endif8:
+	%tmp54 = load i32, i32* %v2
+	%tmp55 = add i32 %tmp54, 1
+	store i32 %tmp55, i32* %v2
+	br label %loop_cond6
+loop_body6_exit:
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.116, i32 3)
+	%tmp56 = load i32, i32* %v1
+	%tmp57 = add i32 %tmp56, 1
+	store i32 %tmp57, i32* %v1
+	br label %loop_cond4
+loop_body4_exit:
 	br label %endif2
 endif2:
-	%tmp43 = load i32, i32* %v0
-	%tmp44 = add i32 %tmp43, 1
-	store i32 %tmp44, i32* %v0
+	br label %loop_body0
+loop_body0:
+	%tmp58 = load i32, i32* %v0
+	%tmp59 = add i32 %tmp58, 1
+	store i32 %tmp59, i32* %v0
 	br label %loop_cond0
 loop_body0_exit:
 	ret void
@@ -3872,8 +4809,8 @@ then2:
 	%tmp21 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp20, i32 0, i32 1
 	%tmp22 = load i32, i32* %tmp21
 	call void @string.append_str(%struct.string.String* %stdout, i8* %tmp19, i32 %tmp22)
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.87, i32 8)
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.88, i32 2)
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.117, i32 8)
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.118, i32 2)
 	%tmp23 = getelementptr inbounds %"struct.vector.Vec<%struct.StructDefinedField>", %"struct.vector.Vec<%struct.StructDefinedField>"* %tmp17, i32 0, i32 1
 	%tmp24 = load i32, i32* %tmp23
 	store i32 0, i32* %v1
@@ -3894,7 +4831,7 @@ endif4:
 	%tmp33 = load i32, i32* %v0
 	%tmp34 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp2, i32 %tmp33
 	%tmp35 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp34, i32 0, i32 1
-	call void @compiler_type_push(%struct.CompilerType* %tmp32, %struct.PathEx* %tmp35, %struct.SymbolTable* %symbol_table, %struct.string.String* %stdout)
+	call void @comp_type.compiler_type_push(%struct.comp_type.CompilerType* %tmp32, %struct.PathEx* %tmp35, %struct.SymbolTable* %symbol_table, %struct.string.String* %stdout)
 	%tmp36 = load i32, i32* %v1
 	%tmp37 = getelementptr inbounds %"struct.vector.Vec<%struct.StructDefinedField>", %"struct.vector.Vec<%struct.StructDefinedField>"* %tmp17, i32 0, i32 1
 	%tmp38 = load i32, i32* %tmp37
@@ -3902,7 +4839,7 @@ endif4:
 	%tmp40 = icmp ne i32 %tmp36, %tmp39
 	br i1 %tmp40, label %then5, label %endif5
 then5:
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.89, i32 2)
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.115, i32 2)
 	br label %endif5
 endif5:
 	%tmp41 = load i32, i32* %v1
@@ -3910,7 +4847,7 @@ endif5:
 	store i32 %tmp42, i32* %v1
 	br label %loop_cond3
 loop_body3_exit:
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.90, i32 3)
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.116, i32 3)
 	br label %endif2
 endif2:
 	%tmp43 = load i32, i32* %v0
@@ -3958,14 +4895,14 @@ then2:
 	%tmp22 = load i8, i8* %v1
 	%tmp23 = sub i8 %tmp22, 1
 	store i8 %tmp23, i8* %v1
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.91, i32 1)
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.119, i32 1)
 	%tmp24 = load i32, i32* %v0
 	%tmp25 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp2, i32 %tmp24
 	%tmp26 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp25, i32 0, i32 1
 	call void @append_path_ex(%struct.PathEx* %tmp26, %struct.string.String* %tmp6, %struct.string.String* %stdout)
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.92, i32 19)
-	call void @compiler_type_push(%struct.CompilerType* %tmp17, %struct.PathEx* %v1, %struct.SymbolTable* %symbol_table, %struct.string.String* %stdout)
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.93, i32 17)
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.120, i32 19)
+	call void @comp_type.compiler_type_push(%struct.comp_type.CompilerType* %tmp17, %struct.PathEx* %v1, %struct.SymbolTable* %symbol_table, %struct.string.String* %stdout)
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.121, i32 17)
 ; Variable loc is out.
 	br label %endif2
 endif2:
@@ -3976,12 +4913,15 @@ endif2:
 loop_body0_exit:
 	ret void
 }
-define void @compile_internals.sym_table_push_external(%struct.SymbolTable* %symbol_table, %struct.string.String* %stdout){
+define void @compile_internals.sym_table_push_functions(%struct.SymbolTable* %symbol_table, %struct.string.String* %stdout){
 	%v0 = alloca i32
 	%v1 = alloca %struct.PathEx
-	%v2 = alloca %struct.PathEx
-	%v3 = alloca i32
-	%v4 = alloca %struct.string.String
+	%v2 = alloca i32
+	%v3 = alloca %"struct.vector.Vec<%struct.output.LLVMInstruction>"
+	%v4 = alloca %struct.scope.Scope
+	%v5 = alloca %struct.comp_type.CompilerType
+	%v6 = alloca %struct.comp_type.CompilerType
+	%v7 = alloca i1
 	%tmp0 = getelementptr inbounds %"struct.vector.Vec<%struct.SymbolTableEntry>", %"struct.vector.Vec<%struct.SymbolTableEntry>"* %symbol_table, i32 0, i32 1
 	%tmp1 = load i32, i32* %tmp0
 	%tmp2 = load %struct.SymbolTableEntry*, %struct.SymbolTableEntry** %symbol_table
@@ -4009,26 +4949,196 @@ then2:
 	%tmp15 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp2, i32 %tmp14
 	%tmp16 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp15, i32 0, i32 2
 	%tmp17 = load i8*, i8** %tmp16
-	%tmp18 = load i32, i32* %v0
-	%tmp19 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp2, i32 %tmp18
-	%tmp20 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp19, i32 0, i32 1
-	%tmp21 = load %struct.PathEx, %struct.PathEx* %tmp20
-	store %struct.PathEx %tmp21, %struct.PathEx* %v1
-	%tmp22 = load i8, i8* %v1
-	%tmp23 = sub i8 %tmp22, 1
-	store i8 %tmp23, i8* %v1
-	%tmp24 = getelementptr inbounds %struct.FunctionSymbolTableEntry, %struct.FunctionSymbolTableEntry* %tmp17, i32 0, i32 3
-	%tmp25 = load i8, i8* %tmp24
-	%tmp26 = and i8 %tmp25, 4
-	%tmp27 = icmp eq i8 %tmp26, 0
-	br i1 %tmp27, label %then3, label %endif3
+	%tmp18 = getelementptr inbounds %struct.FunctionSymbolTableEntry, %struct.FunctionSymbolTableEntry* %tmp17, i32 0, i32 4
+	%tmp19 = load i8, i8* %tmp18
+	%tmp20 = and i8 %tmp19, 4
+	%tmp21 = icmp ne i8 %tmp20, 0
+	br i1 %tmp21, label %then3, label %endif3
 then3:
 	br label %loop_body0
 endif3:
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.94, i32 18)
+	%tmp22 = load i32, i32* %v0
+	%tmp23 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp2, i32 %tmp22
+	%tmp24 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp23, i32 0, i32 1
+	%tmp25 = load %struct.PathEx, %struct.PathEx* %tmp24
+	store %struct.PathEx %tmp25, %struct.PathEx* %v1
+	%tmp26 = load i8, i8* %v1
+	%tmp27 = sub i8 %tmp26, 1
+	store i8 %tmp27, i8* %v1
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.122, i32 7)
 	%tmp28 = getelementptr inbounds %struct.FunctionSymbolTableEntry, %struct.FunctionSymbolTableEntry* %tmp17, i32 0, i32 1
-	call void @compiler_type_push(%struct.CompilerType* %tmp28, %struct.PathEx* %v1, %struct.SymbolTable* %symbol_table, %struct.string.String* %stdout)
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.95, i32 2)
+	%tmp29 = load i32, i32* %v0
+	%tmp30 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp2, i32 %tmp29
+	%tmp31 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp30, i32 0, i32 1
+	call void @comp_type.compiler_type_push(%struct.comp_type.CompilerType* %tmp28, %struct.PathEx* %tmp31, %struct.SymbolTable* %symbol_table, %struct.string.String* %stdout)
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.123, i32 2)
+	%tmp32 = load i32, i32* %v0
+	%tmp33 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp2, i32 %tmp32
+	%tmp34 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp33, i32 0, i32 1
+	call void @append_path_ex(%struct.PathEx* %tmp34, %struct.string.String* %tmp6, %struct.string.String* %stdout)
+	call void @string.append(%struct.string.String* %stdout, i8 40)
+	%tmp35 = getelementptr inbounds %"struct.vector.Vec<%struct.StructDefinedField>", %"struct.vector.Vec<%struct.StructDefinedField>"* %tmp17, i32 0, i32 1
+	%tmp36 = load i32, i32* %tmp35
+	store i32 0, i32* %v2
+	br label %loop_cond4
+loop_cond4:
+	%tmp37 = load i32, i32* %v2
+	%tmp38 = getelementptr inbounds %"struct.vector.Vec<%struct.StructDefinedField>", %"struct.vector.Vec<%struct.StructDefinedField>"* %tmp17, i32 0, i32 1
+	%tmp39 = load i32, i32* %tmp38
+	%tmp40 = icmp uge i32 %tmp37, %tmp39
+	br i1 %tmp40, label %then5, label %endif5
+then5:
+	br label %loop_body4_exit
+endif5:
+	%tmp41 = load i32, i32* %v2
+	%tmp42 = load %struct.StructDefinedField*, %struct.StructDefinedField** %tmp17
+	%tmp43 = getelementptr inbounds %struct.StructDefinedField, %struct.StructDefinedField* %tmp42, i32 %tmp41
+	%tmp44 = getelementptr inbounds %struct.StructDefinedField, %struct.StructDefinedField* %tmp43, i32 0, i32 1
+	call void @comp_type.compiler_type_push(%struct.comp_type.CompilerType* %tmp44, %struct.PathEx* %v1, %struct.SymbolTable* %symbol_table, %struct.string.String* %stdout)
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.124, i32 3)
+	%tmp45 = load i32, i32* %v2
+	%tmp46 = zext i32 %tmp45 to i64
+	call void @string.append_u64(%struct.string.String* %stdout, i64 %tmp46)
+	%tmp47 = load i32, i32* %v2
+	%tmp48 = getelementptr inbounds %"struct.vector.Vec<%struct.StructDefinedField>", %"struct.vector.Vec<%struct.StructDefinedField>"* %tmp17, i32 0, i32 1
+	%tmp49 = load i32, i32* %tmp48
+	%tmp50 = sub i32 %tmp49, 1
+	%tmp51 = icmp ne i32 %tmp47, %tmp50
+	br i1 %tmp51, label %then6, label %endif6
+then6:
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.115, i32 2)
+	br label %endif6
+endif6:
+	%tmp52 = load i32, i32* %v2
+	%tmp53 = add i32 %tmp52, 1
+	store i32 %tmp53, i32* %v2
+	br label %loop_cond4
+loop_body4_exit:
+	call void @string.append(%struct.string.String* %stdout, i8 41)
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.125, i32 2)
+	%tmp54 = call %"struct.vector.Vec<%struct.output.LLVMInstruction>" @"vector.new<%struct.output.LLVMInstruction>"()
+	store %"struct.vector.Vec<%struct.output.LLVMInstruction>" %tmp54, %"struct.vector.Vec<%struct.output.LLVMInstruction>"* %v3
+	%tmp55 = call %struct.scope.Scope @scope.new()
+	store %struct.scope.Scope %tmp55, %struct.scope.Scope* %v4
+	%tmp56 = getelementptr inbounds %struct.scope.Scope, %struct.scope.Scope* %v4, i32 0, i32 2
+	%tmp57 = getelementptr inbounds %"struct.vector.Vec<%struct.StructDefinedField>", %"struct.vector.Vec<%struct.StructDefinedField>"* %tmp17, i32 0, i32 1
+	%tmp58 = load i32, i32* %tmp57
+	store i32 %tmp58, i32* %tmp56
+	%tmp59 = getelementptr inbounds %struct.FunctionSymbolTableEntry, %struct.FunctionSymbolTableEntry* %tmp17, i32 0, i32 2
+	call void @compile_internals.compile_body(%"struct.vector.Vec<%struct.Stmt>"* %tmp59, i32 0, i32 0, %struct.scope.Scope* %v4, %struct.SymbolTable* %symbol_table, %"struct.vector.Vec<%struct.output.LLVMInstruction>"* %v3)
+	%tmp60 = load %struct.primitives.PrimitiveTypeInfo*, %struct.primitives.PrimitiveTypeInfo** @primitives.VOID_TYPE
+	store i32 2, i32* %v6
+	%tmp61 = getelementptr inbounds %struct.comp_type.CompilerType, %struct.comp_type.CompilerType* %v6, i32 0, i32 1
+	%tmp62 = ptrtoint %struct.primitives.PrimitiveTypeInfo* %tmp60 to i64
+	store i64 %tmp62, i64* %tmp61
+	%tmp63 = load %struct.comp_type.CompilerType, %struct.comp_type.CompilerType* %v6
+	store %struct.comp_type.CompilerType %tmp63, %struct.comp_type.CompilerType* %v5
+	%tmp64 = getelementptr inbounds %struct.FunctionSymbolTableEntry, %struct.FunctionSymbolTableEntry* %tmp17, i32 0, i32 1
+	%tmp65 = call i1 @comp_type.equal(%struct.comp_type.CompilerType* %tmp64, %struct.comp_type.CompilerType* %v5)
+	br i1 %tmp65, label %then9, label %endif9
+then9:
+	store i1 false, i1* %v7
+	%tmp66 = getelementptr inbounds %struct.FunctionSymbolTableEntry, %struct.FunctionSymbolTableEntry* %tmp17, i32 0, i32 2
+	%tmp67 = getelementptr inbounds %"struct.vector.Vec<%struct.Stmt>", %"struct.vector.Vec<%struct.Stmt>"* %tmp66, i32 0, i32 1
+	%tmp68 = load i32, i32* %tmp67
+	%tmp69 = icmp ugt i32 %tmp68, 0
+	br i1 %tmp69, label %then10, label %endif10
+then10:
+	%tmp71 = getelementptr inbounds %struct.FunctionSymbolTableEntry, %struct.FunctionSymbolTableEntry* %tmp17, i32 0, i32 2
+	%tmp72 = getelementptr inbounds %"struct.vector.Vec<%struct.Stmt>", %"struct.vector.Vec<%struct.Stmt>"* %tmp71, i32 0, i32 1
+	%tmp73 = load i32, i32* %tmp72
+	%tmp74 = sub i32 %tmp73, 1
+	%tmp75 = getelementptr inbounds %struct.FunctionSymbolTableEntry, %struct.FunctionSymbolTableEntry* %tmp17, i32 0, i32 2
+	%tmp76 = load %struct.Stmt*, %struct.Stmt** %tmp75
+	%tmp77 = getelementptr inbounds %struct.Stmt, %struct.Stmt* %tmp76, i32 %tmp74
+	%tmp78 = load i8, i8* %tmp77
+	%tmp79 = icmp eq i8 %tmp78, 10
+	br i1 %tmp79, label %then11, label %endif11
+then11:
+	store i1 true, i1* %v7
+	br label %endif11
+endif11:
+	br label %endif10
+endif10:
+	%tmp80 = load i1, i1* %v7
+	%tmp81 = xor i1 1, %tmp80
+	br i1 %tmp81, label %then12, label %endif12
+then12:
+	%tmp82 = call %struct.output.LLVMInstruction @output.ret_void()
+	call void @"vector.push<%struct.output.LLVMInstruction>"(%"struct.vector.Vec<%struct.output.LLVMInstruction>"* %v3, %struct.output.LLVMInstruction %tmp82)
+	br label %endif12
+endif12:
+	br label %endif9
+endif9:
+	call void @output.push_instructions(%"struct.vector.Vec<%struct.output.LLVMInstruction>"* %v3, %struct.SymbolTable* %symbol_table, %struct.string.String* %stdout)
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.126, i32 2)
+; Variable vd is out.
+; Variable scope is out.
+; Variable llvm_ir_vec is out.
+; Variable loc is out.
+	br label %endif2
+endif2:
+	br label %loop_body0
+loop_body0:
+	%tmp83 = load i32, i32* %v0
+	%tmp84 = add i32 %tmp83, 1
+	store i32 %tmp84, i32* %v0
+	br label %loop_cond0
+loop_body0_exit:
+	ret void
+}
+define void @compile_internals.sym_table_push_external(%struct.SymbolTable* %symbol_table, %struct.string.String* %stdout){
+	%v0 = alloca i32
+	%v1 = alloca %struct.PathEx
+	%v2 = alloca %struct.PathEx
+	%v3 = alloca i32
+	%tmp0 = getelementptr inbounds %"struct.vector.Vec<%struct.SymbolTableEntry>", %"struct.vector.Vec<%struct.SymbolTableEntry>"* %symbol_table, i32 0, i32 1
+	%tmp1 = load i32, i32* %tmp0
+	%tmp2 = load %struct.SymbolTableEntry*, %struct.SymbolTableEntry** %symbol_table
+	%tmp3 = getelementptr inbounds %struct.SymbolTable, %struct.SymbolTable* %symbol_table, i32 0, i32 1
+	%tmp4 = getelementptr inbounds %struct.SymbolTable, %struct.SymbolTable* %symbol_table, i32 0, i32 1
+	%tmp5 = load %"struct.vector.Vec<%struct.string.String>"*, %"struct.vector.Vec<%struct.string.String>"** %tmp4
+	%tmp6 = load %struct.string.String*, %struct.string.String** %tmp5
+	store i32 0, i32* %v0
+	br label %loop_cond0
+loop_cond0:
+	%tmp7 = load i32, i32* %v0
+	%tmp8 = icmp uge i32 %tmp7, %tmp1
+	br i1 %tmp8, label %then1, label %endif1
+then1:
+	br label %loop_body0_exit
+endif1:
+	%tmp9 = load i32, i32* %v0
+	%tmp10 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp2, i32 %tmp9
+	%tmp11 = load i32, i32* %tmp10
+	%tmp12 = and i32 %tmp11, 7
+	%tmp13 = icmp eq i32 %tmp12, 0
+	br i1 %tmp13, label %then2, label %endif2
+then2:
+	%tmp14 = load i32, i32* %v0
+	%tmp15 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp2, i32 %tmp14
+	%tmp16 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp15, i32 0, i32 2
+	%tmp17 = load i8*, i8** %tmp16
+	%tmp18 = getelementptr inbounds %struct.FunctionSymbolTableEntry, %struct.FunctionSymbolTableEntry* %tmp17, i32 0, i32 4
+	%tmp19 = load i8, i8* %tmp18
+	%tmp20 = and i8 %tmp19, 4
+	%tmp21 = icmp eq i8 %tmp20, 0
+	br i1 %tmp21, label %then3, label %endif3
+then3:
+	br label %loop_body0
+endif3:
+	%tmp22 = load i32, i32* %v0
+	%tmp23 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp2, i32 %tmp22
+	%tmp24 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp23, i32 0, i32 1
+	%tmp25 = load %struct.PathEx, %struct.PathEx* %tmp24
+	store %struct.PathEx %tmp25, %struct.PathEx* %v1
+	%tmp26 = load i8, i8* %v1
+	%tmp27 = sub i8 %tmp26, 1
+	store i8 %tmp27, i8* %v1
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.127, i32 18)
+	%tmp28 = getelementptr inbounds %struct.FunctionSymbolTableEntry, %struct.FunctionSymbolTableEntry* %tmp17, i32 0, i32 1
+	call void @comp_type.compiler_type_push(%struct.comp_type.CompilerType* %tmp28, %struct.PathEx* %v1, %struct.SymbolTable* %symbol_table, %struct.string.String* %stdout)
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.128, i32 2)
 	%tmp29 = load i32, i32* %v0
 	%tmp30 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp2, i32 %tmp29
 	%tmp31 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp30, i32 0, i32 1
@@ -4043,7 +5153,7 @@ endif3:
 	store i16 %tmp38, i16* %tmp33
 	store i8 1, i8* %v2
 	call void @append_path_ex(%struct.PathEx* %v2, %struct.string.String* %tmp6, %struct.string.String* %stdout)
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.96, i32 1)
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.129, i32 1)
 	%tmp39 = getelementptr inbounds %"struct.vector.Vec<%struct.StructDefinedField>", %"struct.vector.Vec<%struct.StructDefinedField>"* %tmp17, i32 0, i32 1
 	%tmp40 = load i32, i32* %tmp39
 	store i32 0, i32* %v3
@@ -4061,46 +5171,1229 @@ endif5:
 	%tmp46 = load %struct.StructDefinedField*, %struct.StructDefinedField** %tmp17
 	%tmp47 = getelementptr inbounds %struct.StructDefinedField, %struct.StructDefinedField* %tmp46, i32 %tmp45
 	%tmp48 = getelementptr inbounds %struct.StructDefinedField, %struct.StructDefinedField* %tmp47, i32 0, i32 1
-	call void @compiler_type_push(%struct.CompilerType* %tmp48, %struct.PathEx* %v1, %struct.SymbolTable* %symbol_table, %struct.string.String* %stdout)
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.97, i32 3)
+	call void @comp_type.compiler_type_push(%struct.comp_type.CompilerType* %tmp48, %struct.PathEx* %v1, %struct.SymbolTable* %symbol_table, %struct.string.String* %stdout)
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.124, i32 3)
 	%tmp49 = load i32, i32* %v3
 	%tmp50 = zext i32 %tmp49 to i64
-	%tmp51 = call %struct.string.String @string_utils.u64_to_string(i64 %tmp50)
-	store %struct.string.String %tmp51, %struct.string.String* %v4
-	%tmp52 = load i8*, i8** %v4
-	%tmp53 = getelementptr inbounds %struct.string.String, %struct.string.String* %v4, i32 0, i32 1
-	%tmp54 = load i32, i32* %tmp53
-	call void @string.append_str(%struct.string.String* %stdout, i8* %tmp52, i32 %tmp54)
-	call void @string.free(%struct.string.String* %v4)
-	%tmp55 = load i32, i32* %v3
-	%tmp56 = getelementptr inbounds %"struct.vector.Vec<%struct.StructDefinedField>", %"struct.vector.Vec<%struct.StructDefinedField>"* %tmp17, i32 0, i32 1
-	%tmp57 = load i32, i32* %tmp56
-	%tmp58 = sub i32 %tmp57, 1
-	%tmp59 = icmp ne i32 %tmp55, %tmp58
-	br i1 %tmp59, label %then6, label %endif6
+	call void @string.append_u64(%struct.string.String* %stdout, i64 %tmp50)
+	%tmp51 = load i32, i32* %v3
+	%tmp52 = getelementptr inbounds %"struct.vector.Vec<%struct.StructDefinedField>", %"struct.vector.Vec<%struct.StructDefinedField>"* %tmp17, i32 0, i32 1
+	%tmp53 = load i32, i32* %tmp52
+	%tmp54 = sub i32 %tmp53, 1
+	%tmp55 = icmp ne i32 %tmp51, %tmp54
+	br i1 %tmp55, label %then6, label %endif6
 then6:
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.89, i32 2)
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.115, i32 2)
 	br label %endif6
 endif6:
-	%tmp60 = load i32, i32* %v3
-	%tmp61 = add i32 %tmp60, 1
-	store i32 %tmp61, i32* %v3
+	%tmp56 = load i32, i32* %v3
+	%tmp57 = add i32 %tmp56, 1
+	store i32 %tmp57, i32* %v3
 	br label %loop_cond4
 loop_body4_exit:
-; Variable n is out.
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.98, i32 1)
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.99, i32 1)
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.130, i32 1)
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.131, i32 1)
 ; Variable q is out.
 ; Variable loc is out.
 	br label %endif2
 endif2:
 	br label %loop_body0
 loop_body0:
-	%tmp62 = load i32, i32* %v0
-	%tmp63 = add i32 %tmp62, 1
-	store i32 %tmp63, i32* %v0
+	%tmp58 = load i32, i32* %v0
+	%tmp59 = add i32 %tmp58, 1
+	store i32 %tmp59, i32* %v0
 	br label %loop_cond0
 loop_body0_exit:
+	ret void
+}
+define void @compile_internals.compile_body(%"struct.vector.Vec<%struct.Stmt>"* %statement_vector, i32 %function_index, i32 %implementation_index, %struct.scope.Scope* %scope, %struct.SymbolTable* %symbol_table, %"struct.vector.Vec<%struct.output.LLVMInstruction>"* %output){
+	%v0 = alloca i32
+	%v1 = alloca %struct.expression_compiler.CompiledValue
+	%v2 = alloca %struct.expression_compiler.CompiledValue
+	%v3 = alloca %struct.expression_compiler.CompiledValue
+	%v4 = alloca %struct.expression_compiler.CompiledValue
+	%v5 = alloca %struct.expression_compiler.CompiledValue
+	%v6 = alloca i32
+	store i32 0, i32* %v0
+	%tmp0 = getelementptr inbounds %"struct.vector.Vec<%struct.Stmt>", %"struct.vector.Vec<%struct.Stmt>"* %statement_vector, i32 0, i32 1
+	%tmp1 = load i32, i32* %tmp0
+	br label %loop_start0
+loop_start0:
+	%tmp2 = load i32, i32* %v0
+	%tmp3 = icmp ult i32 %tmp2, %tmp1
+	br i1 %tmp3, label %endif1, label %else1
+else1:
+	br label %loop_body0_exit
+endif1:
+	%tmp4 = load i32, i32* %v0
+	%tmp5 = load %struct.Stmt*, %struct.Stmt** %statement_vector
+	%tmp6 = getelementptr inbounds %struct.Stmt, %struct.Stmt* %tmp5, i32 %tmp4
+	%tmp7 = load i8, i8* %tmp6
+	%tmp8 = icmp eq i8 %tmp7, 1
+	br i1 %tmp8, label %then2, label %endif2
+then2:
+	%tmp9 = getelementptr inbounds %struct.Stmt, %struct.Stmt* %tmp6, i32 0, i32 1
+	%tmp10 = load i8*, i8** %tmp9
+	%tmp11 = load i32, i32* %v0
+	%tmp12 = add i32 %tmp11, 1
+	store i32 %tmp12, i32* %v0
+	br label %loop_body0
+endif2:
+	%tmp13 = load i8, i8* %tmp6
+	%tmp14 = icmp eq i8 %tmp13, 10
+	br i1 %tmp14, label %then3, label %endif3
+then3:
+	%tmp15 = getelementptr inbounds %struct.Stmt, %struct.Stmt* %tmp6, i32 0, i32 1
+	%tmp16 = load i8*, i8** %tmp15
+	%tmp17 = load i1, i1* %tmp16
+	%tmp18 = xor i1 1, %tmp17
+	br i1 %tmp18, label %then4, label %endif4
+then4:
+	%tmp19 = call %struct.output.LLVMInstruction @output.ret_void()
+	call void @"vector.push<%struct.output.LLVMInstruction>"(%"struct.vector.Vec<%struct.output.LLVMInstruction>"* %output, %struct.output.LLVMInstruction %tmp19)
+	%tmp20 = load i32, i32* %v0
+	%tmp21 = add i32 %tmp20, 1
+	store i32 %tmp21, i32* %v0
+	br label %loop_body0
+endif4:
+	%tmp22 = getelementptr inbounds %struct.ReturnNode, %struct.ReturnNode* %tmp16, i32 0, i32 1
+	%tmp23 = call %struct.expression_compiler.Expected @expression_compiler.expect_anything()
+	%tmp24 = call %struct.expression_compiler.CompiledValue @expression_compiler.compile(%struct.Expression* %tmp22, %struct.expression_compiler.Expected %tmp23, %struct.scope.Scope* %scope, %struct.SymbolTable* %symbol_table, %"struct.vector.Vec<%struct.output.LLVMInstruction>"* %output)
+	store %struct.expression_compiler.CompiledValue %tmp24, %struct.expression_compiler.CompiledValue* %v1
+	%tmp25 = call i32 @expression_compiler.cv_to_register(%struct.expression_compiler.CompiledValue* %v1, %struct.scope.Scope* %scope, %struct.SymbolTable* %symbol_table, %"struct.vector.Vec<%struct.output.LLVMInstruction>"* %output)
+	%tmp26 = call %struct.output.LLVMInstruction @output.ret(i32 %tmp25)
+	call void @"vector.push<%struct.output.LLVMInstruction>"(%"struct.vector.Vec<%struct.output.LLVMInstruction>"* %output, %struct.output.LLVMInstruction %tmp26)
+	%tmp27 = load i32, i32* %v0
+	%tmp28 = add i32 %tmp27, 1
+	store i32 %tmp28, i32* %v0
+	br label %loop_body0
+; Variable check_val is out.
+endif3:
+	%tmp29 = load i8, i8* %tmp6
+	%tmp30 = icmp eq i8 %tmp29, 2
+	br i1 %tmp30, label %then5, label %endif5
+then5:
+	%tmp31 = getelementptr inbounds %struct.Stmt, %struct.Stmt* %tmp6, i32 0, i32 1
+	%tmp32 = load i8*, i8** %tmp31
+	%tmp33 = call %struct.expression_compiler.Expected @expression_compiler.expect_nothing()
+	%tmp34 = call %struct.expression_compiler.CompiledValue @expression_compiler.compile(%struct.Expression* %tmp32, %struct.expression_compiler.Expected %tmp33, %struct.scope.Scope* %scope, %struct.SymbolTable* %symbol_table, %"struct.vector.Vec<%struct.output.LLVMInstruction>"* %output)
+	store %struct.expression_compiler.CompiledValue %tmp34, %struct.expression_compiler.CompiledValue* %v2
+	%tmp35 = load i32, i32* %v0
+	%tmp36 = add i32 %tmp35, 1
+	store i32 %tmp36, i32* %v0
+	br label %loop_body0
+; Variable check_val is out.
+endif5:
+	%tmp37 = load i8, i8* %tmp6
+	%tmp38 = icmp eq i8 %tmp37, 9
+	br i1 %tmp38, label %then6, label %endif6
+then6:
+	%tmp39 = getelementptr inbounds %struct.scope.Scope, %struct.scope.Scope* %scope, i32 0, i32 4
+	%tmp40 = load i32, i32* %tmp39
+	%tmp41 = icmp eq i32 %tmp40, -1
+	br i1 %tmp41, label %then7, label %endif7
+then7:
+	call void @process.throw(i8* @.str.132)
+	br label %endif7
+endif7:
+	%tmp42 = getelementptr inbounds %struct.scope.Scope, %struct.scope.Scope* %scope, i32 0, i32 4
+	%tmp43 = load i32, i32* %tmp42
+	%tmp44 = call %struct.output.LLVMInstruction @output.jump_to(i32 %tmp43)
+	call void @"vector.push<%struct.output.LLVMInstruction>"(%"struct.vector.Vec<%struct.output.LLVMInstruction>"* %output, %struct.output.LLVMInstruction %tmp44)
+	%tmp45 = load i32, i32* %v0
+	%tmp46 = add i32 %tmp45, 1
+	store i32 %tmp46, i32* %v0
+	br label %loop_body0
+endif6:
+	%tmp47 = load i8, i8* %tmp6
+	%tmp48 = icmp eq i8 %tmp47, 8
+	br i1 %tmp48, label %then8, label %endif8
+then8:
+	%tmp49 = getelementptr inbounds %struct.scope.Scope, %struct.scope.Scope* %scope, i32 0, i32 4
+	%tmp50 = load i32, i32* %tmp49
+	%tmp51 = icmp eq i32 %tmp50, -1
+	br i1 %tmp51, label %then9, label %endif9
+then9:
+	call void @process.throw(i8* @.str.133)
+	br label %endif9
+endif9:
+	%tmp52 = getelementptr inbounds %struct.scope.Scope, %struct.scope.Scope* %scope, i32 0, i32 4
+	%tmp53 = load i32, i32* %tmp52
+	%tmp54 = add i32 %tmp53, 1
+	%tmp55 = call %struct.output.LLVMInstruction @output.jump_to(i32 %tmp54)
+	call void @"vector.push<%struct.output.LLVMInstruction>"(%"struct.vector.Vec<%struct.output.LLVMInstruction>"* %output, %struct.output.LLVMInstruction %tmp55)
+	%tmp56 = load i32, i32* %v0
+	%tmp57 = add i32 %tmp56, 1
+	store i32 %tmp57, i32* %v0
+	br label %loop_body0
+endif8:
+	%tmp58 = load i8, i8* %tmp6
+	%tmp59 = icmp eq i8 %tmp58, 4
+	br i1 %tmp59, label %then10, label %endif10
+then10:
+	%tmp60 = getelementptr inbounds %struct.Stmt, %struct.Stmt* %tmp6, i32 0, i32 1
+	%tmp61 = load i8*, i8** %tmp60
+	%tmp62 = getelementptr inbounds %struct.scope.Scope, %struct.scope.Scope* %scope, i32 0, i32 4
+	%tmp63 = load i32, i32* %tmp62
+	%tmp64 = getelementptr inbounds %struct.scope.Scope, %struct.scope.Scope* %scope, i32 0, i32 3
+	%tmp65 = load i32, i32* %tmp64
+	%tmp66 = getelementptr inbounds %struct.scope.Scope, %struct.scope.Scope* %scope, i32 0, i32 3
+	%tmp67 = getelementptr inbounds %struct.scope.Scope, %struct.scope.Scope* %scope, i32 0, i32 3
+	%tmp68 = load i32, i32* %tmp67
+	%tmp69 = add i32 %tmp68, 1
+	store i32 %tmp69, i32* %tmp66
+	%tmp70 = getelementptr inbounds %struct.scope.Scope, %struct.scope.Scope* %scope, i32 0, i32 3
+	%tmp71 = load i32, i32* %tmp70
+	%tmp72 = getelementptr inbounds %struct.scope.Scope, %struct.scope.Scope* %scope, i32 0, i32 3
+	%tmp73 = getelementptr inbounds %struct.scope.Scope, %struct.scope.Scope* %scope, i32 0, i32 3
+	%tmp74 = load i32, i32* %tmp73
+	%tmp75 = add i32 %tmp74, 1
+	store i32 %tmp75, i32* %tmp72
+	%tmp76 = getelementptr inbounds %struct.scope.Scope, %struct.scope.Scope* %scope, i32 0, i32 4
+	store i32 %tmp65, i32* %tmp76
+	%tmp77 = call %struct.output.LLVMInstruction @output.label(i32 %tmp65)
+	call void @"vector.push<%struct.output.LLVMInstruction>"(%"struct.vector.Vec<%struct.output.LLVMInstruction>"* %output, %struct.output.LLVMInstruction %tmp77)
+	call void @scope.enter_scope(%struct.scope.Scope* %scope)
+	call void @compile_internals.compile_body(%"struct.vector.Vec<%struct.Stmt>"* %tmp61, i32 %function_index, i32 %implementation_index, %struct.scope.Scope* %scope, %struct.SymbolTable* %symbol_table, %"struct.vector.Vec<%struct.output.LLVMInstruction>"* %output)
+	call void @scope.exit_scope(%struct.scope.Scope* %scope)
+	%tmp78 = call %struct.output.LLVMInstruction @output.jump_to(i32 %tmp65)
+	call void @"vector.push<%struct.output.LLVMInstruction>"(%"struct.vector.Vec<%struct.output.LLVMInstruction>"* %output, %struct.output.LLVMInstruction %tmp78)
+	%tmp79 = call %struct.output.LLVMInstruction @output.jump_to(i32 %tmp71)
+	call void @"vector.push<%struct.output.LLVMInstruction>"(%"struct.vector.Vec<%struct.output.LLVMInstruction>"* %output, %struct.output.LLVMInstruction %tmp79)
+	%tmp80 = call %struct.output.LLVMInstruction @output.label(i32 %tmp71)
+	call void @"vector.push<%struct.output.LLVMInstruction>"(%"struct.vector.Vec<%struct.output.LLVMInstruction>"* %output, %struct.output.LLVMInstruction %tmp80)
+	%tmp81 = getelementptr inbounds %struct.scope.Scope, %struct.scope.Scope* %scope, i32 0, i32 4
+	store i32 %tmp63, i32* %tmp81
+	%tmp82 = load i32, i32* %v0
+	%tmp83 = add i32 %tmp82, 1
+	store i32 %tmp83, i32* %v0
+	br label %loop_body0
+endif10:
+	%tmp84 = load i8, i8* %tmp6
+	%tmp85 = icmp eq i8 %tmp84, 5
+	br i1 %tmp85, label %then11, label %endif11
+then11:
+	%tmp86 = getelementptr inbounds %struct.Stmt, %struct.Stmt* %tmp6, i32 0, i32 1
+	%tmp87 = load i8*, i8** %tmp86
+	%tmp88 = getelementptr inbounds %struct.scope.Scope, %struct.scope.Scope* %scope, i32 0, i32 4
+	%tmp89 = load i32, i32* %tmp88
+	%tmp90 = getelementptr inbounds %struct.scope.Scope, %struct.scope.Scope* %scope, i32 0, i32 3
+	%tmp91 = load i32, i32* %tmp90
+	%tmp92 = getelementptr inbounds %struct.scope.Scope, %struct.scope.Scope* %scope, i32 0, i32 3
+	%tmp93 = getelementptr inbounds %struct.scope.Scope, %struct.scope.Scope* %scope, i32 0, i32 3
+	%tmp94 = load i32, i32* %tmp93
+	%tmp95 = add i32 %tmp94, 1
+	store i32 %tmp95, i32* %tmp92
+	%tmp96 = getelementptr inbounds %struct.scope.Scope, %struct.scope.Scope* %scope, i32 0, i32 3
+	%tmp97 = load i32, i32* %tmp96
+	%tmp98 = getelementptr inbounds %struct.scope.Scope, %struct.scope.Scope* %scope, i32 0, i32 3
+	%tmp99 = getelementptr inbounds %struct.scope.Scope, %struct.scope.Scope* %scope, i32 0, i32 3
+	%tmp100 = load i32, i32* %tmp99
+	%tmp101 = add i32 %tmp100, 1
+	store i32 %tmp101, i32* %tmp98
+	%tmp102 = getelementptr inbounds %struct.scope.Scope, %struct.scope.Scope* %scope, i32 0, i32 3
+	%tmp103 = load i32, i32* %tmp102
+	%tmp104 = getelementptr inbounds %struct.scope.Scope, %struct.scope.Scope* %scope, i32 0, i32 3
+	%tmp105 = getelementptr inbounds %struct.scope.Scope, %struct.scope.Scope* %scope, i32 0, i32 3
+	%tmp106 = load i32, i32* %tmp105
+	%tmp107 = add i32 %tmp106, 1
+	store i32 %tmp107, i32* %tmp104
+	%tmp108 = getelementptr inbounds %struct.scope.Scope, %struct.scope.Scope* %scope, i32 0, i32 4
+	store i32 %tmp91, i32* %tmp108
+	%tmp109 = call %struct.output.LLVMInstruction @output.label(i32 %tmp91)
+	call void @"vector.push<%struct.output.LLVMInstruction>"(%"struct.vector.Vec<%struct.output.LLVMInstruction>"* %output, %struct.output.LLVMInstruction %tmp109)
+	%tmp110 = call %struct.expression_compiler.Expected @expression_compiler.expect_anything()
+	%tmp111 = call %struct.expression_compiler.CompiledValue @expression_compiler.compile(%struct.Expression* %tmp87, %struct.expression_compiler.Expected %tmp110, %struct.scope.Scope* %scope, %struct.SymbolTable* %symbol_table, %"struct.vector.Vec<%struct.output.LLVMInstruction>"* %output)
+	store %struct.expression_compiler.CompiledValue %tmp111, %struct.expression_compiler.CompiledValue* %v3
+	%tmp112 = call i32 @expression_compiler.cv_to_register(%struct.expression_compiler.CompiledValue* %v3, %struct.scope.Scope* %scope, %struct.SymbolTable* %symbol_table, %"struct.vector.Vec<%struct.output.LLVMInstruction>"* %output)
+	%tmp113 = call %struct.output.LLVMInstruction @output.branch(i32 %tmp112, i32 %tmp103, i32 %tmp97)
+	call void @"vector.push<%struct.output.LLVMInstruction>"(%"struct.vector.Vec<%struct.output.LLVMInstruction>"* %output, %struct.output.LLVMInstruction %tmp113)
+	%tmp114 = call %struct.output.LLVMInstruction @output.label(i32 %tmp103)
+	call void @"vector.push<%struct.output.LLVMInstruction>"(%"struct.vector.Vec<%struct.output.LLVMInstruction>"* %output, %struct.output.LLVMInstruction %tmp114)
+	call void @scope.enter_scope(%struct.scope.Scope* %scope)
+	%tmp115 = getelementptr inbounds %struct.WhileStmt, %struct.WhileStmt* %tmp87, i32 0, i32 1
+	call void @compile_internals.compile_body(%"struct.vector.Vec<%struct.Stmt>"* %tmp115, i32 %function_index, i32 %implementation_index, %struct.scope.Scope* %scope, %struct.SymbolTable* %symbol_table, %"struct.vector.Vec<%struct.output.LLVMInstruction>"* %output)
+	call void @scope.exit_scope(%struct.scope.Scope* %scope)
+	%tmp116 = call %struct.output.LLVMInstruction @output.jump_to(i32 %tmp91)
+	call void @"vector.push<%struct.output.LLVMInstruction>"(%"struct.vector.Vec<%struct.output.LLVMInstruction>"* %output, %struct.output.LLVMInstruction %tmp116)
+	%tmp117 = call %struct.output.LLVMInstruction @output.jump_to(i32 %tmp97)
+	call void @"vector.push<%struct.output.LLVMInstruction>"(%"struct.vector.Vec<%struct.output.LLVMInstruction>"* %output, %struct.output.LLVMInstruction %tmp117)
+	%tmp118 = call %struct.output.LLVMInstruction @output.label(i32 %tmp97)
+	call void @"vector.push<%struct.output.LLVMInstruction>"(%"struct.vector.Vec<%struct.output.LLVMInstruction>"* %output, %struct.output.LLVMInstruction %tmp118)
+	%tmp119 = getelementptr inbounds %struct.scope.Scope, %struct.scope.Scope* %scope, i32 0, i32 4
+	store i32 %tmp89, i32* %tmp119
+	%tmp120 = load i32, i32* %v0
+	%tmp121 = add i32 %tmp120, 1
+	store i32 %tmp121, i32* %v0
+	br label %loop_body0
+; Variable check_val is out.
+endif11:
+	%tmp122 = load i8, i8* %tmp6
+	%tmp123 = icmp eq i8 %tmp122, 6
+	br i1 %tmp123, label %then12, label %endif12
+then12:
+	%tmp124 = getelementptr inbounds %struct.Stmt, %struct.Stmt* %tmp6, i32 0, i32 1
+	%tmp125 = load i8*, i8** %tmp124
+	%tmp126 = getelementptr inbounds %struct.scope.Scope, %struct.scope.Scope* %scope, i32 0, i32 4
+	%tmp127 = load i32, i32* %tmp126
+	%tmp128 = getelementptr inbounds %struct.scope.Scope, %struct.scope.Scope* %scope, i32 0, i32 3
+	%tmp129 = load i32, i32* %tmp128
+	%tmp130 = getelementptr inbounds %struct.scope.Scope, %struct.scope.Scope* %scope, i32 0, i32 3
+	%tmp131 = getelementptr inbounds %struct.scope.Scope, %struct.scope.Scope* %scope, i32 0, i32 3
+	%tmp132 = load i32, i32* %tmp131
+	%tmp133 = add i32 %tmp132, 1
+	store i32 %tmp133, i32* %tmp130
+	%tmp134 = getelementptr inbounds %struct.scope.Scope, %struct.scope.Scope* %scope, i32 0, i32 3
+	%tmp135 = load i32, i32* %tmp134
+	%tmp136 = getelementptr inbounds %struct.scope.Scope, %struct.scope.Scope* %scope, i32 0, i32 3
+	%tmp137 = getelementptr inbounds %struct.scope.Scope, %struct.scope.Scope* %scope, i32 0, i32 3
+	%tmp138 = load i32, i32* %tmp137
+	%tmp139 = add i32 %tmp138, 1
+	store i32 %tmp139, i32* %tmp136
+	%tmp140 = getelementptr inbounds %struct.scope.Scope, %struct.scope.Scope* %scope, i32 0, i32 3
+	%tmp141 = load i32, i32* %tmp140
+	%tmp142 = getelementptr inbounds %struct.scope.Scope, %struct.scope.Scope* %scope, i32 0, i32 3
+	%tmp143 = getelementptr inbounds %struct.scope.Scope, %struct.scope.Scope* %scope, i32 0, i32 3
+	%tmp144 = load i32, i32* %tmp143
+	%tmp145 = add i32 %tmp144, 1
+	store i32 %tmp145, i32* %tmp142
+	%tmp146 = getelementptr inbounds %struct.scope.Scope, %struct.scope.Scope* %scope, i32 0, i32 4
+	store i32 %tmp129, i32* %tmp146
+	%tmp147 = call %struct.output.LLVMInstruction @output.label(i32 %tmp129)
+	call void @"vector.push<%struct.output.LLVMInstruction>"(%"struct.vector.Vec<%struct.output.LLVMInstruction>"* %output, %struct.output.LLVMInstruction %tmp147)
+	%tmp148 = call %struct.output.LLVMInstruction @output.label(i32 %tmp141)
+	call void @"vector.push<%struct.output.LLVMInstruction>"(%"struct.vector.Vec<%struct.output.LLVMInstruction>"* %output, %struct.output.LLVMInstruction %tmp148)
+	call void @scope.enter_scope(%struct.scope.Scope* %scope)
+	%tmp149 = getelementptr inbounds %struct.DoWhileStmt, %struct.DoWhileStmt* %tmp125, i32 0, i32 1
+	call void @compile_internals.compile_body(%"struct.vector.Vec<%struct.Stmt>"* %tmp149, i32 %function_index, i32 %implementation_index, %struct.scope.Scope* %scope, %struct.SymbolTable* %symbol_table, %"struct.vector.Vec<%struct.output.LLVMInstruction>"* %output)
+	call void @scope.exit_scope(%struct.scope.Scope* %scope)
+	%tmp150 = call %struct.expression_compiler.Expected @expression_compiler.expect_anything()
+	%tmp151 = call %struct.expression_compiler.CompiledValue @expression_compiler.compile(%struct.Expression* %tmp125, %struct.expression_compiler.Expected %tmp150, %struct.scope.Scope* %scope, %struct.SymbolTable* %symbol_table, %"struct.vector.Vec<%struct.output.LLVMInstruction>"* %output)
+	store %struct.expression_compiler.CompiledValue %tmp151, %struct.expression_compiler.CompiledValue* %v4
+	%tmp152 = call i32 @expression_compiler.cv_to_register(%struct.expression_compiler.CompiledValue* %v4, %struct.scope.Scope* %scope, %struct.SymbolTable* %symbol_table, %"struct.vector.Vec<%struct.output.LLVMInstruction>"* %output)
+	%tmp153 = call %struct.output.LLVMInstruction @output.branch(i32 %tmp152, i32 %tmp141, i32 %tmp135)
+	call void @"vector.push<%struct.output.LLVMInstruction>"(%"struct.vector.Vec<%struct.output.LLVMInstruction>"* %output, %struct.output.LLVMInstruction %tmp153)
+	%tmp154 = call %struct.output.LLVMInstruction @output.jump_to(i32 %tmp129)
+	call void @"vector.push<%struct.output.LLVMInstruction>"(%"struct.vector.Vec<%struct.output.LLVMInstruction>"* %output, %struct.output.LLVMInstruction %tmp154)
+	%tmp155 = call %struct.output.LLVMInstruction @output.jump_to(i32 %tmp135)
+	call void @"vector.push<%struct.output.LLVMInstruction>"(%"struct.vector.Vec<%struct.output.LLVMInstruction>"* %output, %struct.output.LLVMInstruction %tmp155)
+	%tmp156 = call %struct.output.LLVMInstruction @output.label(i32 %tmp135)
+	call void @"vector.push<%struct.output.LLVMInstruction>"(%"struct.vector.Vec<%struct.output.LLVMInstruction>"* %output, %struct.output.LLVMInstruction %tmp156)
+	%tmp157 = getelementptr inbounds %struct.scope.Scope, %struct.scope.Scope* %scope, i32 0, i32 4
+	store i32 %tmp127, i32* %tmp157
+	%tmp158 = load i32, i32* %v0
+	%tmp159 = add i32 %tmp158, 1
+	store i32 %tmp159, i32* %v0
+	br label %loop_body0
+; Variable check_val is out.
+endif12:
+	%tmp160 = load i8, i8* %tmp6
+	%tmp161 = icmp eq i8 %tmp160, 3
+	br i1 %tmp161, label %then13, label %endif13
+then13:
+	%tmp162 = getelementptr inbounds %struct.Stmt, %struct.Stmt* %tmp6, i32 0, i32 1
+	%tmp163 = load i8*, i8** %tmp162
+	%tmp164 = getelementptr inbounds %struct.scope.Scope, %struct.scope.Scope* %scope, i32 0, i32 4
+	%tmp165 = load i32, i32* %tmp164
+	%tmp166 = call %struct.expression_compiler.Expected @expression_compiler.expect_anything()
+	%tmp167 = call %struct.expression_compiler.CompiledValue @expression_compiler.compile(%struct.Expression* %tmp163, %struct.expression_compiler.Expected %tmp166, %struct.scope.Scope* %scope, %struct.SymbolTable* %symbol_table, %"struct.vector.Vec<%struct.output.LLVMInstruction>"* %output)
+	store %struct.expression_compiler.CompiledValue %tmp167, %struct.expression_compiler.CompiledValue* %v5
+	%tmp168 = call i32 @expression_compiler.cv_to_register(%struct.expression_compiler.CompiledValue* %v5, %struct.scope.Scope* %scope, %struct.SymbolTable* %symbol_table, %"struct.vector.Vec<%struct.output.LLVMInstruction>"* %output)
+	%tmp169 = getelementptr inbounds %struct.scope.Scope, %struct.scope.Scope* %scope, i32 0, i32 3
+	%tmp170 = load i32, i32* %tmp169
+	%tmp171 = getelementptr inbounds %struct.scope.Scope, %struct.scope.Scope* %scope, i32 0, i32 3
+	%tmp172 = load i32, i32* %tmp171
+	%tmp173 = add i32 %tmp172, 1
+	%tmp174 = getelementptr inbounds %struct.scope.Scope, %struct.scope.Scope* %scope, i32 0, i32 3
+	%tmp175 = load i32, i32* %tmp174
+	%tmp176 = add i32 %tmp175, 2
+	store i32 %tmp176, i32* %v6
+	%tmp177 = getelementptr inbounds %struct.IfStmt, %struct.IfStmt* %tmp163, i32 0, i32 2
+	%tmp178 = getelementptr inbounds %"struct.vector.Vec<%struct.Stmt>", %"struct.vector.Vec<%struct.Stmt>"* %tmp177, i32 0, i32 1
+	%tmp179 = load i32, i32* %tmp178
+	%tmp180 = icmp eq i32 %tmp179, 0
+	br i1 %tmp180, label %then14, label %endif14
+then14:
+	store i32 %tmp173, i32* %v6
+	br label %endif14
+endif14:
+	%tmp181 = call %struct.output.LLVMInstruction @output.branch(i32 %tmp168, i32 %tmp170, i32 %tmp173)
+	call void @"vector.push<%struct.output.LLVMInstruction>"(%"struct.vector.Vec<%struct.output.LLVMInstruction>"* %output, %struct.output.LLVMInstruction %tmp181)
+	%tmp182 = call %struct.output.LLVMInstruction @output.label(i32 %tmp170)
+	call void @"vector.push<%struct.output.LLVMInstruction>"(%"struct.vector.Vec<%struct.output.LLVMInstruction>"* %output, %struct.output.LLVMInstruction %tmp182)
+	%tmp183 = getelementptr inbounds %struct.IfStmt, %struct.IfStmt* %tmp163, i32 0, i32 1
+	call void @compile_internals.compile_body(%"struct.vector.Vec<%struct.Stmt>"* %tmp183, i32 %function_index, i32 %implementation_index, %struct.scope.Scope* %scope, %struct.SymbolTable* %symbol_table, %"struct.vector.Vec<%struct.output.LLVMInstruction>"* %output)
+	%tmp184 = load i32, i32* %v6
+	%tmp185 = call %struct.output.LLVMInstruction @output.jump_to(i32 %tmp184)
+	call void @"vector.push<%struct.output.LLVMInstruction>"(%"struct.vector.Vec<%struct.output.LLVMInstruction>"* %output, %struct.output.LLVMInstruction %tmp185)
+	%tmp186 = getelementptr inbounds %struct.IfStmt, %struct.IfStmt* %tmp163, i32 0, i32 2
+	%tmp187 = getelementptr inbounds %"struct.vector.Vec<%struct.Stmt>", %"struct.vector.Vec<%struct.Stmt>"* %tmp186, i32 0, i32 1
+	%tmp188 = load i32, i32* %tmp187
+	%tmp189 = icmp ne i32 %tmp188, 0
+	br i1 %tmp189, label %then15, label %endif15
+then15:
+	%tmp190 = call %struct.output.LLVMInstruction @output.label(i32 %tmp173)
+	call void @"vector.push<%struct.output.LLVMInstruction>"(%"struct.vector.Vec<%struct.output.LLVMInstruction>"* %output, %struct.output.LLVMInstruction %tmp190)
+	%tmp191 = getelementptr inbounds %struct.IfStmt, %struct.IfStmt* %tmp163, i32 0, i32 2
+	call void @compile_internals.compile_body(%"struct.vector.Vec<%struct.Stmt>"* %tmp191, i32 %function_index, i32 %implementation_index, %struct.scope.Scope* %scope, %struct.SymbolTable* %symbol_table, %"struct.vector.Vec<%struct.output.LLVMInstruction>"* %output)
+	%tmp192 = load i32, i32* %v6
+	%tmp193 = call %struct.output.LLVMInstruction @output.jump_to(i32 %tmp192)
+	call void @"vector.push<%struct.output.LLVMInstruction>"(%"struct.vector.Vec<%struct.output.LLVMInstruction>"* %output, %struct.output.LLVMInstruction %tmp193)
+	br label %endif15
+endif15:
+	%tmp194 = load i32, i32* %v6
+	%tmp195 = call %struct.output.LLVMInstruction @output.label(i32 %tmp194)
+	call void @"vector.push<%struct.output.LLVMInstruction>"(%"struct.vector.Vec<%struct.output.LLVMInstruction>"* %output, %struct.output.LLVMInstruction %tmp195)
+	%tmp196 = getelementptr inbounds %struct.scope.Scope, %struct.scope.Scope* %scope, i32 0, i32 3
+	%tmp197 = getelementptr inbounds %struct.scope.Scope, %struct.scope.Scope* %scope, i32 0, i32 3
+	%tmp198 = load i32, i32* %tmp197
+	%tmp199 = add i32 %tmp198, 3
+	store i32 %tmp199, i32* %tmp196
+	%tmp200 = getelementptr inbounds %struct.IfStmt, %struct.IfStmt* %tmp163, i32 0, i32 2
+	%tmp201 = getelementptr inbounds %"struct.vector.Vec<%struct.Stmt>", %"struct.vector.Vec<%struct.Stmt>"* %tmp200, i32 0, i32 1
+	%tmp202 = load i32, i32* %tmp201
+	%tmp203 = icmp eq i32 %tmp202, 0
+	br i1 %tmp203, label %then16, label %endif16
+then16:
+	%tmp204 = getelementptr inbounds %struct.scope.Scope, %struct.scope.Scope* %scope, i32 0, i32 3
+	%tmp205 = getelementptr inbounds %struct.scope.Scope, %struct.scope.Scope* %scope, i32 0, i32 3
+	%tmp206 = load i32, i32* %tmp205
+	%tmp207 = sub i32 %tmp206, 1
+	store i32 %tmp207, i32* %tmp204
+	br label %endif16
+endif16:
+	%tmp208 = getelementptr inbounds %struct.scope.Scope, %struct.scope.Scope* %scope, i32 0, i32 4
+	store i32 %tmp165, i32* %tmp208
+	%tmp209 = load i32, i32* %v0
+	%tmp210 = add i32 %tmp209, 1
+	store i32 %tmp210, i32* %v0
+	br label %loop_body0
+; Variable check_val is out.
+endif13:
+	%tmp211 = load i8, i8* %tmp6
+	%tmp212 = icmp eq i8 %tmp211, 7
+	br i1 %tmp212, label %then17, label %endif17
+then17:
+	%tmp213 = getelementptr inbounds %struct.Stmt, %struct.Stmt* %tmp6, i32 0, i32 1
+	%tmp214 = load i8*, i8** %tmp213
+	%tmp215 = load i32, i32* %v0
+	%tmp216 = add i32 %tmp215, 1
+	store i32 %tmp216, i32* %v0
+	br label %loop_body0
+endif17:
+	%tmp217 = call %struct.output.LLVMInstruction @output.unreachable()
+	call void @"vector.push<%struct.output.LLVMInstruction>"(%"struct.vector.Vec<%struct.output.LLVMInstruction>"* %output, %struct.output.LLVMInstruction %tmp217)
+	%tmp218 = load i32, i32* %v0
+	%tmp219 = add i32 %tmp218, 1
+	store i32 %tmp219, i32* %v0
+	br label %loop_body0
+loop_body0:
+	br label %loop_start0
+loop_body0_exit:
+	ret void
+}
+define %struct.comp_type.CompilerType @comp_type.get_compiler_type_internal(%struct.Type* %type, %struct.Path* %l_path, %struct.Path* %g_path, %struct.SymbolTable* %table){
+	%v0 = alloca %struct.comp_type.CompilerType
+	%v1 = alloca %struct.SymbolTableEntry*
+	%v2 = alloca %struct.comp_type.CompilerType
+	%v3 = alloca %struct.comp_type.CompilerType
+	%v4 = alloca %struct.comp_type.CompilerType
+	%v5 = alloca %struct.SymbolTableEntry*
+	%v6 = alloca %"struct.vector.Vec<%struct.comp_type.CompilerType>"
+	%v7 = alloca i32
+	%v8 = alloca i32
+	%v9 = alloca i32
+	%v10 = alloca i1
+	%v11 = alloca i32
+	%v12 = alloca %struct.Implementation
+	%v13 = alloca %struct.layout.Layout
+	%v14 = alloca %struct.PathEx
+	%v15 = alloca i32
+	%v16 = alloca %struct.comp_type.CompilerType
+	%v17 = alloca %struct.rvalue.Rvalue
+	%v18 = alloca %struct.comp_type.CompilerType
+	%v19 = alloca %struct.comp_type.CompilerType
+	%tmp0 = load i32, i32* %type
+	%tmp1 = icmp eq i32 %tmp0, 0
+	br i1 %tmp1, label %then0, label %else0
+then0:
+	%tmp2 = getelementptr inbounds %struct.Type, %struct.Type* %type, i32 0, i32 1
+	%tmp3 = load i8*, i8** %tmp2
+	%tmp7 = load i16, i16* %tmp3
+	%tmp8 = getelementptr inbounds %struct.SymbolTable, %struct.SymbolTable* %table, i32 0, i32 1
+	%tmp9 = getelementptr inbounds %struct.SymbolTable, %struct.SymbolTable* %table, i32 0, i32 1
+	%tmp10 = load %"struct.vector.Vec<%struct.string.String>"*, %"struct.vector.Vec<%struct.string.String>"** %tmp9
+	%tmp11 = load %struct.string.String*, %struct.string.String** %tmp10
+	%tmp12 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp11, i16 %tmp7
+	%tmp13 = load i8*, i8** %tmp12
+	%tmp14 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp12, i32 0, i32 1
+	%tmp15 = load i32, i32* %tmp14
+	%tmp16 = call %struct.primitives.PrimitiveTypeInfo* @primitives.find_primitive_type(i8* %tmp13, i32 %tmp15)
+	%tmp17 = icmp ne %struct.primitives.PrimitiveTypeInfo* %tmp16, null
+	br i1 %tmp17, label %then1, label %endif1
+then1:
+	store i32 2, i32* %v0
+	%tmp18 = getelementptr inbounds %struct.comp_type.CompilerType, %struct.comp_type.CompilerType* %v0, i32 0, i32 1
+	%tmp19 = ptrtoint %struct.primitives.PrimitiveTypeInfo* %tmp16 to i64
+	store i64 %tmp19, i64* %tmp18
+	%tmp20 = load %struct.comp_type.CompilerType, %struct.comp_type.CompilerType* %v0
+	br label %inl_exit2
+inl_exit2:
+	br label %func_exit
+endif1:
+	%tmp21 = load i16, i16* %tmp3
+	%tmp22 = call %struct.PathEx @path_to_path_ex_name(%struct.Path* %l_path, i16 %tmp21)
+	%tmp23 = call %struct.SymbolTableEntry* @get_symbol_from_table(%struct.SymbolTable* %table, %struct.PathEx %tmp22)
+	store %struct.SymbolTableEntry* %tmp23, %struct.SymbolTableEntry** %v1
+	%tmp24 = load %struct.SymbolTableEntry*, %struct.SymbolTableEntry** %v1
+	%tmp25 = icmp eq %struct.SymbolTableEntry* %tmp24, null
+	br i1 %tmp25, label %then3, label %endif3
+then3:
+	%tmp26 = load i16, i16* %tmp3
+	%tmp27 = call %struct.PathEx @path_to_path_ex_name(%struct.Path* %g_path, i16 %tmp26)
+	%tmp28 = call %struct.SymbolTableEntry* @get_symbol_from_table(%struct.SymbolTable* %table, %struct.PathEx %tmp27)
+	store %struct.SymbolTableEntry* %tmp28, %struct.SymbolTableEntry** %v1
+; Variable p is out.
+	br label %endif3
+endif3:
+	%tmp29 = load %struct.SymbolTableEntry*, %struct.SymbolTableEntry** %v1
+	%tmp30 = icmp eq %struct.SymbolTableEntry* %tmp29, null
+	br i1 %tmp30, label %then4, label %endif4
+then4:
+	%tmp31 = load %struct.primitives.PrimitiveTypeInfo*, %struct.primitives.PrimitiveTypeInfo** @primitives.VOID_TYPE
+	store i32 2, i32* %v2
+	%tmp32 = getelementptr inbounds %struct.comp_type.CompilerType, %struct.comp_type.CompilerType* %v2, i32 0, i32 1
+	%tmp33 = ptrtoint %struct.primitives.PrimitiveTypeInfo* %tmp31 to i64
+	store i64 %tmp33, i64* %tmp32
+	%tmp34 = load %struct.comp_type.CompilerType, %struct.comp_type.CompilerType* %v2
+	br label %inl_exit5
+inl_exit5:
+	br label %func_exit
+endif4:
+	%tmp35 = load %struct.SymbolTableEntry*, %struct.SymbolTableEntry** %v1
+	%tmp36 = ptrtoint %struct.SymbolTableEntry* %tmp35 to i64
+	%tmp37 = load %struct.SymbolTableEntry*, %struct.SymbolTableEntry** %table
+	%tmp38 = ptrtoint %struct.SymbolTableEntry* %tmp37 to i64
+	%tmp39 = sub i64 %tmp36, %tmp38
+	%tmp40 = udiv i64 %tmp39, 40
+	%tmp41 = trunc i64 %tmp40 to i32
+	store i32 3, i32* %v3
+	%tmp42 = getelementptr inbounds %struct.comp_type.CompilerType, %struct.comp_type.CompilerType* %v3, i32 0, i32 1
+	%tmp43 = sext i32 %tmp41 to i64
+	store i64 %tmp43, i64* %tmp42
+	%tmp44 = load %struct.comp_type.CompilerType, %struct.comp_type.CompilerType* %v3
+	br label %inl_exit7
+inl_exit7:
+	br label %func_exit
+; Variable p is out.
+else0:
+	%tmp45 = load i32, i32* %type
+	%tmp46 = icmp eq i32 %tmp45, 1
+	br i1 %tmp46, label %then8, label %else8
+then8:
+	%tmp47 = getelementptr inbounds %struct.Type, %struct.Type* %type, i32 0, i32 1
+	%tmp48 = load i8*, i8** %tmp47
+	%tmp49 = getelementptr inbounds %struct.PointerType, %struct.PointerType* %tmp48, i32 0, i32 1
+	%tmp50 = call %struct.comp_type.CompilerType @comp_type.get_compiler_type_internal(%struct.Type* %tmp49, %struct.Path* %l_path, %struct.Path* %g_path, %struct.SymbolTable* %table)
+	%tmp51 = load i8, i8* %tmp48
+	store i32 0, i32* %v4
+	%tmp52 = call i8* @mem.malloc(i64 24)
+	store i8 %tmp51, i8* %tmp52
+	%tmp53 = getelementptr inbounds %struct.comp_type.PointerCompilerType, %struct.comp_type.PointerCompilerType* %tmp52, i32 0, i32 1
+	store %struct.comp_type.CompilerType %tmp50, %struct.comp_type.CompilerType* %tmp53
+	%tmp54 = getelementptr inbounds %struct.comp_type.CompilerType, %struct.comp_type.CompilerType* %v4, i32 0, i32 1
+	%tmp55 = ptrtoint %struct.comp_type.PointerCompilerType* %tmp52 to i64
+	store i64 %tmp55, i64* %tmp54
+	%tmp56 = load %struct.comp_type.CompilerType, %struct.comp_type.CompilerType* %v4
+	br label %inl_exit9
+inl_exit9:
+	br label %func_exit
+; Variable inner is out.
+else8:
+	%tmp57 = load i32, i32* %type
+	%tmp58 = icmp eq i32 %tmp57, 3
+	br i1 %tmp58, label %then10, label %else10
+then10:
+	%tmp59 = getelementptr inbounds %struct.Type, %struct.Type* %type, i32 0, i32 1
+	%tmp60 = load i8*, i8** %tmp59
+	%tmp61 = getelementptr inbounds %struct.NamespaceLinkType, %struct.NamespaceLinkType* %tmp60, i32 0, i32 1
+	%tmp62 = call %struct.comp_type.CompilerType @comp_type.get_compiler_type_internal(%struct.Type* %tmp61, %struct.Path* %tmp60, %struct.Path* %g_path, %struct.SymbolTable* %table)
+	br label %func_exit
+else10:
+	%tmp63 = load i32, i32* %type
+	%tmp64 = icmp eq i32 %tmp63, 4
+	br i1 %tmp64, label %then11, label %else11
+then11:
+	%tmp65 = getelementptr inbounds %struct.Type, %struct.Type* %type, i32 0, i32 1
+	%tmp66 = load i8*, i8** %tmp65
+	%tmp70 = load i16, i16* %tmp66
+	%tmp71 = getelementptr inbounds %struct.SymbolTable, %struct.SymbolTable* %table, i32 0, i32 1
+	%tmp72 = getelementptr inbounds %struct.SymbolTable, %struct.SymbolTable* %table, i32 0, i32 1
+	%tmp73 = load %"struct.vector.Vec<%struct.string.String>"*, %"struct.vector.Vec<%struct.string.String>"** %tmp72
+	%tmp74 = load %struct.string.String*, %struct.string.String** %tmp73
+	%tmp75 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp74, i16 %tmp70
+	%tmp76 = load i8*, i8** %tmp75
+	%tmp77 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp75, i32 0, i32 1
+	%tmp78 = load i32, i32* %tmp77
+	%tmp79 = call %struct.primitives.PrimitiveTypeInfo* @primitives.find_primitive_type(i8* %tmp76, i32 %tmp78)
+	%tmp80 = icmp ne %struct.primitives.PrimitiveTypeInfo* %tmp79, null
+	br i1 %tmp80, label %then12, label %endif12
+then12:
+	call void @process.throw(i8* @.str.134)
+	br label %endif12
+endif12:
+	%tmp81 = load i16, i16* %tmp66
+	%tmp82 = call %struct.PathEx @path_to_path_ex_name(%struct.Path* %l_path, i16 %tmp81)
+	%tmp83 = call %struct.SymbolTableEntry* @get_symbol_from_table(%struct.SymbolTable* %table, %struct.PathEx %tmp82)
+	store %struct.SymbolTableEntry* %tmp83, %struct.SymbolTableEntry** %v5
+	%tmp84 = load %struct.SymbolTableEntry*, %struct.SymbolTableEntry** %v5
+	%tmp85 = icmp eq %struct.SymbolTableEntry* %tmp84, null
+	br i1 %tmp85, label %then13, label %endif13
+then13:
+	%tmp86 = load i16, i16* %tmp66
+	%tmp87 = call %struct.PathEx @path_to_path_ex_name(%struct.Path* %g_path, i16 %tmp86)
+	%tmp88 = call %struct.SymbolTableEntry* @get_symbol_from_table(%struct.SymbolTable* %table, %struct.PathEx %tmp87)
+	store %struct.SymbolTableEntry* %tmp88, %struct.SymbolTableEntry** %v5
+; Variable p is out.
+	br label %endif13
+endif13:
+	%tmp89 = load %struct.SymbolTableEntry*, %struct.SymbolTableEntry** %v5
+	%tmp90 = icmp eq %struct.SymbolTableEntry* %tmp89, null
+	br i1 %tmp90, label %then14, label %endif14
+then14:
+	call void @process.throw(i8* @.str.135)
+	br label %endif14
+endif14:
+	%tmp91 = load %struct.SymbolTableEntry*, %struct.SymbolTableEntry** %v5
+	%tmp92 = ptrtoint %struct.SymbolTableEntry* %tmp91 to i64
+	%tmp93 = load %struct.SymbolTableEntry*, %struct.SymbolTableEntry** %table
+	%tmp94 = ptrtoint %struct.SymbolTableEntry* %tmp93 to i64
+	%tmp95 = sub i64 %tmp92, %tmp94
+	%tmp96 = udiv i64 %tmp95, 40
+	%tmp97 = trunc i64 %tmp96 to i32
+	%tmp98 = call %"struct.vector.Vec<%struct.comp_type.CompilerType>" @"vector.new<%struct.comp_type.CompilerType>"()
+	store %"struct.vector.Vec<%struct.comp_type.CompilerType>" %tmp98, %"struct.vector.Vec<%struct.comp_type.CompilerType>"* %v6
+	%tmp99 = getelementptr inbounds %struct.GenericType, %struct.GenericType* %tmp66, i32 0, i32 1
+	%tmp100 = getelementptr inbounds %"struct.vector.Vec<%struct.Type>", %"struct.vector.Vec<%struct.Type>"* %tmp99, i32 0, i32 1
+	%tmp101 = load i32, i32* %tmp100
+	store i32 0, i32* %v7
+	br label %loop_cond15
+loop_cond15:
+	%tmp102 = load i32, i32* %v7
+	%tmp103 = getelementptr inbounds %struct.GenericType, %struct.GenericType* %tmp66, i32 0, i32 1
+	%tmp104 = getelementptr inbounds %"struct.vector.Vec<%struct.Type>", %"struct.vector.Vec<%struct.Type>"* %tmp103, i32 0, i32 1
+	%tmp105 = load i32, i32* %tmp104
+	%tmp106 = icmp uge i32 %tmp102, %tmp105
+	br i1 %tmp106, label %then16, label %endif16
+then16:
+	br label %loop_body15_exit
+endif16:
+	%tmp108 = load i32, i32* %v7
+	%tmp109 = getelementptr inbounds %struct.GenericType, %struct.GenericType* %tmp66, i32 0, i32 1
+	%tmp110 = load %struct.Type*, %struct.Type** %tmp109
+	%tmp111 = getelementptr inbounds %struct.Type, %struct.Type* %tmp110, i32 %tmp108
+	%tmp112 = call %struct.comp_type.CompilerType @comp_type.get_compiler_type(%struct.Type* %tmp111, %struct.Path* %g_path, %struct.SymbolTable* %table)
+	call void @"vector.push<%struct.comp_type.CompilerType>"(%"struct.vector.Vec<%struct.comp_type.CompilerType>"* %v6, %struct.comp_type.CompilerType %tmp112)
+	%tmp113 = load i32, i32* %v7
+	%tmp114 = add i32 %tmp113, 1
+	store i32 %tmp114, i32* %v7
+	br label %loop_cond15
+loop_body15_exit:
+	%tmp115 = load %struct.SymbolTableEntry*, %struct.SymbolTableEntry** %v5
+	%tmp116 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp115, i32 0, i32 2
+	%tmp117 = load i8*, i8** %tmp116
+	store i32 65535, i32* %v8
+	%tmp118 = getelementptr inbounds %struct.GenericStructSymbolTableEntry, %struct.GenericStructSymbolTableEntry* %tmp117, i32 0, i32 2
+	%tmp119 = getelementptr inbounds %"struct.vector.Vec<%struct.Implementation>", %"struct.vector.Vec<%struct.Implementation>"* %tmp118, i32 0, i32 1
+	%tmp120 = load i32, i32* %tmp119
+	store i32 0, i32* %v9
+	br label %loop_cond17
+loop_cond17:
+	%tmp121 = load i32, i32* %v9
+	%tmp122 = getelementptr inbounds %struct.GenericStructSymbolTableEntry, %struct.GenericStructSymbolTableEntry* %tmp117, i32 0, i32 2
+	%tmp123 = getelementptr inbounds %"struct.vector.Vec<%struct.Implementation>", %"struct.vector.Vec<%struct.Implementation>"* %tmp122, i32 0, i32 1
+	%tmp124 = load i32, i32* %tmp123
+	%tmp125 = icmp uge i32 %tmp121, %tmp124
+	br i1 %tmp125, label %then18, label %endif18
+then18:
+	br label %loop_body17_exit
+endif18:
+	%tmp127 = load i32, i32* %v9
+	%tmp128 = getelementptr inbounds %struct.GenericStructSymbolTableEntry, %struct.GenericStructSymbolTableEntry* %tmp117, i32 0, i32 2
+	%tmp129 = load %struct.Implementation*, %struct.Implementation** %tmp128
+	%tmp130 = getelementptr inbounds %struct.Implementation, %struct.Implementation* %tmp129, i32 %tmp127
+	store i1 true, i1* %v10
+	%tmp131 = getelementptr inbounds %"struct.vector.Vec<%struct.comp_type.CompilerType>", %"struct.vector.Vec<%struct.comp_type.CompilerType>"* %tmp130, i32 0, i32 1
+	%tmp132 = load i32, i32* %tmp131
+	store i32 0, i32* %v11
+	br label %loop_cond19
+loop_cond19:
+	%tmp133 = load i32, i32* %v11
+	%tmp134 = getelementptr inbounds %"struct.vector.Vec<%struct.comp_type.CompilerType>", %"struct.vector.Vec<%struct.comp_type.CompilerType>"* %tmp130, i32 0, i32 1
+	%tmp135 = load i32, i32* %tmp134
+	%tmp136 = icmp uge i32 %tmp133, %tmp135
+	br i1 %tmp136, label %then20, label %endif20
+then20:
+	br label %loop_body19_exit
+endif20:
+	%tmp137 = load i32, i32* %v11
+	%tmp138 = load %struct.comp_type.CompilerType*, %struct.comp_type.CompilerType** %tmp130
+	%tmp139 = getelementptr inbounds %struct.comp_type.CompilerType, %struct.comp_type.CompilerType* %tmp138, i32 %tmp137
+	%tmp140 = load i32, i32* %v11
+	%tmp141 = load %struct.comp_type.CompilerType*, %struct.comp_type.CompilerType** %v6
+	%tmp142 = getelementptr inbounds %struct.comp_type.CompilerType, %struct.comp_type.CompilerType* %tmp141, i32 %tmp140
+	%tmp143 = call i1 @comp_type.equal(%struct.comp_type.CompilerType* %tmp139, %struct.comp_type.CompilerType* %tmp142)
+	%tmp144 = xor i1 1, %tmp143
+	br i1 %tmp144, label %then21, label %endif21
+then21:
+	store i1 false, i1* %v10
+	br label %loop_body19_exit
+endif21:
+	%tmp145 = load i32, i32* %v11
+	%tmp146 = add i32 %tmp145, 1
+	store i32 %tmp146, i32* %v11
+	br label %loop_cond19
+loop_body19_exit:
+	%tmp147 = load i1, i1* %v10
+	br i1 %tmp147, label %then22, label %endif22
+then22:
+	%tmp148 = load i32, i32* %v9
+	store i32 %tmp148, i32* %v8
+	br label %loop_body17_exit
+endif22:
+	%tmp149 = load i32, i32* %v9
+	%tmp150 = add i32 %tmp149, 1
+	store i32 %tmp150, i32* %v9
+	br label %loop_cond17
+loop_body17_exit:
+	%tmp151 = load i32, i32* %v8
+	%tmp152 = icmp eq i32 %tmp151, 65535
+	br i1 %tmp152, label %then23, label %else23
+then23:
+	%tmp153 = getelementptr inbounds %struct.GenericStructSymbolTableEntry, %struct.GenericStructSymbolTableEntry* %tmp117, i32 0, i32 2
+	%tmp154 = getelementptr inbounds %"struct.vector.Vec<%struct.Implementation>", %"struct.vector.Vec<%struct.Implementation>"* %tmp153, i32 0, i32 1
+	%tmp155 = load i32, i32* %tmp154
+	store i32 %tmp155, i32* %v8
+	%tmp156 = load %"struct.vector.Vec<%struct.comp_type.CompilerType>", %"struct.vector.Vec<%struct.comp_type.CompilerType>"* %v6
+	store %"struct.vector.Vec<%struct.comp_type.CompilerType>" %tmp156, %"struct.vector.Vec<%struct.comp_type.CompilerType>"* %v12
+	%tmp157 = getelementptr inbounds %struct.Implementation, %struct.Implementation* %v12, i32 0, i32 2
+	store i16 65535, i16* %v13
+	%tmp158 = getelementptr inbounds %struct.layout.Layout, %struct.layout.Layout* %v13, i32 0, i32 1
+	store i16 65535, i16* %tmp158
+	%tmp159 = load %struct.layout.Layout, %struct.layout.Layout* %v13
+	store %struct.layout.Layout %tmp159, %struct.layout.Layout* %tmp157
+	%tmp160 = getelementptr inbounds %struct.Implementation, %struct.Implementation* %v12, i32 0, i32 1
+	%tmp161 = getelementptr inbounds %struct.GenericStructSymbolTableEntry, %struct.GenericStructSymbolTableEntry* %tmp117, i32 0, i32 3
+	%tmp162 = call %struct.string.String @string.clone(%struct.string.String* %tmp161)
+	store %struct.string.String %tmp162, %struct.string.String* %tmp160
+	%tmp163 = getelementptr inbounds %struct.Implementation, %struct.Implementation* %v12, i32 0, i32 1
+	call void @string.append(%struct.string.String* %tmp163, i8 46)
+	%tmp164 = call %struct.PathEx @path_to_path_ex(%struct.Path* %g_path)
+	store %struct.PathEx %tmp164, %struct.PathEx* %v14
+	%tmp165 = load %struct.comp_type.CompilerType*, %struct.comp_type.CompilerType** %v6
+	%tmp166 = getelementptr inbounds %struct.Implementation, %struct.Implementation* %v12, i32 0, i32 1
+	call void @comp_type.compiler_type_push_internal(%struct.comp_type.CompilerType* %tmp165, %struct.PathEx* %v14, %struct.SymbolTable* %table, %struct.string.String* %tmp166, i1 true)
+	%tmp167 = getelementptr inbounds %struct.GenericStructSymbolTableEntry, %struct.GenericStructSymbolTableEntry* %tmp117, i32 0, i32 2
+	%tmp168 = load %struct.Implementation, %struct.Implementation* %v12
+	call void @"vector.push<%struct.Implementation>"(%"struct.vector.Vec<%struct.Implementation>"* %tmp167, %struct.Implementation %tmp168)
+; Variable p is out.
+; Variable q is out.
+	br label %endif23
+else23:
+	%tmp169 = getelementptr inbounds %"struct.vector.Vec<%struct.comp_type.CompilerType>", %"struct.vector.Vec<%struct.comp_type.CompilerType>"* %v6, i32 0, i32 1
+	%tmp170 = load i32, i32* %tmp169
+	store i32 0, i32* %v15
+	br label %loop_cond25
+loop_cond25:
+	%tmp171 = load i32, i32* %v15
+	%tmp172 = getelementptr inbounds %"struct.vector.Vec<%struct.comp_type.CompilerType>", %"struct.vector.Vec<%struct.comp_type.CompilerType>"* %v6, i32 0, i32 1
+	%tmp173 = load i32, i32* %tmp172
+	%tmp174 = icmp uge i32 %tmp171, %tmp173
+	br i1 %tmp174, label %then26, label %endif26
+then26:
+	br label %loop_body25_exit
+endif26:
+	%tmp175 = load i32, i32* %v15
+	%tmp176 = load %struct.comp_type.CompilerType*, %struct.comp_type.CompilerType** %v6
+	%tmp177 = getelementptr inbounds %struct.comp_type.CompilerType, %struct.comp_type.CompilerType* %tmp176, i32 %tmp175
+	call void @comp_type.free(%struct.comp_type.CompilerType* %tmp177)
+	%tmp178 = load i32, i32* %v15
+	%tmp179 = add i32 %tmp178, 1
+	store i32 %tmp179, i32* %v15
+	br label %loop_cond25
+loop_body25_exit:
+	call void @"vector.free<%struct.comp_type.CompilerType>"(%"struct.vector.Vec<%struct.comp_type.CompilerType>"* %v6)
+	br label %endif23
+endif23:
+	%tmp180 = load i32, i32* %v8
+	store i32 5, i32* %v16
+	%tmp181 = getelementptr inbounds %struct.comp_type.CompilerType, %struct.comp_type.CompilerType* %v16, i32 0, i32 1
+	%tmp182 = zext i32 %tmp97 to i64
+	%tmp183 = shl i64 %tmp182, 32
+	%tmp184 = zext i32 %tmp180 to i64
+	%tmp185 = or i64 %tmp183, %tmp184
+	store i64 %tmp185, i64* %tmp181
+	%tmp186 = load %struct.comp_type.CompilerType, %struct.comp_type.CompilerType* %v16
+	br label %inl_exit27
+inl_exit27:
+	br label %func_exit
+; Variable c is out.
+; Variable p is out.
+else11:
+	%tmp187 = load i32, i32* %type
+	%tmp188 = icmp eq i32 %tmp187, 5
+	br i1 %tmp188, label %then28, label %endif28
+then28:
+	%tmp189 = getelementptr inbounds %struct.Type, %struct.Type* %type, i32 0, i32 1
+	%tmp190 = load i8*, i8** %tmp189
+	%tmp191 = call %struct.comp_type.CompilerType @comp_type.get_compiler_type_internal(%struct.Type* %tmp190, %struct.Path* %l_path, %struct.Path* %g_path, %struct.SymbolTable* %table)
+	%tmp192 = getelementptr inbounds %struct.ConstantSizeArrayType, %struct.ConstantSizeArrayType* %tmp190, i32 0, i32 1
+	%tmp193 = call %struct.rvalue.Rvalue @expression_compiler.constant_expression_evaluation(%struct.Expression* %tmp192, %struct.SymbolTable* %table)
+	store %struct.rvalue.Rvalue %tmp193, %struct.rvalue.Rvalue* %v17
+	%tmp194 = load i32, i32* %v17
+	%tmp195 = icmp ne i32 %tmp194, 1
+	br i1 %tmp195, label %then29, label %endif29
+then29:
+	call void @process.throw(i8* @.str.136)
+	br label %endif29
+endif29:
+	%tmp196 = getelementptr inbounds %struct.rvalue.Rvalue, %struct.rvalue.Rvalue* %v17, i32 0, i32 1
+	%tmp197 = load i64, i64* %tmp196
+	%tmp198 = bitcast i64 %tmp197 to i64
+	%tmp199 = trunc i64 %tmp198 to i32
+	store i32 1, i32* %v18
+	%tmp200 = call i8* @mem.malloc(i64 24)
+	store i32 %tmp199, i32* %tmp200
+	%tmp201 = getelementptr inbounds %struct.comp_type.ConstantArrayCompilerType, %struct.comp_type.ConstantArrayCompilerType* %tmp200, i32 0, i32 1
+	store %struct.comp_type.CompilerType %tmp191, %struct.comp_type.CompilerType* %tmp201
+	%tmp202 = getelementptr inbounds %struct.comp_type.CompilerType, %struct.comp_type.CompilerType* %v18, i32 0, i32 1
+	%tmp203 = ptrtoint %struct.comp_type.ConstantArrayCompilerType* %tmp200 to i64
+	store i64 %tmp203, i64* %tmp202
+	%tmp204 = load %struct.comp_type.CompilerType, %struct.comp_type.CompilerType* %v18
+	br label %inl_exit30
+inl_exit30:
+	br label %func_exit
+; Variable ev is out.
+; Variable inner is out.
+endif28:
+	%tmp205 = load %struct.primitives.PrimitiveTypeInfo*, %struct.primitives.PrimitiveTypeInfo** @primitives.VOID_TYPE
+	store i32 2, i32* %v19
+	%tmp206 = getelementptr inbounds %struct.comp_type.CompilerType, %struct.comp_type.CompilerType* %v19, i32 0, i32 1
+	%tmp207 = ptrtoint %struct.primitives.PrimitiveTypeInfo* %tmp205 to i64
+	store i64 %tmp207, i64* %tmp206
+	%tmp208 = load %struct.comp_type.CompilerType, %struct.comp_type.CompilerType* %v19
+	br label %inl_exit31
+inl_exit31:
+	br label %func_exit
+func_exit:
+	%tmp209 = phi %struct.comp_type.CompilerType [%tmp20, %inl_exit2], [%tmp34, %inl_exit5], [%tmp44, %inl_exit7], [%tmp56, %inl_exit9], [%tmp62, %then10], [%tmp186, %inl_exit27], [%tmp204, %inl_exit30], [%tmp208, %inl_exit31]
+	ret %struct.comp_type.CompilerType %tmp209
+}
+define i1 @comp_type.get_compiler_type_generic_internal(%struct.Type* %type, %struct.Path* %l_path, %struct.Path* %g_path, %struct.SymbolTable* %table, %"struct.vector.Vec<ui16>"* %generics, %struct.comp_type.CompilerType* %output){
+	%v0 = alloca i32
+	%v1 = alloca %struct.comp_type.CompilerType
+	%v2 = alloca %struct.comp_type.CompilerType
+	%v3 = alloca %struct.SymbolTableEntry*
+	%v4 = alloca %struct.comp_type.CompilerType
+	%v5 = alloca %struct.comp_type.CompilerType
+	%v6 = alloca %struct.comp_type.CompilerType
+	%v7 = alloca %struct.comp_type.CompilerType
+	%v8 = alloca %struct.comp_type.CompilerType
+	%v9 = alloca %struct.comp_type.CompilerType
+	%tmp0 = load i32, i32* %type
+	%tmp1 = icmp eq i32 %tmp0, 0
+	br i1 %tmp1, label %then0, label %else0
+then0:
+	%tmp2 = getelementptr inbounds %struct.Type, %struct.Type* %type, i32 0, i32 1
+	%tmp3 = load i8*, i8** %tmp2
+	%tmp7 = load i16, i16* %tmp3
+	%tmp8 = getelementptr inbounds %struct.SymbolTable, %struct.SymbolTable* %table, i32 0, i32 1
+	%tmp9 = getelementptr inbounds %struct.SymbolTable, %struct.SymbolTable* %table, i32 0, i32 1
+	%tmp10 = load %"struct.vector.Vec<%struct.string.String>"*, %"struct.vector.Vec<%struct.string.String>"** %tmp9
+	%tmp11 = load %struct.string.String*, %struct.string.String** %tmp10
+	%tmp12 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp11, i16 %tmp7
+	%tmp13 = getelementptr inbounds %"struct.vector.Vec<ui16>", %"struct.vector.Vec<ui16>"* %generics, i32 0, i32 1
+	%tmp14 = load i32, i32* %tmp13
+	store i32 0, i32* %v0
+	br label %loop_cond1
+loop_cond1:
+	%tmp15 = load i32, i32* %v0
+	%tmp16 = getelementptr inbounds %"struct.vector.Vec<ui16>", %"struct.vector.Vec<ui16>"* %generics, i32 0, i32 1
+	%tmp17 = load i32, i32* %tmp16
+	%tmp18 = icmp uge i32 %tmp15, %tmp17
+	br i1 %tmp18, label %then2, label %endif2
+then2:
+	br label %loop_body1_exit
+endif2:
+	%tmp19 = load i32, i32* %v0
+	%tmp20 = load i16*, i16** %generics
+	%tmp21 = getelementptr inbounds i16, i16* %tmp20, i32 %tmp19
+	%tmp22 = load i16, i16* %tmp21
+	%tmp23 = load i16, i16* %tmp3
+	%tmp24 = icmp eq i16 %tmp22, %tmp23
+	br i1 %tmp24, label %then3, label %endif3
+then3:
+	%tmp25 = load i16, i16* %tmp3
+	store i32 4, i32* %v1
+	%tmp26 = getelementptr inbounds %struct.comp_type.CompilerType, %struct.comp_type.CompilerType* %v1, i32 0, i32 1
+	%tmp27 = zext i16 %tmp25 to i64
+	store i64 %tmp27, i64* %tmp26
+	%tmp28 = load %struct.comp_type.CompilerType, %struct.comp_type.CompilerType* %v1
+	br label %inl_exit4
+inl_exit4:
+	store %struct.comp_type.CompilerType %tmp28, %struct.comp_type.CompilerType* %output
+	br label %func_exit
+endif3:
+	%tmp29 = load i32, i32* %v0
+	%tmp30 = add i32 %tmp29, 1
+	store i32 %tmp30, i32* %v0
+	br label %loop_cond1
+loop_body1_exit:
+	%tmp31 = load i8*, i8** %tmp12
+	%tmp32 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp12, i32 0, i32 1
+	%tmp33 = load i32, i32* %tmp32
+	%tmp34 = call %struct.primitives.PrimitiveTypeInfo* @primitives.find_primitive_type(i8* %tmp31, i32 %tmp33)
+	%tmp35 = icmp ne %struct.primitives.PrimitiveTypeInfo* %tmp34, null
+	br i1 %tmp35, label %then5, label %endif5
+then5:
+	store i32 2, i32* %v2
+	%tmp36 = getelementptr inbounds %struct.comp_type.CompilerType, %struct.comp_type.CompilerType* %v2, i32 0, i32 1
+	%tmp37 = ptrtoint %struct.primitives.PrimitiveTypeInfo* %tmp34 to i64
+	store i64 %tmp37, i64* %tmp36
+	%tmp38 = load %struct.comp_type.CompilerType, %struct.comp_type.CompilerType* %v2
+	br label %inl_exit6
+inl_exit6:
+	store %struct.comp_type.CompilerType %tmp38, %struct.comp_type.CompilerType* %output
+	br label %func_exit
+endif5:
+	%tmp39 = load i16, i16* %tmp3
+	%tmp40 = call %struct.PathEx @path_to_path_ex_name(%struct.Path* %l_path, i16 %tmp39)
+	%tmp41 = call %struct.SymbolTableEntry* @get_symbol_from_table(%struct.SymbolTable* %table, %struct.PathEx %tmp40)
+	store %struct.SymbolTableEntry* %tmp41, %struct.SymbolTableEntry** %v3
+	%tmp42 = load %struct.SymbolTableEntry*, %struct.SymbolTableEntry** %v3
+	%tmp43 = icmp eq %struct.SymbolTableEntry* %tmp42, null
+	br i1 %tmp43, label %then7, label %endif7
+then7:
+	%tmp44 = load i16, i16* %tmp3
+	%tmp45 = call %struct.PathEx @path_to_path_ex_name(%struct.Path* %g_path, i16 %tmp44)
+	%tmp46 = call %struct.SymbolTableEntry* @get_symbol_from_table(%struct.SymbolTable* %table, %struct.PathEx %tmp45)
+	store %struct.SymbolTableEntry* %tmp46, %struct.SymbolTableEntry** %v3
+; Variable p is out.
+	br label %endif7
+endif7:
+	%tmp47 = load %struct.SymbolTableEntry*, %struct.SymbolTableEntry** %v3
+	%tmp48 = icmp eq %struct.SymbolTableEntry* %tmp47, null
+	br i1 %tmp48, label %then8, label %endif8
+then8:
+	%tmp49 = load %struct.primitives.PrimitiveTypeInfo*, %struct.primitives.PrimitiveTypeInfo** @primitives.VOID_TYPE
+	store i32 2, i32* %v4
+	%tmp50 = getelementptr inbounds %struct.comp_type.CompilerType, %struct.comp_type.CompilerType* %v4, i32 0, i32 1
+	%tmp51 = ptrtoint %struct.primitives.PrimitiveTypeInfo* %tmp49 to i64
+	store i64 %tmp51, i64* %tmp50
+	%tmp52 = load %struct.comp_type.CompilerType, %struct.comp_type.CompilerType* %v4
+	br label %inl_exit9
+inl_exit9:
+	store %struct.comp_type.CompilerType %tmp52, %struct.comp_type.CompilerType* %output
+	br label %func_exit
+endif8:
+	%tmp53 = load %struct.SymbolTableEntry*, %struct.SymbolTableEntry** %v3
+	%tmp54 = ptrtoint %struct.SymbolTableEntry* %tmp53 to i64
+	%tmp55 = load %struct.SymbolTableEntry*, %struct.SymbolTableEntry** %table
+	%tmp56 = ptrtoint %struct.SymbolTableEntry* %tmp55 to i64
+	%tmp57 = sub i64 %tmp54, %tmp56
+	%tmp58 = udiv i64 %tmp57, 40
+	%tmp59 = trunc i64 %tmp58 to i32
+	store i32 3, i32* %v5
+	%tmp60 = getelementptr inbounds %struct.comp_type.CompilerType, %struct.comp_type.CompilerType* %v5, i32 0, i32 1
+	%tmp61 = sext i32 %tmp59 to i64
+	store i64 %tmp61, i64* %tmp60
+	%tmp62 = load %struct.comp_type.CompilerType, %struct.comp_type.CompilerType* %v5
+	br label %inl_exit11
+inl_exit11:
+	store %struct.comp_type.CompilerType %tmp62, %struct.comp_type.CompilerType* %output
+	br label %func_exit
+; Variable p is out.
+else0:
+	%tmp63 = load i32, i32* %type
+	%tmp64 = icmp eq i32 %tmp63, 1
+	br i1 %tmp64, label %then12, label %else12
+then12:
+	%tmp65 = getelementptr inbounds %struct.Type, %struct.Type* %type, i32 0, i32 1
+	%tmp66 = load i8*, i8** %tmp65
+	%tmp67 = getelementptr inbounds %struct.PointerType, %struct.PointerType* %tmp66, i32 0, i32 1
+	%tmp68 = call i1 @comp_type.get_compiler_type_generic_internal(%struct.Type* %tmp67, %struct.Path* %l_path, %struct.Path* %g_path, %struct.SymbolTable* %table, %"struct.vector.Vec<ui16>"* %generics, %struct.comp_type.CompilerType* %v6)
+	%tmp69 = load %struct.comp_type.CompilerType, %struct.comp_type.CompilerType* %v6
+	%tmp70 = load i8, i8* %tmp66
+	store i32 0, i32* %v7
+	%tmp71 = call i8* @mem.malloc(i64 24)
+	store i8 %tmp70, i8* %tmp71
+	%tmp72 = getelementptr inbounds %struct.comp_type.PointerCompilerType, %struct.comp_type.PointerCompilerType* %tmp71, i32 0, i32 1
+	store %struct.comp_type.CompilerType %tmp69, %struct.comp_type.CompilerType* %tmp72
+	%tmp73 = getelementptr inbounds %struct.comp_type.CompilerType, %struct.comp_type.CompilerType* %v7, i32 0, i32 1
+	%tmp74 = ptrtoint %struct.comp_type.PointerCompilerType* %tmp71 to i64
+	store i64 %tmp74, i64* %tmp73
+	%tmp75 = load %struct.comp_type.CompilerType, %struct.comp_type.CompilerType* %v7
+	br label %inl_exit13
+inl_exit13:
+	store %struct.comp_type.CompilerType %tmp75, %struct.comp_type.CompilerType* %output
+	br label %func_exit
+; Variable inner is out.
+else12:
+	%tmp76 = load i32, i32* %type
+	%tmp77 = icmp eq i32 %tmp76, 3
+	br i1 %tmp77, label %then14, label %endif14
+then14:
+	%tmp78 = getelementptr inbounds %struct.Type, %struct.Type* %type, i32 0, i32 1
+	%tmp79 = load i8*, i8** %tmp78
+	%tmp80 = getelementptr inbounds %struct.NamespaceLinkType, %struct.NamespaceLinkType* %tmp79, i32 0, i32 1
+	%tmp81 = call i1 @comp_type.get_compiler_type_generic_internal(%struct.Type* %tmp80, %struct.Path* %tmp79, %struct.Path* %g_path, %struct.SymbolTable* %table, %"struct.vector.Vec<ui16>"* %generics, %struct.comp_type.CompilerType* %v8)
+	%tmp82 = load %struct.comp_type.CompilerType, %struct.comp_type.CompilerType* %v8
+	store %struct.comp_type.CompilerType %tmp82, %struct.comp_type.CompilerType* %output
+	br label %func_exit
+; Variable inner is out.
+endif14:
+	%tmp83 = load %struct.primitives.PrimitiveTypeInfo*, %struct.primitives.PrimitiveTypeInfo** @primitives.VOID_TYPE
+	store i32 2, i32* %v9
+	%tmp84 = getelementptr inbounds %struct.comp_type.CompilerType, %struct.comp_type.CompilerType* %v9, i32 0, i32 1
+	%tmp85 = ptrtoint %struct.primitives.PrimitiveTypeInfo* %tmp83 to i64
+	store i64 %tmp85, i64* %tmp84
+	%tmp86 = load %struct.comp_type.CompilerType, %struct.comp_type.CompilerType* %v9
+	br label %inl_exit15
+inl_exit15:
+	store %struct.comp_type.CompilerType %tmp86, %struct.comp_type.CompilerType* %output
+	br label %func_exit
+func_exit:
+	%tmp87 = phi i1 [true, %inl_exit4], [false, %inl_exit6], [false, %inl_exit9], [false, %inl_exit11], [%tmp68, %inl_exit13], [%tmp81, %then14], [false, %inl_exit15]
+	ret i1 %tmp87
+}
+define i1 @comp_type.get_compiler_type_generic(%struct.Type* %type, %struct.Path* %g_path, %struct.SymbolTable* %table, %"struct.vector.Vec<ui16>"* %generics, %struct.comp_type.CompilerType* %output){
+	%v0 = alloca %struct.Path
+	store i8 0, i8* %v0
+	%tmp0 = call i1 @comp_type.get_compiler_type_generic_internal(%struct.Type* %type, %struct.Path* %v0, %struct.Path* %g_path, %struct.SymbolTable* %table, %"struct.vector.Vec<ui16>"* %generics, %struct.comp_type.CompilerType* %output)
+; Variable l_path is out.
+	ret i1 %tmp0
+}
+define %struct.comp_type.CompilerType @comp_type.get_compiler_type(%struct.Type* %type, %struct.Path* %g_path, %struct.SymbolTable* %table){
+	%v0 = alloca %struct.Path
+	store i8 0, i8* %v0
+	%tmp0 = call %struct.comp_type.CompilerType @comp_type.get_compiler_type_internal(%struct.Type* %type, %struct.Path* %v0, %struct.Path* %g_path, %struct.SymbolTable* %table)
+; Variable l_path is out.
+	ret %struct.comp_type.CompilerType %tmp0
+}
+define void @comp_type.free(%struct.comp_type.CompilerType* %var){
+entry:
+	%tmp0 = load i32, i32* %var
+	%tmp1 = icmp eq i32 %tmp0, 0
+	br i1 %tmp1, label %logic_rhs_0, label %logic_end_0
+logic_rhs_0:
+	%tmp2 = getelementptr inbounds %struct.comp_type.CompilerType, %struct.comp_type.CompilerType* %var, i32 0, i32 1
+	%tmp3 = load i64, i64* %tmp2
+	%tmp4 = icmp ne i64 %tmp3, 0
+	br label %logic_end_0
+logic_end_0:
+	%tmp5 = phi i1 [%tmp1, %entry], [%tmp4, %logic_rhs_0]
+	br i1 %tmp5, label %then1, label %endif1
+then1:
+	%tmp6 = getelementptr inbounds %struct.comp_type.CompilerType, %struct.comp_type.CompilerType* %var, i32 0, i32 1
+	%tmp7 = load i64, i64* %tmp6
+	%tmp8 = inttoptr i64 %tmp7 to i8*
+	call void @mem.free(i8* %tmp8)
+	%tmp9 = getelementptr inbounds %struct.comp_type.CompilerType, %struct.comp_type.CompilerType* %var, i32 0, i32 1
+	store i64 0, i64* %tmp9
+	br label %endif1
+endif1:
+	ret void
+}
+define i1 @comp_type.equal(%struct.comp_type.CompilerType* %l, %struct.comp_type.CompilerType* %r){
+	%tmp0 = load i32, i32* %l
+	%tmp1 = load i32, i32* %r
+	%tmp2 = icmp ne i32 %tmp0, %tmp1
+	br i1 %tmp2, label %then0, label %endif0
+then0:
+	br label %func_exit
+endif0:
+	%tmp3 = load i32, i32* %l
+	%tmp4 = icmp eq i32 %tmp3, 0
+	br i1 %tmp4, label %then1, label %endif1
+then1:
+	%tmp5 = getelementptr inbounds %struct.comp_type.CompilerType, %struct.comp_type.CompilerType* %l, i32 0, i32 1
+	%tmp6 = load i64, i64* %tmp5
+	%tmp7 = inttoptr i64 %tmp6 to %struct.comp_type.PointerCompilerType*
+	%tmp8 = getelementptr inbounds %struct.comp_type.CompilerType, %struct.comp_type.CompilerType* %r, i32 0, i32 1
+	%tmp9 = load i64, i64* %tmp8
+	%tmp10 = inttoptr i64 %tmp9 to %struct.comp_type.PointerCompilerType*
+	%tmp11 = load i8, i8* %tmp7
+	%tmp12 = load i8, i8* %tmp10
+	%tmp13 = icmp eq i8 %tmp11, %tmp12
+	br i1 %tmp13, label %logic_rhs_2, label %logic_end_2
+logic_rhs_2:
+	%tmp14 = getelementptr inbounds %struct.comp_type.PointerCompilerType, %struct.comp_type.PointerCompilerType* %tmp7, i32 0, i32 1
+	%tmp15 = getelementptr inbounds %struct.comp_type.PointerCompilerType, %struct.comp_type.PointerCompilerType* %tmp10, i32 0, i32 1
+	%tmp16 = call i1 @comp_type.equal(%struct.comp_type.CompilerType* %tmp14, %struct.comp_type.CompilerType* %tmp15)
+	br label %logic_end_2
+logic_end_2:
+	%tmp17 = phi i1 [%tmp13, %then1], [%tmp16, %logic_rhs_2]
+	br label %func_exit
+endif1:
+	%tmp18 = getelementptr inbounds %struct.comp_type.CompilerType, %struct.comp_type.CompilerType* %l, i32 0, i32 1
+	%tmp19 = load i64, i64* %tmp18
+	%tmp20 = getelementptr inbounds %struct.comp_type.CompilerType, %struct.comp_type.CompilerType* %r, i32 0, i32 1
+	%tmp21 = load i64, i64* %tmp20
+	%tmp22 = icmp eq i64 %tmp19, %tmp21
+	br label %func_exit
+func_exit:
+	%tmp23 = phi i1 [false, %then0], [%tmp17, %logic_end_2], [%tmp22, %endif1]
+	ret i1 %tmp23
+}
+define void @comp_type.compiler_type_push_internal(%struct.comp_type.CompilerType* %type, %struct.PathEx* %path, %struct.SymbolTable* %symbol_table, %struct.string.String* %stdout, i1 %inside_generic){
+	%v0 = alloca i32
+	%v1 = alloca i32
+	%tmp0 = load i32, i32* %type
+	%tmp1 = icmp eq i32 %tmp0, 2
+	br i1 %tmp1, label %then0, label %else0
+then0:
+	%tmp2 = getelementptr inbounds %struct.comp_type.CompilerType, %struct.comp_type.CompilerType* %type, i32 0, i32 1
+	%tmp3 = load i64, i64* %tmp2
+	%tmp4 = inttoptr i64 %tmp3 to %struct.primitives.PrimitiveTypeInfo*
+	%tmp5 = getelementptr inbounds %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %tmp4, i32 0, i32 1
+	%tmp6 = load i8*, i8** %tmp5
+	%tmp7 = getelementptr inbounds %struct.primitives.PrimitiveTypeInfo, %struct.primitives.PrimitiveTypeInfo* %tmp4, i32 0, i32 1
+	%tmp8 = load i8*, i8** %tmp7
+	%tmp9 = call i32 @string_utils.c_str_len(i8* %tmp8)
+	call void @string.append_str(%struct.string.String* %stdout, i8* %tmp6, i32 %tmp9)
+	br label %endif0
+else0:
+	%tmp10 = load i32, i32* %type
+	%tmp11 = icmp eq i32 %tmp10, 3
+	br i1 %tmp11, label %then1, label %else1
+then1:
+	%tmp12 = getelementptr inbounds %struct.comp_type.CompilerType, %struct.comp_type.CompilerType* %type, i32 0, i32 1
+	%tmp13 = load i64, i64* %tmp12
+	%tmp14 = bitcast i64 %tmp13 to i64
+	%tmp15 = trunc i64 %tmp14 to i32
+	%tmp16 = load %struct.SymbolTableEntry*, %struct.SymbolTableEntry** %symbol_table
+	%tmp17 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp16, i32 %tmp15
+	%tmp18 = load i32, i32* %tmp17
+	%tmp19 = and i32 %tmp18, 7
+	%tmp20 = icmp eq i32 %tmp19, 2
+	br i1 %tmp20, label %then2, label %else2
+then2:
+	%tmp21 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp17, i32 0, i32 2
+	%tmp22 = load i8*, i8** %tmp21
+	%tmp23 = xor i1 1, %inside_generic
+	br i1 %tmp23, label %then3, label %endif3
+then3:
+	call void @string.append(%struct.string.String* %stdout, i8 37)
+	br label %endif3
+endif3:
+	%tmp24 = getelementptr inbounds %struct.StructSymbolTableEntry, %struct.StructSymbolTableEntry* %tmp22, i32 0, i32 2
+	%tmp25 = load i8*, i8** %tmp24
+	%tmp26 = getelementptr inbounds %struct.StructSymbolTableEntry, %struct.StructSymbolTableEntry* %tmp22, i32 0, i32 2
+	%tmp27 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp26, i32 0, i32 1
+	%tmp28 = load i32, i32* %tmp27
+	call void @string.append_str(%struct.string.String* %stdout, i8* %tmp25, i32 %tmp28)
+	br label %endif2
+else2:
+	%tmp29 = load i32, i32* %tmp17
+	%tmp30 = and i32 %tmp29, 7
+	%tmp31 = icmp eq i32 %tmp30, 4
+	br i1 %tmp31, label %then4, label %else4
+then4:
+	%tmp32 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp17, i32 0, i32 2
+	%tmp33 = load i8*, i8** %tmp32
+	call void @comp_type.compiler_type_push_internal(%struct.comp_type.CompilerType* %tmp33, %struct.PathEx* %path, %struct.SymbolTable* %symbol_table, %struct.string.String* %stdout, i1 %inside_generic)
+	br label %endif4
+else4:
+	call void @process.throw(i8* @.str.137)
+	br label %endif4
+endif4:
+	br label %endif2
+endif2:
+	br label %endif1
+else1:
+	%tmp34 = load i32, i32* %type
+	%tmp35 = icmp eq i32 %tmp34, 0
+	br i1 %tmp35, label %then5, label %else5
+then5:
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.138, i32 3)
+	br label %endif5
+else5:
+	%tmp36 = load i32, i32* %type
+	%tmp37 = icmp eq i32 %tmp36, 5
+	br i1 %tmp37, label %then6, label %else6
+then6:
+	%tmp38 = getelementptr inbounds %struct.comp_type.CompilerType, %struct.comp_type.CompilerType* %type, i32 0, i32 1
+	%tmp39 = load i64, i64* %tmp38
+	%tmp40 = lshr i64 %tmp39, 32
+	%tmp41 = trunc i64 %tmp40 to i32
+	store i32 %tmp41, i32* %v0
+	%tmp42 = getelementptr inbounds %struct.comp_type.CompilerType, %struct.comp_type.CompilerType* %type, i32 0, i32 1
+	%tmp43 = load i64, i64* %tmp42
+	%tmp44 = and i64 %tmp43, 4294967295
+	%tmp45 = trunc i64 %tmp44 to i32
+	store i32 %tmp45, i32* %v1
+	%tmp46 = load i32, i32* %v0
+	%tmp47 = load %struct.SymbolTableEntry*, %struct.SymbolTableEntry** %symbol_table
+	%tmp48 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp47, i32 %tmp46
+	%tmp49 = load i32, i32* %tmp48
+	%tmp50 = and i32 %tmp49, 7
+	%tmp51 = icmp eq i32 %tmp50, 3
+	br i1 %tmp51, label %then7, label %else7
+then7:
+	%tmp52 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp48, i32 0, i32 2
+	%tmp53 = load i8*, i8** %tmp52
+	%tmp55 = load i32, i32* %v1
+	%tmp56 = getelementptr inbounds %struct.GenericStructSymbolTableEntry, %struct.GenericStructSymbolTableEntry* %tmp53, i32 0, i32 2
+	%tmp57 = load %struct.Implementation*, %struct.Implementation** %tmp56
+	%tmp58 = getelementptr inbounds %struct.Implementation, %struct.Implementation* %tmp57, i32 %tmp55
+	%tmp59 = xor i1 1, %inside_generic
+	br i1 %tmp59, label %then8, label %endif8
+then8:
+	call void @string.append(%struct.string.String* %stdout, i8 37)
+	br label %endif8
+endif8:
+	%tmp60 = getelementptr inbounds %struct.Implementation, %struct.Implementation* %tmp58, i32 0, i32 1
+	%tmp61 = load i8*, i8** %tmp60
+	%tmp62 = getelementptr inbounds %struct.Implementation, %struct.Implementation* %tmp58, i32 0, i32 1
+	%tmp63 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp62, i32 0, i32 1
+	%tmp64 = load i32, i32* %tmp63
+	call void @string.append_str(%struct.string.String* %stdout, i8* %tmp61, i32 %tmp64)
+	br label %endif7
+else7:
+	call void @process.throw(i8* @.str.139)
+	br label %endif7
+endif7:
+	br label %endif6
+else6:
+	%tmp65 = load i32, i32* %type
+	%tmp66 = icmp eq i32 %tmp65, 1
+	br i1 %tmp66, label %then9, label %endif9
+then9:
+	%tmp67 = getelementptr inbounds %struct.comp_type.CompilerType, %struct.comp_type.CompilerType* %type, i32 0, i32 1
+	%tmp68 = load i64, i64* %tmp67
+	%tmp69 = inttoptr i64 %tmp68 to %struct.comp_type.ConstantArrayCompilerType*
+	call void @string.append(%struct.string.String* %stdout, i8 91)
+	%tmp70 = load i32, i32* %tmp69
+	%tmp71 = zext i32 %tmp70 to i64
+	call void @string.append_u64(%struct.string.String* %stdout, i64 %tmp71)
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.140, i32 3)
+	%tmp72 = getelementptr inbounds %struct.comp_type.ConstantArrayCompilerType, %struct.comp_type.ConstantArrayCompilerType* %tmp69, i32 0, i32 1
+	call void @comp_type.compiler_type_push_internal(%struct.comp_type.CompilerType* %tmp72, %struct.PathEx* %path, %struct.SymbolTable* %symbol_table, %struct.string.String* %stdout, i1 %inside_generic)
+	call void @string.append(%struct.string.String* %stdout, i8 93)
+	br label %endif9
+endif9:
+	br label %endif6
+endif6:
+	br label %endif5
+endif5:
+	br label %endif1
+endif1:
+	br label %endif0
+endif0:
+	ret void
+}
+define void @comp_type.compiler_type_push(%struct.comp_type.CompilerType* %type, %struct.PathEx* %path, %struct.SymbolTable* %symbol_table, %struct.string.String* %stdout){
+	call void @comp_type.compiler_type_push_internal(%struct.comp_type.CompilerType* %type, %struct.PathEx* %path, %struct.SymbolTable* %symbol_table, %struct.string.String* %stdout, i1 false)
 	ret void
 }
 define %struct.Type @wrap_in_pointers(%struct.Type %base, i32 %depth){
@@ -4114,7 +6407,7 @@ endif0:
 	%tmp1 = icmp ugt i32 %depth, 255
 	br i1 %tmp1, label %then1, label %endif1
 then1:
-	call void @process.throw(i8* @.str.100)
+	call void @process.throw(i8* @.str.141)
 	br label %endif1
 endif1:
 	%tmp2 = call i8* @mem.malloc(i64 24)
@@ -4189,7 +6482,7 @@ else4:
 	%tmp30 = icmp eq i8 %tmp29, 69
 	br i1 %tmp30, label %then5, label %endif5
 then5:
-	%tmp31 = call %struct.string.String @string.from_c_string(i8* @.str.101)
+	%tmp31 = call %struct.string.String @string.from_c_string(i8* @.str.142)
 	br label %func_exit
 endif5:
 	br label %endif0
@@ -4198,35 +6491,35 @@ else0:
 	%tmp33 = icmp eq i8 %tmp32, 65
 	br i1 %tmp33, label %then6, label %else6
 then6:
-	%tmp34 = call %struct.string.String @string.from_c_string(i8* @.str.102)
+	%tmp34 = call %struct.string.String @string.from_c_string(i8* @.str.143)
 	br label %func_exit
 else6:
 	%tmp35 = load i8, i8* %val
 	%tmp36 = icmp eq i8 %tmp35, 68
 	br i1 %tmp36, label %then7, label %else7
 then7:
-	%tmp37 = call %struct.string.String @string.from_c_string(i8* @.str.103)
+	%tmp37 = call %struct.string.String @string.from_c_string(i8* @.str.144)
 	br label %func_exit
 else7:
 	%tmp38 = load i8, i8* %val
 	%tmp39 = icmp eq i8 %tmp38, 66
 	br i1 %tmp39, label %then8, label %else8
 then8:
-	%tmp40 = call %struct.string.String @string.from_c_string(i8* @.str.104)
+	%tmp40 = call %struct.string.String @string.from_c_string(i8* @.str.145)
 	br label %func_exit
 else8:
 	%tmp41 = load i8, i8* %val
 	%tmp42 = icmp eq i8 %tmp41, 67
 	br i1 %tmp42, label %then9, label %else9
 then9:
-	%tmp43 = call %struct.string.String @string.from_c_string(i8* @.str.105)
+	%tmp43 = call %struct.string.String @string.from_c_string(i8* @.str.146)
 	br label %func_exit
 else9:
 	%tmp44 = load i8, i8* %val
 	%tmp45 = icmp eq i8 %tmp44, 69
 	br i1 %tmp45, label %then10, label %endif10
 then10:
-	%tmp46 = call %struct.string.String @string.from_c_string(i8* @.str.101)
+	%tmp46 = call %struct.string.String @string.from_c_string(i8* @.str.142)
 	br label %func_exit
 endif10:
 	br label %endif0
@@ -4235,446 +6528,446 @@ endif0:
 	%tmp48 = icmp eq i8 %tmp47, 0
 	br i1 %tmp48, label %then11, label %else11
 then11:
-	%tmp49 = call %struct.string.String @string.from_c_string(i8* @.str.96)
+	%tmp49 = call %struct.string.String @string.from_c_string(i8* @.str.129)
 	br label %func_exit
 else11:
 	%tmp50 = load i8, i8* %val
 	%tmp51 = icmp eq i8 %tmp50, 1
 	br i1 %tmp51, label %then12, label %else12
 then12:
-	%tmp52 = call %struct.string.String @string.from_c_string(i8* @.str.98)
+	%tmp52 = call %struct.string.String @string.from_c_string(i8* @.str.130)
 	br label %func_exit
 else12:
 	%tmp53 = load i8, i8* %val
 	%tmp54 = icmp eq i8 %tmp53, 2
 	br i1 %tmp54, label %then13, label %else13
 then13:
-	%tmp55 = call %struct.string.String @string.from_c_string(i8* @.str.106)
+	%tmp55 = call %struct.string.String @string.from_c_string(i8* @.str.147)
 	br label %func_exit
 else13:
 	%tmp56 = load i8, i8* %val
 	%tmp57 = icmp eq i8 %tmp56, 3
 	br i1 %tmp57, label %then14, label %else14
 then14:
-	%tmp58 = call %struct.string.String @string.from_c_string(i8* @.str.107)
+	%tmp58 = call %struct.string.String @string.from_c_string(i8* @.str.148)
 	br label %func_exit
 else14:
 	%tmp59 = load i8, i8* %val
 	%tmp60 = icmp eq i8 %tmp59, 4
 	br i1 %tmp60, label %then15, label %else15
 then15:
-	%tmp61 = call %struct.string.String @string.from_c_string(i8* @.str.108)
+	%tmp61 = call %struct.string.String @string.from_c_string(i8* @.str.149)
 	br label %func_exit
 else15:
 	%tmp62 = load i8, i8* %val
 	%tmp63 = icmp eq i8 %tmp62, 5
 	br i1 %tmp63, label %then16, label %else16
 then16:
-	%tmp64 = call %struct.string.String @string.from_c_string(i8* @.str.109)
+	%tmp64 = call %struct.string.String @string.from_c_string(i8* @.str.150)
 	br label %func_exit
 else16:
 	%tmp65 = load i8, i8* %val
 	%tmp66 = icmp eq i8 %tmp65, 6
 	br i1 %tmp66, label %then17, label %else17
 then17:
-	%tmp67 = call %struct.string.String @string.from_c_string(i8* @.str.110)
+	%tmp67 = call %struct.string.String @string.from_c_string(i8* @.str.151)
 	br label %func_exit
 else17:
 	%tmp68 = load i8, i8* %val
 	%tmp69 = icmp eq i8 %tmp68, 7
 	br i1 %tmp69, label %then18, label %else18
 then18:
-	%tmp70 = call %struct.string.String @string.from_c_string(i8* @.str.111)
+	%tmp70 = call %struct.string.String @string.from_c_string(i8* @.str.152)
 	br label %func_exit
 else18:
 	%tmp71 = load i8, i8* %val
 	%tmp72 = icmp eq i8 %tmp71, 8
 	br i1 %tmp72, label %then19, label %else19
 then19:
-	%tmp73 = call %struct.string.String @string.from_c_string(i8* @.str.112)
+	%tmp73 = call %struct.string.String @string.from_c_string(i8* @.str.153)
 	br label %func_exit
 else19:
 	%tmp74 = load i8, i8* %val
 	%tmp75 = icmp eq i8 %tmp74, 9
 	br i1 %tmp75, label %then20, label %else20
 then20:
-	%tmp76 = call %struct.string.String @string.from_c_string(i8* @.str.113)
+	%tmp76 = call %struct.string.String @string.from_c_string(i8* @.str.154)
 	br label %func_exit
 else20:
 	%tmp77 = load i8, i8* %val
 	%tmp78 = icmp eq i8 %tmp77, 10
 	br i1 %tmp78, label %then21, label %else21
 then21:
-	%tmp79 = call %struct.string.String @string.from_c_string(i8* @.str.114)
+	%tmp79 = call %struct.string.String @string.from_c_string(i8* @.str.155)
 	br label %func_exit
 else21:
 	%tmp80 = load i8, i8* %val
 	%tmp81 = icmp eq i8 %tmp80, 11
 	br i1 %tmp81, label %then22, label %else22
 then22:
-	%tmp82 = call %struct.string.String @string.from_c_string(i8* @.str.115)
+	%tmp82 = call %struct.string.String @string.from_c_string(i8* @.str.156)
 	br label %func_exit
 else22:
 	%tmp83 = load i8, i8* %val
 	%tmp84 = icmp eq i8 %tmp83, 12
 	br i1 %tmp84, label %then23, label %else23
 then23:
-	%tmp85 = call %struct.string.String @string.from_c_string(i8* @.str.116)
+	%tmp85 = call %struct.string.String @string.from_c_string(i8* @.str.157)
 	br label %func_exit
 else23:
 	%tmp86 = load i8, i8* %val
 	%tmp87 = icmp eq i8 %tmp86, 13
 	br i1 %tmp87, label %then24, label %else24
 then24:
-	%tmp88 = call %struct.string.String @string.from_c_string(i8* @.str.117)
+	%tmp88 = call %struct.string.String @string.from_c_string(i8* @.str.158)
 	br label %func_exit
 else24:
 	%tmp89 = load i8, i8* %val
 	%tmp90 = icmp eq i8 %tmp89, 14
 	br i1 %tmp90, label %then25, label %else25
 then25:
-	%tmp91 = call %struct.string.String @string.from_c_string(i8* @.str.118)
+	%tmp91 = call %struct.string.String @string.from_c_string(i8* @.str.159)
 	br label %func_exit
 else25:
 	%tmp92 = load i8, i8* %val
 	%tmp93 = icmp eq i8 %tmp92, 15
 	br i1 %tmp93, label %then26, label %else26
 then26:
-	%tmp94 = call %struct.string.String @string.from_c_string(i8* @.str.119)
+	%tmp94 = call %struct.string.String @string.from_c_string(i8* @.str.160)
 	br label %func_exit
 else26:
 	%tmp95 = load i8, i8* %val
 	%tmp96 = icmp eq i8 %tmp95, 16
 	br i1 %tmp96, label %then27, label %else27
 then27:
-	%tmp97 = call %struct.string.String @string.from_c_string(i8* @.str.120)
+	%tmp97 = call %struct.string.String @string.from_c_string(i8* @.str.161)
 	br label %func_exit
 else27:
 	%tmp98 = load i8, i8* %val
 	%tmp99 = icmp eq i8 %tmp98, 17
 	br i1 %tmp99, label %then28, label %else28
 then28:
-	%tmp100 = call %struct.string.String @string.from_c_string(i8* @.str.121)
+	%tmp100 = call %struct.string.String @string.from_c_string(i8* @.str.162)
 	br label %func_exit
 else28:
 	%tmp101 = load i8, i8* %val
 	%tmp102 = icmp eq i8 %tmp101, 18
 	br i1 %tmp102, label %then29, label %else29
 then29:
-	%tmp103 = call %struct.string.String @string.from_c_string(i8* @.str.122)
+	%tmp103 = call %struct.string.String @string.from_c_string(i8* @.str.163)
 	br label %func_exit
 else29:
 	%tmp104 = load i8, i8* %val
 	%tmp105 = icmp eq i8 %tmp104, 19
 	br i1 %tmp105, label %then30, label %else30
 then30:
-	%tmp106 = call %struct.string.String @string.from_c_string(i8* @.str.123)
+	%tmp106 = call %struct.string.String @string.from_c_string(i8* @.str.164)
 	br label %func_exit
 else30:
 	%tmp107 = load i8, i8* %val
 	%tmp108 = icmp eq i8 %tmp107, 20
 	br i1 %tmp108, label %then31, label %else31
 then31:
-	%tmp109 = call %struct.string.String @string.from_c_string(i8* @.str.124)
+	%tmp109 = call %struct.string.String @string.from_c_string(i8* @.str.165)
 	br label %func_exit
 else31:
 	%tmp110 = load i8, i8* %val
 	%tmp111 = icmp eq i8 %tmp110, 21
 	br i1 %tmp111, label %then32, label %else32
 then32:
-	%tmp112 = call %struct.string.String @string.from_c_string(i8* @.str.125)
+	%tmp112 = call %struct.string.String @string.from_c_string(i8* @.str.166)
 	br label %func_exit
 else32:
 	%tmp113 = load i8, i8* %val
 	%tmp114 = icmp eq i8 %tmp113, 22
 	br i1 %tmp114, label %then33, label %else33
 then33:
-	%tmp115 = call %struct.string.String @string.from_c_string(i8* @.str.126)
+	%tmp115 = call %struct.string.String @string.from_c_string(i8* @.str.167)
 	br label %func_exit
 else33:
 	%tmp116 = load i8, i8* %val
 	%tmp117 = icmp eq i8 %tmp116, 23
 	br i1 %tmp117, label %then34, label %else34
 then34:
-	%tmp118 = call %struct.string.String @string.from_c_string(i8* @.str.127)
+	%tmp118 = call %struct.string.String @string.from_c_string(i8* @.str.168)
 	br label %func_exit
 else34:
 	%tmp119 = load i8, i8* %val
 	%tmp120 = icmp eq i8 %tmp119, 24
 	br i1 %tmp120, label %then35, label %else35
 then35:
-	%tmp121 = call %struct.string.String @string.from_c_string(i8* @.str.128)
+	%tmp121 = call %struct.string.String @string.from_c_string(i8* @.str.169)
 	br label %func_exit
 else35:
 	%tmp122 = load i8, i8* %val
 	%tmp123 = icmp eq i8 %tmp122, 25
 	br i1 %tmp123, label %then36, label %else36
 then36:
-	%tmp124 = call %struct.string.String @string.from_c_string(i8* @.str.129)
+	%tmp124 = call %struct.string.String @string.from_c_string(i8* @.str.170)
 	br label %func_exit
 else36:
 	%tmp125 = load i8, i8* %val
 	%tmp126 = icmp eq i8 %tmp125, 26
 	br i1 %tmp126, label %then37, label %else37
 then37:
-	%tmp127 = call %struct.string.String @string.from_c_string(i8* @.str.130)
+	%tmp127 = call %struct.string.String @string.from_c_string(i8* @.str.171)
 	br label %func_exit
 else37:
 	%tmp128 = load i8, i8* %val
 	%tmp129 = icmp eq i8 %tmp128, 27
 	br i1 %tmp129, label %then38, label %else38
 then38:
-	%tmp130 = call %struct.string.String @string.from_c_string(i8* @.str.131)
+	%tmp130 = call %struct.string.String @string.from_c_string(i8* @.str.172)
 	br label %func_exit
 else38:
 	%tmp131 = load i8, i8* %val
 	%tmp132 = icmp eq i8 %tmp131, 28
 	br i1 %tmp132, label %then39, label %else39
 then39:
-	%tmp133 = call %struct.string.String @string.from_c_string(i8* @.str.132)
+	%tmp133 = call %struct.string.String @string.from_c_string(i8* @.str.173)
 	br label %func_exit
 else39:
 	%tmp134 = load i8, i8* %val
 	%tmp135 = icmp eq i8 %tmp134, 29
 	br i1 %tmp135, label %then40, label %else40
 then40:
-	%tmp136 = call %struct.string.String @string.from_c_string(i8* @.str.133)
+	%tmp136 = call %struct.string.String @string.from_c_string(i8* @.str.174)
 	br label %func_exit
 else40:
 	%tmp137 = load i8, i8* %val
 	%tmp138 = icmp eq i8 %tmp137, 30
 	br i1 %tmp138, label %then41, label %else41
 then41:
-	%tmp139 = call %struct.string.String @string.from_c_string(i8* @.str.134)
+	%tmp139 = call %struct.string.String @string.from_c_string(i8* @.str.175)
 	br label %func_exit
 else41:
 	%tmp140 = load i8, i8* %val
 	%tmp141 = icmp eq i8 %tmp140, 31
 	br i1 %tmp141, label %then42, label %else42
 then42:
-	%tmp142 = call %struct.string.String @string.from_c_string(i8* @.str.135)
+	%tmp142 = call %struct.string.String @string.from_c_string(i8* @.str.176)
 	br label %func_exit
 else42:
 	%tmp143 = load i8, i8* %val
 	%tmp144 = icmp eq i8 %tmp143, 32
 	br i1 %tmp144, label %then43, label %else43
 then43:
-	%tmp145 = call %struct.string.String @string.from_c_string(i8* @.str.136)
+	%tmp145 = call %struct.string.String @string.from_c_string(i8* @.str.177)
 	br label %func_exit
 else43:
 	%tmp146 = load i8, i8* %val
 	%tmp147 = icmp eq i8 %tmp146, 33
 	br i1 %tmp147, label %then44, label %else44
 then44:
-	%tmp148 = call %struct.string.String @string.from_c_string(i8* @.str.137)
+	%tmp148 = call %struct.string.String @string.from_c_string(i8* @.str.178)
 	br label %func_exit
 else44:
 	%tmp149 = load i8, i8* %val
 	%tmp150 = icmp eq i8 %tmp149, 36
 	br i1 %tmp150, label %then45, label %else45
 then45:
-	%tmp151 = call %struct.string.String @string.from_c_string(i8* @.str.138)
+	%tmp151 = call %struct.string.String @string.from_c_string(i8* @.str.179)
 	br label %func_exit
 else45:
 	%tmp152 = load i8, i8* %val
 	%tmp153 = icmp eq i8 %tmp152, 37
 	br i1 %tmp153, label %then46, label %else46
 then46:
-	%tmp154 = call %struct.string.String @string.from_c_string(i8* @.str.139)
+	%tmp154 = call %struct.string.String @string.from_c_string(i8* @.str.180)
 	br label %func_exit
 else46:
 	%tmp155 = load i8, i8* %val
 	%tmp156 = icmp eq i8 %tmp155, 38
 	br i1 %tmp156, label %then47, label %else47
 then47:
-	%tmp157 = call %struct.string.String @string.from_c_string(i8* @.str.140)
+	%tmp157 = call %struct.string.String @string.from_c_string(i8* @.str.181)
 	br label %func_exit
 else47:
 	%tmp158 = load i8, i8* %val
 	%tmp159 = icmp eq i8 %tmp158, 39
 	br i1 %tmp159, label %then48, label %else48
 then48:
-	%tmp160 = call %struct.string.String @string.from_c_string(i8* @.str.141)
+	%tmp160 = call %struct.string.String @string.from_c_string(i8* @.str.182)
 	br label %func_exit
 else48:
 	%tmp161 = load i8, i8* %val
 	%tmp162 = icmp eq i8 %tmp161, 40
 	br i1 %tmp162, label %then49, label %else49
 then49:
-	%tmp163 = call %struct.string.String @string.from_c_string(i8* @.str.142)
+	%tmp163 = call %struct.string.String @string.from_c_string(i8* @.str.183)
 	br label %func_exit
 else49:
 	%tmp164 = load i8, i8* %val
 	%tmp165 = icmp eq i8 %tmp164, 41
 	br i1 %tmp165, label %then50, label %else50
 then50:
-	%tmp166 = call %struct.string.String @string.from_c_string(i8* @.str.143)
+	%tmp166 = call %struct.string.String @string.from_c_string(i8* @.str.184)
 	br label %func_exit
 else50:
 	%tmp167 = load i8, i8* %val
 	%tmp168 = icmp eq i8 %tmp167, 42
 	br i1 %tmp168, label %then51, label %else51
 then51:
-	%tmp169 = call %struct.string.String @string.from_c_string(i8* @.str.144)
+	%tmp169 = call %struct.string.String @string.from_c_string(i8* @.str.185)
 	br label %func_exit
 else51:
 	%tmp170 = load i8, i8* %val
 	%tmp171 = icmp eq i8 %tmp170, 43
 	br i1 %tmp171, label %then52, label %else52
 then52:
-	%tmp172 = call %struct.string.String @string.from_c_string(i8* @.str.145)
+	%tmp172 = call %struct.string.String @string.from_c_string(i8* @.str.186)
 	br label %func_exit
 else52:
 	%tmp173 = load i8, i8* %val
 	%tmp174 = icmp eq i8 %tmp173, 44
 	br i1 %tmp174, label %then53, label %else53
 then53:
-	%tmp175 = call %struct.string.String @string.from_c_string(i8* @.str.146)
+	%tmp175 = call %struct.string.String @string.from_c_string(i8* @.str.187)
 	br label %func_exit
 else53:
 	%tmp176 = load i8, i8* %val
 	%tmp177 = icmp eq i8 %tmp176, 45
 	br i1 %tmp177, label %then54, label %else54
 then54:
-	%tmp178 = call %struct.string.String @string.from_c_string(i8* @.str.147)
+	%tmp178 = call %struct.string.String @string.from_c_string(i8* @.str.188)
 	br label %func_exit
 else54:
 	%tmp179 = load i8, i8* %val
 	%tmp180 = icmp eq i8 %tmp179, 46
 	br i1 %tmp180, label %then55, label %else55
 then55:
-	%tmp181 = call %struct.string.String @string.from_c_string(i8* @.str.148)
+	%tmp181 = call %struct.string.String @string.from_c_string(i8* @.str.189)
 	br label %func_exit
 else55:
 	%tmp182 = load i8, i8* %val
 	%tmp183 = icmp eq i8 %tmp182, 47
 	br i1 %tmp183, label %then56, label %else56
 then56:
-	%tmp184 = call %struct.string.String @string.from_c_string(i8* @.str.149)
+	%tmp184 = call %struct.string.String @string.from_c_string(i8* @.str.190)
 	br label %func_exit
 else56:
 	%tmp185 = load i8, i8* %val
 	%tmp186 = icmp eq i8 %tmp185, 48
 	br i1 %tmp186, label %then57, label %else57
 then57:
-	%tmp187 = call %struct.string.String @string.from_c_string(i8* @.str.150)
+	%tmp187 = call %struct.string.String @string.from_c_string(i8* @.str.191)
 	br label %func_exit
 else57:
 	%tmp188 = load i8, i8* %val
 	%tmp189 = icmp eq i8 %tmp188, 49
 	br i1 %tmp189, label %then58, label %else58
 then58:
-	%tmp190 = call %struct.string.String @string.from_c_string(i8* @.str.151)
+	%tmp190 = call %struct.string.String @string.from_c_string(i8* @.str.192)
 	br label %func_exit
 else58:
 	%tmp191 = load i8, i8* %val
 	%tmp192 = icmp eq i8 %tmp191, 50
 	br i1 %tmp192, label %then59, label %else59
 then59:
-	%tmp193 = call %struct.string.String @string.from_c_string(i8* @.str.152)
+	%tmp193 = call %struct.string.String @string.from_c_string(i8* @.str.193)
 	br label %func_exit
 else59:
 	%tmp194 = load i8, i8* %val
 	%tmp195 = icmp eq i8 %tmp194, 51
 	br i1 %tmp195, label %then60, label %else60
 then60:
-	%tmp196 = call %struct.string.String @string.from_c_string(i8* @.str.153)
+	%tmp196 = call %struct.string.String @string.from_c_string(i8* @.str.194)
 	br label %func_exit
 else60:
 	%tmp197 = load i8, i8* %val
 	%tmp198 = icmp eq i8 %tmp197, 52
 	br i1 %tmp198, label %then61, label %else61
 then61:
-	%tmp199 = call %struct.string.String @string.from_c_string(i8* @.str.154)
+	%tmp199 = call %struct.string.String @string.from_c_string(i8* @.str.195)
 	br label %func_exit
 else61:
 	%tmp200 = load i8, i8* %val
 	%tmp201 = icmp eq i8 %tmp200, 53
 	br i1 %tmp201, label %then62, label %else62
 then62:
-	%tmp202 = call %struct.string.String @string.from_c_string(i8* @.str.155)
+	%tmp202 = call %struct.string.String @string.from_c_string(i8* @.str.196)
 	br label %func_exit
 else62:
 	%tmp203 = load i8, i8* %val
 	%tmp204 = icmp eq i8 %tmp203, 54
 	br i1 %tmp204, label %then63, label %else63
 then63:
-	%tmp205 = call %struct.string.String @string.from_c_string(i8* @.str.156)
+	%tmp205 = call %struct.string.String @string.from_c_string(i8* @.str.197)
 	br label %func_exit
 else63:
 	%tmp206 = load i8, i8* %val
 	%tmp207 = icmp eq i8 %tmp206, 55
 	br i1 %tmp207, label %then64, label %else64
 then64:
-	%tmp208 = call %struct.string.String @string.from_c_string(i8* @.str.157)
+	%tmp208 = call %struct.string.String @string.from_c_string(i8* @.str.198)
 	br label %func_exit
 else64:
 	%tmp209 = load i8, i8* %val
 	%tmp210 = icmp eq i8 %tmp209, 56
 	br i1 %tmp210, label %then65, label %else65
 then65:
-	%tmp211 = call %struct.string.String @string.from_c_string(i8* @.str.158)
+	%tmp211 = call %struct.string.String @string.from_c_string(i8* @.str.199)
 	br label %func_exit
 else65:
 	%tmp212 = load i8, i8* %val
 	%tmp213 = icmp eq i8 %tmp212, 57
 	br i1 %tmp213, label %then66, label %else66
 then66:
-	%tmp214 = call %struct.string.String @string.from_c_string(i8* @.str.159)
+	%tmp214 = call %struct.string.String @string.from_c_string(i8* @.str.200)
 	br label %func_exit
 else66:
 	%tmp215 = load i8, i8* %val
 	%tmp216 = icmp eq i8 %tmp215, 58
 	br i1 %tmp216, label %then67, label %else67
 then67:
-	%tmp217 = call %struct.string.String @string.from_c_string(i8* @.str.160)
+	%tmp217 = call %struct.string.String @string.from_c_string(i8* @.str.201)
 	br label %func_exit
 else67:
 	%tmp218 = load i8, i8* %val
 	%tmp219 = icmp eq i8 %tmp218, 59
 	br i1 %tmp219, label %then68, label %else68
 then68:
-	%tmp220 = call %struct.string.String @string.from_c_string(i8* @.str.161)
+	%tmp220 = call %struct.string.String @string.from_c_string(i8* @.str.202)
 	br label %func_exit
 else68:
 	%tmp221 = load i8, i8* %val
 	%tmp222 = icmp eq i8 %tmp221, 60
 	br i1 %tmp222, label %then69, label %else69
 then69:
-	%tmp223 = call %struct.string.String @string.from_c_string(i8* @.str.162)
+	%tmp223 = call %struct.string.String @string.from_c_string(i8* @.str.203)
 	br label %func_exit
 else69:
 	%tmp224 = load i8, i8* %val
 	%tmp225 = icmp eq i8 %tmp224, 61
 	br i1 %tmp225, label %then70, label %else70
 then70:
-	%tmp226 = call %struct.string.String @string.from_c_string(i8* @.str.163)
+	%tmp226 = call %struct.string.String @string.from_c_string(i8* @.str.204)
 	br label %func_exit
 else70:
 	%tmp227 = load i8, i8* %val
 	%tmp228 = icmp eq i8 %tmp227, 62
 	br i1 %tmp228, label %then71, label %else71
 then71:
-	%tmp229 = call %struct.string.String @string.from_c_string(i8* @.str.164)
+	%tmp229 = call %struct.string.String @string.from_c_string(i8* @.str.205)
 	br label %func_exit
 else71:
 	%tmp230 = load i8, i8* %val
 	%tmp231 = icmp eq i8 %tmp230, 63
 	br i1 %tmp231, label %then72, label %else72
 then72:
-	%tmp232 = call %struct.string.String @string.from_c_string(i8* @.str.165)
+	%tmp232 = call %struct.string.String @string.from_c_string(i8* @.str.206)
 	br label %func_exit
 else72:
 	%tmp233 = load i8, i8* %val
 	%tmp234 = icmp eq i8 %tmp233, 64
 	br i1 %tmp234, label %then73, label %endif73
 then73:
-	%tmp235 = call %struct.string.String @string.from_c_string(i8* @.str.166)
+	%tmp235 = call %struct.string.String @string.from_c_string(i8* @.str.207)
 	br label %func_exit
 endif73:
 	br label %endif11
 endif11:
-	%tmp236 = call %struct.string.String @string.from_c_string(i8* @.str.167)
+	%tmp236 = call %struct.string.String @string.from_c_string(i8* @.str.208)
 	br label %func_exit
 func_exit:
 	%tmp237 = phi %struct.string.String [%tmp7, %then1], [%tmp14, %then2], [%tmp21, %then3], [%tmp28, %then4], [%tmp31, %then5], [%tmp34, %then6], [%tmp37, %then7], [%tmp40, %then8], [%tmp43, %then9], [%tmp46, %then10], [%tmp49, %then11], [%tmp52, %then12], [%tmp55, %then13], [%tmp58, %then14], [%tmp61, %then15], [%tmp64, %then16], [%tmp67, %then17], [%tmp70, %then18], [%tmp73, %then19], [%tmp76, %then20], [%tmp79, %then21], [%tmp82, %then22], [%tmp85, %then23], [%tmp88, %then24], [%tmp91, %then25], [%tmp94, %then26], [%tmp97, %then27], [%tmp100, %then28], [%tmp103, %then29], [%tmp106, %then30], [%tmp109, %then31], [%tmp112, %then32], [%tmp115, %then33], [%tmp118, %then34], [%tmp121, %then35], [%tmp124, %then36], [%tmp127, %then37], [%tmp130, %then38], [%tmp133, %then39], [%tmp136, %then40], [%tmp139, %then41], [%tmp142, %then42], [%tmp145, %then43], [%tmp148, %then44], [%tmp151, %then45], [%tmp154, %then46], [%tmp157, %then47], [%tmp160, %then48], [%tmp163, %then49], [%tmp166, %then50], [%tmp169, %then51], [%tmp172, %then52], [%tmp175, %then53], [%tmp178, %then54], [%tmp181, %then55], [%tmp184, %then56], [%tmp187, %then57], [%tmp190, %then58], [%tmp193, %then59], [%tmp196, %then60], [%tmp199, %then61], [%tmp202, %then62], [%tmp205, %then63], [%tmp208, %then64], [%tmp211, %then65], [%tmp214, %then66], [%tmp217, %then67], [%tmp220, %then68], [%tmp223, %then69], [%tmp226, %then70], [%tmp229, %then71], [%tmp232, %then72], [%tmp235, %then73], [%tmp236, %endif11]
@@ -4883,260 +7176,278 @@ loop_body0_exit:
 	%tmp19 = trunc i64 %tmp18 to i32
 	%tmp20 = sext i32 %tmp19 to i64
 	call void @console.println_i64(i64 %tmp20)
-	%tmp21 = call i32 @string_utils.c_str_len(i8* %input_file_path)
-	%tmp22 = call i32 @string_utils.c_str_len(i8* %output_file_path)
-	%tmp23 = call %struct.string.String @string.from_data(i8* %tmp0, i32 %tmp19)
-	store %struct.string.String %tmp23, %struct.string.String* %v3
+	%tmp21 = call %struct.string.String @string.from_data(i8* %tmp0, i32 %tmp19)
+	store %struct.string.String %tmp21, %struct.string.String* %v3
 	call void @console.write_string(%struct.string.String* %v3)
-	%tmp24 = call %"struct.vector.Vec<%struct.string.String>" @"vector.new<%struct.string.String>"()
-	store %"struct.vector.Vec<%struct.string.String>" %tmp24, %"struct.vector.Vec<%struct.string.String>"* %v4
-	%tmp25 = call %struct.string.String @string.from_c_string(i8* %tmp0)
-	call void @"vector.push<%struct.string.String>"(%"struct.vector.Vec<%struct.string.String>"* %v4, %struct.string.String %tmp25)
-	call void @console.writeln(i8* @.str.168, i32 10)
-	%tmp26 = call %"struct.vector.Vec<%struct.Stmt>" @"vector.new<%struct.Stmt>"()
-	store %"struct.vector.Vec<%struct.Stmt>" %tmp26, %"struct.vector.Vec<%struct.Stmt>"* %v5
-	%tmp27 = call %"struct.vector.Vec<%struct.string.String>" @"vector.new<%struct.string.String>"()
-	store %"struct.vector.Vec<%struct.string.String>" %tmp27, %"struct.vector.Vec<%struct.string.String>"* %v6
+	call void @string.free(%struct.string.String* %v3)
+	%tmp22 = call %"struct.vector.Vec<%struct.string.String>" @"vector.new<%struct.string.String>"()
+	store %"struct.vector.Vec<%struct.string.String>" %tmp22, %"struct.vector.Vec<%struct.string.String>"* %v4
+	%tmp23 = call %struct.string.String @string.from_c_string(i8* %tmp0)
+	call void @"vector.push<%struct.string.String>"(%"struct.vector.Vec<%struct.string.String>"* %v4, %struct.string.String %tmp23)
+	call void @console.writeln(i8* @.str.209, i32 10)
+	%tmp24 = call %"struct.vector.Vec<%struct.Stmt>" @"vector.new<%struct.Stmt>"()
+	store %"struct.vector.Vec<%struct.Stmt>" %tmp24, %"struct.vector.Vec<%struct.Stmt>"* %v5
+	%tmp25 = call %"struct.vector.Vec<%struct.string.String>" @"vector.new<%struct.string.String>"()
+	store %"struct.vector.Vec<%struct.string.String>" %tmp25, %"struct.vector.Vec<%struct.string.String>"* %v6
 	store i32 0, i32* %v7
 	br label %loop_start3
 loop_start3:
-	%tmp28 = load i32, i32* %v7
-	%tmp29 = getelementptr inbounds %"struct.vector.Vec<%struct.string.String>", %"struct.vector.Vec<%struct.string.String>"* %v4, i32 0, i32 1
-	%tmp30 = load i32, i32* %tmp29
-	%tmp31 = icmp ult i32 %tmp28, %tmp30
-	br i1 %tmp31, label %endif4, label %else4
+	%tmp26 = load i32, i32* %v7
+	%tmp27 = getelementptr inbounds %"struct.vector.Vec<%struct.string.String>", %"struct.vector.Vec<%struct.string.String>"* %v4, i32 0, i32 1
+	%tmp28 = load i32, i32* %tmp27
+	%tmp29 = icmp ult i32 %tmp26, %tmp28
+	br i1 %tmp29, label %endif4, label %else4
 else4:
 	br label %loop_body3_exit
 endif4:
-	call void @console.writeln(i8* @.str.169, i32 15)
-	%tmp32 = load i32, i32* %v7
-	%tmp33 = load %struct.string.String*, %struct.string.String** %v4
-	%tmp34 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp33, i32 %tmp32
-	call void @console.write_string(%struct.string.String* %tmp34)
-	call void @console.write(i8* @.str.99, i32 1)
-	%tmp35 = load i32, i32* %v7
-	%tmp36 = load %struct.string.String*, %struct.string.String** %v4
-	%tmp37 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp36, i32 %tmp35
-	%tmp38 = load i8*, i8** %tmp37
-	%tmp39 = call %struct.string.String @fs.read_full_file_as_string(i8* %tmp38)
-	store %struct.string.String %tmp39, %struct.string.String* %v8
-	%tmp40 = call %"struct.vector.Vec<%struct.TokenData>" @"vector.new<%struct.TokenData>"()
-	store %"struct.vector.Vec<%struct.TokenData>" %tmp40, %"struct.vector.Vec<%struct.TokenData>"* %v9
+	call void @console.write(i8* @.str.210, i32 13)
+	%tmp30 = load i32, i32* %v7
+	%tmp31 = load %struct.string.String*, %struct.string.String** %v4
+	%tmp32 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp31, i32 %tmp30
+	call void @console.write_string(%struct.string.String* %tmp32)
+	call void @console.write(i8* @.str.131, i32 1)
+	%tmp33 = load i32, i32* %v7
+	%tmp34 = load %struct.string.String*, %struct.string.String** %v4
+	%tmp35 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp34, i32 %tmp33
+	%tmp36 = call %struct.string.String @fs.read_full_file_as_string_string(%struct.string.String* %tmp35)
+	store %struct.string.String %tmp36, %struct.string.String* %v8
+	%tmp37 = call %"struct.vector.Vec<%struct.TokenData>" @"vector.new<%struct.TokenData>"()
+	store %"struct.vector.Vec<%struct.TokenData>" %tmp37, %"struct.vector.Vec<%struct.TokenData>"* %v9
 	call void @lex(%struct.string.String* %v8, %"struct.vector.Vec<%struct.TokenData>"* %v9, %"struct.vector.Vec<%struct.string.String>"* %v6)
 	call void @string.free(%struct.string.String* %v8)
-	%tmp41 = call %"struct.vector.Vec<%struct.Stmt>" @"vector.new<%struct.Stmt>"()
-	store %"struct.vector.Vec<%struct.Stmt>" %tmp41, %"struct.vector.Vec<%struct.Stmt>"* %v10
-	%tmp42 = load %struct.TokenData*, %struct.TokenData** %v9
-	%tmp43 = getelementptr inbounds %"struct.vector.Vec<%struct.TokenData>", %"struct.vector.Vec<%struct.TokenData>"* %v9, i32 0, i32 1
-	%tmp44 = load i32, i32* %tmp43
-	call void @parse(%struct.TokenData* %tmp42, i32 %tmp44, %"struct.vector.Vec<%struct.string.String>"* %v6, %"struct.vector.Vec<%struct.Stmt>"* %v10)
-	%tmp45 = getelementptr inbounds %"struct.vector.Vec<%struct.Stmt>", %"struct.vector.Vec<%struct.Stmt>"* %v10, i32 0, i32 1
-	%tmp46 = load i32, i32* %tmp45
+	%tmp38 = call %"struct.vector.Vec<%struct.Stmt>" @"vector.new<%struct.Stmt>"()
+	store %"struct.vector.Vec<%struct.Stmt>" %tmp38, %"struct.vector.Vec<%struct.Stmt>"* %v10
+	%tmp39 = load %struct.TokenData*, %struct.TokenData** %v9
+	%tmp40 = getelementptr inbounds %"struct.vector.Vec<%struct.TokenData>", %"struct.vector.Vec<%struct.TokenData>"* %v9, i32 0, i32 1
+	%tmp41 = load i32, i32* %tmp40
+	call void @parse(%struct.TokenData* %tmp39, i32 %tmp41, %"struct.vector.Vec<%struct.string.String>"* %v6, %"struct.vector.Vec<%struct.Stmt>"* %v10)
+	%tmp42 = getelementptr inbounds %"struct.vector.Vec<%struct.Stmt>", %"struct.vector.Vec<%struct.Stmt>"* %v10, i32 0, i32 1
+	%tmp43 = load i32, i32* %tmp42
 	store i32 0, i32* %v11
 	br label %loop_cond5
 loop_cond5:
-	%tmp47 = load i32, i32* %v11
-	%tmp48 = getelementptr inbounds %"struct.vector.Vec<%struct.Stmt>", %"struct.vector.Vec<%struct.Stmt>"* %v10, i32 0, i32 1
-	%tmp49 = load i32, i32* %tmp48
-	%tmp50 = icmp uge i32 %tmp47, %tmp49
-	br i1 %tmp50, label %then6, label %endif6
+	%tmp44 = load i32, i32* %v11
+	%tmp45 = getelementptr inbounds %"struct.vector.Vec<%struct.Stmt>", %"struct.vector.Vec<%struct.Stmt>"* %v10, i32 0, i32 1
+	%tmp46 = load i32, i32* %tmp45
+	%tmp47 = icmp uge i32 %tmp44, %tmp46
+	br i1 %tmp47, label %then6, label %endif6
 then6:
 	br label %loop_body5_exit
 endif6:
-	%tmp51 = load i32, i32* %v11
-	%tmp52 = load %struct.Stmt*, %struct.Stmt** %v10
-	%tmp53 = getelementptr inbounds %struct.Stmt, %struct.Stmt* %tmp52, i32 %tmp51
-	%tmp54 = load i8, i8* %tmp53
-	%tmp55 = icmp eq i8 %tmp54, 0
-	br i1 %tmp55, label %then7, label %endif7
+	%tmp48 = load i32, i32* %v11
+	%tmp49 = load %struct.Stmt*, %struct.Stmt** %v10
+	%tmp50 = getelementptr inbounds %struct.Stmt, %struct.Stmt* %tmp49, i32 %tmp48
+	%tmp51 = load i8, i8* %tmp50
+	%tmp52 = icmp eq i8 %tmp51, 0
+	br i1 %tmp52, label %then7, label %endif7
 then7:
-	%tmp56 = getelementptr inbounds %struct.Stmt, %struct.Stmt* %tmp53, i32 0, i32 1
-	%tmp57 = load i8*, i8** %tmp56
-	%tmp58 = load %struct.string.String*, %struct.string.String** %v6
-	%tmp59 = load i16, i16* %tmp57
-	%tmp60 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp58, i16 %tmp59
-	%tmp61 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp60, i32 0, i32 1
-	%tmp62 = load i32, i32* %tmp61
-	%tmp63 = icmp eq i32 %tmp62, 7
-	br i1 %tmp63, label %logic_rhs_8, label %logic_end_8
+	%tmp53 = getelementptr inbounds %struct.Stmt, %struct.Stmt* %tmp50, i32 0, i32 1
+	%tmp54 = load i8*, i8** %tmp53
+	%tmp55 = load %struct.string.String*, %struct.string.String** %v6
+	%tmp56 = load i16, i16* %tmp54
+	%tmp57 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp55, i16 %tmp56
+	%tmp58 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp57, i32 0, i32 1
+	%tmp59 = load i32, i32* %tmp58
+	%tmp60 = icmp eq i32 %tmp59, 7
+	br i1 %tmp60, label %logic_rhs_8, label %logic_end_8
 logic_rhs_8:
-	%tmp64 = load i16, i16* %tmp57
-	%tmp65 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp58, i16 %tmp64
-	%tmp66 = load i8*, i8** %tmp65
-	%tmp67 = call i32 @mem.compare(i8* %tmp66, i8* @.str.170, i64 7)
-	%tmp68 = icmp eq i32 %tmp67, 0
+	%tmp61 = load i16, i16* %tmp54
+	%tmp62 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp55, i16 %tmp61
+	%tmp63 = load i8*, i8** %tmp62
+	%tmp64 = call i32 @mem.compare(i8* %tmp63, i8* @.str.211, i64 7)
+	%tmp65 = icmp eq i32 %tmp64, 0
 	br label %logic_end_8
 logic_end_8:
-	%tmp69 = phi i1 [%tmp63, %then7], [%tmp68, %logic_rhs_8]
-	br i1 %tmp69, label %then9, label %else9
+	%tmp66 = phi i1 [%tmp60, %then7], [%tmp65, %logic_rhs_8]
+	br i1 %tmp66, label %then9, label %else9
 then9:
-	%tmp70 = getelementptr inbounds %struct.HintNode, %struct.HintNode* %tmp57, i32 0, i32 1
-	%tmp71 = getelementptr inbounds %"struct.vector.Vec<%struct.Expression>", %"struct.vector.Vec<%struct.Expression>"* %tmp70, i32 0, i32 1
-	%tmp72 = load i32, i32* %tmp71
-	%tmp73 = icmp ne i32 %tmp72, 1
-	br i1 %tmp73, label %then10, label %endif10
+	%tmp67 = getelementptr inbounds %struct.HintNode, %struct.HintNode* %tmp54, i32 0, i32 1
+	%tmp68 = getelementptr inbounds %"struct.vector.Vec<%struct.Expression>", %"struct.vector.Vec<%struct.Expression>"* %tmp67, i32 0, i32 1
+	%tmp69 = load i32, i32* %tmp68
+	%tmp70 = icmp ne i32 %tmp69, 1
+	br i1 %tmp70, label %then10, label %endif10
 then10:
-	call void @process.throw(i8* @.str.171)
+	call void @process.throw(i8* @.str.212)
 	br label %endif10
 endif10:
-	%tmp75 = getelementptr inbounds %struct.HintNode, %struct.HintNode* %tmp57, i32 0, i32 1
-	%tmp76 = load %struct.Expression*, %struct.Expression** %tmp75
-	%tmp77 = load i32, i32* %tmp76
-	%tmp78 = icmp ne i32 %tmp77, 4
-	br i1 %tmp78, label %then11, label %endif11
+	%tmp72 = getelementptr inbounds %struct.HintNode, %struct.HintNode* %tmp54, i32 0, i32 1
+	%tmp73 = load %struct.Expression*, %struct.Expression** %tmp72
+	%tmp74 = load i32, i32* %tmp73
+	%tmp75 = icmp ne i32 %tmp74, 4
+	br i1 %tmp75, label %then11, label %endif11
 then11:
-	call void @process.throw(i8* @.str.171)
+	call void @process.throw(i8* @.str.212)
 	br label %endif11
 endif11:
-	%tmp79 = getelementptr inbounds %struct.Expression, %struct.Expression* %tmp76, i32 0, i32 1
-	%tmp80 = load i8*, i8** %tmp79
-	%tmp81 = alloca i8, i64 255
-	%tmp82 = load i16, i16* %tmp80
-	%tmp83 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp58, i16 %tmp82
-	%tmp84 = load i8*, i8** %tmp83
-	call i32 @GetFullPathNameA(i8* %tmp84, i32 255, i8* %tmp81, i8* %v12)
-	%tmp85 = call %struct.string.String @string.from_c_string(i8* %tmp81)
-	store %struct.string.String %tmp85, %struct.string.String* %v13
-	call void @console.write(i8* @.str.172, i32 1)
-	call void @console.write_string(%struct.string.String* %v13)
-	call void @console.write(i8* @.str.173, i32 2)
-	store i1 false, i1* %v14
-	%tmp86 = getelementptr inbounds %"struct.vector.Vec<%struct.string.String>", %"struct.vector.Vec<%struct.string.String>"* %v4, i32 0, i32 1
-	%tmp87 = load i32, i32* %tmp86
-	store i32 0, i32* %v15
-	br label %loop_cond12
-loop_cond12:
-	%tmp88 = load i32, i32* %v15
-	%tmp89 = getelementptr inbounds %"struct.vector.Vec<%struct.string.String>", %"struct.vector.Vec<%struct.string.String>"* %v4, i32 0, i32 1
-	%tmp90 = load i32, i32* %tmp89
-	%tmp91 = icmp uge i32 %tmp88, %tmp90
-	br i1 %tmp91, label %then13, label %endif13
+	%tmp76 = getelementptr inbounds %struct.Expression, %struct.Expression* %tmp73, i32 0, i32 1
+	%tmp77 = load i8*, i8** %tmp76
+	%tmp78 = load i16, i16* %tmp77
+	%tmp79 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp55, i16 %tmp78
+	%tmp80 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp79, i32 0, i32 1
+	%tmp81 = load i32, i32* %tmp80
+	%tmp82 = add i32 %tmp81, 1
+	%tmp83 = sext i32 %tmp82 to i64
+	%tmp84 = alloca i8, i64 %tmp83
+	%tmp85 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp79, i32 0, i32 1
+	%tmp86 = load i32, i32* %tmp85
+	%tmp87 = icmp sgt i32 %tmp86, 0
+	br i1 %tmp87, label %then13, label %endif13
 then13:
-	br label %loop_body12_exit
+	%tmp88 = load i8*, i8** %tmp79
+	%tmp89 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp79, i32 0, i32 1
+	%tmp90 = load i32, i32* %tmp89
+	%tmp91 = sext i32 %tmp90 to i64
+	call void @mem.copy(i8* %tmp88, i8* %tmp84, i64 %tmp91)
+	br label %endif13
 endif13:
-	%tmp92 = load i32, i32* %v15
-	%tmp93 = load %struct.string.String*, %struct.string.String** %v4
-	%tmp94 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp93, i32 %tmp92
-	%tmp95 = call i1 @string.equal(%struct.string.String* %v13, %struct.string.String* %tmp94)
-	br i1 %tmp95, label %then14, label %endif14
-then14:
-	store i1 true, i1* %v14
-	br label %loop_body12_exit
-endif14:
-	%tmp96 = load i32, i32* %v15
-	%tmp97 = add i32 %tmp96, 1
-	store i32 %tmp97, i32* %v15
-	br label %loop_cond12
-loop_body12_exit:
-	%tmp98 = load i1, i1* %v14
-	%tmp99 = xor i1 1, %tmp98
-	br i1 %tmp99, label %then15, label %else15
+	%tmp92 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp79, i32 0, i32 1
+	%tmp93 = load i32, i32* %tmp92
+	%tmp94 = getelementptr inbounds i8, i8* %tmp84, i32 %tmp93
+	store i8 0, i8* %tmp94
+	%tmp95 = alloca i8, i64 255
+	call i32 @GetFullPathNameA(i8* %tmp84, i32 255, i8* %tmp95, i8* %v12)
+	%tmp96 = call %struct.string.String @string.from_c_string(i8* %tmp95)
+	store %struct.string.String %tmp96, %struct.string.String* %v13
+	store i1 false, i1* %v14
+	%tmp97 = getelementptr inbounds %"struct.vector.Vec<%struct.string.String>", %"struct.vector.Vec<%struct.string.String>"* %v4, i32 0, i32 1
+	%tmp98 = load i32, i32* %tmp97
+	store i32 0, i32* %v15
+	br label %loop_cond14
+loop_cond14:
+	%tmp99 = load i32, i32* %v15
+	%tmp100 = getelementptr inbounds %"struct.vector.Vec<%struct.string.String>", %"struct.vector.Vec<%struct.string.String>"* %v4, i32 0, i32 1
+	%tmp101 = load i32, i32* %tmp100
+	%tmp102 = icmp uge i32 %tmp99, %tmp101
+	br i1 %tmp102, label %then15, label %endif15
 then15:
-	%tmp100 = load %struct.string.String, %struct.string.String* %v13
-	call void @"vector.push<%struct.string.String>"(%"struct.vector.Vec<%struct.string.String>"* %v4, %struct.string.String %tmp100)
-	br label %endif15
-else15:
-	call void @string.free(%struct.string.String* %v13)
-	br label %endif15
+	br label %loop_body14_exit
 endif15:
+	%tmp103 = load i32, i32* %v15
+	%tmp104 = load %struct.string.String*, %struct.string.String** %v4
+	%tmp105 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp104, i32 %tmp103
+	%tmp106 = call i1 @string.equal(%struct.string.String* %v13, %struct.string.String* %tmp105)
+	br i1 %tmp106, label %then16, label %endif16
+then16:
+	store i1 true, i1* %v14
+	br label %loop_body14_exit
+endif16:
+	%tmp107 = load i32, i32* %v15
+	%tmp108 = add i32 %tmp107, 1
+	store i32 %tmp108, i32* %v15
+	br label %loop_cond14
+loop_body14_exit:
+	%tmp109 = load i1, i1* %v14
+	%tmp110 = xor i1 1, %tmp109
+	br i1 %tmp110, label %then17, label %else17
+then17:
+	call void @console.write(i8* @.str.213, i32 14)
+	call void @console.write_string(%struct.string.String* %v13)
+	call void @console.write(i8* @.str.214, i32 2)
+	%tmp111 = load %struct.string.String, %struct.string.String* %v13
+	call void @"vector.push<%struct.string.String>"(%"struct.vector.Vec<%struct.string.String>"* %v4, %struct.string.String %tmp111)
+	br label %endif17
+else17:
+	call void @string.free(%struct.string.String* %v13)
+	br label %endif17
+endif17:
 	br label %loop_body5
 ; Variable abs_inc_path is out.
 else9:
-	call void @process.throw(i8* @.str.174)
+	call void @process.throw(i8* @.str.215)
 	br label %endif7
 endif7:
-	%tmp101 = load %struct.Stmt, %struct.Stmt* %tmp53
-	call void @"vector.push<%struct.Stmt>"(%"struct.vector.Vec<%struct.Stmt>"* %v5, %struct.Stmt %tmp101)
+	%tmp112 = load %struct.Stmt, %struct.Stmt* %tmp50
+	call void @"vector.push<%struct.Stmt>"(%"struct.vector.Vec<%struct.Stmt>"* %v5, %struct.Stmt %tmp112)
 	br label %loop_body5
 loop_body5:
-	%tmp102 = load i32, i32* %v11
-	%tmp103 = add i32 %tmp102, 1
-	store i32 %tmp103, i32* %v11
+	%tmp113 = load i32, i32* %v11
+	%tmp114 = add i32 %tmp113, 1
+	store i32 %tmp114, i32* %v11
 	br label %loop_cond5
 loop_body5_exit:
 	call void @"vector.free<%struct.Stmt>"(%"struct.vector.Vec<%struct.Stmt>"* %v10)
-	%tmp104 = load i32, i32* %v7
-	%tmp105 = add i32 %tmp104, 1
-	store i32 %tmp105, i32* %v7
+	%tmp115 = load i32, i32* %v7
+	%tmp116 = add i32 %tmp115, 1
+	store i32 %tmp116, i32* %v7
 	br label %loop_start3
 loop_body3_exit:
 ; Variable statement_vector is out.
 ; Variable token_vector is out.
 ; Variable file_data is out.
-	call void @console.writeln(i8* @.str.175, i32 9)
-	call void @console.writeln(i8* @.str.176, i32 16)
-	call void @console.write(i8* @.str.177, i32 13)
-	%tmp106 = getelementptr inbounds %"struct.vector.Vec<%struct.string.String>", %"struct.vector.Vec<%struct.string.String>"* %v6, i32 0, i32 1
-	%tmp107 = load i32, i32* %tmp106
-	%tmp108 = zext i32 %tmp107 to i64
-	call void @console.println_u64(i64 %tmp108)
-	%tmp109 = getelementptr inbounds %"struct.vector.Vec<%struct.string.String>", %"struct.vector.Vec<%struct.string.String>"* %v4, i32 0, i32 1
-	%tmp110 = load i32, i32* %tmp109
-	store i32 0, i32* %v16
-	br label %loop_cond16
-loop_cond16:
-	%tmp111 = load i32, i32* %v16
-	%tmp112 = getelementptr inbounds %"struct.vector.Vec<%struct.string.String>", %"struct.vector.Vec<%struct.string.String>"* %v4, i32 0, i32 1
-	%tmp113 = load i32, i32* %tmp112
-	%tmp114 = icmp uge i32 %tmp111, %tmp113
-	br i1 %tmp114, label %then17, label %endif17
-then17:
-	br label %loop_body16_exit
-endif17:
-	call void @console.write(i8* @.str.172, i32 1)
-	%tmp115 = load i32, i32* %v16
-	%tmp116 = load %struct.string.String*, %struct.string.String** %v4
-	%tmp117 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp116, i32 %tmp115
-	call void @console.write_string(%struct.string.String* %tmp117)
-	call void @console.write(i8* @.str.99, i32 1)
-	%tmp118 = load i32, i32* %v16
-	%tmp119 = add i32 %tmp118, 1
-	store i32 %tmp119, i32* %v16
-	br label %loop_cond16
-loop_body16_exit:
-	%tmp120 = getelementptr inbounds %"struct.vector.Vec<%struct.Stmt>", %"struct.vector.Vec<%struct.Stmt>"* %v5, i32 0, i32 1
+	call void @console.writeln(i8* @.str.216, i32 9)
+	call void @console.writeln(i8* @.str.217, i32 16)
+	call void @console.write(i8* @.str.218, i32 13)
+	%tmp117 = getelementptr inbounds %"struct.vector.Vec<%struct.string.String>", %"struct.vector.Vec<%struct.string.String>"* %v6, i32 0, i32 1
+	%tmp118 = load i32, i32* %tmp117
+	%tmp119 = zext i32 %tmp118 to i64
+	call void @console.println_u64(i64 %tmp119)
+	%tmp120 = getelementptr inbounds %"struct.vector.Vec<%struct.string.String>", %"struct.vector.Vec<%struct.string.String>"* %v4, i32 0, i32 1
 	%tmp121 = load i32, i32* %tmp120
-	%tmp122 = zext i32 %tmp121 to i64
-	call void @console.println_i64(i64 %tmp122)
-	call void @console.writeln(i8* @.str.178, i32 12)
-	%tmp123 = call %struct.string.String @string.empty()
-	store %struct.string.String %tmp123, %struct.string.String* %v17
-	call void @compile(%"struct.vector.Vec<%struct.Stmt>"* %v5, %"struct.vector.Vec<%struct.string.String>"* %v6, %struct.string.String* %v17)
-	%tmp124 = alloca i8, i64 255
-	%tmp125 = call i32 @GetFullPathNameA(i8* %output_file_path, i32 255, i8* %tmp124, i8* %v18)
-	store i32 0, i32* %v19
+	store i32 0, i32* %v16
 	br label %loop_cond18
 loop_cond18:
-	%tmp126 = load i32, i32* %v19
-	%tmp127 = icmp sge i32 %tmp126, %tmp125
-	br i1 %tmp127, label %then19, label %endif19
+	%tmp122 = load i32, i32* %v16
+	%tmp123 = getelementptr inbounds %"struct.vector.Vec<%struct.string.String>", %"struct.vector.Vec<%struct.string.String>"* %v4, i32 0, i32 1
+	%tmp124 = load i32, i32* %tmp123
+	%tmp125 = icmp uge i32 %tmp122, %tmp124
+	br i1 %tmp125, label %then19, label %endif19
 then19:
 	br label %loop_body18_exit
 endif19:
-	%tmp128 = ptrtoint i8* %tmp124 to i64
-	%tmp129 = load i32, i32* %v19
-	%tmp130 = sext i32 %tmp129 to i64
-	%tmp131 = add i64 %tmp128, %tmp130
-	%tmp132 = inttoptr i64 %tmp131 to i8*
-	store i8* %tmp132, i8** %v20
-	%tmp133 = load i8*, i8** %v20
-	%tmp134 = load i8, i8* %tmp133
-	%tmp135 = icmp eq i8 %tmp134, 47
-	br i1 %tmp135, label %then20, label %endif20
-then20:
-	%tmp136 = load i8*, i8** %v20
-	store i8 92, i8* %tmp136
-	br label %endif20
-endif20:
-	%tmp137 = load i32, i32* %v19
-	%tmp138 = add i32 %tmp137, 1
-	store i32 %tmp138, i32* %v19
+	call void @console.write(i8* @.str.219, i32 1)
+	%tmp126 = load i32, i32* %v16
+	%tmp127 = load %struct.string.String*, %struct.string.String** %v4
+	%tmp128 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp127, i32 %tmp126
+	call void @console.write_string(%struct.string.String* %tmp128)
+	call void @console.write(i8* @.str.131, i32 1)
+	%tmp129 = load i32, i32* %v16
+	%tmp130 = add i32 %tmp129, 1
+	store i32 %tmp130, i32* %v16
 	br label %loop_cond18
 loop_body18_exit:
-	%tmp139 = load i8*, i8** %v17
-	%tmp140 = getelementptr inbounds %struct.string.String, %struct.string.String* %v17, i32 0, i32 1
-	%tmp141 = load i32, i32* %tmp140
-	call i32 @fs.write_to_file(i8* %tmp124, i8* %tmp139, i32 %tmp141)
+	%tmp131 = getelementptr inbounds %"struct.vector.Vec<%struct.Stmt>", %"struct.vector.Vec<%struct.Stmt>"* %v5, i32 0, i32 1
+	%tmp132 = load i32, i32* %tmp131
+	%tmp133 = zext i32 %tmp132 to i64
+	call void @console.println_i64(i64 %tmp133)
+	call void @console.writeln(i8* @.str.220, i32 12)
+	%tmp134 = call %struct.string.String @string.empty()
+	store %struct.string.String %tmp134, %struct.string.String* %v17
+	call void @compile(%"struct.vector.Vec<%struct.Stmt>"* %v5, %"struct.vector.Vec<%struct.string.String>"* %v6, %struct.string.String* %v17)
+	%tmp135 = alloca i8, i64 255
+	%tmp136 = call i32 @GetFullPathNameA(i8* %output_file_path, i32 255, i8* %tmp135, i8* %v18)
+	store i32 0, i32* %v19
+	br label %loop_cond20
+loop_cond20:
+	%tmp137 = load i32, i32* %v19
+	%tmp138 = icmp sge i32 %tmp137, %tmp136
+	br i1 %tmp138, label %then21, label %endif21
+then21:
+	br label %loop_body20_exit
+endif21:
+	%tmp139 = ptrtoint i8* %tmp135 to i64
+	%tmp140 = load i32, i32* %v19
+	%tmp141 = sext i32 %tmp140 to i64
+	%tmp142 = add i64 %tmp139, %tmp141
+	%tmp143 = inttoptr i64 %tmp142 to i8*
+	store i8* %tmp143, i8** %v20
+	%tmp144 = load i8*, i8** %v20
+	%tmp145 = load i8, i8* %tmp144
+	%tmp146 = icmp eq i8 %tmp145, 47
+	br i1 %tmp146, label %then22, label %endif22
+then22:
+	%tmp147 = load i8*, i8** %v20
+	store i8 92, i8* %tmp147
+	br label %endif22
+endif22:
+	%tmp148 = load i32, i32* %v19
+	%tmp149 = add i32 %tmp148, 1
+	store i32 %tmp149, i32* %v19
+	br label %loop_cond20
+loop_body20_exit:
+	%tmp150 = load i8*, i8** %v17
+	%tmp151 = getelementptr inbounds %struct.string.String, %struct.string.String* %v17, i32 0, i32 1
+	%tmp152 = load i32, i32* %tmp151
+	call i32 @fs.write_to_file(i8* %tmp135, i8* %tmp150, i32 %tmp152)
 	call void @ExitProcess(i32 0)
 ; Variable stdout is out.
 ; Variable symbol_vector is out.
@@ -5464,7 +7775,7 @@ loop_body0_exit:
 	%tmp19 = icmp uge i32 %tmp18, %len
 	br i1 %tmp19, label %then4, label %endif4
 then4:
-	call void @process.throw(i8* @.str.179)
+	call void @process.throw(i8* @.str.221)
 	br label %endif4
 endif4:
 	%tmp20 = load i32, i32* %index
@@ -5476,11 +7787,11 @@ then5:
 	%tmp24 = load i32, i32* %index
 	%tmp25 = add i32 %tmp24, 1
 	store i32 %tmp25, i32* %index
-	call void @expect(%struct.TokenData* %token_array, i32* %index, i32 %len, i8 0, i8* @.str.180)
+	call void @expect(%struct.TokenData* %token_array, i32* %index, i32 %len, i8 0, i8* @.str.222)
 	%tmp26 = call %"struct.vector.Vec<%struct.Type>" @parse_types_comma(%struct.TokenData* %token_array, i32* %index, i32 %len, i8 1)
 	store %"struct.vector.Vec<%struct.Type>" %tmp26, %"struct.vector.Vec<%struct.Type>"* %v2
-	call void @expect(%struct.TokenData* %token_array, i32* %index, i32 %len, i8 1, i8* @.str.181)
-	call void @expect(%struct.TokenData* %token_array, i32* %index, i32 %len, i8 6, i8* @.str.182)
+	call void @expect(%struct.TokenData* %token_array, i32* %index, i32 %len, i8 1, i8* @.str.223)
+	call void @expect(%struct.TokenData* %token_array, i32* %index, i32 %len, i8 6, i8* @.str.224)
 	%tmp27 = call %struct.Type @parse_type_internal(%struct.TokenData* %token_array, i32* %index, i32 %len)
 	store %struct.Type %tmp27, %struct.Type* %v3
 	%tmp28 = call i8* @mem.malloc(i64 32)
@@ -5508,10 +7819,10 @@ then6:
 	store i32 %tmp38, i32* %index
 	%tmp39 = call %struct.Type @parse_type_internal(%struct.TokenData* %token_array, i32* %index, i32 %len)
 	store %struct.Type %tmp39, %struct.Type* %v5
-	call void @expect(%struct.TokenData* %token_array, i32* %index, i32 %len, i8 8, i8* @.str.183)
+	call void @expect(%struct.TokenData* %token_array, i32* %index, i32 %len, i8 8, i8* @.str.225)
 	%tmp40 = call %struct.Expression @parse_expression_internal(%struct.TokenData* %token_array, i32* %index, i32 %len, i8 0)
 	store %struct.Expression %tmp40, %struct.Expression* %v6
-	call void @expect(%struct.TokenData* %token_array, i32* %index, i32 %len, i8 5, i8* @.str.184)
+	call void @expect(%struct.TokenData* %token_array, i32* %index, i32 %len, i8 5, i8* @.str.226)
 	%tmp41 = call i8* @mem.malloc(i64 32)
 	store %struct.ConstantSizeArrayType* %tmp41, %struct.ConstantSizeArrayType** %v7
 	%tmp42 = load %struct.ConstantSizeArrayType*, %struct.ConstantSizeArrayType** %v7
@@ -5554,7 +7865,7 @@ endif10:
 	%tmp58 = icmp uge i8 %tmp57, 8
 	br i1 %tmp58, label %then11, label %endif11
 then11:
-	call void @process.throw(i8* @.str.185)
+	call void @process.throw(i8* @.str.227)
 	br label %endif11
 endif11:
 	%tmp59 = getelementptr inbounds %struct.Path, %struct.Path* %v8, i32 0, i32 1
@@ -5599,7 +7910,7 @@ logic_end_14:
 	%tmp85 = phi i1 [%tmp79, %then13], [%tmp84, %logic_rhs_14]
 	br i1 %tmp85, label %then15, label %endif15
 then15:
-	call void @process.throw(i8* @.str.186)
+	call void @process.throw(i8* @.str.228)
 	br label %endif15
 endif15:
 	%tmp86 = load i32, i32* %index
@@ -5692,7 +8003,7 @@ endif18:
 ; Variable path is out.
 	br label %endif7
 else7:
-	call void @process.throw(i8* @.str.187)
+	call void @process.throw(i8* @.str.229)
 	br label %endif7
 endif7:
 	br label %endif6
@@ -5714,7 +8025,7 @@ define %"struct.vector.Vec<%struct.Argument>" @parse_struct_fields(%struct.Token
 	%v1 = alloca %struct.Argument
 	%tmp0 = call %"struct.vector.Vec<%struct.Argument>" @"vector.new<%struct.Argument>"()
 	store %"struct.vector.Vec<%struct.Argument>" %tmp0, %"struct.vector.Vec<%struct.Argument>"* %v0
-	call void @expect(%struct.TokenData* %token_array, i32* %index, i32 %len, i8 2, i8* @.str.188)
+	call void @expect(%struct.TokenData* %token_array, i32* %index, i32 %len, i8 2, i8* @.str.230)
 	br label %loop_start0
 loop_start0:
 	%tmp1 = load i32, i32* %index
@@ -5738,7 +8049,7 @@ endif2:
 	%tmp11 = icmp ne i8 %tmp10, 65
 	br i1 %tmp11, label %then3, label %endif3
 then3:
-	call void @process.throw(i8* @.str.189)
+	call void @process.throw(i8* @.str.231)
 	br label %endif3
 endif3:
 	%tmp12 = load i32, i32* %index
@@ -5749,7 +8060,7 @@ endif3:
 	%tmp16 = load i32, i32* %index
 	%tmp17 = add i32 %tmp16, 1
 	store i32 %tmp17, i32* %index
-	call void @expect(%struct.TokenData* %token_array, i32* %index, i32 %len, i8 6, i8* @.str.190)
+	call void @expect(%struct.TokenData* %token_array, i32* %index, i32 %len, i8 6, i8* @.str.232)
 	%tmp18 = getelementptr inbounds %struct.Argument, %struct.Argument* %v1, i32 0, i32 1
 	%tmp19 = call %struct.Type @parse_type(%struct.TokenData* %token_array, i32* %index, i32 %len)
 	store %struct.Type %tmp19, %struct.Type* %tmp18
@@ -5772,7 +8083,7 @@ else4:
 	%tmp30 = icmp ne i8 %tmp29, 3
 	br i1 %tmp30, label %then5, label %endif5
 then5:
-	call void @process.throw(i8* @.str.191)
+	call void @process.throw(i8* @.str.233)
 	br label %endif5
 endif5:
 	br label %endif4
@@ -5780,7 +8091,7 @@ endif4:
 	br label %loop_start0
 loop_body0_exit:
 ; Variable field is out.
-	call void @expect(%struct.TokenData* %token_array, i32* %index, i32 %len, i8 3, i8* @.str.192)
+	call void @expect(%struct.TokenData* %token_array, i32* %index, i32 %len, i8 3, i8* @.str.234)
 	%tmp31 = load %"struct.vector.Vec<%struct.Argument>", %"struct.vector.Vec<%struct.Argument>"* %v0
 ; Variable fields is out.
 	ret %"struct.vector.Vec<%struct.Argument>" %tmp31
@@ -5842,14 +8153,14 @@ then5:
 	store i32 %tmp29, i32* %index
 	br label %endif5
 else5:
-	call void @process.throw(i8* @.str.193)
+	call void @process.throw(i8* @.str.235)
 	br label %endif5
 endif5:
 	br label %endif4
 endif4:
 	br label %loop_start1
 loop_body1_exit:
-	call void @expect(%struct.TokenData* %token_array, i32* %index, i32 %len, i8 26, i8* @.str.194)
+	call void @expect(%struct.TokenData* %token_array, i32* %index, i32 %len, i8 26, i8* @.str.236)
 	br label %endif0
 endif0:
 	%tmp30 = load %"struct.vector.Vec<ui16>", %"struct.vector.Vec<ui16>"* %v0
@@ -5882,14 +8193,14 @@ endif2:
 	%tmp9 = icmp eq i8 %tmp5, 35
 	br i1 %tmp9, label %then3, label %endif3
 then3:
-	call void @process.throw(i8* @.str.195)
+	call void @process.throw(i8* @.str.237)
 	br label %endif3
 endif3:
 	%tmp10 = load i32, i32* %index
 	%tmp11 = icmp uge i32 %tmp10, %len
 	br i1 %tmp11, label %then4, label %endif4
 then4:
-	call void @process.throw(i8* @.str.196)
+	call void @process.throw(i8* @.str.238)
 	br label %endif4
 endif4:
 	%tmp12 = getelementptr inbounds %"struct.vector.Vec<%struct.Type>", %"struct.vector.Vec<%struct.Type>"* %v0, i32 0, i32 1
@@ -5903,7 +8214,7 @@ then5:
 	%tmp18 = icmp ne i8 %tmp17, 9
 	br i1 %tmp18, label %then6, label %endif6
 then6:
-	call void @process.throw(i8* @.str.197)
+	call void @process.throw(i8* @.str.239)
 	br label %endif6
 endif6:
 	%tmp19 = load i32, i32* %index
@@ -5968,7 +8279,7 @@ define %struct.Expression @parse_expression_internal(%struct.TokenData* %tokens,
 	%tmp1 = icmp uge i32 %tmp0, %len
 	br i1 %tmp1, label %then0, label %endif0
 then0:
-	call void @process.throw(i8* @.str.198)
+	call void @process.throw(i8* @.str.240)
 	br label %endif0
 endif0:
 	%tmp2 = load i32, i32* %index
@@ -6114,7 +8425,7 @@ then8:
 	store i32 %tmp76, i32* %index
 	%tmp77 = call %struct.Expression @parse_expression_internal(%struct.TokenData* %tokens, i32* %index, i32 %len, i8 0)
 	store %struct.Expression %tmp77, %struct.Expression* %v0
-	call void @expect(%struct.TokenData* %tokens, i32* %index, i32 %len, i8 1, i8* @.str.199)
+	call void @expect(%struct.TokenData* %tokens, i32* %index, i32 %len, i8 1, i8* @.str.241)
 	br label %endif8
 else8:
 	%tmp78 = icmp eq i8 %tmp4, 4
@@ -6165,14 +8476,14 @@ else13:
 	%tmp102 = icmp ne i8 %tmp101, 5
 	br i1 %tmp102, label %then14, label %endif14
 then14:
-	call void @process.throw(i8* @.str.200)
+	call void @process.throw(i8* @.str.242)
 	br label %endif14
 endif14:
 	br label %endif13
 endif13:
 	br label %loop_start10
 loop_body10_exit:
-	call void @expect(%struct.TokenData* %tokens, i32* %index, i32 %len, i8 5, i8* @.str.201)
+	call void @expect(%struct.TokenData* %tokens, i32* %index, i32 %len, i8 5, i8* @.str.243)
 	store i32 14, i32* %v0
 	%tmp103 = getelementptr inbounds %struct.Expression, %struct.Expression* %v0, i32 0, i32 1
 	%tmp104 = load %struct.ArrayExpr*, %struct.ArrayExpr** %v8
@@ -6226,9 +8537,9 @@ endif18:
 	%tmp125 = getelementptr inbounds %struct.TokenData, %struct.TokenData* %tokens, i32 %tmp124
 	%tmp126 = call %struct.string.String @token_type_to_string(%struct.TokenData* %tmp125, %"struct.vector.Vec<%struct.string.String>"* null)
 	store %struct.string.String %tmp126, %struct.string.String* %v11
-	call void @console.write(i8* @.str.202, i32 4)
+	call void @console.write(i8* @.str.244, i32 4)
 	call void @console.write_string(%struct.string.String* %v11)
-	call void @console.write(i8* @.str.203, i32 5)
+	call void @console.write(i8* @.str.245, i32 5)
 	call void @string.free(%struct.string.String* %v11)
 	%tmp127 = load i32, i32* %v10
 	%tmp128 = add i32 %tmp127, 1
@@ -6236,7 +8547,7 @@ endif18:
 	br label %loop_cond17
 loop_body17_exit:
 ; Variable q is out.
-	call void @process.throw(i8* @.str.204)
+	call void @process.throw(i8* @.str.246)
 	br label %endif16
 endif16:
 	br label %endif15
@@ -6439,14 +8750,14 @@ else39:
 	%tmp212 = icmp ne i8 %tmp211, 1
 	br i1 %tmp212, label %then40, label %endif40
 then40:
-	call void @process.throw(i8* @.str.205)
+	call void @process.throw(i8* @.str.247)
 	br label %endif40
 endif40:
 	br label %endif39
 endif39:
 	br label %loop_start36
 loop_body36_exit:
-	call void @expect(%struct.TokenData* %tokens, i32* %index, i32 %len, i8 1, i8* @.str.206)
+	call void @expect(%struct.TokenData* %tokens, i32* %index, i32 %len, i8 1, i8* @.str.248)
 	store i32 12, i32* %v0
 	%tmp213 = getelementptr inbounds %struct.Expression, %struct.Expression* %v0, i32 0, i32 1
 	%tmp214 = load %struct.CallExpr*, %struct.CallExpr** %v14
@@ -6466,7 +8777,7 @@ then41:
 	%tmp221 = getelementptr inbounds %struct.IndexExpr, %struct.IndexExpr* %tmp220, i32 0, i32 1
 	%tmp222 = call %struct.Expression @parse_expression_internal(%struct.TokenData* %tokens, i32* %index, i32 %len, i8 0)
 	store %struct.Expression %tmp222, %struct.Expression* %tmp221
-	call void @expect(%struct.TokenData* %tokens, i32* %index, i32 %len, i8 5, i8* @.str.207)
+	call void @expect(%struct.TokenData* %tokens, i32* %index, i32 %len, i8 5, i8* @.str.249)
 	store i32 13, i32* %v0
 	%tmp223 = getelementptr inbounds %struct.Expression, %struct.Expression* %v0, i32 0, i32 1
 	%tmp224 = load %struct.IndexExpr*, %struct.IndexExpr** %v15
@@ -6533,14 +8844,14 @@ else47:
 	%tmp258 = icmp ne i8 %tmp257, 26
 	br i1 %tmp258, label %then48, label %endif48
 then48:
-	call void @process.throw(i8* @.str.208)
+	call void @process.throw(i8* @.str.250)
 	br label %endif48
 endif48:
 	br label %endif47
 endif47:
 	br label %loop_start44
 loop_body44_exit:
-	call void @expect(%struct.TokenData* %tokens, i32* %index, i32 %len, i8 26, i8* @.str.209)
+	call void @expect(%struct.TokenData* %tokens, i32* %index, i32 %len, i8 26, i8* @.str.251)
 	store i32 11, i32* %v0
 	%tmp259 = getelementptr inbounds %struct.Expression, %struct.Expression* %v0, i32 0, i32 1
 	%tmp260 = load %struct.NameWithGenericsExpr*, %struct.NameWithGenericsExpr** %v16
@@ -6587,8 +8898,8 @@ endif52:
 	%tmp282 = getelementptr inbounds %struct.TokenData, %struct.TokenData* %tmp281, i32 0, i32 1
 	%tmp283 = load i16, i16* %tmp282
 	store i16 %tmp283, i16* %v18
-	call void @expect(%struct.TokenData* %tokens, i32* %index, i32 %len, i8 65, i8* @.str.210)
-	call void @expect(%struct.TokenData* %tokens, i32* %index, i32 %len, i8 6, i8* @.str.190)
+	call void @expect(%struct.TokenData* %tokens, i32* %index, i32 %len, i8 65, i8* @.str.252)
+	call void @expect(%struct.TokenData* %tokens, i32* %index, i32 %len, i8 6, i8* @.str.232)
 	%tmp284 = load i16, i16* %v18
 	store i16 %tmp284, i16* %v19
 	%tmp285 = getelementptr inbounds %struct.StructInitFieldExpr, %struct.StructInitFieldExpr* %v19, i32 0, i32 1
@@ -6615,7 +8926,7 @@ else53:
 	%tmp299 = icmp ne i8 %tmp298, 3
 	br i1 %tmp299, label %then54, label %endif54
 then54:
-	call void @process.throw(i8* @.str.211)
+	call void @process.throw(i8* @.str.253)
 	br label %endif54
 endif54:
 	br label %endif53
@@ -6623,7 +8934,7 @@ endif53:
 	br label %loop_start50
 loop_body50_exit:
 ; Variable fe is out.
-	call void @expect(%struct.TokenData* %tokens, i32* %index, i32 %len, i8 3, i8* @.str.212)
+	call void @expect(%struct.TokenData* %tokens, i32* %index, i32 %len, i8 3, i8* @.str.254)
 	store i32 15, i32* %v0
 	%tmp300 = getelementptr inbounds %struct.Expression, %struct.Expression* %v0, i32 0, i32 1
 	%tmp301 = load %struct.StructInitExpr*, %struct.StructInitExpr** %v17
@@ -6641,7 +8952,7 @@ else49:
 	%tmp308 = icmp ne i8 %tmp307, 65
 	br i1 %tmp308, label %then55, label %endif55
 then55:
-	call void @process.throw(i8* @.str.213)
+	call void @process.throw(i8* @.str.255)
 	br label %endif55
 endif55:
 	%tmp309 = load %struct.StaticAccessExpr*, %struct.StaticAccessExpr** %v20
@@ -6679,7 +8990,7 @@ then56:
 	%tmp327 = icmp ne i8 %tmp326, 65
 	br i1 %tmp327, label %then57, label %endif57
 then57:
-	call void @process.throw(i8* @.str.214)
+	call void @process.throw(i8* @.str.256)
 	br label %endif57
 endif57:
 	%tmp328 = load %struct.MemberAccessExpr*, %struct.MemberAccessExpr** %v21
@@ -6856,7 +9167,7 @@ define %"struct.vector.Vec<%struct.EnumField>" @parse_enum_fields(%struct.TokenD
 	%v1 = alloca %struct.EnumField
 	%tmp0 = call %"struct.vector.Vec<%struct.EnumField>" @"vector.new<%struct.EnumField>"()
 	store %"struct.vector.Vec<%struct.EnumField>" %tmp0, %"struct.vector.Vec<%struct.EnumField>"* %v0
-	call void @expect(%struct.TokenData* %token_array, i32* %index, i32 %len, i8 2, i8* @.str.215)
+	call void @expect(%struct.TokenData* %token_array, i32* %index, i32 %len, i8 2, i8* @.str.257)
 	br label %loop_start0
 loop_start0:
 	%tmp1 = load i32, i32* %index
@@ -6880,7 +9191,7 @@ endif2:
 	%tmp11 = icmp ne i8 %tmp10, 65
 	br i1 %tmp11, label %then3, label %endif3
 then3:
-	call void @process.throw(i8* @.str.216)
+	call void @process.throw(i8* @.str.258)
 	br label %endif3
 endif3:
 	%tmp12 = load i32, i32* %index
@@ -6930,7 +9241,7 @@ else5:
 	%tmp38 = icmp ne i8 %tmp37, 3
 	br i1 %tmp38, label %then6, label %endif6
 then6:
-	call void @process.throw(i8* @.str.217)
+	call void @process.throw(i8* @.str.259)
 	br label %endif6
 endif6:
 	br label %endif5
@@ -6938,7 +9249,7 @@ endif5:
 	br label %loop_start0
 loop_body0_exit:
 ; Variable field is out.
-	call void @expect(%struct.TokenData* %token_array, i32* %index, i32 %len, i8 3, i8* @.str.218)
+	call void @expect(%struct.TokenData* %token_array, i32* %index, i32 %len, i8 3, i8* @.str.260)
 	%tmp39 = load %"struct.vector.Vec<%struct.EnumField>", %"struct.vector.Vec<%struct.EnumField>"* %v0
 ; Variable fields is out.
 	ret %"struct.vector.Vec<%struct.EnumField>" %tmp39
@@ -7020,7 +9331,7 @@ then4:
 endif4:
 	%tmp18 = call %struct.Expression @parse_expression(%struct.TokenData* %token_array, i32* %v0, i32 %token_len)
 	store %struct.Expression %tmp18, %struct.Expression* %v2
-	call void @expect(%struct.TokenData* %token_array, i32* %v0, i32 %token_len, i8 8, i8* @.str.219)
+	call void @expect(%struct.TokenData* %token_array, i32* %v0, i32 %token_len, i8 8, i8* @.str.261)
 	%tmp19 = call i8* @mem.malloc(i64 24)
 	store i1 true, i1* %tmp19
 	%tmp20 = getelementptr inbounds %struct.ReturnNode, %struct.ReturnNode* %tmp19, i32 0, i32 1
@@ -7057,8 +9368,8 @@ then7:
 	%tmp32 = getelementptr inbounds %struct.TokenData, %struct.TokenData* %token_array, i32 %tmp31
 	%tmp33 = getelementptr inbounds %struct.TokenData, %struct.TokenData* %tmp32, i32 0, i32 1
 	%tmp34 = load i16, i16* %tmp33
-	call void @expect(%struct.TokenData* %token_array, i32* %v0, i32 %token_len, i8 65, i8* @.str.220)
-	call void @expect(%struct.TokenData* %token_array, i32* %v0, i32 %token_len, i8 6, i8* @.str.221)
+	call void @expect(%struct.TokenData* %token_array, i32* %v0, i32 %token_len, i8 65, i8* @.str.262)
+	call void @expect(%struct.TokenData* %token_array, i32* %v0, i32 %token_len, i8 6, i8* @.str.263)
 	%tmp35 = call %struct.Type @parse_type(%struct.TokenData* %token_array, i32* %v0, i32 %token_len)
 	store %struct.Type %tmp35, %struct.Type* %v4
 	store i1 false, i1* %v5
@@ -7079,7 +9390,7 @@ then8:
 ; Variable x is out.
 	br label %endif8
 endif8:
-	call void @expect(%struct.TokenData* %token_array, i32* %v0, i32 %token_len, i8 8, i8* @.str.222)
+	call void @expect(%struct.TokenData* %token_array, i32* %v0, i32 %token_len, i8 8, i8* @.str.264)
 	%tmp44 = call i8* @mem.malloc(i64 48)
 	store i16 %tmp34, i16* %tmp44
 	%tmp45 = getelementptr inbounds %struct.DeclarationNode, %struct.DeclarationNode* %tmp44, i32 0, i32 3
@@ -7125,7 +9436,7 @@ then11:
 	%tmp59 = load i32, i32* %v0
 	%tmp60 = add i32 %tmp59, 1
 	store i32 %tmp60, i32* %v0
-	call void @expect(%struct.TokenData* %token_array, i32* %v0, i32 %token_len, i8 8, i8* @.str.223)
+	call void @expect(%struct.TokenData* %token_array, i32* %v0, i32 %token_len, i8 8, i8* @.str.265)
 	store i8 8, i8* %v9
 	%tmp61 = getelementptr inbounds %struct.Stmt, %struct.Stmt* %v9, i32 0, i32 1
 	store i8* null, i8** %tmp61
@@ -7140,7 +9451,7 @@ then12:
 	%tmp64 = load i32, i32* %v0
 	%tmp65 = add i32 %tmp64, 1
 	store i32 %tmp65, i32* %v0
-	call void @expect(%struct.TokenData* %token_array, i32* %v0, i32 %token_len, i8 8, i8* @.str.224)
+	call void @expect(%struct.TokenData* %token_array, i32* %v0, i32 %token_len, i8 8, i8* @.str.266)
 	store i8 9, i8* %v10
 	%tmp66 = getelementptr inbounds %struct.Stmt, %struct.Stmt* %v10, i32 0, i32 1
 	store i8* null, i8** %tmp66
@@ -7163,7 +9474,7 @@ then13:
 	%tmp75 = icmp ne i8 %tmp74, 2
 	br i1 %tmp75, label %then14, label %endif14
 then14:
-	call void @process.throw(i8* @.str.225)
+	call void @process.throw(i8* @.str.267)
 	br label %endif14
 endif14:
 	%tmp76 = load i32, i32* %v0
@@ -7225,7 +9536,7 @@ else18:
 	%tmp109 = icmp ne i8 %tmp108, 2
 	br i1 %tmp109, label %then19, label %endif19
 then19:
-	call void @process.throw(i8* @.str.226)
+	call void @process.throw(i8* @.str.268)
 	br label %endif19
 endif19:
 	%tmp110 = load i32, i32* %v0
@@ -7274,7 +9585,7 @@ then20:
 	%tmp131 = icmp ne i8 %tmp130, 2
 	br i1 %tmp131, label %then21, label %endif21
 then21:
-	call void @process.throw(i8* @.str.227)
+	call void @process.throw(i8* @.str.269)
 	br label %endif21
 endif21:
 	%tmp132 = load i32, i32* %v0
@@ -7315,7 +9626,7 @@ then22:
 	%tmp151 = icmp ne i8 %tmp150, 2
 	br i1 %tmp151, label %then23, label %endif23
 then23:
-	call void @process.throw(i8* @.str.227)
+	call void @process.throw(i8* @.str.269)
 	br label %endif23
 endif23:
 	%tmp152 = load i32, i32* %v0
@@ -7352,7 +9663,7 @@ then24:
 	%tmp169 = icmp ne i8 %tmp168, 2
 	br i1 %tmp169, label %then25, label %endif25
 then25:
-	call void @process.throw(i8* @.str.227)
+	call void @process.throw(i8* @.str.269)
 	br label %endif25
 endif25:
 	%tmp170 = load i32, i32* %v0
@@ -7365,10 +9676,10 @@ endif25:
 	store %"struct.vector.Vec<%struct.Stmt>" %tmp175, %"struct.vector.Vec<%struct.Stmt>"* %v21
 	%tmp176 = getelementptr inbounds %struct.TokenData, %struct.TokenData* %token_array, i32 %tmp171
 	call void @parse_body(%struct.TokenData* %tmp176, i32 %tmp174, %"struct.vector.Vec<%struct.string.String>"* %symbol_vector, %"struct.vector.Vec<%struct.Stmt>"* %v21)
-	call void @expect(%struct.TokenData* %token_array, i32* %v0, i32 %token_len, i8 55, i8* @.str.228)
+	call void @expect(%struct.TokenData* %token_array, i32* %v0, i32 %token_len, i8 55, i8* @.str.270)
 	%tmp177 = call %struct.Expression @parse_expression(%struct.TokenData* %token_array, i32* %v0, i32 %token_len)
 	store %struct.Expression %tmp177, %struct.Expression* %v22
-	call void @expect(%struct.TokenData* %token_array, i32* %v0, i32 %token_len, i8 8, i8* @.str.229)
+	call void @expect(%struct.TokenData* %token_array, i32* %v0, i32 %token_len, i8 8, i8* @.str.271)
 	%tmp178 = call i8* @mem.malloc(i64 32)
 	%tmp179 = load %struct.Expression, %struct.Expression* %v22
 	store %struct.Expression %tmp179, %struct.Expression* %tmp178
@@ -7393,7 +9704,7 @@ then26:
 	store i32 %tmp186, i32* %v0
 	%tmp187 = call %struct.Expression @parse_expression(%struct.TokenData* %token_array, i32* %v0, i32 %token_len)
 	store %struct.Expression %tmp187, %struct.Expression* %v24
-	call void @expect(%struct.TokenData* %token_array, i32* %v0, i32 %token_len, i8 54, i8* @.str.230)
+	call void @expect(%struct.TokenData* %token_array, i32* %v0, i32 %token_len, i8 54, i8* @.str.272)
 	%tmp188 = call %struct.Expression @parse_expression(%struct.TokenData* %token_array, i32* %v0, i32 %token_len)
 	store %struct.Expression %tmp188, %struct.Expression* %v25
 	%tmp189 = load i32, i32* %v0
@@ -7402,7 +9713,7 @@ then26:
 	%tmp192 = icmp ne i8 %tmp191, 2
 	br i1 %tmp192, label %then27, label %endif27
 then27:
-	call void @process.throw(i8* @.str.231)
+	call void @process.throw(i8* @.str.273)
 	br label %endif27
 endif27:
 	%tmp193 = load i32, i32* %v0
@@ -7440,7 +9751,7 @@ endif26:
 then28:
 	%tmp209 = call %struct.Expression @parse_expression(%struct.TokenData* %token_array, i32* %v0, i32 %token_len)
 	store %struct.Expression %tmp209, %struct.Expression* %v28
-	call void @expect(%struct.TokenData* %token_array, i32* %v0, i32 %token_len, i8 8, i8* @.str.232)
+	call void @expect(%struct.TokenData* %token_array, i32* %v0, i32 %token_len, i8 8, i8* @.str.274)
 	%tmp210 = call i8* @mem.malloc(i64 16)
 	%tmp211 = load %struct.Expression, %struct.Expression* %v28
 	store %struct.Expression %tmp211, %struct.Expression* %tmp210
@@ -7468,9 +9779,9 @@ endif30:
 	%tmp219 = getelementptr inbounds %struct.TokenData, %struct.TokenData* %token_array, i32 %tmp218
 	%tmp220 = call %struct.string.String @token_type_to_string(%struct.TokenData* %tmp219, %"struct.vector.Vec<%struct.string.String>"* %symbol_vector)
 	store %struct.string.String %tmp220, %struct.string.String* %v31
-	call void @console.write(i8* @.str.202, i32 4)
+	call void @console.write(i8* @.str.244, i32 4)
 	call void @console.write_string(%struct.string.String* %v31)
-	call void @console.write(i8* @.str.203, i32 5)
+	call void @console.write(i8* @.str.245, i32 5)
 	call void @string.free(%struct.string.String* %v31)
 	%tmp221 = load i32, i32* %v30
 	%tmp222 = add i32 %tmp221, 1
@@ -7478,7 +9789,7 @@ endif30:
 	br label %loop_cond29
 loop_body29_exit:
 ; Variable q is out.
-	call void @process.throw(i8* @.str.233)
+	call void @process.throw(i8* @.str.275)
 	br label %loop_body1
 loop_body1:
 	br label %loop_start1
@@ -7515,7 +9826,7 @@ endif2:
 	%tmp11 = icmp ne i8 %tmp10, 65
 	br i1 %tmp11, label %then3, label %endif3
 then3:
-	call void @process.throw(i8* @.str.234)
+	call void @process.throw(i8* @.str.276)
 	br label %endif3
 endif3:
 	%tmp12 = load i32, i32* %index
@@ -7532,7 +9843,7 @@ endif3:
 	%tmp21 = icmp ne i8 %tmp20, 6
 	br i1 %tmp21, label %then4, label %endif4
 then4:
-	call void @process.throw(i8* @.str.235)
+	call void @process.throw(i8* @.str.277)
 	br label %endif4
 endif4:
 	%tmp22 = load i32, i32* %index
@@ -7560,7 +9871,7 @@ else5:
 	%tmp36 = icmp ne i8 %tmp35, 1
 	br i1 %tmp36, label %then6, label %endif6
 then6:
-	call void @process.throw(i8* @.str.236)
+	call void @process.throw(i8* @.str.278)
 	br label %endif6
 endif6:
 	br label %endif5
@@ -7664,7 +9975,7 @@ endif6:
 	%tmp24 = icmp ne i8 %tmp23, 65
 	br i1 %tmp24, label %then7, label %endif7
 then7:
-	call void @process.throw(i8* @.str.237)
+	call void @process.throw(i8* @.str.279)
 	br label %endif7
 endif7:
 	%tmp25 = load i32, i32* %v0
@@ -7687,14 +9998,14 @@ then8:
 	store i32 %tmp37, i32* %v0
 	%tmp38 = call %"struct.vector.Vec<%struct.Expression>" @parse_expression_comma(%struct.TokenData* %token_array, i32* %v0, i32 %token_len)
 	store %"struct.vector.Vec<%struct.Expression>" %tmp38, %"struct.vector.Vec<%struct.Expression>"* %v3
-	call void @expect(%struct.TokenData* %token_array, i32* %v0, i32 %token_len, i8 1, i8* @.str.238)
+	call void @expect(%struct.TokenData* %token_array, i32* %v0, i32 %token_len, i8 1, i8* @.str.280)
 	br label %endif8
 endif8:
 	store i8 0, i8* %v4
 	%tmp39 = load i1, i1* %v2
 	br i1 %tmp39, label %then9, label %endif9
 then9:
-	call void @expect(%struct.TokenData* %token_array, i32* %v0, i32 %token_len, i8 5, i8* @.str.239)
+	call void @expect(%struct.TokenData* %token_array, i32* %v0, i32 %token_len, i8 5, i8* @.str.281)
 	store i8 20, i8* %v4
 	br label %endif9
 endif9:
@@ -7729,7 +10040,7 @@ then10:
 	%tmp55 = icmp ne i8 %tmp54, 65
 	br i1 %tmp55, label %then11, label %endif11
 then11:
-	call void @process.throw(i8* @.str.240)
+	call void @process.throw(i8* @.str.282)
 	br label %endif11
 endif11:
 	%tmp56 = load i32, i32* %v0
@@ -7754,7 +10065,7 @@ logic_end_12:
 	%tmp70 = phi i1 [%tmp65, %endif11], [%tmp69, %logic_rhs_12]
 	br i1 %tmp70, label %then13, label %endif13
 then13:
-	call void @process.throw(i8* @.str.241)
+	call void @process.throw(i8* @.str.283)
 	br label %endif13
 endif13:
 	%tmp71 = call %"struct.vector.Vec<ui16>" @"vector.new<ui16>"()
@@ -7791,7 +10102,7 @@ then17:
 	call void @"vector.push<ui16>"(%"struct.vector.Vec<ui16>"* %v6, i16 %tmp89)
 	br label %endif17
 else17:
-	call void @process.throw(i8* @.str.242)
+	call void @process.throw(i8* @.str.284)
 	br label %endif17
 endif17:
 	%tmp90 = load i32, i32* %v0
@@ -7826,7 +10137,7 @@ endif14:
 	%tmp106 = icmp ne i8 %tmp105, 1
 	br i1 %tmp106, label %then19, label %endif19
 then19:
-	call void @process.throw(i8* @.str.206)
+	call void @process.throw(i8* @.str.248)
 	br label %endif19
 endif19:
 	%tmp107 = load i32, i32* %v0
@@ -7878,7 +10189,7 @@ then22:
 	%tmp134 = getelementptr inbounds %struct.ReturnNode, %struct.ReturnNode* %tmp133, i32 0, i32 1
 	%tmp135 = call %struct.Expression @parse_expression(%struct.TokenData* %token_array, i32* %v0, i32 %token_len)
 	store %struct.Expression %tmp135, %struct.Expression* %tmp134
-	call void @expect(%struct.TokenData* %token_array, i32* %v0, i32 %token_len, i8 8, i8* @.str.243)
+	call void @expect(%struct.TokenData* %token_array, i32* %v0, i32 %token_len, i8 8, i8* @.str.285)
 	store i8 10, i8* %v11
 	%tmp136 = getelementptr inbounds %struct.Stmt, %struct.Stmt* %v11, i32 0, i32 1
 	store i8* %tmp133, i8** %tmp136
@@ -7949,7 +10260,7 @@ then24:
 	%tmp167 = icmp ne i8 %tmp166, 65
 	br i1 %tmp167, label %then25, label %endif25
 then25:
-	call void @process.throw(i8* @.str.244)
+	call void @process.throw(i8* @.str.286)
 	br label %endif25
 endif25:
 	%tmp168 = load i32, i32* %v0
@@ -7977,7 +10288,7 @@ then26:
 	call void @parse(%struct.TokenData* %tmp184, i32 %tmp183, %"struct.vector.Vec<%struct.string.String>"* %symbol_vector, %"struct.vector.Vec<%struct.Stmt>"* %v13)
 	br label %endif26
 else26:
-	call void @process.throw(i8* @.str.245)
+	call void @process.throw(i8* @.str.287)
 	br label %endif26
 endif26:
 	%tmp185 = call i8* @mem.malloc(i64 24)
@@ -8010,7 +10321,7 @@ then27:
 	%tmp199 = icmp ne i8 %tmp198, 65
 	br i1 %tmp199, label %then28, label %endif28
 then28:
-	call void @process.throw(i8* @.str.246)
+	call void @process.throw(i8* @.str.288)
 	br label %endif28
 endif28:
 	%tmp200 = load i32, i32* %v0
@@ -8047,7 +10358,7 @@ then30:
 	store %"struct.vector.Vec<%struct.EnumField>" %tmp218, %"struct.vector.Vec<%struct.EnumField>"* %v17
 	br label %endif30
 else30:
-	call void @process.throw(i8* @.str.215)
+	call void @process.throw(i8* @.str.257)
 	br label %endif30
 endif30:
 	%tmp219 = call i8* @mem.malloc(i64 40)
@@ -8089,7 +10400,7 @@ then31:
 	%tmp238 = icmp ne i8 %tmp237, 65
 	br i1 %tmp238, label %then32, label %endif32
 then32:
-	call void @process.throw(i8* @.str.247)
+	call void @process.throw(i8* @.str.289)
 	br label %endif32
 endif32:
 	%tmp239 = load i32, i32* %v0
@@ -8123,7 +10434,7 @@ then34:
 	store %"struct.vector.Vec<%struct.Argument>" %tmp256, %"struct.vector.Vec<%struct.Argument>"* %v20
 	br label %endif34
 else34:
-	call void @process.throw(i8* @.str.188)
+	call void @process.throw(i8* @.str.230)
 	br label %endif34
 endif34:
 	%tmp257 = call i8* @mem.malloc(i64 40)
@@ -8283,8 +10594,8 @@ then43:
 	%tmp352 = getelementptr inbounds %struct.TokenData, %struct.TokenData* %token_array, i32 %tmp351
 	%tmp353 = getelementptr inbounds %struct.TokenData, %struct.TokenData* %tmp352, i32 0, i32 1
 	%tmp354 = load i16, i16* %tmp353
-	call void @expect(%struct.TokenData* %token_array, i32* %v0, i32 %token_len, i8 65, i8* @.str.220)
-	call void @expect(%struct.TokenData* %token_array, i32* %v0, i32 %token_len, i8 6, i8* @.str.221)
+	call void @expect(%struct.TokenData* %token_array, i32* %v0, i32 %token_len, i8 65, i8* @.str.262)
+	call void @expect(%struct.TokenData* %token_array, i32* %v0, i32 %token_len, i8 6, i8* @.str.263)
 	%tmp355 = call %struct.Type @parse_type(%struct.TokenData* %token_array, i32* %v0, i32 %token_len)
 	store %struct.Type %tmp355, %struct.Type* %v24
 	store i1 false, i1* %v25
@@ -8305,7 +10616,7 @@ then44:
 ; Variable x is out.
 	br label %endif44
 endif44:
-	call void @expect(%struct.TokenData* %token_array, i32* %v0, i32 %token_len, i8 8, i8* @.str.222)
+	call void @expect(%struct.TokenData* %token_array, i32* %v0, i32 %token_len, i8 8, i8* @.str.264)
 	%tmp364 = call i8* @mem.malloc(i64 48)
 	store i16 %tmp354, i16* %tmp364
 	%tmp365 = getelementptr inbounds %struct.DeclarationNode, %struct.DeclarationNode* %tmp364, i32 0, i32 3
@@ -8364,7 +10675,7 @@ endif48:
 	%tmp384 = call %struct.string.String @token_type_to_string(%struct.TokenData* %tmp383, %"struct.vector.Vec<%struct.string.String>"* null)
 	store %struct.string.String %tmp384, %struct.string.String* %v30
 	call void @console.write_string(%struct.string.String* %v30)
-	call void @console.write(i8* @.str.248, i32 5)
+	call void @console.write(i8* @.str.290, i32 5)
 	call void @string.free(%struct.string.String* %v30)
 	%tmp385 = load i32, i32* %v29
 	%tmp386 = add i32 %tmp385, 1
@@ -8372,7 +10683,7 @@ endif48:
 	br label %loop_cond47
 loop_body47_exit:
 ; Variable q is out.
-	call void @process.throw(i8* @.str.249)
+	call void @process.throw(i8* @.str.291)
 	br label %loop_body1
 loop_body1:
 	br label %loop_start1
@@ -8380,17 +10691,6 @@ loop_body1_exit:
 	br label %func_exit
 func_exit:
 	ret void
-}
-define %struct.Scope @new_scope(){
-	%v0 = alloca %struct.Scope
-	%tmp0 = call %"struct.vector.Vec<%struct.Variable>" @"vector.new<%struct.Variable>"()
-	%tmp1 = call %"struct.vector.Vec<ui32>" @"vector.new<ui32>"()
-	store %"struct.vector.Vec<%struct.Variable>" %tmp0, %"struct.vector.Vec<%struct.Variable>"* %v0
-	%tmp2 = getelementptr inbounds %struct.Scope, %struct.Scope* %v0, i32 0, i32 1
-	store %"struct.vector.Vec<ui32>" %tmp1, %"struct.vector.Vec<ui32>"* %tmp2
-	%tmp3 = load %struct.Scope, %struct.Scope* %v0
-; Variable scope is out.
-	ret %struct.Scope %tmp3
 }
 define void @lex(%struct.string.String* %data, %"struct.vector.Vec<%struct.TokenData>"* %token_vector, %"struct.vector.Vec<%struct.string.String>"* %symbol_vector){
 	%v0 = alloca i32
@@ -9536,7 +11836,7 @@ then115:
 	br label %loop_body0
 ; Variable temp is out.
 endif115:
-	call void @console.write(i8* @.str.250, i32 8)
+	call void @console.write(i8* @.str.292, i32 8)
 	%tmp445 = load i32, i32* %v0
 	%tmp446 = zext i32 %tmp445 to i64
 	call void @console.println_i64(i64 %tmp446)
@@ -9546,7 +11846,7 @@ endif115:
 	%tmp450 = load i8, i8* %tmp449
 	%tmp451 = sext i8 %tmp450 to i64
 	call void @console.println_i64(i64 %tmp451)
-	call void @process.throw(i8* @.str.251)
+	call void @process.throw(i8* @.str.293)
 	br label %loop_body0
 loop_body0:
 	br label %loop_start0
@@ -9706,7 +12006,7 @@ define void @insert_symbol_into_table(%struct.SymbolTable* %table, %struct.Symbo
 	%tmp3 = icmp ne %struct.SymbolTableEntry* %tmp2, null
 	br i1 %tmp3, label %then0, label %endif0
 then0:
-	call void @process.throw(i8* @.str.252)
+	call void @process.throw(i8* @.str.294)
 	br label %endif0
 endif0:
 	%tmp4 = load %struct.SymbolTableEntry, %struct.SymbolTableEntry* %v0
@@ -9809,7 +12109,7 @@ define void @handle_symbol(i8* %data, i32 %start, i32 %end, %"struct.vector.Vec<
 	%tmp2 = icmp eq i32 %tmp0, 2
 	br i1 %tmp2, label %then0, label %else0
 then0:
-	%tmp3 = call i32 @mem.compare(i8* %tmp1, i8* @.str.253, i64 2)
+	%tmp3 = call i32 @mem.compare(i8* %tmp1, i8* @.str.295, i64 2)
 	%tmp4 = icmp eq i32 %tmp3, 0
 	br i1 %tmp4, label %then1, label %endif1
 then1:
@@ -9823,7 +12123,7 @@ then1:
 	br label %func_exit
 ; Variable temp is out.
 endif1:
-	%tmp8 = call i32 @mem.compare(i8* %tmp1, i8* @.str.254, i64 2)
+	%tmp8 = call i32 @mem.compare(i8* %tmp1, i8* @.str.296, i64 2)
 	%tmp9 = icmp eq i32 %tmp8, 0
 	br i1 %tmp9, label %then2, label %endif2
 then2:
@@ -9837,7 +12137,7 @@ then2:
 	br label %func_exit
 ; Variable temp is out.
 endif2:
-	%tmp13 = call i32 @mem.compare(i8* %tmp1, i8* @.str.255, i64 2)
+	%tmp13 = call i32 @mem.compare(i8* %tmp1, i8* @.str.297, i64 2)
 	%tmp14 = icmp eq i32 %tmp13, 0
 	br i1 %tmp14, label %then3, label %endif3
 then3:
@@ -9851,7 +12151,7 @@ then3:
 	br label %func_exit
 ; Variable temp is out.
 endif3:
-	%tmp18 = call i32 @mem.compare(i8* %tmp1, i8* @.str.256, i64 2)
+	%tmp18 = call i32 @mem.compare(i8* %tmp1, i8* @.str.298, i64 2)
 	%tmp19 = icmp eq i32 %tmp18, 0
 	br i1 %tmp19, label %then4, label %endif4
 then4:
@@ -9865,7 +12165,7 @@ then4:
 	br label %func_exit
 ; Variable temp is out.
 endif4:
-	%tmp23 = call i32 @mem.compare(i8* %tmp1, i8* @.str.257, i64 2)
+	%tmp23 = call i32 @mem.compare(i8* %tmp1, i8* @.str.299, i64 2)
 	%tmp24 = icmp eq i32 %tmp23, 0
 	br i1 %tmp24, label %then5, label %endif5
 then5:
@@ -9884,7 +12184,7 @@ else0:
 	%tmp28 = icmp eq i32 %tmp0, 3
 	br i1 %tmp28, label %then6, label %else6
 then6:
-	%tmp29 = call i32 @mem.compare(i8* %tmp1, i8* @.str.258, i64 3)
+	%tmp29 = call i32 @mem.compare(i8* %tmp1, i8* @.str.300, i64 3)
 	%tmp30 = icmp eq i32 %tmp29, 0
 	br i1 %tmp30, label %then7, label %endif7
 then7:
@@ -9898,7 +12198,7 @@ then7:
 	br label %func_exit
 ; Variable temp is out.
 endif7:
-	%tmp34 = call i32 @mem.compare(i8* %tmp1, i8* @.str.259, i64 3)
+	%tmp34 = call i32 @mem.compare(i8* %tmp1, i8* @.str.301, i64 3)
 	%tmp35 = icmp eq i32 %tmp34, 0
 	br i1 %tmp35, label %then8, label %endif8
 then8:
@@ -9912,7 +12212,7 @@ then8:
 	br label %func_exit
 ; Variable temp is out.
 endif8:
-	%tmp39 = call i32 @mem.compare(i8* %tmp1, i8* @.str.260, i64 3)
+	%tmp39 = call i32 @mem.compare(i8* %tmp1, i8* @.str.302, i64 3)
 	%tmp40 = icmp eq i32 %tmp39, 0
 	br i1 %tmp40, label %then9, label %endif9
 then9:
@@ -9931,7 +12231,7 @@ else6:
 	%tmp44 = icmp eq i32 %tmp0, 4
 	br i1 %tmp44, label %then10, label %else10
 then10:
-	%tmp45 = call i32 @mem.compare(i8* %tmp1, i8* @.str.261, i64 4)
+	%tmp45 = call i32 @mem.compare(i8* %tmp1, i8* @.str.303, i64 4)
 	%tmp46 = icmp eq i32 %tmp45, 0
 	br i1 %tmp46, label %then11, label %endif11
 then11:
@@ -9945,7 +12245,7 @@ then11:
 	br label %func_exit
 ; Variable temp is out.
 endif11:
-	%tmp50 = call i32 @mem.compare(i8* %tmp1, i8* @.str.262, i64 4)
+	%tmp50 = call i32 @mem.compare(i8* %tmp1, i8* @.str.304, i64 4)
 	%tmp51 = icmp eq i32 %tmp50, 0
 	br i1 %tmp51, label %then12, label %endif12
 then12:
@@ -9959,7 +12259,7 @@ then12:
 	br label %func_exit
 ; Variable temp is out.
 endif12:
-	%tmp55 = call i32 @mem.compare(i8* %tmp1, i8* @.str.263, i64 4)
+	%tmp55 = call i32 @mem.compare(i8* %tmp1, i8* @.str.305, i64 4)
 	%tmp56 = icmp eq i32 %tmp55, 0
 	br i1 %tmp56, label %then13, label %endif13
 then13:
@@ -9973,7 +12273,7 @@ then13:
 	br label %func_exit
 ; Variable temp is out.
 endif13:
-	%tmp60 = call i32 @mem.compare(i8* %tmp1, i8* @.str.264, i64 4)
+	%tmp60 = call i32 @mem.compare(i8* %tmp1, i8* @.str.306, i64 4)
 	%tmp61 = icmp eq i32 %tmp60, 0
 	br i1 %tmp61, label %then14, label %endif14
 then14:
@@ -9987,7 +12287,7 @@ then14:
 	br label %func_exit
 ; Variable temp is out.
 endif14:
-	%tmp65 = call i32 @mem.compare(i8* %tmp1, i8* @.str.265, i64 4)
+	%tmp65 = call i32 @mem.compare(i8* %tmp1, i8* @.str.307, i64 4)
 	%tmp66 = icmp eq i32 %tmp65, 0
 	br i1 %tmp66, label %then15, label %endif15
 then15:
@@ -10001,7 +12301,7 @@ then15:
 	br label %func_exit
 ; Variable temp is out.
 endif15:
-	%tmp70 = call i32 @mem.compare(i8* %tmp1, i8* @.str.266, i64 4)
+	%tmp70 = call i32 @mem.compare(i8* %tmp1, i8* @.str.308, i64 4)
 	%tmp71 = icmp eq i32 %tmp70, 0
 	br i1 %tmp71, label %then16, label %endif16
 then16:
@@ -10015,7 +12315,7 @@ then16:
 	br label %func_exit
 ; Variable temp is out.
 endif16:
-	%tmp75 = call i32 @mem.compare(i8* %tmp1, i8* @.str.267, i64 4)
+	%tmp75 = call i32 @mem.compare(i8* %tmp1, i8* @.str.309, i64 4)
 	%tmp76 = icmp eq i32 %tmp75, 0
 	br i1 %tmp76, label %then17, label %endif17
 then17:
@@ -10034,7 +12334,7 @@ else10:
 	%tmp80 = icmp eq i32 %tmp0, 5
 	br i1 %tmp80, label %then18, label %else18
 then18:
-	%tmp81 = call i32 @mem.compare(i8* %tmp1, i8* @.str.268, i64 5)
+	%tmp81 = call i32 @mem.compare(i8* %tmp1, i8* @.str.310, i64 5)
 	%tmp82 = icmp eq i32 %tmp81, 0
 	br i1 %tmp82, label %then19, label %endif19
 then19:
@@ -10048,7 +12348,7 @@ then19:
 	br label %func_exit
 ; Variable temp is out.
 endif19:
-	%tmp86 = call i32 @mem.compare(i8* %tmp1, i8* @.str.269, i64 5)
+	%tmp86 = call i32 @mem.compare(i8* %tmp1, i8* @.str.311, i64 5)
 	%tmp87 = icmp eq i32 %tmp86, 0
 	br i1 %tmp87, label %then20, label %endif20
 then20:
@@ -10062,7 +12362,7 @@ then20:
 	br label %func_exit
 ; Variable temp is out.
 endif20:
-	%tmp91 = call i32 @mem.compare(i8* %tmp1, i8* @.str.270, i64 5)
+	%tmp91 = call i32 @mem.compare(i8* %tmp1, i8* @.str.312, i64 5)
 	%tmp92 = icmp eq i32 %tmp91, 0
 	br i1 %tmp92, label %then21, label %endif21
 then21:
@@ -10076,7 +12376,7 @@ then21:
 	br label %func_exit
 ; Variable temp is out.
 endif21:
-	%tmp96 = call i32 @mem.compare(i8* %tmp1, i8* @.str.271, i64 5)
+	%tmp96 = call i32 @mem.compare(i8* %tmp1, i8* @.str.313, i64 5)
 	%tmp97 = icmp eq i32 %tmp96, 0
 	br i1 %tmp97, label %then22, label %endif22
 then22:
@@ -10090,7 +12390,7 @@ then22:
 	br label %func_exit
 ; Variable temp is out.
 endif22:
-	%tmp101 = call i32 @mem.compare(i8* %tmp1, i8* @.str.272, i64 5)
+	%tmp101 = call i32 @mem.compare(i8* %tmp1, i8* @.str.314, i64 5)
 	%tmp102 = icmp eq i32 %tmp101, 0
 	br i1 %tmp102, label %then23, label %endif23
 then23:
@@ -10104,7 +12404,7 @@ then23:
 	br label %func_exit
 ; Variable temp is out.
 endif23:
-	%tmp106 = call i32 @mem.compare(i8* %tmp1, i8* @.str.273, i64 5)
+	%tmp106 = call i32 @mem.compare(i8* %tmp1, i8* @.str.315, i64 5)
 	%tmp107 = icmp eq i32 %tmp106, 0
 	br i1 %tmp107, label %then24, label %endif24
 then24:
@@ -10123,7 +12423,7 @@ else18:
 	%tmp111 = icmp eq i32 %tmp0, 6
 	br i1 %tmp111, label %then25, label %else25
 then25:
-	%tmp112 = call i32 @mem.compare(i8* %tmp1, i8* @.str.274, i64 6)
+	%tmp112 = call i32 @mem.compare(i8* %tmp1, i8* @.str.316, i64 6)
 	%tmp113 = icmp eq i32 %tmp112, 0
 	br i1 %tmp113, label %then26, label %endif26
 then26:
@@ -10137,7 +12437,7 @@ then26:
 	br label %func_exit
 ; Variable temp is out.
 endif26:
-	%tmp117 = call i32 @mem.compare(i8* %tmp1, i8* @.str.275, i64 6)
+	%tmp117 = call i32 @mem.compare(i8* %tmp1, i8* @.str.317, i64 6)
 	%tmp118 = icmp eq i32 %tmp117, 0
 	br i1 %tmp118, label %then27, label %endif27
 then27:
@@ -10151,7 +12451,7 @@ then27:
 	br label %func_exit
 ; Variable temp is out.
 endif27:
-	%tmp122 = call i32 @mem.compare(i8* %tmp1, i8* @.str.276, i64 6)
+	%tmp122 = call i32 @mem.compare(i8* %tmp1, i8* @.str.318, i64 6)
 	%tmp123 = icmp eq i32 %tmp122, 0
 	br i1 %tmp123, label %then28, label %endif28
 then28:
@@ -10165,7 +12465,7 @@ then28:
 	br label %func_exit
 ; Variable temp is out.
 endif28:
-	%tmp127 = call i32 @mem.compare(i8* %tmp1, i8* @.str.277, i64 6)
+	%tmp127 = call i32 @mem.compare(i8* %tmp1, i8* @.str.319, i64 6)
 	%tmp128 = icmp eq i32 %tmp127, 0
 	br i1 %tmp128, label %then29, label %endif29
 then29:
@@ -10179,7 +12479,7 @@ then29:
 	br label %func_exit
 ; Variable temp is out.
 endif29:
-	%tmp132 = call i32 @mem.compare(i8* %tmp1, i8* @.str.278, i64 6)
+	%tmp132 = call i32 @mem.compare(i8* %tmp1, i8* @.str.320, i64 6)
 	%tmp133 = icmp eq i32 %tmp132, 0
 	br i1 %tmp133, label %then30, label %endif30
 then30:
@@ -10198,7 +12498,7 @@ else25:
 	%tmp137 = icmp eq i32 %tmp0, 8
 	br i1 %tmp137, label %then31, label %else31
 then31:
-	%tmp138 = call i32 @mem.compare(i8* %tmp1, i8* @.str.279, i64 8)
+	%tmp138 = call i32 @mem.compare(i8* %tmp1, i8* @.str.321, i64 8)
 	%tmp139 = icmp eq i32 %tmp138, 0
 	br i1 %tmp139, label %then32, label %endif32
 then32:
@@ -10212,7 +12512,7 @@ then32:
 	br label %func_exit
 ; Variable temp is out.
 endif32:
-	%tmp143 = call i32 @mem.compare(i8* %tmp1, i8* @.str.280, i64 8)
+	%tmp143 = call i32 @mem.compare(i8* %tmp1, i8* @.str.322, i64 8)
 	%tmp144 = icmp eq i32 %tmp143, 0
 	br i1 %tmp144, label %then33, label %endif33
 then33:
@@ -10231,7 +12531,7 @@ else31:
 	%tmp148 = icmp eq i32 %tmp0, 9
 	br i1 %tmp148, label %then34, label %endif34
 then34:
-	%tmp149 = call i32 @mem.compare(i8* %tmp1, i8* @.str.281, i64 9)
+	%tmp149 = call i32 @mem.compare(i8* %tmp1, i8* @.str.323, i64 9)
 	%tmp150 = icmp eq i32 %tmp149, 0
 	br i1 %tmp150, label %then35, label %endif35
 then35:
@@ -10381,7 +12681,7 @@ else11:
 	%tmp39 = sext i8 %tmp38 to i64
 	call void @console.println_i64(i64 %tmp39)
 	call void @console.writeln(i8* %tmp37, i32 %tmp1)
-	call void @process.throw(i8* @.str.282)
+	call void @process.throw(i8* @.str.324)
 	br label %endif11
 endif11:
 	br label %endif10
@@ -10548,7 +12848,7 @@ then8:
 	br label %endif8
 else8:
 	call void @console.writeln(i8* %tmp3, i32 %tmp1)
-	call void @process.throw(i8* @.str.282)
+	call void @process.throw(i8* @.str.324)
 	br label %endif8
 endif8:
 	br label %endif7
@@ -10576,7 +12876,7 @@ endif1:
 	%tmp28 = icmp sgt i32 %tmp1, 2
 	br i1 %tmp28, label %then9, label %endif9
 then9:
-	call void @process.throw(i8* @.str.283)
+	call void @process.throw(i8* @.str.325)
 	br label %endif9
 endif9:
 	br label %func_exit
@@ -10585,7 +12885,7 @@ endif0:
 	%tmp29 = icmp ne i32 %tmp1, 1
 	br i1 %tmp29, label %then10, label %endif10
 then10:
-	call void @process.throw(i8* @.str.283)
+	call void @process.throw(i8* @.str.325)
 	br label %endif10
 endif10:
 	%tmp30 = sext i8 %tmp4 to i16
@@ -10627,7 +12927,7 @@ endif3:
 then4:
 	br label %func_exit
 endif4:
-	call void @process.throw(i8* @.str.284)
+	call void @process.throw(i8* @.str.326)
 	br label %func_exit
 func_exit:
 	%tmp5 = phi i8 [0, %then0], [1, %then1], [2, %then2], [3, %then3], [4, %then4], [0, %endif4]
@@ -10644,7 +12944,7 @@ define %struct.SymbolTableEntry* @get_symbol_from_table(%struct.SymbolTable* %ta
 	%tmp1 = icmp eq i8 %tmp0, 0
 	br i1 %tmp1, label %then0, label %endif0
 then0:
-	call void @process.throw(i8* @.str.285)
+	call void @process.throw(i8* @.str.327)
 	br label %endif0
 endif0:
 	%tmp2 = load %struct.SymbolTableEntry*, %struct.SymbolTableEntry** %table
@@ -10807,463 +13107,6 @@ func_exit:
 	%tmp30 = phi i8 [0, %then0], [%tmp29, %loop_body1_exit]
 	ret i8 %tmp30
 }
-define %struct.CompilerType @get_compiler_type_internal(%struct.Type* %type, %struct.Path* %l_path, %struct.Path* %g_path, %struct.SymbolTable* %table){
-	%v0 = alloca %struct.CompilerType
-	%v1 = alloca %struct.SymbolTableEntry*
-	%v2 = alloca %struct.CompilerType
-	%v3 = alloca %struct.CompilerType
-	%v4 = alloca %struct.CompilerType
-	%v5 = alloca %struct.SymbolTableEntry*
-	%v6 = alloca %"struct.vector.Vec<%struct.CompilerType>"
-	%v7 = alloca i32
-	%v8 = alloca i32
-	%v9 = alloca i32
-	%v10 = alloca %struct.CompilerType
-	%v11 = alloca %struct.CompilerType
-	%tmp0 = load i32, i32* %type
-	%tmp1 = icmp eq i32 %tmp0, 0
-	br i1 %tmp1, label %then0, label %else0
-then0:
-	%tmp2 = getelementptr inbounds %struct.Type, %struct.Type* %type, i32 0, i32 1
-	%tmp3 = load i8*, i8** %tmp2
-	%tmp7 = load i16, i16* %tmp3
-	%tmp8 = getelementptr inbounds %struct.SymbolTable, %struct.SymbolTable* %table, i32 0, i32 1
-	%tmp9 = getelementptr inbounds %struct.SymbolTable, %struct.SymbolTable* %table, i32 0, i32 1
-	%tmp10 = load %"struct.vector.Vec<%struct.string.String>"*, %"struct.vector.Vec<%struct.string.String>"** %tmp9
-	%tmp11 = load %struct.string.String*, %struct.string.String** %tmp10
-	%tmp12 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp11, i16 %tmp7
-	%tmp13 = load i8*, i8** %tmp12
-	%tmp14 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp12, i32 0, i32 1
-	%tmp15 = load i32, i32* %tmp14
-	%tmp16 = call i32 @find_primitive_type(i8* %tmp13, i32 %tmp15)
-	%tmp17 = icmp ne i32 %tmp16, -1
-	br i1 %tmp17, label %then1, label %endif1
-then1:
-	%tmp18 = getelementptr inbounds [15 x %struct.PrimitiveTypeInfo], [15 x %struct.PrimitiveTypeInfo]* @PRIMITIVE_TYPES_INFO, i32 0, i32 %tmp16
-	store i32 0, i32* %v0
-	%tmp19 = getelementptr inbounds %struct.CompilerType, %struct.CompilerType* %v0, i32 0, i32 1
-	store i8* %tmp18, i8** %tmp19
-	%tmp20 = load %struct.CompilerType, %struct.CompilerType* %v0
-	br label %func_exit
-; Variable x is out.
-endif1:
-	%tmp21 = load i16, i16* %tmp3
-	%tmp22 = call %struct.PathEx @path_to_path_ex_name(%struct.Path* %l_path, i16 %tmp21)
-	%tmp23 = call %struct.SymbolTableEntry* @get_symbol_from_table(%struct.SymbolTable* %table, %struct.PathEx %tmp22)
-	store %struct.SymbolTableEntry* %tmp23, %struct.SymbolTableEntry** %v1
-	%tmp24 = load %struct.SymbolTableEntry*, %struct.SymbolTableEntry** %v1
-	%tmp25 = icmp eq %struct.SymbolTableEntry* %tmp24, null
-	br i1 %tmp25, label %then2, label %endif2
-then2:
-	%tmp26 = load i16, i16* %tmp3
-	%tmp27 = call %struct.PathEx @path_to_path_ex_name(%struct.Path* %g_path, i16 %tmp26)
-	%tmp28 = call %struct.SymbolTableEntry* @get_symbol_from_table(%struct.SymbolTable* %table, %struct.PathEx %tmp27)
-	store %struct.SymbolTableEntry* %tmp28, %struct.SymbolTableEntry** %v1
-; Variable p is out.
-	br label %endif2
-endif2:
-	%tmp29 = load %struct.SymbolTableEntry*, %struct.SymbolTableEntry** %v1
-	%tmp30 = icmp eq %struct.SymbolTableEntry* %tmp29, null
-	br i1 %tmp30, label %then3, label %endif3
-then3:
-	%tmp31 = load %struct.PrimitiveTypeInfo*, %struct.PrimitiveTypeInfo** @VOID_TYPE
-	store i32 0, i32* %v2
-	%tmp32 = getelementptr inbounds %struct.CompilerType, %struct.CompilerType* %v2, i32 0, i32 1
-	store i8* %tmp31, i8** %tmp32
-	%tmp33 = load %struct.CompilerType, %struct.CompilerType* %v2
-	br label %func_exit
-; Variable x is out.
-endif3:
-	%tmp34 = load %struct.SymbolTableEntry*, %struct.SymbolTableEntry** %v1
-	%tmp35 = ptrtoint %struct.SymbolTableEntry* %tmp34 to i64
-	%tmp36 = load %struct.SymbolTableEntry*, %struct.SymbolTableEntry** %table
-	%tmp37 = ptrtoint %struct.SymbolTableEntry* %tmp36 to i64
-	%tmp38 = sub i64 %tmp35, %tmp37
-	%tmp39 = udiv i64 %tmp38, 40
-	%tmp40 = trunc i64 %tmp39 to i32
-	%tmp41 = zext i32 %tmp40 to i64
-	%tmp42 = inttoptr i64 %tmp41 to i8*
-	store i32 2, i32* %v3
-	%tmp43 = getelementptr inbounds %struct.CompilerType, %struct.CompilerType* %v3, i32 0, i32 1
-	store i8* %tmp42, i8** %tmp43
-	%tmp44 = load %struct.CompilerType, %struct.CompilerType* %v3
-	br label %func_exit
-; Variable x is out.
-; Variable p is out.
-else0:
-	%tmp45 = load i32, i32* %type
-	%tmp46 = icmp eq i32 %tmp45, 1
-	br i1 %tmp46, label %then4, label %else4
-then4:
-	%tmp47 = getelementptr inbounds %struct.Type, %struct.Type* %type, i32 0, i32 1
-	%tmp48 = load i8*, i8** %tmp47
-	%tmp49 = getelementptr inbounds %struct.PointerType, %struct.PointerType* %tmp48, i32 0, i32 1
-	%tmp50 = call %struct.CompilerType @get_compiler_type_internal(%struct.Type* %tmp49, %struct.Path* %l_path, %struct.Path* %g_path, %struct.SymbolTable* %table)
-	%tmp51 = call i8* @mem.malloc(i64 24)
-	%tmp52 = load i8, i8* %tmp48
-	store i8 %tmp52, i8* %tmp51
-	%tmp53 = getelementptr inbounds %struct.PointerCompilerType, %struct.PointerCompilerType* %tmp51, i32 0, i32 1
-	store %struct.CompilerType %tmp50, %struct.CompilerType* %tmp53
-	store i32 1, i32* %v4
-	%tmp54 = getelementptr inbounds %struct.CompilerType, %struct.CompilerType* %v4, i32 0, i32 1
-	store i8* %tmp51, i8** %tmp54
-	%tmp55 = load %struct.CompilerType, %struct.CompilerType* %v4
-	br label %func_exit
-; Variable x is out.
-; Variable inner is out.
-else4:
-	%tmp56 = load i32, i32* %type
-	%tmp57 = icmp eq i32 %tmp56, 3
-	br i1 %tmp57, label %then5, label %else5
-then5:
-	%tmp58 = getelementptr inbounds %struct.Type, %struct.Type* %type, i32 0, i32 1
-	%tmp59 = load i8*, i8** %tmp58
-	%tmp60 = getelementptr inbounds %struct.NamespaceLinkType, %struct.NamespaceLinkType* %tmp59, i32 0, i32 1
-	%tmp61 = call %struct.CompilerType @get_compiler_type_internal(%struct.Type* %tmp60, %struct.Path* %tmp59, %struct.Path* %g_path, %struct.SymbolTable* %table)
-	br label %func_exit
-else5:
-	%tmp62 = load i32, i32* %type
-	%tmp63 = icmp eq i32 %tmp62, 4
-	br i1 %tmp63, label %then6, label %endif6
-then6:
-	%tmp64 = getelementptr inbounds %struct.Type, %struct.Type* %type, i32 0, i32 1
-	%tmp65 = load i8*, i8** %tmp64
-	%tmp69 = load i16, i16* %tmp65
-	%tmp70 = getelementptr inbounds %struct.SymbolTable, %struct.SymbolTable* %table, i32 0, i32 1
-	%tmp71 = getelementptr inbounds %struct.SymbolTable, %struct.SymbolTable* %table, i32 0, i32 1
-	%tmp72 = load %"struct.vector.Vec<%struct.string.String>"*, %"struct.vector.Vec<%struct.string.String>"** %tmp71
-	%tmp73 = load %struct.string.String*, %struct.string.String** %tmp72
-	%tmp74 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp73, i16 %tmp69
-	%tmp75 = load i8*, i8** %tmp74
-	%tmp76 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp74, i32 0, i32 1
-	%tmp77 = load i32, i32* %tmp76
-	%tmp78 = call i32 @find_primitive_type(i8* %tmp75, i32 %tmp77)
-	%tmp79 = icmp ne i32 %tmp78, -1
-	br i1 %tmp79, label %then7, label %endif7
-then7:
-	call void @process.throw(i8* @.str.286)
-	br label %endif7
-endif7:
-	%tmp80 = load i16, i16* %tmp65
-	%tmp81 = call %struct.PathEx @path_to_path_ex_name(%struct.Path* %l_path, i16 %tmp80)
-	%tmp82 = call %struct.SymbolTableEntry* @get_symbol_from_table(%struct.SymbolTable* %table, %struct.PathEx %tmp81)
-	store %struct.SymbolTableEntry* %tmp82, %struct.SymbolTableEntry** %v5
-	%tmp83 = load %struct.SymbolTableEntry*, %struct.SymbolTableEntry** %v5
-	%tmp84 = icmp eq %struct.SymbolTableEntry* %tmp83, null
-	br i1 %tmp84, label %then8, label %endif8
-then8:
-	%tmp85 = load i16, i16* %tmp65
-	%tmp86 = call %struct.PathEx @path_to_path_ex_name(%struct.Path* %g_path, i16 %tmp85)
-	%tmp87 = call %struct.SymbolTableEntry* @get_symbol_from_table(%struct.SymbolTable* %table, %struct.PathEx %tmp86)
-	store %struct.SymbolTableEntry* %tmp87, %struct.SymbolTableEntry** %v5
-; Variable p is out.
-	br label %endif8
-endif8:
-	%tmp88 = load %struct.SymbolTableEntry*, %struct.SymbolTableEntry** %v5
-	%tmp89 = icmp eq %struct.SymbolTableEntry* %tmp88, null
-	br i1 %tmp89, label %then9, label %endif9
-then9:
-	call void @process.throw(i8* @.str.287)
-	br label %endif9
-endif9:
-	%tmp90 = load %struct.SymbolTableEntry*, %struct.SymbolTableEntry** %v5
-	%tmp91 = ptrtoint %struct.SymbolTableEntry* %tmp90 to i64
-	%tmp92 = load %struct.SymbolTableEntry*, %struct.SymbolTableEntry** %table
-	%tmp93 = ptrtoint %struct.SymbolTableEntry* %tmp92 to i64
-	%tmp94 = sub i64 %tmp91, %tmp93
-	%tmp95 = udiv i64 %tmp94, 40
-	%tmp96 = trunc i64 %tmp95 to i32
-	%tmp97 = call %"struct.vector.Vec<%struct.CompilerType>" @"vector.new<%struct.CompilerType>"()
-	store %"struct.vector.Vec<%struct.CompilerType>" %tmp97, %"struct.vector.Vec<%struct.CompilerType>"* %v6
-	%tmp98 = getelementptr inbounds %struct.GenericType, %struct.GenericType* %tmp65, i32 0, i32 1
-	%tmp99 = getelementptr inbounds %"struct.vector.Vec<%struct.Type>", %"struct.vector.Vec<%struct.Type>"* %tmp98, i32 0, i32 1
-	%tmp100 = load i32, i32* %tmp99
-	store i32 0, i32* %v7
-	br label %loop_cond10
-loop_cond10:
-	%tmp101 = load i32, i32* %v7
-	%tmp102 = getelementptr inbounds %struct.GenericType, %struct.GenericType* %tmp65, i32 0, i32 1
-	%tmp103 = getelementptr inbounds %"struct.vector.Vec<%struct.Type>", %"struct.vector.Vec<%struct.Type>"* %tmp102, i32 0, i32 1
-	%tmp104 = load i32, i32* %tmp103
-	%tmp105 = icmp uge i32 %tmp101, %tmp104
-	br i1 %tmp105, label %then11, label %endif11
-then11:
-	br label %loop_body10_exit
-endif11:
-	%tmp107 = load i32, i32* %v7
-	%tmp108 = getelementptr inbounds %struct.GenericType, %struct.GenericType* %tmp65, i32 0, i32 1
-	%tmp109 = load %struct.Type*, %struct.Type** %tmp108
-	%tmp110 = getelementptr inbounds %struct.Type, %struct.Type* %tmp109, i32 %tmp107
-	%tmp111 = call %struct.CompilerType @get_compiler_type(%struct.Type* %tmp110, %struct.Path* %g_path, %struct.SymbolTable* %table)
-	call void @"vector.push<%struct.CompilerType>"(%"struct.vector.Vec<%struct.CompilerType>"* %v6, %struct.CompilerType %tmp111)
-	%tmp112 = load i32, i32* %v7
-	%tmp113 = add i32 %tmp112, 1
-	store i32 %tmp113, i32* %v7
-	br label %loop_cond10
-loop_body10_exit:
-	%tmp114 = load %struct.SymbolTableEntry*, %struct.SymbolTableEntry** %v5
-	%tmp115 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp114, i32 0, i32 2
-	%tmp116 = load i8*, i8** %tmp115
-	store i32 65535, i32* %v8
-	%tmp117 = getelementptr inbounds %struct.GenericStructSymbolTableEntry, %struct.GenericStructSymbolTableEntry* %tmp116, i32 0, i32 2
-	%tmp118 = getelementptr inbounds %"struct.vector.Vec<%struct.vector.Vec<%struct.CompilerType>>", %"struct.vector.Vec<%struct.vector.Vec<%struct.CompilerType>>"* %tmp117, i32 0, i32 1
-	%tmp119 = load i32, i32* %tmp118
-	store i32 0, i32* %v9
-	br label %loop_cond12
-loop_cond12:
-	%tmp120 = load i32, i32* %v9
-	%tmp121 = getelementptr inbounds %struct.GenericStructSymbolTableEntry, %struct.GenericStructSymbolTableEntry* %tmp116, i32 0, i32 2
-	%tmp122 = getelementptr inbounds %"struct.vector.Vec<%struct.vector.Vec<%struct.CompilerType>>", %"struct.vector.Vec<%struct.vector.Vec<%struct.CompilerType>>"* %tmp121, i32 0, i32 1
-	%tmp123 = load i32, i32* %tmp122
-	%tmp124 = icmp uge i32 %tmp120, %tmp123
-	br i1 %tmp124, label %then13, label %endif13
-then13:
-	br label %loop_body12_exit
-endif13:
-	%tmp125 = load i32, i32* %v9
-	%tmp126 = add i32 %tmp125, 1
-	store i32 %tmp126, i32* %v9
-	br label %loop_cond12
-loop_body12_exit:
-	%tmp127 = load i32, i32* %v8
-	%tmp128 = icmp eq i32 %tmp127, 65535
-	br i1 %tmp128, label %then14, label %else14
-then14:
-	%tmp129 = getelementptr inbounds %struct.GenericStructSymbolTableEntry, %struct.GenericStructSymbolTableEntry* %tmp116, i32 0, i32 2
-	%tmp130 = getelementptr inbounds %"struct.vector.Vec<%struct.vector.Vec<%struct.CompilerType>>", %"struct.vector.Vec<%struct.vector.Vec<%struct.CompilerType>>"* %tmp129, i32 0, i32 1
-	%tmp131 = load i32, i32* %tmp130
-	store i32 %tmp131, i32* %v8
-	%tmp132 = load i32, i32* %v8
-	%tmp133 = zext i32 %tmp132 to i64
-	call void @console.println_u64(i64 %tmp133)
-	%tmp134 = getelementptr inbounds %struct.GenericStructSymbolTableEntry, %struct.GenericStructSymbolTableEntry* %tmp116, i32 0, i32 2
-	%tmp135 = load %"struct.vector.Vec<%struct.CompilerType>", %"struct.vector.Vec<%struct.CompilerType>"* %v6
-	call void @"vector.push<%struct.vector.Vec<%struct.CompilerType>>"(%"struct.vector.Vec<%struct.vector.Vec<%struct.CompilerType>>"* %tmp134, %"struct.vector.Vec<%struct.CompilerType>" %tmp135)
-	br label %endif14
-else14:
-	call void @"vector.free<%struct.CompilerType>"(%"struct.vector.Vec<%struct.CompilerType>"* %v6)
-	br label %endif14
-endif14:
-	%tmp136 = call i8* @mem.malloc(i64 8)
-	store i32 %tmp96, i32* %tmp136
-	%tmp137 = getelementptr inbounds %struct.GenericImplementationCompilerType, %struct.GenericImplementationCompilerType* %tmp136, i32 0, i32 1
-	%tmp138 = load i32, i32* %v8
-	store i32 %tmp138, i32* %tmp137
-	store i32 4, i32* %v10
-	%tmp139 = getelementptr inbounds %struct.CompilerType, %struct.CompilerType* %v10, i32 0, i32 1
-	store i8* %tmp136, i8** %tmp139
-	%tmp140 = load %struct.CompilerType, %struct.CompilerType* %v10
-	br label %func_exit
-; Variable x is out.
-; Variable c is out.
-; Variable p is out.
-endif6:
-	br label %endif0
-endif0:
-	%tmp141 = load %struct.PrimitiveTypeInfo*, %struct.PrimitiveTypeInfo** @VOID_TYPE
-	store i32 0, i32* %v11
-	%tmp142 = getelementptr inbounds %struct.CompilerType, %struct.CompilerType* %v11, i32 0, i32 1
-	store i8* %tmp141, i8** %tmp142
-	%tmp143 = load %struct.CompilerType, %struct.CompilerType* %v11
-	br label %func_exit
-func_exit:
-; Variable x is out.
-	%tmp144 = phi %struct.CompilerType [%tmp20, %then1], [%tmp33, %then3], [%tmp44, %endif3], [%tmp55, %then4], [%tmp61, %then5], [%tmp140, %endif14], [%tmp143, %endif0]
-	ret %struct.CompilerType %tmp144
-}
-define i1 @get_compiler_type_generic_internal(%struct.Type* %type, %struct.Path* %l_path, %struct.Path* %g_path, %struct.SymbolTable* %table, %"struct.vector.Vec<ui16>"* %generics, %struct.CompilerType* %output){
-	%v0 = alloca %struct.CompilerType
-	%v1 = alloca i32
-	%v2 = alloca %struct.CompilerType
-	%v3 = alloca %struct.PathEx
-	%v4 = alloca %struct.CompilerType
-	%v5 = alloca %struct.PathEx
-	%v6 = alloca %struct.CompilerType
-	%v7 = alloca %struct.CompilerType
-	%v8 = alloca %struct.CompilerType
-	%v9 = alloca %struct.CompilerType
-	%v10 = alloca %struct.CompilerType
-	%tmp0 = load i32, i32* %type
-	%tmp1 = icmp eq i32 %tmp0, 0
-	br i1 %tmp1, label %then0, label %else0
-then0:
-	%tmp2 = getelementptr inbounds %struct.Type, %struct.Type* %type, i32 0, i32 1
-	%tmp3 = load i8*, i8** %tmp2
-	%tmp7 = load i16, i16* %tmp3
-	%tmp8 = getelementptr inbounds %struct.SymbolTable, %struct.SymbolTable* %table, i32 0, i32 1
-	%tmp9 = getelementptr inbounds %struct.SymbolTable, %struct.SymbolTable* %table, i32 0, i32 1
-	%tmp10 = load %"struct.vector.Vec<%struct.string.String>"*, %"struct.vector.Vec<%struct.string.String>"** %tmp9
-	%tmp11 = load %struct.string.String*, %struct.string.String** %tmp10
-	%tmp12 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp11, i16 %tmp7
-	%tmp13 = load i8*, i8** %tmp12
-	%tmp14 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp12, i32 0, i32 1
-	%tmp15 = load i32, i32* %tmp14
-	%tmp16 = call i32 @find_primitive_type(i8* %tmp13, i32 %tmp15)
-	%tmp17 = icmp ne i32 %tmp16, -1
-	br i1 %tmp17, label %then1, label %endif1
-then1:
-	%tmp18 = getelementptr inbounds [15 x %struct.PrimitiveTypeInfo], [15 x %struct.PrimitiveTypeInfo]* @PRIMITIVE_TYPES_INFO, i32 0, i32 %tmp16
-	store i32 0, i32* %v0
-	%tmp19 = getelementptr inbounds %struct.CompilerType, %struct.CompilerType* %v0, i32 0, i32 1
-	store i8* %tmp18, i8** %tmp19
-	%tmp20 = load %struct.CompilerType, %struct.CompilerType* %v0
-	store %struct.CompilerType %tmp20, %struct.CompilerType* %output
-	br label %func_exit
-; Variable x is out.
-endif1:
-	%tmp21 = getelementptr inbounds %"struct.vector.Vec<ui16>", %"struct.vector.Vec<ui16>"* %generics, i32 0, i32 1
-	%tmp22 = load i32, i32* %tmp21
-	store i32 0, i32* %v1
-	br label %loop_cond2
-loop_cond2:
-	%tmp23 = load i32, i32* %v1
-	%tmp24 = getelementptr inbounds %"struct.vector.Vec<ui16>", %"struct.vector.Vec<ui16>"* %generics, i32 0, i32 1
-	%tmp25 = load i32, i32* %tmp24
-	%tmp26 = icmp uge i32 %tmp23, %tmp25
-	br i1 %tmp26, label %then3, label %endif3
-then3:
-	br label %loop_body2_exit
-endif3:
-	%tmp27 = load i32, i32* %v1
-	%tmp28 = load i16*, i16** %generics
-	%tmp29 = getelementptr inbounds i16, i16* %tmp28, i32 %tmp27
-	%tmp30 = load i16, i16* %tmp29
-	%tmp31 = load i16, i16* %tmp3
-	%tmp32 = icmp eq i16 %tmp30, %tmp31
-	br i1 %tmp32, label %then4, label %endif4
-then4:
-	%tmp33 = load i16, i16* %tmp3
-	%tmp34 = zext i16 %tmp33 to i64
-	%tmp35 = inttoptr i64 %tmp34 to i8*
-	store i32 3, i32* %v2
-	%tmp36 = getelementptr inbounds %struct.CompilerType, %struct.CompilerType* %v2, i32 0, i32 1
-	store i8* %tmp35, i8** %tmp36
-	%tmp37 = load %struct.CompilerType, %struct.CompilerType* %v2
-	store %struct.CompilerType %tmp37, %struct.CompilerType* %output
-	br label %func_exit
-; Variable x is out.
-endif4:
-	%tmp38 = load i32, i32* %v1
-	%tmp39 = add i32 %tmp38, 1
-	store i32 %tmp39, i32* %v1
-	br label %loop_cond2
-loop_body2_exit:
-	%tmp40 = load i16, i16* %tmp3
-	%tmp41 = call %struct.PathEx @path_to_path_ex_name(%struct.Path* %l_path, i16 %tmp40)
-	store %struct.PathEx %tmp41, %struct.PathEx* %v3
-	%tmp42 = load %struct.PathEx, %struct.PathEx* %v3
-	%tmp43 = call %struct.SymbolTableEntry* @get_symbol_from_table(%struct.SymbolTable* %table, %struct.PathEx %tmp42)
-	%tmp44 = icmp ne %struct.SymbolTableEntry* %tmp43, null
-	br i1 %tmp44, label %then5, label %endif5
-then5:
-	%tmp45 = ptrtoint %struct.SymbolTableEntry* %tmp43 to i64
-	%tmp46 = load %struct.SymbolTableEntry*, %struct.SymbolTableEntry** %table
-	%tmp47 = ptrtoint %struct.SymbolTableEntry* %tmp46 to i64
-	%tmp48 = sub i64 %tmp45, %tmp47
-	%tmp49 = udiv i64 %tmp48, 40
-	%tmp50 = trunc i64 %tmp49 to i32
-	%tmp51 = zext i32 %tmp50 to i64
-	%tmp52 = inttoptr i64 %tmp51 to i8*
-	store i32 2, i32* %v4
-	%tmp53 = getelementptr inbounds %struct.CompilerType, %struct.CompilerType* %v4, i32 0, i32 1
-	store i8* %tmp52, i8** %tmp53
-	%tmp54 = load %struct.CompilerType, %struct.CompilerType* %v4
-	store %struct.CompilerType %tmp54, %struct.CompilerType* %output
-	br label %func_exit
-; Variable x is out.
-endif5:
-	%tmp55 = load i16, i16* %tmp3
-	%tmp56 = call %struct.PathEx @path_to_path_ex_name(%struct.Path* %g_path, i16 %tmp55)
-; Variable p is out.
-	store %struct.PathEx %tmp56, %struct.PathEx* %v5
-	%tmp57 = load %struct.PathEx, %struct.PathEx* %v5
-	%tmp58 = call %struct.SymbolTableEntry* @get_symbol_from_table(%struct.SymbolTable* %table, %struct.PathEx %tmp57)
-	%tmp59 = icmp ne %struct.SymbolTableEntry* %tmp58, null
-	br i1 %tmp59, label %then6, label %endif6
-then6:
-	%tmp60 = ptrtoint %struct.SymbolTableEntry* %tmp58 to i64
-	%tmp61 = load %struct.SymbolTableEntry*, %struct.SymbolTableEntry** %table
-	%tmp62 = ptrtoint %struct.SymbolTableEntry* %tmp61 to i64
-	%tmp63 = sub i64 %tmp60, %tmp62
-	%tmp64 = udiv i64 %tmp63, 40
-	%tmp65 = trunc i64 %tmp64 to i32
-	%tmp66 = zext i32 %tmp65 to i64
-	%tmp67 = inttoptr i64 %tmp66 to i8*
-	store i32 2, i32* %v6
-	%tmp68 = getelementptr inbounds %struct.CompilerType, %struct.CompilerType* %v6, i32 0, i32 1
-	store i8* %tmp67, i8** %tmp68
-	%tmp69 = load %struct.CompilerType, %struct.CompilerType* %v6
-	store %struct.CompilerType %tmp69, %struct.CompilerType* %output
-	br label %func_exit
-; Variable x is out.
-endif6:
-; Variable p is out.
-	br label %endif0
-else0:
-	%tmp70 = load i32, i32* %type
-	%tmp71 = icmp eq i32 %tmp70, 1
-	br i1 %tmp71, label %then7, label %else7
-then7:
-	%tmp72 = getelementptr inbounds %struct.Type, %struct.Type* %type, i32 0, i32 1
-	%tmp73 = load i8*, i8** %tmp72
-	%tmp74 = getelementptr inbounds %struct.PointerType, %struct.PointerType* %tmp73, i32 0, i32 1
-	%tmp75 = call i1 @get_compiler_type_generic_internal(%struct.Type* %tmp74, %struct.Path* %l_path, %struct.Path* %g_path, %struct.SymbolTable* %table, %"struct.vector.Vec<ui16>"* %generics, %struct.CompilerType* %v7)
-	%tmp76 = call i8* @mem.malloc(i64 24)
-	%tmp77 = load i8, i8* %tmp73
-	store i8 %tmp77, i8* %tmp76
-	%tmp78 = getelementptr inbounds %struct.PointerCompilerType, %struct.PointerCompilerType* %tmp76, i32 0, i32 1
-	%tmp79 = load %struct.CompilerType, %struct.CompilerType* %v7
-	store %struct.CompilerType %tmp79, %struct.CompilerType* %tmp78
-	store i32 1, i32* %v8
-	%tmp80 = getelementptr inbounds %struct.CompilerType, %struct.CompilerType* %v8, i32 0, i32 1
-	store i8* %tmp76, i8** %tmp80
-	%tmp81 = load %struct.CompilerType, %struct.CompilerType* %v8
-	store %struct.CompilerType %tmp81, %struct.CompilerType* %output
-	br label %func_exit
-; Variable x is out.
-; Variable inner is out.
-else7:
-	%tmp82 = load i32, i32* %type
-	%tmp83 = icmp eq i32 %tmp82, 3
-	br i1 %tmp83, label %then8, label %endif8
-then8:
-	%tmp84 = getelementptr inbounds %struct.Type, %struct.Type* %type, i32 0, i32 1
-	%tmp85 = load i8*, i8** %tmp84
-	%tmp86 = getelementptr inbounds %struct.NamespaceLinkType, %struct.NamespaceLinkType* %tmp85, i32 0, i32 1
-	%tmp87 = call i1 @get_compiler_type_generic_internal(%struct.Type* %tmp86, %struct.Path* %tmp85, %struct.Path* %g_path, %struct.SymbolTable* %table, %"struct.vector.Vec<ui16>"* %generics, %struct.CompilerType* %v9)
-	%tmp88 = load %struct.CompilerType, %struct.CompilerType* %v9
-	store %struct.CompilerType %tmp88, %struct.CompilerType* %output
-	br label %func_exit
-; Variable inner is out.
-endif8:
-	br label %endif0
-endif0:
-	%tmp89 = load %struct.PrimitiveTypeInfo*, %struct.PrimitiveTypeInfo** @DEFAULT_INTEGER_TYPE
-	store i32 0, i32* %v10
-	%tmp90 = getelementptr inbounds %struct.CompilerType, %struct.CompilerType* %v10, i32 0, i32 1
-	store i8* %tmp89, i8** %tmp90
-	%tmp91 = load %struct.CompilerType, %struct.CompilerType* %v10
-	store %struct.CompilerType %tmp91, %struct.CompilerType* %output
-	br label %func_exit
-func_exit:
-; Variable x is out.
-	%tmp92 = phi i1 [false, %then1], [true, %then4], [false, %then5], [false, %then6], [%tmp75, %then7], [%tmp87, %then8], [false, %endif0]
-	ret i1 %tmp92
-}
-define i1 @get_compiler_type_generic(%struct.Type* %type, %struct.Path* %g_path, %struct.SymbolTable* %table, %"struct.vector.Vec<ui16>"* %generics, %struct.CompilerType* %output){
-	%v0 = alloca %struct.Path
-	store i8 0, i8* %v0
-	%tmp0 = call i1 @get_compiler_type_generic_internal(%struct.Type* %type, %struct.Path* %v0, %struct.Path* %g_path, %struct.SymbolTable* %table, %"struct.vector.Vec<ui16>"* %generics, %struct.CompilerType* %output)
-; Variable l_path is out.
-	ret i1 %tmp0
-}
-define %struct.CompilerType @get_compiler_type(%struct.Type* %type, %struct.Path* %g_path, %struct.SymbolTable* %table){
-	%v0 = alloca %struct.Path
-	store i8 0, i8* %v0
-	%tmp0 = call %struct.CompilerType @get_compiler_type_internal(%struct.Type* %type, %struct.Path* %v0, %struct.Path* %g_path, %struct.SymbolTable* %table)
-; Variable l_path is out.
-	ret %struct.CompilerType %tmp0
-}
 define i8 @get_binary_op(i8 %token){
 	%tmp0 = icmp eq i8 %token, 16
 	br i1 %tmp0, label %then0, label %endif0
@@ -11360,158 +13203,16 @@ endif17:
 then18:
 	br label %func_exit
 endif18:
-	call void @process.throw(i8* @.str.288)
+	call void @process.throw(i8* @.str.328)
 	br label %func_exit
 func_exit:
 	%tmp19 = phi i8 [0, %then0], [1, %then1], [2, %then2], [3, %then3], [4, %then4], [5, %then5], [6, %then6], [7, %then7], [8, %then8], [9, %then9], [10, %then10], [11, %then11], [12, %then12], [13, %then13], [14, %then14], [15, %then15], [16, %then16], [17, %then17], [18, %then18], [0, %endif18]
 	ret i8 %tmp19
 }
 define void @free_type(%struct.Type %t){
-	call void @process.throw(i8* @.str.289)
+	call void @process.throw(i8* @.str.329)
 ; Variable t is out.
 	ret void
-}
-define %struct.Variable* @find_variable(i32 %name, %struct.Scope* %scope){
-	%v0 = alloca i32
-	%tmp0 = getelementptr inbounds %"struct.vector.Vec<%struct.Variable>", %"struct.vector.Vec<%struct.Variable>"* %scope, i32 0, i32 1
-	%tmp1 = load i32, i32* %tmp0
-	%tmp2 = getelementptr inbounds %"struct.vector.Vec<%struct.Variable>", %"struct.vector.Vec<%struct.Variable>"* %scope, i32 0, i32 1
-	%tmp3 = load i32, i32* %tmp2
-	%tmp4 = sub i32 %tmp3, 1
-	store i32 %tmp4, i32* %v0
-	br label %loop_start0
-loop_start0:
-	%tmp5 = load i32, i32* %v0
-	%tmp6 = icmp ugt i32 %tmp5, 0
-	br i1 %tmp6, label %endif1, label %else1
-else1:
-	br label %loop_body0_exit
-endif1:
-	%tmp7 = load i32, i32* %v0
-	%tmp8 = sub i32 %tmp7, 1
-	store i32 %tmp8, i32* %v0
-	%tmp9 = load i32, i32* %v0
-	%tmp10 = load %struct.Variable*, %struct.Variable** %scope
-	%tmp11 = getelementptr inbounds %struct.Variable, %struct.Variable* %tmp10, i32 %tmp9
-	br label %loop_start0
-loop_body0_exit:
-	ret %struct.Variable* null
-}
-define i32 @find_primitive_type(i8* %name, i32 %len){
-	%tmp0 = icmp eq i32 %len, 2
-	br i1 %tmp0, label %then0, label %endif0
-then0:
-	%tmp1 = call i32 @mem.compare(i8* %name, i8* @.str.290, i64 2)
-	%tmp2 = icmp eq i32 %tmp1, 0
-	br i1 %tmp2, label %then1, label %endif1
-then1:
-	br label %func_exit
-endif1:
-	%tmp3 = call i32 @mem.compare(i8* %name, i8* @.str.291, i64 2)
-	%tmp4 = icmp eq i32 %tmp3, 0
-	br i1 %tmp4, label %then2, label %endif2
-then2:
-	br label %func_exit
-endif2:
-	br label %endif0
-endif0:
-	%tmp5 = icmp eq i32 %len, 3
-	br i1 %tmp5, label %then3, label %endif3
-then3:
-	%tmp6 = call i32 @mem.compare(i8* %name, i8* @.str.292, i64 3)
-	%tmp7 = icmp eq i32 %tmp6, 0
-	br i1 %tmp7, label %then4, label %endif4
-then4:
-	br label %func_exit
-endif4:
-	%tmp8 = call i32 @mem.compare(i8* %name, i8* @.str.293, i64 3)
-	%tmp9 = icmp eq i32 %tmp8, 0
-	br i1 %tmp9, label %then5, label %endif5
-then5:
-	br label %func_exit
-endif5:
-	%tmp10 = call i32 @mem.compare(i8* %name, i8* @.str.294, i64 3)
-	%tmp11 = icmp eq i32 %tmp10, 0
-	br i1 %tmp11, label %then6, label %endif6
-then6:
-	br label %func_exit
-endif6:
-	%tmp12 = call i32 @mem.compare(i8* %name, i8* @.str.295, i64 3)
-	%tmp13 = icmp eq i32 %tmp12, 0
-	br i1 %tmp13, label %then7, label %endif7
-then7:
-	br label %func_exit
-endif7:
-	%tmp14 = call i32 @mem.compare(i8* %name, i8* @.str.295, i64 3)
-	%tmp15 = icmp eq i32 %tmp14, 0
-	br i1 %tmp15, label %then8, label %endif8
-then8:
-	br label %func_exit
-endif8:
-	%tmp16 = call i32 @mem.compare(i8* %name, i8* @.str.296, i64 3)
-	%tmp17 = icmp eq i32 %tmp16, 0
-	br i1 %tmp17, label %then9, label %endif9
-then9:
-	br label %func_exit
-endif9:
-	%tmp18 = call i32 @mem.compare(i8* %name, i8* @.str.297, i64 3)
-	%tmp19 = icmp eq i32 %tmp18, 0
-	br i1 %tmp19, label %then10, label %endif10
-then10:
-	br label %func_exit
-endif10:
-	%tmp20 = call i32 @mem.compare(i8* %name, i8* @.str.298, i64 3)
-	%tmp21 = icmp eq i32 %tmp20, 0
-	br i1 %tmp21, label %then11, label %endif11
-then11:
-	br label %func_exit
-endif11:
-	%tmp22 = call i32 @mem.compare(i8* %name, i8* @.str.299, i64 3)
-	%tmp23 = icmp eq i32 %tmp22, 0
-	br i1 %tmp23, label %then12, label %endif12
-then12:
-	br label %func_exit
-endif12:
-	br label %endif3
-endif3:
-	%tmp24 = icmp eq i32 %len, 4
-	br i1 %tmp24, label %then13, label %endif13
-then13:
-	%tmp25 = call i32 @mem.compare(i8* %name, i8* @.str.300, i64 4)
-	%tmp26 = icmp eq i32 %tmp25, 0
-	br i1 %tmp26, label %then14, label %endif14
-then14:
-	br label %func_exit
-endif14:
-	%tmp27 = call i32 @mem.compare(i8* %name, i8* @.str.301, i64 4)
-	%tmp28 = icmp eq i32 %tmp27, 0
-	br i1 %tmp28, label %then15, label %endif15
-then15:
-	br label %func_exit
-endif15:
-	br label %endif13
-endif13:
-	%tmp29 = icmp eq i32 %len, 5
-	br i1 %tmp29, label %then16, label %endif16
-then16:
-	%tmp30 = call i32 @mem.compare(i8* %name, i8* @.str.302, i64 5)
-	%tmp31 = icmp eq i32 %tmp30, 0
-	br i1 %tmp31, label %then17, label %endif17
-then17:
-	br label %func_exit
-endif17:
-	%tmp32 = call i32 @mem.compare(i8* %name, i8* @.str.303, i64 5)
-	%tmp33 = icmp eq i32 %tmp32, 0
-	br i1 %tmp33, label %then18, label %endif18
-then18:
-	br label %func_exit
-endif18:
-	br label %endif16
-endif16:
-	br label %func_exit
-func_exit:
-	%tmp34 = phi i32 [2, %then1], [7, %then2], [3, %then4], [4, %then5], [5, %then6], [8, %then7], [9, %then8], [10, %then9], [12, %then10], [13, %then11], [14, %then12], [0, %then14], [1, %then15], [11, %then17], [6, %then18], [-1, %endif16]
-	ret i32 %tmp34
 }
 define void @expect(%struct.TokenData* %tokens, i32* %index, i32 %len, i8 %expected, i8* %error_msg){
 entry:
@@ -11549,9 +13250,9 @@ endif3:
 	%tmp13 = getelementptr inbounds %struct.TokenData, %struct.TokenData* %tokens, i32 %tmp12
 	%tmp14 = call %struct.string.String @token_type_to_string(%struct.TokenData* %tmp13, %"struct.vector.Vec<%struct.string.String>"* null)
 	store %struct.string.String %tmp14, %struct.string.String* %v1
-	call void @console.write(i8* @.str.202, i32 4)
+	call void @console.write(i8* @.str.244, i32 4)
 	call void @console.write_string(%struct.string.String* %v1)
-	call void @console.write(i8* @.str.203, i32 5)
+	call void @console.write(i8* @.str.245, i32 5)
 	call void @string.free(%struct.string.String* %v1)
 	%tmp15 = load i32, i32* %v0
 	%tmp16 = add i32 %tmp15, 1
@@ -11563,9 +13264,9 @@ loop_body2_exit:
 	%tmp18 = getelementptr inbounds %struct.TokenData, %struct.TokenData* %tokens, i32 %tmp17
 	%tmp19 = call %struct.string.String @token_type_to_string(%struct.TokenData* %tmp18, %"struct.vector.Vec<%struct.string.String>"* null)
 	store %struct.string.String %tmp19, %struct.string.String* %v2
-	call void @console.write(i8* @.str.304, i32 4)
+	call void @console.write(i8* @.str.330, i32 4)
 	call void @console.write_string(%struct.string.String* %v2)
-	call void @console.write(i8* @.str.305, i32 5)
+	call void @console.write(i8* @.str.331, i32 5)
 	call void @string.free(%struct.string.String* %v2)
 	store i32 0, i32* %v3
 	br label %loop_cond4
@@ -11583,9 +13284,9 @@ endif5:
 	%tmp26 = getelementptr inbounds %struct.TokenData, %struct.TokenData* %tokens, i32 %tmp25
 	%tmp27 = call %struct.string.String @token_type_to_string(%struct.TokenData* %tmp26, %"struct.vector.Vec<%struct.string.String>"* null)
 	store %struct.string.String %tmp27, %struct.string.String* %v4
-	call void @console.write(i8* @.str.202, i32 4)
+	call void @console.write(i8* @.str.244, i32 4)
 	call void @console.write_string(%struct.string.String* %v4)
-	call void @console.write(i8* @.str.203, i32 5)
+	call void @console.write(i8* @.str.245, i32 5)
 	call void @string.free(%struct.string.String* %v4)
 	%tmp28 = load i32, i32* %v3
 	%tmp29 = add i32 %tmp28, 1
@@ -11600,53 +13301,6 @@ endif1:
 	%tmp30 = load i32, i32* %index
 	%tmp31 = add i32 %tmp30, 1
 	store i32 %tmp31, i32* %index
-	ret void
-}
-define void @exit_scope(%struct.Scope* %scope){
-	%v0 = alloca i32
-	%v1 = alloca i32
-	%v2 = alloca i32
-	store i32 0, i32* %v0
-	%tmp0 = getelementptr inbounds %"struct.vector.Vec<%struct.Variable>", %"struct.vector.Vec<%struct.Variable>"* %scope, i32 0, i32 1
-	%tmp1 = load i32, i32* %tmp0
-	store i32 %tmp1, i32* %v1
-	%tmp2 = getelementptr inbounds %struct.Scope, %struct.Scope* %scope, i32 0, i32 1
-	%tmp3 = getelementptr inbounds %"struct.vector.Vec<ui32>", %"struct.vector.Vec<ui32>"* %tmp2, i32 0, i32 1
-	%tmp4 = load i32, i32* %tmp3
-	%tmp5 = icmp ne i32 %tmp4, 0
-	br i1 %tmp5, label %then0, label %endif0
-then0:
-	%tmp6 = getelementptr inbounds %struct.Scope, %struct.Scope* %scope, i32 0, i32 1
-	%tmp7 = call i32 @"vector.pop<ui32>"(%"struct.vector.Vec<ui32>"* %tmp6)
-	store i32 %tmp7, i32* %v0
-	br label %endif0
-endif0:
-	%tmp8 = load i32, i32* %v1
-	%tmp9 = sub i32 %tmp8, 1
-	store i32 %tmp9, i32* %v2
-	br label %loop_start1
-loop_start1:
-	%tmp10 = load i32, i32* %v2
-	%tmp11 = load i32, i32* %v0
-	%tmp12 = icmp ugt i32 %tmp10, %tmp11
-	br i1 %tmp12, label %endif2, label %else2
-else2:
-	br label %loop_body1_exit
-endif2:
-	%tmp13 = load i32, i32* %v2
-	%tmp14 = sub i32 %tmp13, 1
-	store i32 %tmp14, i32* %v2
-	%tmp15 = call %struct.Variable @"vector.pop<%struct.Variable>"(%"struct.vector.Vec<%struct.Variable>"* %scope)
-	br label %loop_start1
-loop_body1_exit:
-; Variable var is out.
-	ret void
-}
-define void @enter_scope(%struct.Scope* %scope){
-	%tmp0 = getelementptr inbounds %struct.Scope, %struct.Scope* %scope, i32 0, i32 1
-	%tmp1 = getelementptr inbounds %"struct.vector.Vec<%struct.Variable>", %"struct.vector.Vec<%struct.Variable>"* %scope, i32 0, i32 1
-	%tmp2 = load i32, i32* %tmp1
-	call void @"vector.push<ui32>"(%"struct.vector.Vec<ui32>"* %tmp0, i32 %tmp2)
 	ret void
 }
 define void @debug_dump_type(%struct.Type* %expr, %"struct.vector.Vec<%struct.string.String>"* %symbol_vector, %struct.string.String* %stdout){
@@ -11704,7 +13358,7 @@ else1:
 then4:
 	%tmp25 = getelementptr inbounds %struct.Type, %struct.Type* %expr, i32 0, i32 1
 	%tmp26 = load i8*, i8** %tmp25
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.306, i32 3)
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.332, i32 3)
 	%tmp27 = getelementptr inbounds %"struct.vector.Vec<%struct.Type>", %"struct.vector.Vec<%struct.Type>"* %tmp26, i32 0, i32 1
 	%tmp28 = load i32, i32* %tmp27
 	store i32 0, i32* %v1
@@ -11729,7 +13383,7 @@ endif6:
 	%tmp40 = icmp ne i32 %tmp36, %tmp39
 	br i1 %tmp40, label %then7, label %endif7
 then7:
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.89, i32 2)
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.115, i32 2)
 	br label %endif7
 endif7:
 	%tmp41 = load i32, i32* %v1
@@ -11737,7 +13391,7 @@ endif7:
 	store i32 %tmp42, i32* %v1
 	br label %loop_cond5
 loop_body5_exit:
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.307, i32 4)
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.333, i32 4)
 	%tmp43 = getelementptr inbounds %struct.FunctionType, %struct.FunctionType* %tmp26, i32 0, i32 1
 	call void @debug_dump_type(%struct.Type* %tmp43, %"struct.vector.Vec<%struct.string.String>"* %symbol_vector, %struct.string.String* %stdout)
 	br label %endif4
@@ -11773,7 +13427,7 @@ endif10:
 	%tmp63 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp62, i32 0, i32 1
 	%tmp64 = load i32, i32* %tmp63
 	call void @string.append_str(%struct.string.String* %stdout, i8* %tmp57, i32 %tmp64)
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.111, i32 2)
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.152, i32 2)
 	%tmp65 = load i8, i8* %v2
 	%tmp66 = add i8 %tmp65, 1
 	store i8 %tmp66, i8* %v2
@@ -11826,7 +13480,7 @@ endif13:
 	%tmp97 = icmp ne i32 %tmp92, %tmp96
 	br i1 %tmp97, label %then14, label %endif14
 then14:
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.89, i32 2)
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.115, i32 2)
 	br label %endif14
 endif14:
 	%tmp98 = load i32, i32* %v3
@@ -11845,7 +13499,7 @@ then15:
 	%tmp103 = load i8*, i8** %tmp102
 	call void @string.append(%struct.string.String* %stdout, i8 91)
 	call void @debug_dump_type(%struct.Type* %tmp103, %"struct.vector.Vec<%struct.string.String>"* %symbol_vector, %struct.string.String* %stdout)
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.308, i32 2)
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.334, i32 2)
 	%tmp104 = getelementptr inbounds %struct.ConstantSizeArrayType, %struct.ConstantSizeArrayType* %tmp103, i32 0, i32 1
 	call void @debug_dump_expression(%struct.Expression* %tmp104, %"struct.vector.Vec<%struct.string.String>"* %symbol_vector, %struct.string.String* %stdout)
 	call void @string.append(%struct.string.String* %stdout, i8 93)
@@ -11867,14 +13521,10 @@ define void @debug_dump_symbol_table(%struct.SymbolTable* %table, %struct.string
 	%v0 = alloca i32
 	%v1 = alloca %struct.PathEx
 	%v2 = alloca i32
-	%v3 = alloca %struct.string.String
-	%v4 = alloca i32
+	%v3 = alloca %struct.PathEx
+	%v4 = alloca %struct.PathEx
 	%v5 = alloca %struct.PathEx
 	%v6 = alloca i32
-	%v7 = alloca %struct.PathEx
-	%v8 = alloca %struct.PathEx
-	%v9 = alloca %struct.PathEx
-	%v10 = alloca i32
 	%tmp0 = getelementptr inbounds %"struct.vector.Vec<%struct.SymbolTableEntry>", %"struct.vector.Vec<%struct.SymbolTableEntry>"* %table, i32 0, i32 1
 	%tmp1 = load i32, i32* %tmp0
 	%tmp2 = load %struct.SymbolTableEntry*, %struct.SymbolTableEntry** %table
@@ -11919,14 +13569,14 @@ then3:
 	%tmp27 = load i8, i8* %v1
 	%tmp28 = sub i8 %tmp27, 1
 	store i8 %tmp28, i8* %v1
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.309, i32 6)
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.335, i32 6)
 	%tmp29 = load i32, i32* %v0
 	%tmp30 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp2, i32 %tmp29
 	%tmp31 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp30, i32 0, i32 1
 	call void @append_path_ex(%struct.PathEx* %tmp31, %struct.string.String* %tmp6, %struct.string.String* %stdout)
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.310, i32 2)
-	call void @compiler_type_push(%struct.CompilerType* %tmp22, %struct.PathEx* %v1, %struct.SymbolTable* %table, %struct.string.String* %stdout)
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.88, i32 2)
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.336, i32 2)
+	call void @comp_type.compiler_type_push(%struct.comp_type.CompilerType* %tmp22, %struct.PathEx* %v1, %struct.SymbolTable* %table, %struct.string.String* %stdout)
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.118, i32 2)
 	%tmp32 = getelementptr inbounds %struct.EnumSymbolTableEntry, %struct.EnumSymbolTableEntry* %tmp22, i32 0, i32 1
 	%tmp33 = getelementptr inbounds %"struct.vector.Vec<%struct.EnumDefinedField>", %"struct.vector.Vec<%struct.EnumDefinedField>"* %tmp32, i32 0, i32 1
 	%tmp34 = load i32, i32* %tmp33
@@ -11958,329 +13608,182 @@ endif5:
 	%tmp55 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp54, i32 0, i32 1
 	%tmp56 = load i32, i32* %tmp55
 	call void @string.append_str(%struct.string.String* %stdout, i8* %tmp47, i32 %tmp56)
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.310, i32 2)
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.336, i32 2)
 	%tmp58 = load i32, i32* %v2
 	%tmp59 = getelementptr inbounds %struct.EnumSymbolTableEntry, %struct.EnumSymbolTableEntry* %tmp22, i32 0, i32 1
 	%tmp60 = load %struct.EnumDefinedField*, %struct.EnumDefinedField** %tmp59
 	%tmp61 = getelementptr inbounds %struct.EnumDefinedField, %struct.EnumDefinedField* %tmp60, i32 %tmp58
 	%tmp62 = getelementptr inbounds %struct.EnumDefinedField, %struct.EnumDefinedField* %tmp61, i32 0, i32 1
 	%tmp63 = load i64, i64* %tmp62
-	%tmp64 = call %struct.string.String @string_utils.u64_to_string(i64 %tmp63)
-	store %struct.string.String %tmp64, %struct.string.String* %v3
-	%tmp65 = load i8*, i8** %v3
-	%tmp66 = getelementptr inbounds %struct.string.String, %struct.string.String* %v3, i32 0, i32 1
+	call void @string.append_u64(%struct.string.String* %stdout, i64 %tmp63)
+	%tmp64 = load i32, i32* %v2
+	%tmp65 = getelementptr inbounds %struct.EnumSymbolTableEntry, %struct.EnumSymbolTableEntry* %tmp22, i32 0, i32 1
+	%tmp66 = getelementptr inbounds %"struct.vector.Vec<%struct.EnumDefinedField>", %"struct.vector.Vec<%struct.EnumDefinedField>"* %tmp65, i32 0, i32 1
 	%tmp67 = load i32, i32* %tmp66
-	call void @string.append_str(%struct.string.String* %stdout, i8* %tmp65, i32 %tmp67)
-	call void @string.free(%struct.string.String* %v3)
-	%tmp68 = load i32, i32* %v2
-	%tmp69 = getelementptr inbounds %struct.EnumSymbolTableEntry, %struct.EnumSymbolTableEntry* %tmp22, i32 0, i32 1
-	%tmp70 = getelementptr inbounds %"struct.vector.Vec<%struct.EnumDefinedField>", %"struct.vector.Vec<%struct.EnumDefinedField>"* %tmp69, i32 0, i32 1
-	%tmp71 = load i32, i32* %tmp70
-	%tmp72 = sub i32 %tmp71, 1
-	%tmp73 = icmp ne i32 %tmp68, %tmp72
-	br i1 %tmp73, label %then6, label %endif6
+	%tmp68 = sub i32 %tmp67, 1
+	%tmp69 = icmp ne i32 %tmp64, %tmp68
+	br i1 %tmp69, label %then6, label %endif6
 then6:
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.89, i32 2)
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.115, i32 2)
 	br label %endif6
 endif6:
-	%tmp74 = load i32, i32* %v2
-	%tmp75 = add i32 %tmp74, 1
-	store i32 %tmp75, i32* %v2
+	%tmp70 = load i32, i32* %v2
+	%tmp71 = add i32 %tmp70, 1
+	store i32 %tmp71, i32* %v2
 	br label %loop_cond4
 loop_body4_exit:
-; Variable s is out.
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.90, i32 3)
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.116, i32 3)
 ; Variable loc is out.
 	br label %endif3
 else3:
-	%tmp76 = load i32, i32* %v0
-	%tmp77 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp2, i32 %tmp76
-	%tmp78 = load i32, i32* %tmp77
-	%tmp79 = and i32 %tmp78, 7
-	%tmp80 = icmp eq i32 %tmp79, 2
-	br i1 %tmp80, label %then7, label %else7
+	%tmp72 = load i32, i32* %v0
+	%tmp73 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp2, i32 %tmp72
+	%tmp74 = load i32, i32* %tmp73
+	%tmp75 = and i32 %tmp74, 7
+	%tmp76 = icmp eq i32 %tmp75, 6
+	br i1 %tmp76, label %then7, label %else7
 then7:
+	%tmp77 = load i32, i32* %v0
+	%tmp78 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp2, i32 %tmp77
+	%tmp79 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp78, i32 0, i32 2
+	%tmp80 = load i8*, i8** %tmp79
 	%tmp81 = load i32, i32* %v0
 	%tmp82 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp2, i32 %tmp81
-	%tmp83 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp82, i32 0, i32 2
-	%tmp84 = load i8*, i8** %tmp83
-	call void @string.append(%struct.string.String* %stdout, i8 37)
-	%tmp85 = getelementptr inbounds %struct.StructSymbolTableEntry, %struct.StructSymbolTableEntry* %tmp84, i32 0, i32 2
-	%tmp86 = load i8*, i8** %tmp85
-	%tmp87 = getelementptr inbounds %struct.StructSymbolTableEntry, %struct.StructSymbolTableEntry* %tmp84, i32 0, i32 2
-	%tmp88 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp87, i32 0, i32 1
-	%tmp89 = load i32, i32* %tmp88
-	call void @string.append_str(%struct.string.String* %stdout, i8* %tmp86, i32 %tmp89)
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.87, i32 8)
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.88, i32 2)
-	%tmp90 = getelementptr inbounds %"struct.vector.Vec<%struct.StructDefinedField>", %"struct.vector.Vec<%struct.StructDefinedField>"* %tmp84, i32 0, i32 1
-	%tmp91 = load i32, i32* %tmp90
-	store i32 0, i32* %v4
-	br label %loop_cond8
-loop_cond8:
-	%tmp92 = load i32, i32* %v4
-	%tmp93 = getelementptr inbounds %"struct.vector.Vec<%struct.StructDefinedField>", %"struct.vector.Vec<%struct.StructDefinedField>"* %tmp84, i32 0, i32 1
-	%tmp94 = load i32, i32* %tmp93
-	%tmp95 = icmp uge i32 %tmp92, %tmp94
-	br i1 %tmp95, label %then9, label %endif9
-then9:
-	br label %loop_body8_exit
-endif9:
-	%tmp96 = load i32, i32* %v4
-	%tmp97 = load %struct.StructDefinedField*, %struct.StructDefinedField** %tmp84
-	%tmp98 = getelementptr inbounds %struct.StructDefinedField, %struct.StructDefinedField* %tmp97, i32 %tmp96
-	%tmp99 = getelementptr inbounds %struct.StructDefinedField, %struct.StructDefinedField* %tmp98, i32 0, i32 1
-	%tmp100 = load i32, i32* %v0
-	%tmp101 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp2, i32 %tmp100
-	%tmp102 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp101, i32 0, i32 1
-	call void @compiler_type_push(%struct.CompilerType* %tmp99, %struct.PathEx* %tmp102, %struct.SymbolTable* %table, %struct.string.String* %stdout)
-	%tmp103 = load i32, i32* %v4
-	%tmp104 = getelementptr inbounds %"struct.vector.Vec<%struct.StructDefinedField>", %"struct.vector.Vec<%struct.StructDefinedField>"* %tmp84, i32 0, i32 1
-	%tmp105 = load i32, i32* %tmp104
-	%tmp106 = sub i32 %tmp105, 1
-	%tmp107 = icmp ne i32 %tmp103, %tmp106
-	br i1 %tmp107, label %then10, label %endif10
-then10:
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.89, i32 2)
-	br label %endif10
-endif10:
-	%tmp108 = load i32, i32* %v4
-	%tmp109 = add i32 %tmp108, 1
-	store i32 %tmp109, i32* %v4
-	br label %loop_cond8
-loop_body8_exit:
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.90, i32 3)
+	%tmp83 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp82, i32 0, i32 1
+	%tmp84 = load %struct.PathEx, %struct.PathEx* %tmp83
+	store %struct.PathEx %tmp84, %struct.PathEx* %v3
+	%tmp85 = load i8, i8* %v3
+	%tmp86 = sub i8 %tmp85, 1
+	store i8 %tmp86, i8* %v3
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.337, i32 10)
+	%tmp87 = load i32, i32* %v0
+	%tmp88 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp2, i32 %tmp87
+	%tmp89 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp88, i32 0, i32 1
+	call void @append_path_ex(%struct.PathEx* %tmp89, %struct.string.String* %tmp6, %struct.string.String* %stdout)
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.338, i32 3)
+	call void @comp_type.compiler_type_push(%struct.comp_type.CompilerType* %tmp80, %struct.PathEx* %v3, %struct.SymbolTable* %table, %struct.string.String* %stdout)
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.131, i32 1)
+; Variable loc is out.
 	br label %endif7
 else7:
-	%tmp110 = load i32, i32* %v0
-	%tmp111 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp2, i32 %tmp110
-	%tmp112 = load i32, i32* %tmp111
-	%tmp113 = and i32 %tmp112, 7
-	%tmp114 = icmp eq i32 %tmp113, 3
-	br i1 %tmp114, label %then11, label %else11
-then11:
-	%tmp115 = load i32, i32* %v0
-	%tmp116 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp2, i32 %tmp115
-	%tmp117 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp116, i32 0, i32 2
-	%tmp118 = load i8*, i8** %tmp117
-	%tmp119 = load i32, i32* %v0
-	%tmp120 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp2, i32 %tmp119
-	%tmp121 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp120, i32 0, i32 1
-	%tmp122 = load %struct.PathEx, %struct.PathEx* %tmp121
-	store %struct.PathEx %tmp122, %struct.PathEx* %v5
-	%tmp123 = load i8, i8* %v5
-	%tmp124 = sub i8 %tmp123, 1
-	store i8 %tmp124, i8* %v5
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.311, i32 8)
-	%tmp125 = load i32, i32* %v0
-	%tmp126 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp2, i32 %tmp125
-	%tmp127 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp126, i32 0, i32 1
-	call void @append_path_ex(%struct.PathEx* %tmp127, %struct.string.String* %tmp6, %struct.string.String* %stdout)
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.88, i32 2)
-	%tmp128 = getelementptr inbounds %"struct.vector.Vec<%struct.GenericStructDefinedField>", %"struct.vector.Vec<%struct.GenericStructDefinedField>"* %tmp118, i32 0, i32 1
-	%tmp129 = load i32, i32* %tmp128
+	%tmp90 = load i32, i32* %v0
+	%tmp91 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp2, i32 %tmp90
+	%tmp92 = load i32, i32* %tmp91
+	%tmp93 = and i32 %tmp92, 7
+	%tmp94 = icmp eq i32 %tmp93, 0
+	br i1 %tmp94, label %then8, label %endif8
+then8:
+	%tmp95 = load i32, i32* %v0
+	%tmp96 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp2, i32 %tmp95
+	%tmp97 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp96, i32 0, i32 2
+	%tmp98 = load i8*, i8** %tmp97
+	%tmp99 = load i32, i32* %v0
+	%tmp100 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp2, i32 %tmp99
+	%tmp101 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp100, i32 0, i32 1
+	%tmp102 = load %struct.PathEx, %struct.PathEx* %tmp101
+	store %struct.PathEx %tmp102, %struct.PathEx* %v4
+	%tmp103 = load i8, i8* %v4
+	%tmp104 = sub i8 %tmp103, 1
+	store i8 %tmp104, i8* %v4
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.122, i32 7)
+	%tmp105 = getelementptr inbounds %struct.FunctionSymbolTableEntry, %struct.FunctionSymbolTableEntry* %tmp98, i32 0, i32 4
+	%tmp106 = load i8, i8* %tmp105
+	%tmp107 = and i8 %tmp106, 4
+	%tmp108 = icmp ne i8 %tmp107, 0
+	br i1 %tmp108, label %then9, label %endif9
+then9:
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.339, i32 10)
+	br label %endif9
+endif9:
+	%tmp109 = getelementptr inbounds %struct.FunctionSymbolTableEntry, %struct.FunctionSymbolTableEntry* %tmp98, i32 0, i32 1
+	call void @comp_type.compiler_type_push(%struct.comp_type.CompilerType* %tmp109, %struct.PathEx* %v4, %struct.SymbolTable* %table, %struct.string.String* %stdout)
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.123, i32 2)
+	%tmp110 = getelementptr inbounds %struct.FunctionSymbolTableEntry, %struct.FunctionSymbolTableEntry* %tmp98, i32 0, i32 4
+	%tmp111 = load i8, i8* %tmp110
+	%tmp112 = and i8 %tmp111, 4
+	%tmp113 = icmp ne i8 %tmp112, 0
+	br i1 %tmp113, label %then10, label %else10
+then10:
+	%tmp114 = load i32, i32* %v0
+	%tmp115 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp2, i32 %tmp114
+	%tmp116 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp115, i32 0, i32 1
+	%tmp117 = load %struct.PathEx, %struct.PathEx* %tmp116
+	store %struct.PathEx %tmp117, %struct.PathEx* %v5
+	%tmp118 = getelementptr inbounds %struct.PathEx, %struct.PathEx* %v5, i32 0, i32 1
+	%tmp119 = getelementptr inbounds %struct.PathEx, %struct.PathEx* %v5, i32 0, i32 1
+	%tmp120 = load i8, i8* %v5
+	%tmp121 = sub i8 %tmp120, 1
+	%tmp122 = getelementptr inbounds [12 x i16], [12 x i16]* %tmp119, i32 0, i8 %tmp121
+	%tmp123 = load i16, i16* %tmp122
+	store i16 %tmp123, i16* %tmp118
+	store i8 1, i8* %v5
+	call void @append_path_ex(%struct.PathEx* %v5, %struct.string.String* %tmp6, %struct.string.String* %stdout)
+; Variable q is out.
+	br label %endif10
+else10:
+	%tmp124 = load i32, i32* %v0
+	%tmp125 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp2, i32 %tmp124
+	%tmp126 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp125, i32 0, i32 1
+	call void @append_path_ex(%struct.PathEx* %tmp126, %struct.string.String* %tmp6, %struct.string.String* %stdout)
+	br label %endif10
+endif10:
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.129, i32 1)
+	%tmp127 = getelementptr inbounds %"struct.vector.Vec<%struct.StructDefinedField>", %"struct.vector.Vec<%struct.StructDefinedField>"* %tmp98, i32 0, i32 1
+	%tmp128 = load i32, i32* %tmp127
 	store i32 0, i32* %v6
-	br label %loop_cond12
-loop_cond12:
-	%tmp130 = load i32, i32* %v6
-	%tmp131 = getelementptr inbounds %"struct.vector.Vec<%struct.GenericStructDefinedField>", %"struct.vector.Vec<%struct.GenericStructDefinedField>"* %tmp118, i32 0, i32 1
-	%tmp132 = load i32, i32* %tmp131
-	%tmp133 = icmp uge i32 %tmp130, %tmp132
-	br i1 %tmp133, label %then13, label %endif13
-then13:
-	br label %loop_body12_exit
-endif13:
-	%tmp134 = load i32, i32* %v6
-	%tmp135 = load %struct.GenericStructDefinedField*, %struct.GenericStructDefinedField** %tmp118
-	%tmp136 = getelementptr inbounds %struct.GenericStructDefinedField, %struct.GenericStructDefinedField* %tmp135, i32 %tmp134
-	%tmp137 = load i16, i16* %tmp136
+	br label %loop_cond11
+loop_cond11:
+	%tmp129 = load i32, i32* %v6
+	%tmp130 = getelementptr inbounds %"struct.vector.Vec<%struct.StructDefinedField>", %"struct.vector.Vec<%struct.StructDefinedField>"* %tmp98, i32 0, i32 1
+	%tmp131 = load i32, i32* %tmp130
+	%tmp132 = icmp uge i32 %tmp129, %tmp131
+	br i1 %tmp132, label %then12, label %endif12
+then12:
+	br label %loop_body11_exit
+endif12:
+	%tmp133 = load i32, i32* %v6
+	%tmp134 = load %struct.StructDefinedField*, %struct.StructDefinedField** %tmp98
+	%tmp135 = getelementptr inbounds %struct.StructDefinedField, %struct.StructDefinedField* %tmp134, i32 %tmp133
+	%tmp136 = getelementptr inbounds %struct.StructDefinedField, %struct.StructDefinedField* %tmp135, i32 0, i32 1
+	call void @comp_type.compiler_type_push(%struct.comp_type.CompilerType* %tmp136, %struct.PathEx* %v4, %struct.SymbolTable* %table, %struct.string.String* %stdout)
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.340, i32 2)
+	%tmp137 = load i16, i16* %tmp135
 	%tmp138 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp6, i16 %tmp137
 	%tmp139 = load i8*, i8** %tmp138
-	%tmp140 = load i32, i32* %v6
-	%tmp141 = load %struct.GenericStructDefinedField*, %struct.GenericStructDefinedField** %tmp118
-	%tmp142 = getelementptr inbounds %struct.GenericStructDefinedField, %struct.GenericStructDefinedField* %tmp141, i32 %tmp140
-	%tmp143 = load i16, i16* %tmp142
-	%tmp144 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp6, i16 %tmp143
-	%tmp145 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp144, i32 0, i32 1
+	%tmp140 = load i16, i16* %tmp135
+	%tmp141 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp6, i16 %tmp140
+	%tmp142 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp141, i32 0, i32 1
+	%tmp143 = load i32, i32* %tmp142
+	call void @string.append_str(%struct.string.String* %stdout, i8* %tmp139, i32 %tmp143)
+	%tmp144 = load i32, i32* %v6
+	%tmp145 = getelementptr inbounds %"struct.vector.Vec<%struct.StructDefinedField>", %"struct.vector.Vec<%struct.StructDefinedField>"* %tmp98, i32 0, i32 1
 	%tmp146 = load i32, i32* %tmp145
-	call void @string.append_str(%struct.string.String* %stdout, i8* %tmp139, i32 %tmp146)
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.310, i32 2)
-	%tmp147 = load i32, i32* %v6
-	%tmp148 = load %struct.GenericStructDefinedField*, %struct.GenericStructDefinedField** %tmp118
-	%tmp149 = getelementptr inbounds %struct.GenericStructDefinedField, %struct.GenericStructDefinedField* %tmp148, i32 %tmp147
-	%tmp150 = getelementptr inbounds %struct.GenericStructDefinedField, %struct.GenericStructDefinedField* %tmp149, i32 0, i32 1
-	call void @compiler_type_push(%struct.CompilerType* %tmp150, %struct.PathEx* %v5, %struct.SymbolTable* %table, %struct.string.String* %stdout)
-	%tmp151 = load i32, i32* %v6
-	%tmp152 = getelementptr inbounds %"struct.vector.Vec<%struct.GenericStructDefinedField>", %"struct.vector.Vec<%struct.GenericStructDefinedField>"* %tmp118, i32 0, i32 1
-	%tmp153 = load i32, i32* %tmp152
-	%tmp154 = sub i32 %tmp153, 1
-	%tmp155 = icmp ne i32 %tmp151, %tmp154
-	br i1 %tmp155, label %then14, label %endif14
-then14:
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.89, i32 2)
-	br label %endif14
-endif14:
-	%tmp156 = load i32, i32* %v6
-	%tmp157 = add i32 %tmp156, 1
-	store i32 %tmp157, i32* %v6
-	br label %loop_cond12
-loop_body12_exit:
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.90, i32 3)
+	%tmp147 = sub i32 %tmp146, 1
+	%tmp148 = icmp ne i32 %tmp144, %tmp147
+	br i1 %tmp148, label %then13, label %endif13
+then13:
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.115, i32 2)
+	br label %endif13
+endif13:
+	%tmp149 = load i32, i32* %v6
+	%tmp150 = add i32 %tmp149, 1
+	store i32 %tmp150, i32* %v6
+	br label %loop_cond11
+loop_body11_exit:
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.130, i32 1)
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.131, i32 1)
 ; Variable loc is out.
-	br label %endif11
-else11:
-	%tmp158 = load i32, i32* %v0
-	%tmp159 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp2, i32 %tmp158
-	%tmp160 = load i32, i32* %tmp159
-	%tmp161 = and i32 %tmp160, 7
-	%tmp162 = icmp eq i32 %tmp161, 6
-	br i1 %tmp162, label %then15, label %else15
-then15:
-	%tmp163 = load i32, i32* %v0
-	%tmp164 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp2, i32 %tmp163
-	%tmp165 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp164, i32 0, i32 2
-	%tmp166 = load i8*, i8** %tmp165
-	%tmp167 = load i32, i32* %v0
-	%tmp168 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp2, i32 %tmp167
-	%tmp169 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp168, i32 0, i32 1
-	%tmp170 = load %struct.PathEx, %struct.PathEx* %tmp169
-	store %struct.PathEx %tmp170, %struct.PathEx* %v7
-	%tmp171 = load i8, i8* %v7
-	%tmp172 = sub i8 %tmp171, 1
-	store i8 %tmp172, i8* %v7
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.312, i32 10)
-	%tmp173 = load i32, i32* %v0
-	%tmp174 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp2, i32 %tmp173
-	%tmp175 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp174, i32 0, i32 1
-	call void @append_path_ex(%struct.PathEx* %tmp175, %struct.string.String* %tmp6, %struct.string.String* %stdout)
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.313, i32 3)
-	call void @compiler_type_push(%struct.CompilerType* %tmp166, %struct.PathEx* %v7, %struct.SymbolTable* %table, %struct.string.String* %stdout)
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.99, i32 1)
-; Variable loc is out.
-	br label %endif15
-else15:
-	%tmp176 = load i32, i32* %v0
-	%tmp177 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp2, i32 %tmp176
-	%tmp178 = load i32, i32* %tmp177
-	%tmp179 = and i32 %tmp178, 7
-	%tmp180 = icmp eq i32 %tmp179, 0
-	br i1 %tmp180, label %then16, label %endif16
-then16:
-	%tmp181 = load i32, i32* %v0
-	%tmp182 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp2, i32 %tmp181
-	%tmp183 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp182, i32 0, i32 2
-	%tmp184 = load i8*, i8** %tmp183
-	%tmp185 = load i32, i32* %v0
-	%tmp186 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp2, i32 %tmp185
-	%tmp187 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp186, i32 0, i32 1
-	%tmp188 = load %struct.PathEx, %struct.PathEx* %tmp187
-	store %struct.PathEx %tmp188, %struct.PathEx* %v8
-	%tmp189 = load i8, i8* %v8
-	%tmp190 = sub i8 %tmp189, 1
-	store i8 %tmp190, i8* %v8
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.314, i32 7)
-	%tmp191 = getelementptr inbounds %struct.FunctionSymbolTableEntry, %struct.FunctionSymbolTableEntry* %tmp184, i32 0, i32 3
-	%tmp192 = load i8, i8* %tmp191
-	%tmp193 = and i8 %tmp192, 4
-	%tmp194 = icmp ne i8 %tmp193, 0
-	br i1 %tmp194, label %then17, label %endif17
-then17:
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.315, i32 10)
-	br label %endif17
-endif17:
-	%tmp195 = getelementptr inbounds %struct.FunctionSymbolTableEntry, %struct.FunctionSymbolTableEntry* %tmp184, i32 0, i32 1
-	call void @compiler_type_push(%struct.CompilerType* %tmp195, %struct.PathEx* %v8, %struct.SymbolTable* %table, %struct.string.String* %stdout)
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.316, i32 2)
-	%tmp196 = getelementptr inbounds %struct.FunctionSymbolTableEntry, %struct.FunctionSymbolTableEntry* %tmp184, i32 0, i32 3
-	%tmp197 = load i8, i8* %tmp196
-	%tmp198 = and i8 %tmp197, 4
-	%tmp199 = icmp ne i8 %tmp198, 0
-	br i1 %tmp199, label %then18, label %else18
-then18:
-	%tmp200 = load i32, i32* %v0
-	%tmp201 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp2, i32 %tmp200
-	%tmp202 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp201, i32 0, i32 1
-	%tmp203 = load %struct.PathEx, %struct.PathEx* %tmp202
-	store %struct.PathEx %tmp203, %struct.PathEx* %v9
-	%tmp204 = getelementptr inbounds %struct.PathEx, %struct.PathEx* %v9, i32 0, i32 1
-	%tmp205 = getelementptr inbounds %struct.PathEx, %struct.PathEx* %v9, i32 0, i32 1
-	%tmp206 = load i8, i8* %v9
-	%tmp207 = sub i8 %tmp206, 1
-	%tmp208 = getelementptr inbounds [12 x i16], [12 x i16]* %tmp205, i32 0, i8 %tmp207
-	%tmp209 = load i16, i16* %tmp208
-	store i16 %tmp209, i16* %tmp204
-	store i8 1, i8* %v9
-	call void @append_path_ex(%struct.PathEx* %v9, %struct.string.String* %tmp6, %struct.string.String* %stdout)
-; Variable q is out.
-	br label %endif18
-else18:
-	%tmp210 = load i32, i32* %v0
-	%tmp211 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp2, i32 %tmp210
-	%tmp212 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp211, i32 0, i32 1
-	call void @append_path_ex(%struct.PathEx* %tmp212, %struct.string.String* %tmp6, %struct.string.String* %stdout)
-	br label %endif18
-endif18:
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.96, i32 1)
-	%tmp213 = getelementptr inbounds %"struct.vector.Vec<%struct.StructDefinedField>", %"struct.vector.Vec<%struct.StructDefinedField>"* %tmp184, i32 0, i32 1
-	%tmp214 = load i32, i32* %tmp213
-	store i32 0, i32* %v10
-	br label %loop_cond19
-loop_cond19:
-	%tmp215 = load i32, i32* %v10
-	%tmp216 = getelementptr inbounds %"struct.vector.Vec<%struct.StructDefinedField>", %"struct.vector.Vec<%struct.StructDefinedField>"* %tmp184, i32 0, i32 1
-	%tmp217 = load i32, i32* %tmp216
-	%tmp218 = icmp uge i32 %tmp215, %tmp217
-	br i1 %tmp218, label %then20, label %endif20
-then20:
-	br label %loop_body19_exit
-endif20:
-	%tmp219 = load i32, i32* %v10
-	%tmp220 = load %struct.StructDefinedField*, %struct.StructDefinedField** %tmp184
-	%tmp221 = getelementptr inbounds %struct.StructDefinedField, %struct.StructDefinedField* %tmp220, i32 %tmp219
-	%tmp222 = getelementptr inbounds %struct.StructDefinedField, %struct.StructDefinedField* %tmp221, i32 0, i32 1
-	call void @compiler_type_push(%struct.CompilerType* %tmp222, %struct.PathEx* %v8, %struct.SymbolTable* %table, %struct.string.String* %stdout)
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.317, i32 2)
-	%tmp223 = load i16, i16* %tmp221
-	%tmp224 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp6, i16 %tmp223
-	%tmp225 = load i8*, i8** %tmp224
-	%tmp226 = load i16, i16* %tmp221
-	%tmp227 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp6, i16 %tmp226
-	%tmp228 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp227, i32 0, i32 1
-	%tmp229 = load i32, i32* %tmp228
-	call void @string.append_str(%struct.string.String* %stdout, i8* %tmp225, i32 %tmp229)
-	%tmp230 = load i32, i32* %v10
-	%tmp231 = getelementptr inbounds %"struct.vector.Vec<%struct.StructDefinedField>", %"struct.vector.Vec<%struct.StructDefinedField>"* %tmp184, i32 0, i32 1
-	%tmp232 = load i32, i32* %tmp231
-	%tmp233 = sub i32 %tmp232, 1
-	%tmp234 = icmp ne i32 %tmp230, %tmp233
-	br i1 %tmp234, label %then21, label %endif21
-then21:
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.89, i32 2)
-	br label %endif21
-endif21:
-	%tmp235 = load i32, i32* %v10
-	%tmp236 = add i32 %tmp235, 1
-	store i32 %tmp236, i32* %v10
-	br label %loop_cond19
-loop_body19_exit:
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.98, i32 1)
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.99, i32 1)
-; Variable loc is out.
-	br label %endif16
-endif16:
-	br label %endif15
-endif15:
-	br label %endif11
-endif11:
+	br label %endif8
+endif8:
 	br label %endif7
 endif7:
 	br label %endif3
 endif3:
 	br label %loop_body0
 loop_body0:
-	%tmp237 = load i32, i32* %v0
-	%tmp238 = add i32 %tmp237, 1
-	store i32 %tmp238, i32* %v0
+	%tmp151 = load i32, i32* %v0
+	%tmp152 = add i32 %tmp151, 1
+	store i32 %tmp152, i32* %v0
 	br label %loop_cond0
 loop_body0_exit:
 	ret void
@@ -12355,7 +13858,7 @@ endif3:
 	%tmp28 = icmp eq i32 %tmp27, 18
 	br i1 %tmp28, label %then6, label %endif6
 then6:
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.264, i32 4)
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.306, i32 4)
 	br label %func_exit
 endif6:
 	%tmp29 = load i32, i32* %expr
@@ -12422,7 +13925,7 @@ endif11:
 	%tmp68 = icmp ne i32 %tmp63, %tmp67
 	br i1 %tmp68, label %then12, label %endif12
 then12:
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.89, i32 2)
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.115, i32 2)
 	br label %endif12
 endif12:
 	%tmp69 = load i32, i32* %v0
@@ -12462,7 +13965,7 @@ endif14:
 	%tmp89 = icmp ne i32 %tmp84, %tmp88
 	br i1 %tmp89, label %then15, label %endif15
 then15:
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.89, i32 2)
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.115, i32 2)
 	br label %endif15
 endif15:
 	%tmp90 = load i32, i32* %v1
@@ -12480,7 +13983,7 @@ then16:
 	%tmp94 = getelementptr inbounds %struct.Expression, %struct.Expression* %expr, i32 0, i32 1
 	%tmp95 = load i8*, i8** %tmp94
 	call void @debug_dump_expression(%struct.Expression* %tmp95, %"struct.vector.Vec<%struct.string.String>"* %symbol_vector, %struct.string.String* %stdout)
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.111, i32 2)
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.152, i32 2)
 	%tmp96 = getelementptr inbounds %struct.StaticAccessExpr, %struct.StaticAccessExpr* %tmp95, i32 0, i32 1
 	%tmp97 = load i16, i16* %tmp96
 	%tmp98 = load %struct.string.String*, %struct.string.String** %symbol_vector
@@ -12524,7 +14027,7 @@ then18:
 	%tmp124 = getelementptr inbounds %struct.Expression, %struct.Expression* %expr, i32 0, i32 1
 	%tmp125 = load i8*, i8** %tmp124
 	call void @debug_dump_expression(%struct.Expression* %tmp125, %"struct.vector.Vec<%struct.string.String>"* %symbol_vector, %struct.string.String* %stdout)
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.318, i32 4)
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.341, i32 4)
 	%tmp126 = getelementptr inbounds %struct.CastExpr, %struct.CastExpr* %tmp125, i32 0, i32 1
 	call void @debug_dump_type(%struct.Type* %tmp126, %"struct.vector.Vec<%struct.string.String>"* %symbol_vector, %struct.string.String* %stdout)
 	br label %func_exit
@@ -12538,10 +14041,10 @@ then19:
 	%tmp131 = load i1, i1* %tmp130
 	br i1 %tmp131, label %then20, label %else20
 then20:
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.261, i32 4)
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.303, i32 4)
 	br label %endif20
 else20:
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.273, i32 5)
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.315, i32 5)
 	br label %endif20
 endif20:
 	br label %func_exit
@@ -12623,7 +14126,7 @@ then28:
 	%tmp158 = getelementptr inbounds %struct.Expression, %struct.Expression* %expr, i32 0, i32 1
 	%tmp159 = load i8*, i8** %tmp158
 	call void @debug_dump_expression(%struct.Expression* %tmp159, %"struct.vector.Vec<%struct.string.String>"* %symbol_vector, %struct.string.String* %stdout)
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.115, i32 2)
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.156, i32 2)
 	%tmp160 = getelementptr inbounds %struct.RangeExpr, %struct.RangeExpr* %tmp159, i32 0, i32 2
 	%tmp161 = load i1, i1* %tmp160
 	br i1 %tmp161, label %then29, label %endif29
@@ -12686,7 +14189,7 @@ endif33:
 	%tmp190 = icmp ne i32 %tmp185, %tmp189
 	br i1 %tmp190, label %then34, label %endif34
 then34:
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.89, i32 2)
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.115, i32 2)
 	br label %endif34
 endif34:
 	%tmp191 = load i32, i32* %v2
@@ -12740,7 +14243,7 @@ endif37:
 	%tmp222 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp221, i32 0, i32 1
 	%tmp223 = load i32, i32* %tmp222
 	call void @string.append_str(%struct.string.String* %stdout, i8* %tmp213, i32 %tmp223)
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.310, i32 2)
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.336, i32 2)
 	%tmp225 = load i32, i32* %v3
 	%tmp226 = getelementptr inbounds %struct.StructInitExpr, %struct.StructInitExpr* %tmp196, i32 0, i32 1
 	%tmp227 = load %struct.StructInitFieldExpr*, %struct.StructInitFieldExpr** %tmp226
@@ -12755,7 +14258,7 @@ endif37:
 	%tmp235 = icmp ne i32 %tmp230, %tmp234
 	br i1 %tmp235, label %then38, label %endif38
 then38:
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.89, i32 2)
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.115, i32 2)
 	br label %endif38
 endif38:
 	%tmp236 = load i32, i32* %v3
@@ -12773,177 +14276,6 @@ endif35:
 func_exit:
 	ret void
 }
-define %struct.Rvalue @constant_evaluate_expression(%struct.Expression* %expr, %struct.SymbolTable* %table){
-	%v0 = alloca %struct.Rvalue
-	%tmp0 = inttoptr i64 1337 to i8*
-	store i32 1, i32* %v0
-	%tmp1 = getelementptr inbounds %struct.Rvalue, %struct.Rvalue* %v0, i32 0, i32 1
-	store i8* %tmp0, i8** %tmp1
-	%tmp2 = load %struct.Rvalue, %struct.Rvalue* %v0
-; Variable sample is out.
-	ret %struct.Rvalue %tmp2
-}
-define void @compiler_type_push(%struct.CompilerType* %type, %struct.PathEx* %path, %struct.SymbolTable* %symbol_table, %struct.string.String* %stdout){
-	%v0 = alloca i8
-	%v1 = alloca i32
-	%tmp0 = load i32, i32* %type
-	%tmp1 = icmp eq i32 %tmp0, 0
-	br i1 %tmp1, label %then0, label %else0
-then0:
-	%tmp2 = getelementptr inbounds %struct.CompilerType, %struct.CompilerType* %type, i32 0, i32 1
-	%tmp3 = load i8*, i8** %tmp2
-	%tmp4 = getelementptr inbounds %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %tmp3, i32 0, i32 1
-	%tmp5 = load i8*, i8** %tmp4
-	%tmp6 = getelementptr inbounds %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %tmp3, i32 0, i32 1
-	%tmp7 = load i8*, i8** %tmp6
-	%tmp8 = call i32 @string_utils.c_str_len(i8* %tmp7)
-	call void @string.append_str(%struct.string.String* %stdout, i8* %tmp5, i32 %tmp8)
-	br label %endif0
-else0:
-	%tmp9 = load i32, i32* %type
-	%tmp10 = icmp eq i32 %tmp9, 2
-	br i1 %tmp10, label %then1, label %else1
-then1:
-	%tmp11 = getelementptr inbounds %struct.CompilerType, %struct.CompilerType* %type, i32 0, i32 1
-	%tmp12 = load i8*, i8** %tmp11
-	%tmp13 = ptrtoint i8* %tmp12 to i64
-	%tmp14 = trunc i64 %tmp13 to i32
-	%tmp15 = load %struct.SymbolTableEntry*, %struct.SymbolTableEntry** %symbol_table
-	%tmp16 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp15, i32 %tmp14
-	%tmp17 = load i32, i32* %tmp16
-	%tmp18 = and i32 %tmp17, 7
-	%tmp19 = icmp eq i32 %tmp18, 2
-	br i1 %tmp19, label %then2, label %else2
-then2:
-	%tmp20 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp16, i32 0, i32 2
-	%tmp21 = load i8*, i8** %tmp20
-	call void @string.append(%struct.string.String* %stdout, i8 37)
-	%tmp22 = getelementptr inbounds %struct.StructSymbolTableEntry, %struct.StructSymbolTableEntry* %tmp21, i32 0, i32 2
-	%tmp23 = load i8*, i8** %tmp22
-	%tmp24 = getelementptr inbounds %struct.StructSymbolTableEntry, %struct.StructSymbolTableEntry* %tmp21, i32 0, i32 2
-	%tmp25 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp24, i32 0, i32 1
-	%tmp26 = load i32, i32* %tmp25
-	call void @string.append_str(%struct.string.String* %stdout, i8* %tmp23, i32 %tmp26)
-	br label %endif2
-else2:
-	%tmp27 = load i32, i32* %tmp16
-	%tmp28 = and i32 %tmp27, 7
-	%tmp29 = icmp eq i32 %tmp28, 4
-	br i1 %tmp29, label %then3, label %else3
-then3:
-	%tmp30 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp16, i32 0, i32 2
-	%tmp31 = load i8*, i8** %tmp30
-	call void @compiler_type_push(%struct.CompilerType* %tmp31, %struct.PathEx* %path, %struct.SymbolTable* %symbol_table, %struct.string.String* %stdout)
-	br label %endif3
-else3:
-	call void @process.throw(i8* @.str.319)
-	br label %endif3
-endif3:
-	br label %endif2
-endif2:
-	br label %endif1
-else1:
-	%tmp32 = load i32, i32* %type
-	%tmp33 = icmp eq i32 %tmp32, 1
-	br i1 %tmp33, label %then4, label %else4
-then4:
-	%tmp34 = getelementptr inbounds %struct.CompilerType, %struct.CompilerType* %type, i32 0, i32 1
-	%tmp35 = load i8*, i8** %tmp34
-	%tmp36 = getelementptr inbounds %struct.PointerCompilerType, %struct.PointerCompilerType* %tmp35, i32 0, i32 1
-	call void @compiler_type_push(%struct.CompilerType* %tmp36, %struct.PathEx* %path, %struct.SymbolTable* %symbol_table, %struct.string.String* %stdout)
-	%tmp37 = load i8, i8* %tmp35
-	store i8 0, i8* %v0
-	br label %loop_cond5
-loop_cond5:
-	%tmp38 = load i8, i8* %v0
-	%tmp39 = load i8, i8* %tmp35
-	%tmp40 = icmp uge i8 %tmp38, %tmp39
-	br i1 %tmp40, label %then6, label %endif6
-then6:
-	br label %loop_body5_exit
-endif6:
-	call void @string.append(%struct.string.String* %stdout, i8 42)
-	%tmp41 = load i8, i8* %v0
-	%tmp42 = add i8 %tmp41, 1
-	store i8 %tmp42, i8* %v0
-	br label %loop_cond5
-loop_body5_exit:
-	br label %endif4
-else4:
-	%tmp43 = load i32, i32* %type
-	%tmp44 = icmp eq i32 %tmp43, 4
-	br i1 %tmp44, label %then7, label %endif7
-then7:
-	%tmp45 = getelementptr inbounds %struct.CompilerType, %struct.CompilerType* %type, i32 0, i32 1
-	%tmp46 = load i8*, i8** %tmp45
-	%tmp47 = load i32, i32* %tmp46
-	%tmp48 = load %struct.SymbolTableEntry*, %struct.SymbolTableEntry** %symbol_table
-	%tmp49 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp48, i32 %tmp47
-	%tmp50 = load i32, i32* %tmp49
-	%tmp51 = and i32 %tmp50, 7
-	%tmp52 = icmp eq i32 %tmp51, 3
-	br i1 %tmp52, label %then8, label %else8
-then8:
-	%tmp53 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp49, i32 0, i32 2
-	%tmp54 = load i8*, i8** %tmp53
-	call void @string.append(%struct.string.String* %stdout, i8 37)
-	%tmp55 = getelementptr inbounds %struct.GenericStructSymbolTableEntry, %struct.GenericStructSymbolTableEntry* %tmp54, i32 0, i32 3
-	%tmp56 = load i8*, i8** %tmp55
-	%tmp57 = getelementptr inbounds %struct.GenericStructSymbolTableEntry, %struct.GenericStructSymbolTableEntry* %tmp54, i32 0, i32 3
-	%tmp58 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp57, i32 0, i32 1
-	%tmp59 = load i32, i32* %tmp58
-	call void @string.append_str(%struct.string.String* %stdout, i8* %tmp56, i32 %tmp59)
-	call void @string.append(%struct.string.String* %stdout, i8 95)
-	%tmp60 = getelementptr inbounds %struct.GenericStructSymbolTableEntry, %struct.GenericStructSymbolTableEntry* %tmp54, i32 0, i32 1
-	%tmp61 = getelementptr inbounds %"struct.vector.Vec<ui16>", %"struct.vector.Vec<ui16>"* %tmp60, i32 0, i32 1
-	%tmp62 = load i32, i32* %tmp61
-	%tmp64 = getelementptr inbounds %struct.GenericImplementationCompilerType, %struct.GenericImplementationCompilerType* %tmp46, i32 0, i32 1
-	%tmp65 = load i32, i32* %tmp64
-	%tmp66 = getelementptr inbounds %struct.GenericStructSymbolTableEntry, %struct.GenericStructSymbolTableEntry* %tmp54, i32 0, i32 2
-	%tmp67 = load %"struct.vector.Vec<%struct.CompilerType>"*, %"struct.vector.Vec<%struct.CompilerType>"** %tmp66
-	%tmp68 = getelementptr inbounds %"struct.vector.Vec<%struct.CompilerType>", %"struct.vector.Vec<%struct.CompilerType>"* %tmp67, i32 %tmp65
-	store i32 0, i32* %v1
-	br label %loop_cond9
-loop_cond9:
-	%tmp69 = load i32, i32* %v1
-	%tmp70 = icmp uge i32 %tmp69, %tmp62
-	br i1 %tmp70, label %then10, label %endif10
-then10:
-	br label %loop_body9_exit
-endif10:
-	%tmp71 = load i32, i32* %v1
-	%tmp72 = load %struct.CompilerType*, %struct.CompilerType** %tmp68
-	%tmp73 = getelementptr inbounds %struct.CompilerType, %struct.CompilerType* %tmp72, i32 %tmp71
-	call void @compiler_type_push(%struct.CompilerType* %tmp73, %struct.PathEx* %path, %struct.SymbolTable* %symbol_table, %struct.string.String* %stdout)
-	%tmp74 = load i32, i32* %v1
-	%tmp75 = sub i32 %tmp62, 1
-	%tmp76 = icmp ne i32 %tmp74, %tmp75
-	br i1 %tmp76, label %then11, label %endif11
-then11:
-	call void @string.append(%struct.string.String* %stdout, i8 46)
-	br label %endif11
-endif11:
-	%tmp77 = load i32, i32* %v1
-	%tmp78 = add i32 %tmp77, 1
-	store i32 %tmp78, i32* %v1
-	br label %loop_cond9
-loop_body9_exit:
-	call void @string.append(%struct.string.String* %stdout, i8 95)
-	br label %endif8
-else8:
-	call void @process.throw(i8* @.str.319)
-	br label %endif8
-endif8:
-	br label %endif7
-endif7:
-	br label %endif4
-endif4:
-	br label %endif1
-endif1:
-	br label %endif0
-endif0:
-	ret void
-}
 define void @compile_internal_sym_table_prefill(%struct.Path* %path, %"struct.vector.Vec<%struct.Stmt>"* %statement_vector, %struct.SymbolTable* %symbol_table, %struct.string.String* %stdout){
 	%v0 = alloca i32
 	%v1 = alloca i32
@@ -12954,14 +14286,16 @@ define void @compile_internal_sym_table_prefill(%struct.Path* %path, %"struct.ve
 	%v6 = alloca %struct.SymbolTableEntry
 	%v7 = alloca %struct.GenericStructSymbolTableEntry*
 	%v8 = alloca i32
-	%v9 = alloca %struct.StructSymbolTableEntry*
-	%v10 = alloca %struct.Layout
-	%v11 = alloca %struct.PathEx
-	%v12 = alloca %struct.SymbolTableEntry
-	%v13 = alloca %struct.Path
-	%v14 = alloca %struct.PathEx
-	%v15 = alloca %struct.SymbolTableEntry
-	%v16 = alloca i32
+	%v9 = alloca %struct.string.String
+	%v10 = alloca %struct.StructSymbolTableEntry*
+	%v11 = alloca %struct.layout.Layout
+	%v12 = alloca %struct.string.String
+	%v13 = alloca %struct.PathEx
+	%v14 = alloca %struct.SymbolTableEntry
+	%v15 = alloca %struct.Path
+	%v16 = alloca %struct.PathEx
+	%v17 = alloca %struct.SymbolTableEntry
+	%v18 = alloca i32
 	store i32 0, i32* %v0
 	%tmp0 = getelementptr inbounds %"struct.vector.Vec<%struct.Stmt>", %"struct.vector.Vec<%struct.Stmt>"* %statement_vector, i32 0, i32 1
 	%tmp1 = load i32, i32* %tmp0
@@ -12987,7 +14321,7 @@ endif1:
 	%tmp13 = icmp eq i8 %tmp12, 0
 	br i1 %tmp13, label %then2, label %else2
 then2:
-	call void @process.throw(i8* @.str.320)
+	call void @process.throw(i8* @.str.342)
 	br label %endif2
 else2:
 	%tmp14 = load %struct.Stmt*, %struct.Stmt** %v2
@@ -13073,8 +14407,8 @@ then7:
 	store %"struct.vector.Vec<%struct.GenericStructDefinedField>" %tmp59, %"struct.vector.Vec<%struct.GenericStructDefinedField>"* %tmp58
 	%tmp60 = load %struct.GenericStructSymbolTableEntry*, %struct.GenericStructSymbolTableEntry** %v7
 	%tmp61 = getelementptr inbounds %struct.GenericStructSymbolTableEntry, %struct.GenericStructSymbolTableEntry* %tmp60, i32 0, i32 2
-	%tmp62 = call %"struct.vector.Vec<%struct.vector.Vec<%struct.CompilerType>>" @"vector.new<%struct.vector.Vec<%struct.CompilerType>>"()
-	store %"struct.vector.Vec<%struct.vector.Vec<%struct.CompilerType>>" %tmp62, %"struct.vector.Vec<%struct.vector.Vec<%struct.CompilerType>>"* %tmp61
+	%tmp62 = call %"struct.vector.Vec<%struct.Implementation>" @"vector.new<%struct.Implementation>"()
+	store %"struct.vector.Vec<%struct.Implementation>" %tmp62, %"struct.vector.Vec<%struct.Implementation>"* %tmp61
 	%tmp63 = load %struct.GenericStructSymbolTableEntry*, %struct.GenericStructSymbolTableEntry** %v7
 	%tmp64 = getelementptr inbounds %struct.GenericStructSymbolTableEntry, %struct.GenericStructSymbolTableEntry* %tmp63, i32 0, i32 1
 	%tmp65 = call %"struct.vector.Vec<ui16>" @"vector.new<ui16>"()
@@ -13107,186 +14441,212 @@ endif9:
 	store i32 %tmp83, i32* %v8
 	br label %loop_cond8
 loop_body8_exit:
+	%tmp84 = call %struct.string.String @string.from_c_string(i8* @.str.343)
+	store %struct.string.String %tmp84, %struct.string.String* %v9
+	%tmp85 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %v6, i32 0, i32 1
+	%tmp86 = getelementptr inbounds %struct.SymbolTable, %struct.SymbolTable* %symbol_table, i32 0, i32 1
+	%tmp87 = getelementptr inbounds %struct.SymbolTable, %struct.SymbolTable* %symbol_table, i32 0, i32 1
+	%tmp88 = load %"struct.vector.Vec<%struct.string.String>"*, %"struct.vector.Vec<%struct.string.String>"** %tmp87
+	%tmp89 = load %struct.string.String*, %struct.string.String** %tmp88
+	call void @append_path_ex(%struct.PathEx* %tmp85, %struct.string.String* %tmp89, %struct.string.String* %v9)
+	%tmp90 = load %struct.GenericStructSymbolTableEntry*, %struct.GenericStructSymbolTableEntry** %v7
+	%tmp91 = getelementptr inbounds %struct.GenericStructSymbolTableEntry, %struct.GenericStructSymbolTableEntry* %tmp90, i32 0, i32 3
+	%tmp92 = load %struct.string.String, %struct.string.String* %v9
+	store %struct.string.String %tmp92, %struct.string.String* %tmp91
+; Variable llvm_signature is out.
 	br label %endif7
 else7:
 	store i32 2, i32* %v6
-	%tmp84 = call i8* @mem.malloc(i64 48)
-	store %struct.StructSymbolTableEntry* %tmp84, %struct.StructSymbolTableEntry** %v9
-	%tmp85 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %v6, i32 0, i32 2
-	%tmp86 = load %struct.StructSymbolTableEntry*, %struct.StructSymbolTableEntry** %v9
-	store i8* %tmp86, i8** %tmp85
-	%tmp87 = load %struct.StructSymbolTableEntry*, %struct.StructSymbolTableEntry** %v9
-	%tmp88 = getelementptr inbounds %struct.StructSymbolTableEntry, %struct.StructSymbolTableEntry* %tmp87, i32 0, i32 3
-	%tmp89 = getelementptr inbounds %struct.StructNode, %struct.StructNode* %tmp42, i32 0, i32 1
-	%tmp90 = load i8, i8* %tmp89
-	store i8 %tmp90, i8* %tmp88
-	%tmp91 = load %struct.StructSymbolTableEntry*, %struct.StructSymbolTableEntry** %v9
-	%tmp92 = call %"struct.vector.Vec<%struct.StructDefinedField>" @"vector.new<%struct.StructDefinedField>"()
-	store %"struct.vector.Vec<%struct.StructDefinedField>" %tmp92, %"struct.vector.Vec<%struct.StructDefinedField>"* %tmp91
-	%tmp93 = load %struct.StructSymbolTableEntry*, %struct.StructSymbolTableEntry** %v9
-	%tmp94 = getelementptr inbounds %struct.StructSymbolTableEntry, %struct.StructSymbolTableEntry* %tmp93, i32 0, i32 1
-	store i16 65535, i16* %v10
-	%tmp95 = getelementptr inbounds %struct.Layout, %struct.Layout* %v10, i32 0, i32 1
-	store i16 65535, i16* %tmp95
-	%tmp96 = load %struct.Layout, %struct.Layout* %v10
-	store %struct.Layout %tmp96, %struct.Layout* %tmp94
+	%tmp93 = call i8* @mem.malloc(i64 48)
+	store %struct.StructSymbolTableEntry* %tmp93, %struct.StructSymbolTableEntry** %v10
+	%tmp94 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %v6, i32 0, i32 2
+	%tmp95 = load %struct.StructSymbolTableEntry*, %struct.StructSymbolTableEntry** %v10
+	store i8* %tmp95, i8** %tmp94
+	%tmp96 = load %struct.StructSymbolTableEntry*, %struct.StructSymbolTableEntry** %v10
+	%tmp97 = getelementptr inbounds %struct.StructSymbolTableEntry, %struct.StructSymbolTableEntry* %tmp96, i32 0, i32 3
+	%tmp98 = getelementptr inbounds %struct.StructNode, %struct.StructNode* %tmp42, i32 0, i32 1
+	%tmp99 = load i8, i8* %tmp98
+	store i8 %tmp99, i8* %tmp97
+	%tmp100 = load %struct.StructSymbolTableEntry*, %struct.StructSymbolTableEntry** %v10
+	%tmp101 = call %"struct.vector.Vec<%struct.StructDefinedField>" @"vector.new<%struct.StructDefinedField>"()
+	store %"struct.vector.Vec<%struct.StructDefinedField>" %tmp101, %"struct.vector.Vec<%struct.StructDefinedField>"* %tmp100
+	%tmp102 = load %struct.StructSymbolTableEntry*, %struct.StructSymbolTableEntry** %v10
+	%tmp103 = getelementptr inbounds %struct.StructSymbolTableEntry, %struct.StructSymbolTableEntry* %tmp102, i32 0, i32 1
+	store i16 65535, i16* %v11
+	%tmp104 = getelementptr inbounds %struct.layout.Layout, %struct.layout.Layout* %v11, i32 0, i32 1
+	store i16 65535, i16* %tmp104
+	%tmp105 = load %struct.layout.Layout, %struct.layout.Layout* %v11
+	store %struct.layout.Layout %tmp105, %struct.layout.Layout* %tmp103
+	%tmp106 = call %struct.string.String @string.from_c_string(i8* @.str.343)
+	store %struct.string.String %tmp106, %struct.string.String* %v12
+	%tmp107 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %v6, i32 0, i32 1
+	%tmp108 = getelementptr inbounds %struct.SymbolTable, %struct.SymbolTable* %symbol_table, i32 0, i32 1
+	%tmp109 = getelementptr inbounds %struct.SymbolTable, %struct.SymbolTable* %symbol_table, i32 0, i32 1
+	%tmp110 = load %"struct.vector.Vec<%struct.string.String>"*, %"struct.vector.Vec<%struct.string.String>"** %tmp109
+	%tmp111 = load %struct.string.String*, %struct.string.String** %tmp110
+	call void @append_path_ex(%struct.PathEx* %tmp107, %struct.string.String* %tmp111, %struct.string.String* %v12)
+	%tmp112 = load %struct.StructSymbolTableEntry*, %struct.StructSymbolTableEntry** %v10
+	%tmp113 = getelementptr inbounds %struct.StructSymbolTableEntry, %struct.StructSymbolTableEntry* %tmp112, i32 0, i32 2
+	%tmp114 = load %struct.string.String, %struct.string.String* %v12
+	store %struct.string.String %tmp114, %struct.string.String* %tmp113
+; Variable llvm_signature is out.
 	br label %endif7
 endif7:
-	%tmp97 = load %struct.SymbolTableEntry, %struct.SymbolTableEntry* %v6
-	call void @insert_symbol_into_table(%struct.SymbolTable* %symbol_table, %struct.SymbolTableEntry %tmp97)
-	%tmp98 = load i32, i32* %v0
-	%tmp99 = add i32 %tmp98, 1
-	store i32 %tmp99, i32* %v0
+	%tmp115 = load %struct.SymbolTableEntry, %struct.SymbolTableEntry* %v6
+	call void @insert_symbol_into_table(%struct.SymbolTable* %symbol_table, %struct.SymbolTableEntry %tmp115)
+	%tmp116 = load i32, i32* %v0
+	%tmp117 = add i32 %tmp116, 1
+	store i32 %tmp117, i32* %v0
 	br label %loop_body0
 ; Variable sym_t_entry is out.
 ; Variable struct_path is out.
 else6:
-	%tmp100 = load %struct.Stmt*, %struct.Stmt** %v2
-	%tmp101 = load i8, i8* %tmp100
-	%tmp102 = icmp eq i8 %tmp101, 13
-	br i1 %tmp102, label %then11, label %else11
+	%tmp118 = load %struct.Stmt*, %struct.Stmt** %v2
+	%tmp119 = load i8, i8* %tmp118
+	%tmp120 = icmp eq i8 %tmp119, 13
+	br i1 %tmp120, label %then11, label %else11
 then11:
-	%tmp103 = load %struct.Stmt*, %struct.Stmt** %v2
-	%tmp104 = getelementptr inbounds %struct.Stmt, %struct.Stmt* %tmp103, i32 0, i32 1
-	%tmp105 = load i8*, i8** %tmp104
-	%tmp106 = load i16, i16* %tmp105
-	%tmp107 = call %struct.PathEx @path_to_path_ex_name(%struct.Path* %path, i16 %tmp106)
-	store %struct.PathEx %tmp107, %struct.PathEx* %v11
-	%tmp108 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %v12, i32 0, i32 1
-	%tmp109 = load %struct.PathEx, %struct.PathEx* %v11
-	store %struct.PathEx %tmp109, %struct.PathEx* %tmp108
-	store i32 4, i32* %v12
-	%tmp110 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %v12, i32 0, i32 2
-	store i8* null, i8** %tmp110
-	%tmp111 = load %struct.SymbolTableEntry, %struct.SymbolTableEntry* %v12
-	call void @insert_symbol_into_table(%struct.SymbolTable* %symbol_table, %struct.SymbolTableEntry %tmp111)
-	%tmp112 = load i32, i32* %v0
-	%tmp113 = add i32 %tmp112, 1
-	store i32 %tmp113, i32* %v0
-	br label %loop_body0
-; Variable sym_t_entry is out.
-; Variable enum_path is out.
-else11:
-	%tmp114 = load %struct.Stmt*, %struct.Stmt** %v2
-	%tmp115 = load i8, i8* %tmp114
-	%tmp116 = icmp eq i8 %tmp115, 14
-	br i1 %tmp116, label %then12, label %else12
-then12:
-	%tmp117 = load %struct.Stmt*, %struct.Stmt** %v2
-	%tmp118 = getelementptr inbounds %struct.Stmt, %struct.Stmt* %tmp117, i32 0, i32 1
-	%tmp119 = load i8*, i8** %tmp118
-	%tmp120 = load %struct.Path, %struct.Path* %path
-	store %struct.Path %tmp120, %struct.Path* %v13
-	%tmp121 = load i8, i8* %v13
-	%tmp122 = icmp eq i8 %tmp121, 8
-	br i1 %tmp122, label %then13, label %endif13
-then13:
-	call void @process.throw(i8* @.str.321)
-	br label %endif13
-endif13:
-	%tmp123 = getelementptr inbounds %struct.Path, %struct.Path* %v13, i32 0, i32 1
-	%tmp124 = load i8, i8* %v13
-	%tmp125 = getelementptr inbounds [8 x i16], [8 x i16]* %tmp123, i32 0, i8 %tmp124
-	%tmp126 = load i16, i16* %tmp119
-	store i16 %tmp126, i16* %tmp125
-	%tmp127 = load i8, i8* %v13
-	%tmp128 = add i8 %tmp127, 1
-	store i8 %tmp128, i8* %v13
-	%tmp129 = getelementptr inbounds %struct.NamespaceNode, %struct.NamespaceNode* %tmp119, i32 0, i32 1
-	call void @compile_internal_sym_table_prefill(%struct.Path* %v13, %"struct.vector.Vec<%struct.Stmt>"* %tmp129, %struct.SymbolTable* %symbol_table, %struct.string.String* %stdout)
+	%tmp121 = load %struct.Stmt*, %struct.Stmt** %v2
+	%tmp122 = getelementptr inbounds %struct.Stmt, %struct.Stmt* %tmp121, i32 0, i32 1
+	%tmp123 = load i8*, i8** %tmp122
+	%tmp124 = load i16, i16* %tmp123
+	%tmp125 = call %struct.PathEx @path_to_path_ex_name(%struct.Path* %path, i16 %tmp124)
+	store %struct.PathEx %tmp125, %struct.PathEx* %v13
+	%tmp126 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %v14, i32 0, i32 1
+	%tmp127 = load %struct.PathEx, %struct.PathEx* %v13
+	store %struct.PathEx %tmp127, %struct.PathEx* %tmp126
+	store i32 4, i32* %v14
+	%tmp128 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %v14, i32 0, i32 2
+	store i8* null, i8** %tmp128
+	%tmp129 = load %struct.SymbolTableEntry, %struct.SymbolTableEntry* %v14
+	call void @insert_symbol_into_table(%struct.SymbolTable* %symbol_table, %struct.SymbolTableEntry %tmp129)
 	%tmp130 = load i32, i32* %v0
 	%tmp131 = add i32 %tmp130, 1
 	store i32 %tmp131, i32* %v0
 	br label %loop_body0
-; Variable path is out.
-else12:
+; Variable sym_t_entry is out.
+; Variable enum_path is out.
+else11:
 	%tmp132 = load %struct.Stmt*, %struct.Stmt** %v2
 	%tmp133 = load i8, i8* %tmp132
-	%tmp134 = icmp eq i8 %tmp133, 1
-	br i1 %tmp134, label %then14, label %endif14
-then14:
+	%tmp134 = icmp eq i8 %tmp133, 14
+	br i1 %tmp134, label %then12, label %else12
+then12:
 	%tmp135 = load %struct.Stmt*, %struct.Stmt** %v2
 	%tmp136 = getelementptr inbounds %struct.Stmt, %struct.Stmt* %tmp135, i32 0, i32 1
 	%tmp137 = load i8*, i8** %tmp136
-	%tmp138 = load i16, i16* %tmp137
-	%tmp139 = call %struct.PathEx @path_to_path_ex_name(%struct.Path* %path, i16 %tmp138)
-	store %struct.PathEx %tmp139, %struct.PathEx* %v14
-	%tmp140 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %v15, i32 0, i32 1
-	%tmp141 = load %struct.PathEx, %struct.PathEx* %v14
-	store %struct.PathEx %tmp141, %struct.PathEx* %tmp140
-	%tmp142 = getelementptr inbounds %struct.DeclarationNode, %struct.DeclarationNode* %tmp137, i32 0, i32 4
-	%tmp143 = load i8, i8* %tmp142
-	%tmp144 = icmp eq i8 %tmp143, 2
-	br i1 %tmp144, label %then15, label %else15
+	%tmp138 = load %struct.Path, %struct.Path* %path
+	store %struct.Path %tmp138, %struct.Path* %v15
+	%tmp139 = load i8, i8* %v15
+	%tmp140 = icmp eq i8 %tmp139, 8
+	br i1 %tmp140, label %then13, label %endif13
+then13:
+	call void @process.throw(i8* @.str.344)
+	br label %endif13
+endif13:
+	%tmp141 = getelementptr inbounds %struct.Path, %struct.Path* %v15, i32 0, i32 1
+	%tmp142 = load i8, i8* %v15
+	%tmp143 = getelementptr inbounds [8 x i16], [8 x i16]* %tmp141, i32 0, i8 %tmp142
+	%tmp144 = load i16, i16* %tmp137
+	store i16 %tmp144, i16* %tmp143
+	%tmp145 = load i8, i8* %v15
+	%tmp146 = add i8 %tmp145, 1
+	store i8 %tmp146, i8* %v15
+	%tmp147 = getelementptr inbounds %struct.NamespaceNode, %struct.NamespaceNode* %tmp137, i32 0, i32 1
+	call void @compile_internal_sym_table_prefill(%struct.Path* %v15, %"struct.vector.Vec<%struct.Stmt>"* %tmp147, %struct.SymbolTable* %symbol_table, %struct.string.String* %stdout)
+	%tmp148 = load i32, i32* %v0
+	%tmp149 = add i32 %tmp148, 1
+	store i32 %tmp149, i32* %v0
+	br label %loop_body0
+; Variable path is out.
+else12:
+	%tmp150 = load %struct.Stmt*, %struct.Stmt** %v2
+	%tmp151 = load i8, i8* %tmp150
+	%tmp152 = icmp eq i8 %tmp151, 1
+	br i1 %tmp152, label %then14, label %endif14
+then14:
+	%tmp153 = load %struct.Stmt*, %struct.Stmt** %v2
+	%tmp154 = getelementptr inbounds %struct.Stmt, %struct.Stmt* %tmp153, i32 0, i32 1
+	%tmp155 = load i8*, i8** %tmp154
+	%tmp156 = load i16, i16* %tmp155
+	%tmp157 = call %struct.PathEx @path_to_path_ex_name(%struct.Path* %path, i16 %tmp156)
+	store %struct.PathEx %tmp157, %struct.PathEx* %v16
+	%tmp158 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %v17, i32 0, i32 1
+	%tmp159 = load %struct.PathEx, %struct.PathEx* %v16
+	store %struct.PathEx %tmp159, %struct.PathEx* %tmp158
+	%tmp160 = getelementptr inbounds %struct.DeclarationNode, %struct.DeclarationNode* %tmp155, i32 0, i32 4
+	%tmp161 = load i8, i8* %tmp160
+	%tmp162 = icmp eq i8 %tmp161, 2
+	br i1 %tmp162, label %then15, label %else15
 then15:
-	store i32 6, i32* %v15
-	%tmp145 = getelementptr inbounds %struct.DeclarationNode, %struct.DeclarationNode* %tmp137, i32 0, i32 1
-	%tmp146 = load i1, i1* %tmp145
-	%tmp147 = xor i1 1, %tmp146
-	br i1 %tmp147, label %then16, label %endif16
+	store i32 6, i32* %v17
+	%tmp163 = getelementptr inbounds %struct.DeclarationNode, %struct.DeclarationNode* %tmp155, i32 0, i32 1
+	%tmp164 = load i1, i1* %tmp163
+	%tmp165 = xor i1 1, %tmp164
+	br i1 %tmp165, label %then16, label %endif16
 then16:
-	call void @process.throw(i8* @.str.322)
+	call void @process.throw(i8* @.str.345)
 	br label %endif16
 endif16:
 	br label %endif15
 else15:
-	%tmp148 = getelementptr inbounds %struct.DeclarationNode, %struct.DeclarationNode* %tmp137, i32 0, i32 4
-	%tmp149 = load i8, i8* %tmp148
-	%tmp150 = icmp eq i8 %tmp149, 1
-	br i1 %tmp150, label %then17, label %else17
+	%tmp166 = getelementptr inbounds %struct.DeclarationNode, %struct.DeclarationNode* %tmp155, i32 0, i32 4
+	%tmp167 = load i8, i8* %tmp166
+	%tmp168 = icmp eq i8 %tmp167, 1
+	br i1 %tmp168, label %then17, label %else17
 then17:
-	store i32 5, i32* %v15
+	store i32 5, i32* %v17
 	br label %endif17
 else17:
-	%tmp151 = getelementptr inbounds %struct.DeclarationNode, %struct.DeclarationNode* %tmp137, i32 0, i32 4
-	%tmp152 = load i8, i8* %tmp151
-	%tmp153 = icmp eq i8 %tmp152, 0
-	br i1 %tmp153, label %then18, label %endif18
+	%tmp169 = getelementptr inbounds %struct.DeclarationNode, %struct.DeclarationNode* %tmp155, i32 0, i32 4
+	%tmp170 = load i8, i8* %tmp169
+	%tmp171 = icmp eq i8 %tmp170, 0
+	br i1 %tmp171, label %then18, label %endif18
 then18:
-	call void @process.throw(i8* @.str.323)
+	call void @process.throw(i8* @.str.346)
 	br label %endif18
 endif18:
 	br label %endif17
 endif17:
 	br label %endif15
 endif15:
-	%tmp154 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %v15, i32 0, i32 2
-	store i8* null, i8** %tmp154
-	%tmp155 = load %struct.SymbolTableEntry, %struct.SymbolTableEntry* %v15
-	call void @insert_symbol_into_table(%struct.SymbolTable* %symbol_table, %struct.SymbolTableEntry %tmp155)
-	%tmp156 = load i32, i32* %v0
-	%tmp157 = add i32 %tmp156, 1
-	store i32 %tmp157, i32* %v0
+	%tmp172 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %v17, i32 0, i32 2
+	store i8* null, i8** %tmp172
+	%tmp173 = load %struct.SymbolTableEntry, %struct.SymbolTableEntry* %v17
+	call void @insert_symbol_into_table(%struct.SymbolTable* %symbol_table, %struct.SymbolTableEntry %tmp173)
+	%tmp174 = load i32, i32* %v0
+	%tmp175 = add i32 %tmp174, 1
+	store i32 %tmp175, i32* %v0
 	br label %loop_body0
 ; Variable sym_t_entry is out.
 ; Variable dec_path is out.
 endif14:
 	br label %endif2
 endif2:
-	store i32 0, i32* %v16
+	store i32 0, i32* %v18
 	br label %loop_cond19
 loop_cond19:
-	%tmp158 = load i32, i32* %v16
-	%tmp159 = icmp uge i32 %tmp158, 3
-	br i1 %tmp159, label %then20, label %endif20
+	%tmp176 = load i32, i32* %v18
+	%tmp177 = icmp uge i32 %tmp176, 3
+	br i1 %tmp177, label %then20, label %endif20
 then20:
 	br label %loop_body19_exit
 endif20:
-	%tmp160 = load i32, i32* %v0
-	%tmp161 = load i32, i32* %v16
-	%tmp162 = add i32 %tmp160, %tmp161
-	%tmp163 = load %struct.Stmt*, %struct.Stmt** %statement_vector
-	%tmp164 = getelementptr inbounds %struct.Stmt, %struct.Stmt* %tmp163, i32 %tmp162
-	%tmp165 = load i8, i8* %tmp164
-	%tmp166 = zext i8 %tmp165 to i64
-	call void @console.println_i64(i64 %tmp166)
-	call void @console.write(i8* @.str.324, i32 6)
-	%tmp167 = load i32, i32* %v16
-	%tmp168 = add i32 %tmp167, 1
-	store i32 %tmp168, i32* %v16
+	%tmp178 = load i32, i32* %v0
+	%tmp179 = load i32, i32* %v18
+	%tmp180 = add i32 %tmp178, %tmp179
+	%tmp181 = load %struct.Stmt*, %struct.Stmt** %statement_vector
+	%tmp182 = getelementptr inbounds %struct.Stmt, %struct.Stmt* %tmp181, i32 %tmp180
+	%tmp183 = load i8, i8* %tmp182
+	%tmp184 = zext i8 %tmp183 to i64
+	call void @console.println_i64(i64 %tmp184)
+	call void @console.write(i8* @.str.347, i32 6)
+	%tmp185 = load i32, i32* %v18
+	%tmp186 = add i32 %tmp185, 1
+	store i32 %tmp186, i32* %v18
 	br label %loop_cond19
 loop_body19_exit:
-	call void @process.throw(i8* @.str.325)
+	call void @process.throw(i8* @.str.348)
 	br label %loop_body0
 loop_body0:
 	br label %loop_start0
@@ -13300,31 +14660,30 @@ define void @compile_internal_sym_table(%struct.Path* %path, %"struct.vector.Vec
 	%v3 = alloca i32
 	%v4 = alloca %struct.PathEx
 	%v5 = alloca %struct.GenericFunctionSymbolTableEntry*
-	%v6 = alloca %struct.CompilerType
+	%v6 = alloca %struct.comp_type.CompilerType
 	%v7 = alloca i32
 	%v8 = alloca %struct.GenericStructDefinedField
 	%v9 = alloca %struct.FunctionSymbolTableEntry*
-	%v10 = alloca %struct.CompilerType
+	%v10 = alloca %struct.comp_type.CompilerType
 	%v11 = alloca i32
 	%v12 = alloca %struct.StructDefinedField
 	%v13 = alloca %struct.PathEx
 	%v14 = alloca %struct.GenericStructSymbolTableEntry*
 	%v15 = alloca i32
 	%v16 = alloca %struct.GenericStructDefinedField
-	%v17 = alloca %struct.string.String
-	%v18 = alloca %struct.StructSymbolTableEntry*
-	%v19 = alloca i32
-	%v20 = alloca %struct.StructDefinedField
-	%v21 = alloca %struct.string.String
-	%v22 = alloca %struct.PathEx
-	%v23 = alloca i64
-	%v24 = alloca i32
-	%v25 = alloca %struct.EnumDefinedField
-	%v26 = alloca %struct.Rvalue
-	%v27 = alloca %struct.Path
-	%v28 = alloca %struct.PathEx
-	%v29 = alloca %struct.Rvalue
-	%v30 = alloca i32
+	%v17 = alloca %struct.StructSymbolTableEntry*
+	%v18 = alloca i32
+	%v19 = alloca %struct.StructDefinedField
+	%v20 = alloca %struct.PathEx
+	%v21 = alloca %struct.comp_type.CompilerType
+	%v22 = alloca i64
+	%v23 = alloca i32
+	%v24 = alloca %struct.EnumDefinedField
+	%v25 = alloca %struct.rvalue.Rvalue
+	%v26 = alloca %struct.Path
+	%v27 = alloca %struct.PathEx
+	%v28 = alloca %struct.rvalue.Rvalue
+	%v29 = alloca i32
 	store i32 0, i32* %v0
 	%tmp0 = getelementptr inbounds %"struct.vector.Vec<%struct.Stmt>", %"struct.vector.Vec<%struct.Stmt>"* %statement_vector, i32 0, i32 1
 	%tmp1 = load i32, i32* %tmp0
@@ -13350,7 +14709,7 @@ endif1:
 	%tmp13 = icmp eq i8 %tmp12, 0
 	br i1 %tmp13, label %then2, label %else2
 then2:
-	call void @process.throw(i8* @.str.320)
+	call void @process.throw(i8* @.str.342)
 	%tmp14 = load %struct.Stmt*, %struct.Stmt** %v2
 	%tmp15 = getelementptr inbounds %struct.Stmt, %struct.Stmt* %tmp14, i32 0, i32 1
 	%tmp16 = load i8*, i8** %tmp15
@@ -13392,7 +14751,7 @@ endif4:
 	%tmp42 = icmp ne i32 %tmp37, %tmp41
 	br i1 %tmp42, label %then5, label %endif5
 then5:
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.89, i32 2)
+	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.115, i32 2)
 	br label %endif5
 endif5:
 	%tmp43 = load i32, i32* %v3
@@ -13436,13 +14795,13 @@ then7:
 	%tmp65 = icmp ne i32 %tmp64, 0
 	br i1 %tmp65, label %then8, label %endif8
 then8:
-	%tmp66 = call i8* @mem.malloc(i64 96)
+	%tmp66 = call i8* @mem.malloc(i64 112)
 	store %struct.GenericFunctionSymbolTableEntry* %tmp66, %struct.GenericFunctionSymbolTableEntry** %v5
 	%tmp67 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp61, i32 0, i32 2
 	%tmp68 = load %struct.GenericFunctionSymbolTableEntry*, %struct.GenericFunctionSymbolTableEntry** %v5
 	store i8* %tmp68, i8** %tmp67
 	%tmp69 = load %struct.GenericFunctionSymbolTableEntry*, %struct.GenericFunctionSymbolTableEntry** %v5
-	%tmp70 = getelementptr inbounds %struct.GenericFunctionSymbolTableEntry, %struct.GenericFunctionSymbolTableEntry* %tmp69, i32 0, i32 6
+	%tmp70 = getelementptr inbounds %struct.GenericFunctionSymbolTableEntry, %struct.GenericFunctionSymbolTableEntry* %tmp69, i32 0, i32 7
 	%tmp71 = getelementptr inbounds %struct.FnNode, %struct.FnNode* %tmp57, i32 0, i32 1
 	%tmp72 = load i8, i8* %tmp71
 	store i8 %tmp72, i8* %tmp70
@@ -13459,810 +14818,501 @@ then9:
 	%tmp80 = getelementptr inbounds %struct.FnNode, %struct.FnNode* %tmp57, i32 0, i32 5
 	%tmp81 = load %struct.GenericFunctionSymbolTableEntry*, %struct.GenericFunctionSymbolTableEntry** %v5
 	%tmp82 = getelementptr inbounds %struct.GenericFunctionSymbolTableEntry, %struct.GenericFunctionSymbolTableEntry* %tmp81, i32 0, i32 2
-	%tmp83 = call i1 @get_compiler_type_generic(%struct.Type* %tmp79, %struct.Path* %path, %struct.SymbolTable* %symbol_table, %"struct.vector.Vec<ui16>"* %tmp80, %struct.CompilerType* %tmp82)
+	%tmp83 = call i1 @comp_type.get_compiler_type_generic(%struct.Type* %tmp79, %struct.Path* %path, %struct.SymbolTable* %symbol_table, %"struct.vector.Vec<ui16>"* %tmp80, %struct.comp_type.CompilerType* %tmp82)
 	store i1 %tmp83, i1* %tmp78
 	br label %endif9
 else9:
-	%tmp84 = load %struct.PrimitiveTypeInfo*, %struct.PrimitiveTypeInfo** @VOID_TYPE
-	store i32 0, i32* %v6
-	%tmp85 = getelementptr inbounds %struct.CompilerType, %struct.CompilerType* %v6, i32 0, i32 1
-	store i8* %tmp84, i8** %tmp85
+	%tmp84 = load %struct.GenericFunctionSymbolTableEntry*, %struct.GenericFunctionSymbolTableEntry** %v5
+	%tmp85 = getelementptr inbounds %struct.GenericFunctionSymbolTableEntry, %struct.GenericFunctionSymbolTableEntry* %tmp84, i32 0, i32 1
+	store i1 false, i1* %tmp85
 	%tmp86 = load %struct.GenericFunctionSymbolTableEntry*, %struct.GenericFunctionSymbolTableEntry** %v5
-	%tmp87 = getelementptr inbounds %struct.GenericFunctionSymbolTableEntry, %struct.GenericFunctionSymbolTableEntry* %tmp86, i32 0, i32 1
-	store i1 false, i1* %tmp87
-	%tmp88 = load %struct.GenericFunctionSymbolTableEntry*, %struct.GenericFunctionSymbolTableEntry** %v5
-	%tmp89 = getelementptr inbounds %struct.GenericFunctionSymbolTableEntry, %struct.GenericFunctionSymbolTableEntry* %tmp88, i32 0, i32 2
-	%tmp90 = load %struct.CompilerType, %struct.CompilerType* %v6
-	store %struct.CompilerType %tmp90, %struct.CompilerType* %tmp89
-; Variable z is out.
+	%tmp87 = getelementptr inbounds %struct.GenericFunctionSymbolTableEntry, %struct.GenericFunctionSymbolTableEntry* %tmp86, i32 0, i32 2
+	%tmp88 = load %struct.primitives.PrimitiveTypeInfo*, %struct.primitives.PrimitiveTypeInfo** @primitives.VOID_TYPE
+	store i32 2, i32* %v6
+	%tmp89 = getelementptr inbounds %struct.comp_type.CompilerType, %struct.comp_type.CompilerType* %v6, i32 0, i32 1
+	%tmp90 = ptrtoint %struct.primitives.PrimitiveTypeInfo* %tmp88 to i64
+	store i64 %tmp90, i64* %tmp89
+	%tmp91 = load %struct.comp_type.CompilerType, %struct.comp_type.CompilerType* %v6
+	store %struct.comp_type.CompilerType %tmp91, %struct.comp_type.CompilerType* %tmp87
 	br label %endif9
 endif9:
-	%tmp91 = getelementptr inbounds %struct.FnNode, %struct.FnNode* %tmp57, i32 0, i32 2
-	%tmp92 = getelementptr inbounds %"struct.vector.Vec<%struct.Argument>", %"struct.vector.Vec<%struct.Argument>"* %tmp91, i32 0, i32 1
-	%tmp93 = load i32, i32* %tmp92
+	%tmp92 = getelementptr inbounds %struct.FnNode, %struct.FnNode* %tmp57, i32 0, i32 2
+	%tmp93 = getelementptr inbounds %"struct.vector.Vec<%struct.Argument>", %"struct.vector.Vec<%struct.Argument>"* %tmp92, i32 0, i32 1
+	%tmp94 = load i32, i32* %tmp93
 	store i32 0, i32* %v7
-	br label %loop_cond10
-loop_cond10:
-	%tmp94 = load i32, i32* %v7
-	%tmp95 = getelementptr inbounds %struct.FnNode, %struct.FnNode* %tmp57, i32 0, i32 2
-	%tmp96 = getelementptr inbounds %"struct.vector.Vec<%struct.Argument>", %"struct.vector.Vec<%struct.Argument>"* %tmp95, i32 0, i32 1
-	%tmp97 = load i32, i32* %tmp96
-	%tmp98 = icmp uge i32 %tmp94, %tmp97
-	br i1 %tmp98, label %then11, label %endif11
-then11:
-	br label %loop_body10_exit
-endif11:
-	%tmp100 = load i32, i32* %v7
-	%tmp101 = getelementptr inbounds %struct.FnNode, %struct.FnNode* %tmp57, i32 0, i32 2
-	%tmp102 = load %struct.Argument*, %struct.Argument** %tmp101
-	%tmp103 = getelementptr inbounds %struct.Argument, %struct.Argument* %tmp102, i32 %tmp100
-	%tmp104 = load i16, i16* %tmp103
-	store i16 %tmp104, i16* %v8
-	%tmp105 = getelementptr inbounds %struct.GenericStructDefinedField, %struct.GenericStructDefinedField* %v8, i32 0, i32 2
-	%tmp106 = getelementptr inbounds %struct.Argument, %struct.Argument* %tmp103, i32 0, i32 1
-	%tmp107 = getelementptr inbounds %struct.FnNode, %struct.FnNode* %tmp57, i32 0, i32 5
-	%tmp108 = getelementptr inbounds %struct.GenericStructDefinedField, %struct.GenericStructDefinedField* %v8, i32 0, i32 1
-	%tmp109 = call i1 @get_compiler_type_generic(%struct.Type* %tmp106, %struct.Path* %path, %struct.SymbolTable* %symbol_table, %"struct.vector.Vec<ui16>"* %tmp107, %struct.CompilerType* %tmp108)
-	store i1 %tmp109, i1* %tmp105
-	%tmp110 = load %struct.GenericFunctionSymbolTableEntry*, %struct.GenericFunctionSymbolTableEntry** %v5
-	%tmp111 = load %struct.GenericStructDefinedField, %struct.GenericStructDefinedField* %v8
-	call void @"vector.push<%struct.GenericStructDefinedField>"(%"struct.vector.Vec<%struct.GenericStructDefinedField>"* %tmp110, %struct.GenericStructDefinedField %tmp111)
-	%tmp112 = load i32, i32* %v7
-	%tmp113 = add i32 %tmp112, 1
-	store i32 %tmp113, i32* %v7
-	br label %loop_cond10
-loop_body10_exit:
+	br label %loop_cond12
+loop_cond12:
+	%tmp95 = load i32, i32* %v7
+	%tmp96 = getelementptr inbounds %struct.FnNode, %struct.FnNode* %tmp57, i32 0, i32 2
+	%tmp97 = getelementptr inbounds %"struct.vector.Vec<%struct.Argument>", %"struct.vector.Vec<%struct.Argument>"* %tmp96, i32 0, i32 1
+	%tmp98 = load i32, i32* %tmp97
+	%tmp99 = icmp uge i32 %tmp95, %tmp98
+	br i1 %tmp99, label %then13, label %endif13
+then13:
+	br label %loop_body12_exit
+endif13:
+	%tmp101 = load i32, i32* %v7
+	%tmp102 = getelementptr inbounds %struct.FnNode, %struct.FnNode* %tmp57, i32 0, i32 2
+	%tmp103 = load %struct.Argument*, %struct.Argument** %tmp102
+	%tmp104 = getelementptr inbounds %struct.Argument, %struct.Argument* %tmp103, i32 %tmp101
+	%tmp105 = load i16, i16* %tmp104
+	store i16 %tmp105, i16* %v8
+	%tmp106 = getelementptr inbounds %struct.GenericStructDefinedField, %struct.GenericStructDefinedField* %v8, i32 0, i32 2
+	%tmp107 = getelementptr inbounds %struct.Argument, %struct.Argument* %tmp104, i32 0, i32 1
+	%tmp108 = getelementptr inbounds %struct.FnNode, %struct.FnNode* %tmp57, i32 0, i32 5
+	%tmp109 = getelementptr inbounds %struct.GenericStructDefinedField, %struct.GenericStructDefinedField* %v8, i32 0, i32 1
+	%tmp110 = call i1 @comp_type.get_compiler_type_generic(%struct.Type* %tmp107, %struct.Path* %path, %struct.SymbolTable* %symbol_table, %"struct.vector.Vec<ui16>"* %tmp108, %struct.comp_type.CompilerType* %tmp109)
+	store i1 %tmp110, i1* %tmp106
+	%tmp111 = load %struct.GenericFunctionSymbolTableEntry*, %struct.GenericFunctionSymbolTableEntry** %v5
+	%tmp112 = load %struct.GenericStructDefinedField, %struct.GenericStructDefinedField* %v8
+	call void @"vector.push<%struct.GenericStructDefinedField>"(%"struct.vector.Vec<%struct.GenericStructDefinedField>"* %tmp111, %struct.GenericStructDefinedField %tmp112)
+	%tmp113 = load i32, i32* %v7
+	%tmp114 = add i32 %tmp113, 1
+	store i32 %tmp114, i32* %v7
+	br label %loop_cond12
+loop_body12_exit:
 ; Variable sdf is out.
-	%tmp114 = load i32, i32* %v0
-	%tmp115 = add i32 %tmp114, 1
-	store i32 %tmp115, i32* %v0
+	%tmp115 = load i32, i32* %v0
+	%tmp116 = add i32 %tmp115, 1
+	store i32 %tmp116, i32* %v0
 	br label %loop_body0
 endif8:
-	%tmp116 = call i8* @mem.malloc(i64 56)
-	store %struct.FunctionSymbolTableEntry* %tmp116, %struct.FunctionSymbolTableEntry** %v9
-	%tmp117 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp61, i32 0, i32 2
-	%tmp118 = load %struct.FunctionSymbolTableEntry*, %struct.FunctionSymbolTableEntry** %v9
-	store i8* %tmp118, i8** %tmp117
+	%tmp117 = call i8* @mem.malloc(i64 72)
+	store %struct.FunctionSymbolTableEntry* %tmp117, %struct.FunctionSymbolTableEntry** %v9
+	%tmp118 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp61, i32 0, i32 2
 	%tmp119 = load %struct.FunctionSymbolTableEntry*, %struct.FunctionSymbolTableEntry** %v9
-	%tmp120 = getelementptr inbounds %struct.FunctionSymbolTableEntry, %struct.FunctionSymbolTableEntry* %tmp119, i32 0, i32 3
-	%tmp121 = getelementptr inbounds %struct.FnNode, %struct.FnNode* %tmp57, i32 0, i32 1
-	%tmp122 = load i8, i8* %tmp121
-	store i8 %tmp122, i8* %tmp120
-	%tmp123 = load %struct.FunctionSymbolTableEntry*, %struct.FunctionSymbolTableEntry** %v9
-	%tmp124 = call %"struct.vector.Vec<%struct.StructDefinedField>" @"vector.new<%struct.StructDefinedField>"()
-	store %"struct.vector.Vec<%struct.StructDefinedField>" %tmp124, %"struct.vector.Vec<%struct.StructDefinedField>"* %tmp123
-	%tmp125 = getelementptr inbounds %struct.FnNode, %struct.FnNode* %tmp57, i32 0, i32 3
-	%tmp126 = load i1, i1* %tmp125
-	br i1 %tmp126, label %then12, label %else12
-then12:
-	%tmp127 = load %struct.FunctionSymbolTableEntry*, %struct.FunctionSymbolTableEntry** %v9
-	%tmp128 = getelementptr inbounds %struct.FunctionSymbolTableEntry, %struct.FunctionSymbolTableEntry* %tmp127, i32 0, i32 1
-	%tmp129 = getelementptr inbounds %struct.FnNode, %struct.FnNode* %tmp57, i32 0, i32 4
-	%tmp130 = call %struct.CompilerType @get_compiler_type(%struct.Type* %tmp129, %struct.Path* %path, %struct.SymbolTable* %symbol_table)
-	store %struct.CompilerType %tmp130, %struct.CompilerType* %tmp128
-	br label %endif12
-else12:
-	%tmp131 = load %struct.PrimitiveTypeInfo*, %struct.PrimitiveTypeInfo** @VOID_TYPE
-	store i32 0, i32* %v10
-	%tmp132 = getelementptr inbounds %struct.CompilerType, %struct.CompilerType* %v10, i32 0, i32 1
-	store i8* %tmp131, i8** %tmp132
-	%tmp133 = load %struct.FunctionSymbolTableEntry*, %struct.FunctionSymbolTableEntry** %v9
-	%tmp134 = getelementptr inbounds %struct.FunctionSymbolTableEntry, %struct.FunctionSymbolTableEntry* %tmp133, i32 0, i32 1
-	%tmp135 = load %struct.CompilerType, %struct.CompilerType* %v10
-	store %struct.CompilerType %tmp135, %struct.CompilerType* %tmp134
-; Variable z is out.
-	br label %endif12
-endif12:
-	%tmp136 = getelementptr inbounds %struct.FnNode, %struct.FnNode* %tmp57, i32 0, i32 2
-	%tmp137 = getelementptr inbounds %"struct.vector.Vec<%struct.Argument>", %"struct.vector.Vec<%struct.Argument>"* %tmp136, i32 0, i32 1
-	%tmp138 = load i32, i32* %tmp137
-	store i32 0, i32* %v11
-	br label %loop_cond13
-loop_cond13:
-	%tmp139 = load i32, i32* %v11
-	%tmp140 = getelementptr inbounds %struct.FnNode, %struct.FnNode* %tmp57, i32 0, i32 2
-	%tmp141 = getelementptr inbounds %"struct.vector.Vec<%struct.Argument>", %"struct.vector.Vec<%struct.Argument>"* %tmp140, i32 0, i32 1
-	%tmp142 = load i32, i32* %tmp141
-	%tmp143 = icmp uge i32 %tmp139, %tmp142
-	br i1 %tmp143, label %then14, label %endif14
+	store i8* %tmp119, i8** %tmp118
+	%tmp120 = load %struct.FunctionSymbolTableEntry*, %struct.FunctionSymbolTableEntry** %v9
+	%tmp121 = getelementptr inbounds %struct.FunctionSymbolTableEntry, %struct.FunctionSymbolTableEntry* %tmp120, i32 0, i32 4
+	%tmp122 = getelementptr inbounds %struct.FnNode, %struct.FnNode* %tmp57, i32 0, i32 1
+	%tmp123 = load i8, i8* %tmp122
+	store i8 %tmp123, i8* %tmp121
+	%tmp124 = load %struct.FunctionSymbolTableEntry*, %struct.FunctionSymbolTableEntry** %v9
+	%tmp125 = call %"struct.vector.Vec<%struct.StructDefinedField>" @"vector.new<%struct.StructDefinedField>"()
+	store %"struct.vector.Vec<%struct.StructDefinedField>" %tmp125, %"struct.vector.Vec<%struct.StructDefinedField>"* %tmp124
+	%tmp126 = getelementptr inbounds %struct.FnNode, %struct.FnNode* %tmp57, i32 0, i32 3
+	%tmp127 = load i1, i1* %tmp126
+	br i1 %tmp127, label %then14, label %else14
 then14:
-	br label %loop_body13_exit
+	%tmp128 = load %struct.FunctionSymbolTableEntry*, %struct.FunctionSymbolTableEntry** %v9
+	%tmp129 = getelementptr inbounds %struct.FunctionSymbolTableEntry, %struct.FunctionSymbolTableEntry* %tmp128, i32 0, i32 1
+	%tmp130 = getelementptr inbounds %struct.FnNode, %struct.FnNode* %tmp57, i32 0, i32 4
+	%tmp131 = call %struct.comp_type.CompilerType @comp_type.get_compiler_type(%struct.Type* %tmp130, %struct.Path* %path, %struct.SymbolTable* %symbol_table)
+	store %struct.comp_type.CompilerType %tmp131, %struct.comp_type.CompilerType* %tmp129
+	br label %endif14
+else14:
+	%tmp132 = load %struct.FunctionSymbolTableEntry*, %struct.FunctionSymbolTableEntry** %v9
+	%tmp133 = getelementptr inbounds %struct.FunctionSymbolTableEntry, %struct.FunctionSymbolTableEntry* %tmp132, i32 0, i32 1
+	%tmp134 = load %struct.primitives.PrimitiveTypeInfo*, %struct.primitives.PrimitiveTypeInfo** @primitives.VOID_TYPE
+	store i32 2, i32* %v10
+	%tmp135 = getelementptr inbounds %struct.comp_type.CompilerType, %struct.comp_type.CompilerType* %v10, i32 0, i32 1
+	%tmp136 = ptrtoint %struct.primitives.PrimitiveTypeInfo* %tmp134 to i64
+	store i64 %tmp136, i64* %tmp135
+	%tmp137 = load %struct.comp_type.CompilerType, %struct.comp_type.CompilerType* %v10
+	store %struct.comp_type.CompilerType %tmp137, %struct.comp_type.CompilerType* %tmp133
+	br label %endif14
 endif14:
-	%tmp145 = load i32, i32* %v11
-	%tmp146 = getelementptr inbounds %struct.FnNode, %struct.FnNode* %tmp57, i32 0, i32 2
-	%tmp147 = load %struct.Argument*, %struct.Argument** %tmp146
-	%tmp148 = getelementptr inbounds %struct.Argument, %struct.Argument* %tmp147, i32 %tmp145
-	%tmp149 = load i16, i16* %tmp148
-	store i16 %tmp149, i16* %v12
-	%tmp150 = getelementptr inbounds %struct.StructDefinedField, %struct.StructDefinedField* %v12, i32 0, i32 1
-	%tmp151 = getelementptr inbounds %struct.Argument, %struct.Argument* %tmp148, i32 0, i32 1
-	%tmp152 = call %struct.CompilerType @get_compiler_type(%struct.Type* %tmp151, %struct.Path* %path, %struct.SymbolTable* %symbol_table)
-	store %struct.CompilerType %tmp152, %struct.CompilerType* %tmp150
-	%tmp153 = load %struct.FunctionSymbolTableEntry*, %struct.FunctionSymbolTableEntry** %v9
-	%tmp154 = load %struct.StructDefinedField, %struct.StructDefinedField* %v12
-	call void @"vector.push<%struct.StructDefinedField>"(%"struct.vector.Vec<%struct.StructDefinedField>"* %tmp153, %struct.StructDefinedField %tmp154)
-	%tmp155 = load i32, i32* %v11
-	%tmp156 = add i32 %tmp155, 1
-	store i32 %tmp156, i32* %v11
-	br label %loop_cond13
-loop_body13_exit:
-; Variable sf is out.
-	%tmp157 = load %struct.FunctionSymbolTableEntry*, %struct.FunctionSymbolTableEntry** %v9
-	%tmp158 = getelementptr inbounds %struct.FunctionSymbolTableEntry, %struct.FunctionSymbolTableEntry* %tmp157, i32 0, i32 2
-	%tmp159 = getelementptr inbounds %struct.FnNode, %struct.FnNode* %tmp57, i32 0, i32 6
-	%tmp160 = load %"struct.vector.Vec<%struct.Stmt>", %"struct.vector.Vec<%struct.Stmt>"* %tmp159
-	store %"struct.vector.Vec<%struct.Stmt>" %tmp160, %"struct.vector.Vec<%struct.Stmt>"* %tmp158
-	%tmp161 = load i32, i32* %tmp61
-	%tmp162 = or i32 %tmp161, 8
-	store i32 %tmp162, i32* %tmp61
-	%tmp163 = load i32, i32* %v0
-	%tmp164 = add i32 %tmp163, 1
-	store i32 %tmp164, i32* %v0
-	br label %loop_body0
-; Variable func_path is out.
-else7:
-	%tmp165 = load %struct.Stmt*, %struct.Stmt** %v2
-	%tmp166 = load i8, i8* %tmp165
-	%tmp167 = icmp eq i8 %tmp166, 12
-	br i1 %tmp167, label %then15, label %else15
-then15:
-	%tmp168 = load %struct.Stmt*, %struct.Stmt** %v2
-	%tmp169 = getelementptr inbounds %struct.Stmt, %struct.Stmt* %tmp168, i32 0, i32 1
-	%tmp170 = load i8*, i8** %tmp169
-	%tmp171 = load i16, i16* %tmp170
-	%tmp172 = call %struct.PathEx @path_to_path_ex_name(%struct.Path* %path, i16 %tmp171)
-	store %struct.PathEx %tmp172, %struct.PathEx* %v13
-	%tmp173 = load %struct.PathEx, %struct.PathEx* %v13
-	%tmp174 = call %struct.SymbolTableEntry* @get_symbol_from_table(%struct.SymbolTable* %symbol_table, %struct.PathEx %tmp173)
-	%tmp175 = getelementptr inbounds %struct.StructNode, %struct.StructNode* %tmp170, i32 0, i32 3
-	%tmp176 = getelementptr inbounds %"struct.vector.Vec<ui16>", %"struct.vector.Vec<ui16>"* %tmp175, i32 0, i32 1
-	%tmp177 = load i32, i32* %tmp176
-	%tmp178 = icmp ne i32 %tmp177, 0
-	br i1 %tmp178, label %then16, label %endif16
-then16:
-	%tmp179 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp174, i32 0, i32 2
-	%tmp180 = load i8*, i8** %tmp179
-	store %struct.GenericStructSymbolTableEntry* %tmp180, %struct.GenericStructSymbolTableEntry** %v14
-	%tmp181 = getelementptr inbounds %struct.StructNode, %struct.StructNode* %tmp170, i32 0, i32 2
-	%tmp182 = getelementptr inbounds %"struct.vector.Vec<%struct.Argument>", %"struct.vector.Vec<%struct.Argument>"* %tmp181, i32 0, i32 1
-	%tmp183 = load i32, i32* %tmp182
-	store i32 0, i32* %v15
+	%tmp138 = getelementptr inbounds %struct.FnNode, %struct.FnNode* %tmp57, i32 0, i32 2
+	%tmp139 = getelementptr inbounds %"struct.vector.Vec<%struct.Argument>", %"struct.vector.Vec<%struct.Argument>"* %tmp138, i32 0, i32 1
+	%tmp140 = load i32, i32* %tmp139
+	store i32 0, i32* %v11
 	br label %loop_cond17
 loop_cond17:
-	%tmp184 = load i32, i32* %v15
-	%tmp185 = getelementptr inbounds %struct.StructNode, %struct.StructNode* %tmp170, i32 0, i32 2
-	%tmp186 = getelementptr inbounds %"struct.vector.Vec<%struct.Argument>", %"struct.vector.Vec<%struct.Argument>"* %tmp185, i32 0, i32 1
-	%tmp187 = load i32, i32* %tmp186
-	%tmp188 = icmp uge i32 %tmp184, %tmp187
-	br i1 %tmp188, label %then18, label %endif18
+	%tmp141 = load i32, i32* %v11
+	%tmp142 = getelementptr inbounds %struct.FnNode, %struct.FnNode* %tmp57, i32 0, i32 2
+	%tmp143 = getelementptr inbounds %"struct.vector.Vec<%struct.Argument>", %"struct.vector.Vec<%struct.Argument>"* %tmp142, i32 0, i32 1
+	%tmp144 = load i32, i32* %tmp143
+	%tmp145 = icmp uge i32 %tmp141, %tmp144
+	br i1 %tmp145, label %then18, label %endif18
 then18:
 	br label %loop_body17_exit
 endif18:
-	%tmp190 = load i32, i32* %v15
-	%tmp191 = getelementptr inbounds %struct.StructNode, %struct.StructNode* %tmp170, i32 0, i32 2
-	%tmp192 = load %struct.Argument*, %struct.Argument** %tmp191
-	%tmp193 = getelementptr inbounds %struct.Argument, %struct.Argument* %tmp192, i32 %tmp190
-	%tmp194 = load i16, i16* %tmp193
-	store i16 %tmp194, i16* %v16
-	%tmp195 = getelementptr inbounds %struct.GenericStructDefinedField, %struct.GenericStructDefinedField* %v16, i32 0, i32 2
-	%tmp196 = getelementptr inbounds %struct.Argument, %struct.Argument* %tmp193, i32 0, i32 1
-	%tmp197 = getelementptr inbounds %struct.StructNode, %struct.StructNode* %tmp170, i32 0, i32 3
-	%tmp198 = getelementptr inbounds %struct.GenericStructDefinedField, %struct.GenericStructDefinedField* %v16, i32 0, i32 1
-	%tmp199 = call i1 @get_compiler_type_generic(%struct.Type* %tmp196, %struct.Path* %path, %struct.SymbolTable* %symbol_table, %"struct.vector.Vec<ui16>"* %tmp197, %struct.CompilerType* %tmp198)
-	store i1 %tmp199, i1* %tmp195
-	%tmp200 = load %struct.GenericStructSymbolTableEntry*, %struct.GenericStructSymbolTableEntry** %v14
-	%tmp201 = load %struct.GenericStructDefinedField, %struct.GenericStructDefinedField* %v16
-	call void @"vector.push<%struct.GenericStructDefinedField>"(%"struct.vector.Vec<%struct.GenericStructDefinedField>"* %tmp200, %struct.GenericStructDefinedField %tmp201)
-	%tmp202 = load i32, i32* %v15
-	%tmp203 = add i32 %tmp202, 1
-	store i32 %tmp203, i32* %v15
+	%tmp147 = load i32, i32* %v11
+	%tmp148 = getelementptr inbounds %struct.FnNode, %struct.FnNode* %tmp57, i32 0, i32 2
+	%tmp149 = load %struct.Argument*, %struct.Argument** %tmp148
+	%tmp150 = getelementptr inbounds %struct.Argument, %struct.Argument* %tmp149, i32 %tmp147
+	%tmp151 = load i16, i16* %tmp150
+	store i16 %tmp151, i16* %v12
+	%tmp152 = getelementptr inbounds %struct.StructDefinedField, %struct.StructDefinedField* %v12, i32 0, i32 1
+	%tmp153 = getelementptr inbounds %struct.Argument, %struct.Argument* %tmp150, i32 0, i32 1
+	%tmp154 = call %struct.comp_type.CompilerType @comp_type.get_compiler_type(%struct.Type* %tmp153, %struct.Path* %path, %struct.SymbolTable* %symbol_table)
+	store %struct.comp_type.CompilerType %tmp154, %struct.comp_type.CompilerType* %tmp152
+	%tmp155 = load %struct.FunctionSymbolTableEntry*, %struct.FunctionSymbolTableEntry** %v9
+	%tmp156 = load %struct.StructDefinedField, %struct.StructDefinedField* %v12
+	call void @"vector.push<%struct.StructDefinedField>"(%"struct.vector.Vec<%struct.StructDefinedField>"* %tmp155, %struct.StructDefinedField %tmp156)
+	%tmp157 = load i32, i32* %v11
+	%tmp158 = add i32 %tmp157, 1
+	store i32 %tmp158, i32* %v11
 	br label %loop_cond17
 loop_body17_exit:
-; Variable sdf is out.
-	%tmp204 = call %struct.string.String @string.from_c_string(i8* @.str.326)
-	store %struct.string.String %tmp204, %struct.string.String* %v17
-	%tmp205 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp174, i32 0, i32 1
-	%tmp206 = getelementptr inbounds %struct.SymbolTable, %struct.SymbolTable* %symbol_table, i32 0, i32 1
-	%tmp207 = getelementptr inbounds %struct.SymbolTable, %struct.SymbolTable* %symbol_table, i32 0, i32 1
-	%tmp208 = load %"struct.vector.Vec<%struct.string.String>"*, %"struct.vector.Vec<%struct.string.String>"** %tmp207
-	%tmp209 = load %struct.string.String*, %struct.string.String** %tmp208
-	call void @append_path_ex(%struct.PathEx* %tmp205, %struct.string.String* %tmp209, %struct.string.String* %v17)
-	%tmp210 = load %struct.GenericStructSymbolTableEntry*, %struct.GenericStructSymbolTableEntry** %v14
-	%tmp211 = getelementptr inbounds %struct.GenericStructSymbolTableEntry, %struct.GenericStructSymbolTableEntry* %tmp210, i32 0, i32 3
-	%tmp212 = load %struct.string.String, %struct.string.String* %v17
-	store %struct.string.String %tmp212, %struct.string.String* %tmp211
-	%tmp213 = load i32, i32* %tmp174
-	%tmp214 = or i32 %tmp213, 8
-	store i32 %tmp214, i32* %tmp174
-	%tmp215 = load i32, i32* %v0
-	%tmp216 = add i32 %tmp215, 1
-	store i32 %tmp216, i32* %v0
+; Variable sf is out.
+	%tmp159 = load %struct.FunctionSymbolTableEntry*, %struct.FunctionSymbolTableEntry** %v9
+	%tmp160 = getelementptr inbounds %struct.FunctionSymbolTableEntry, %struct.FunctionSymbolTableEntry* %tmp159, i32 0, i32 2
+	%tmp161 = getelementptr inbounds %struct.FnNode, %struct.FnNode* %tmp57, i32 0, i32 6
+	%tmp162 = load %"struct.vector.Vec<%struct.Stmt>", %"struct.vector.Vec<%struct.Stmt>"* %tmp161
+	store %"struct.vector.Vec<%struct.Stmt>" %tmp162, %"struct.vector.Vec<%struct.Stmt>"* %tmp160
+	%tmp163 = load i32, i32* %tmp61
+	%tmp164 = or i32 %tmp163, 8
+	store i32 %tmp164, i32* %tmp61
+	%tmp165 = load i32, i32* %v0
+	%tmp166 = add i32 %tmp165, 1
+	store i32 %tmp166, i32* %v0
 	br label %loop_body0
-; Variable llvm_signature is out.
-endif16:
-	%tmp217 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp174, i32 0, i32 2
-	%tmp218 = load i8*, i8** %tmp217
-	store %struct.StructSymbolTableEntry* %tmp218, %struct.StructSymbolTableEntry** %v18
-	%tmp219 = getelementptr inbounds %struct.StructNode, %struct.StructNode* %tmp170, i32 0, i32 2
-	%tmp220 = getelementptr inbounds %"struct.vector.Vec<%struct.Argument>", %"struct.vector.Vec<%struct.Argument>"* %tmp219, i32 0, i32 1
-	%tmp221 = load i32, i32* %tmp220
-	store i32 0, i32* %v19
-	br label %loop_cond19
-loop_cond19:
-	%tmp222 = load i32, i32* %v19
-	%tmp223 = getelementptr inbounds %struct.StructNode, %struct.StructNode* %tmp170, i32 0, i32 2
-	%tmp224 = getelementptr inbounds %"struct.vector.Vec<%struct.Argument>", %"struct.vector.Vec<%struct.Argument>"* %tmp223, i32 0, i32 1
-	%tmp225 = load i32, i32* %tmp224
-	%tmp226 = icmp uge i32 %tmp222, %tmp225
-	br i1 %tmp226, label %then20, label %endif20
+; Variable func_path is out.
+else7:
+	%tmp167 = load %struct.Stmt*, %struct.Stmt** %v2
+	%tmp168 = load i8, i8* %tmp167
+	%tmp169 = icmp eq i8 %tmp168, 12
+	br i1 %tmp169, label %then19, label %else19
+then19:
+	%tmp170 = load %struct.Stmt*, %struct.Stmt** %v2
+	%tmp171 = getelementptr inbounds %struct.Stmt, %struct.Stmt* %tmp170, i32 0, i32 1
+	%tmp172 = load i8*, i8** %tmp171
+	%tmp173 = load i16, i16* %tmp172
+	%tmp174 = call %struct.PathEx @path_to_path_ex_name(%struct.Path* %path, i16 %tmp173)
+	store %struct.PathEx %tmp174, %struct.PathEx* %v13
+	%tmp175 = load %struct.PathEx, %struct.PathEx* %v13
+	%tmp176 = call %struct.SymbolTableEntry* @get_symbol_from_table(%struct.SymbolTable* %symbol_table, %struct.PathEx %tmp175)
+	%tmp177 = getelementptr inbounds %struct.StructNode, %struct.StructNode* %tmp172, i32 0, i32 3
+	%tmp178 = getelementptr inbounds %"struct.vector.Vec<ui16>", %"struct.vector.Vec<ui16>"* %tmp177, i32 0, i32 1
+	%tmp179 = load i32, i32* %tmp178
+	%tmp180 = icmp ne i32 %tmp179, 0
+	br i1 %tmp180, label %then20, label %endif20
 then20:
-	br label %loop_body19_exit
-endif20:
-	%tmp228 = load i32, i32* %v19
-	%tmp229 = getelementptr inbounds %struct.StructNode, %struct.StructNode* %tmp170, i32 0, i32 2
-	%tmp230 = load %struct.Argument*, %struct.Argument** %tmp229
-	%tmp231 = getelementptr inbounds %struct.Argument, %struct.Argument* %tmp230, i32 %tmp228
-	%tmp232 = load i16, i16* %tmp231
-	store i16 %tmp232, i16* %v20
-	%tmp233 = getelementptr inbounds %struct.StructDefinedField, %struct.StructDefinedField* %v20, i32 0, i32 1
-	%tmp234 = getelementptr inbounds %struct.Argument, %struct.Argument* %tmp231, i32 0, i32 1
-	%tmp235 = call %struct.CompilerType @get_compiler_type(%struct.Type* %tmp234, %struct.Path* %path, %struct.SymbolTable* %symbol_table)
-	store %struct.CompilerType %tmp235, %struct.CompilerType* %tmp233
-	%tmp236 = load %struct.StructSymbolTableEntry*, %struct.StructSymbolTableEntry** %v18
-	%tmp237 = load %struct.StructDefinedField, %struct.StructDefinedField* %v20
-	call void @"vector.push<%struct.StructDefinedField>"(%"struct.vector.Vec<%struct.StructDefinedField>"* %tmp236, %struct.StructDefinedField %tmp237)
-	%tmp238 = load i32, i32* %v19
-	%tmp239 = add i32 %tmp238, 1
-	store i32 %tmp239, i32* %v19
-	br label %loop_cond19
-loop_body19_exit:
-; Variable sdf is out.
-	%tmp240 = call %struct.string.String @string.from_c_string(i8* @.str.326)
-	store %struct.string.String %tmp240, %struct.string.String* %v21
-	%tmp241 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp174, i32 0, i32 1
-	%tmp242 = getelementptr inbounds %struct.SymbolTable, %struct.SymbolTable* %symbol_table, i32 0, i32 1
-	%tmp243 = getelementptr inbounds %struct.SymbolTable, %struct.SymbolTable* %symbol_table, i32 0, i32 1
-	%tmp244 = load %"struct.vector.Vec<%struct.string.String>"*, %"struct.vector.Vec<%struct.string.String>"** %tmp243
-	%tmp245 = load %struct.string.String*, %struct.string.String** %tmp244
-	call void @append_path_ex(%struct.PathEx* %tmp241, %struct.string.String* %tmp245, %struct.string.String* %v21)
-	%tmp246 = load %struct.StructSymbolTableEntry*, %struct.StructSymbolTableEntry** %v18
-	%tmp247 = getelementptr inbounds %struct.StructSymbolTableEntry, %struct.StructSymbolTableEntry* %tmp246, i32 0, i32 2
-	%tmp248 = load %struct.string.String, %struct.string.String* %v21
-	store %struct.string.String %tmp248, %struct.string.String* %tmp247
-	%tmp249 = load i32, i32* %tmp174
-	%tmp250 = or i32 %tmp249, 8
-	store i32 %tmp250, i32* %tmp174
-	%tmp251 = load i32, i32* %v0
-	%tmp252 = add i32 %tmp251, 1
-	store i32 %tmp252, i32* %v0
-	br label %loop_body0
-; Variable llvm_signature is out.
-; Variable struct_path is out.
-else15:
-	%tmp253 = load %struct.Stmt*, %struct.Stmt** %v2
-	%tmp254 = load i8, i8* %tmp253
-	%tmp255 = icmp eq i8 %tmp254, 13
-	br i1 %tmp255, label %then21, label %else21
-then21:
-	%tmp256 = load %struct.Stmt*, %struct.Stmt** %v2
-	%tmp257 = getelementptr inbounds %struct.Stmt, %struct.Stmt* %tmp256, i32 0, i32 1
-	%tmp258 = load i8*, i8** %tmp257
-	%tmp259 = load i16, i16* %tmp258
-	%tmp260 = call %struct.PathEx @path_to_path_ex_name(%struct.Path* %path, i16 %tmp259)
-	store %struct.PathEx %tmp260, %struct.PathEx* %v22
-	%tmp261 = load %struct.PathEx, %struct.PathEx* %v22
-	%tmp262 = call %struct.SymbolTableEntry* @get_symbol_from_table(%struct.SymbolTable* %symbol_table, %struct.PathEx %tmp261)
-	%tmp263 = call i8* @mem.malloc(i64 40)
-	%tmp264 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp262, i32 0, i32 2
-	store i8* %tmp263, i8** %tmp264
-	%tmp265 = getelementptr inbounds %struct.EnumSymbolTableEntry, %struct.EnumSymbolTableEntry* %tmp263, i32 0, i32 2
-	%tmp266 = getelementptr inbounds %struct.EnumNode, %struct.EnumNode* %tmp258, i32 0, i32 1
-	%tmp267 = load i8, i8* %tmp266
-	store i8 %tmp267, i8* %tmp265
-	store i32 0, i32* %tmp263
-	%tmp268 = getelementptr inbounds %struct.CompilerType, %struct.CompilerType* %tmp263, i32 0, i32 1
-	%tmp269 = load %struct.PrimitiveTypeInfo*, %struct.PrimitiveTypeInfo** @DEFAULT_INTEGER_TYPE
-	store i8* %tmp269, i8** %tmp268
-	%tmp270 = getelementptr inbounds %struct.EnumNode, %struct.EnumNode* %tmp258, i32 0, i32 2
-	%tmp271 = load i1, i1* %tmp270
-	br i1 %tmp271, label %then22, label %endif22
+	%tmp181 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp176, i32 0, i32 2
+	%tmp182 = load i8*, i8** %tmp181
+	store %struct.GenericStructSymbolTableEntry* %tmp182, %struct.GenericStructSymbolTableEntry** %v14
+	%tmp183 = getelementptr inbounds %struct.StructNode, %struct.StructNode* %tmp172, i32 0, i32 2
+	%tmp184 = getelementptr inbounds %"struct.vector.Vec<%struct.Argument>", %"struct.vector.Vec<%struct.Argument>"* %tmp183, i32 0, i32 1
+	%tmp185 = load i32, i32* %tmp184
+	store i32 0, i32* %v15
+	br label %loop_cond21
+loop_cond21:
+	%tmp186 = load i32, i32* %v15
+	%tmp187 = getelementptr inbounds %struct.StructNode, %struct.StructNode* %tmp172, i32 0, i32 2
+	%tmp188 = getelementptr inbounds %"struct.vector.Vec<%struct.Argument>", %"struct.vector.Vec<%struct.Argument>"* %tmp187, i32 0, i32 1
+	%tmp189 = load i32, i32* %tmp188
+	%tmp190 = icmp uge i32 %tmp186, %tmp189
+	br i1 %tmp190, label %then22, label %endif22
 then22:
-	%tmp272 = getelementptr inbounds %struct.EnumNode, %struct.EnumNode* %tmp258, i32 0, i32 3
-	%tmp273 = call %struct.CompilerType @get_compiler_type(%struct.Type* %tmp272, %struct.Path* %path, %struct.SymbolTable* %symbol_table)
-	store %struct.CompilerType %tmp273, %struct.CompilerType* %tmp263
-	br label %endif22
+	br label %loop_body21_exit
 endif22:
-	%tmp274 = getelementptr inbounds %struct.EnumSymbolTableEntry, %struct.EnumSymbolTableEntry* %tmp263, i32 0, i32 1
-	%tmp275 = call %"struct.vector.Vec<%struct.EnumDefinedField>" @"vector.new<%struct.EnumDefinedField>"()
-	store %"struct.vector.Vec<%struct.EnumDefinedField>" %tmp275, %"struct.vector.Vec<%struct.EnumDefinedField>"* %tmp274
-	store i64 0, i64* %v23
-	%tmp276 = getelementptr inbounds %struct.EnumNode, %struct.EnumNode* %tmp258, i32 0, i32 4
-	%tmp277 = getelementptr inbounds %"struct.vector.Vec<%struct.EnumField>", %"struct.vector.Vec<%struct.EnumField>"* %tmp276, i32 0, i32 1
-	%tmp278 = load i32, i32* %tmp277
-	store i32 0, i32* %v24
+	%tmp192 = load i32, i32* %v15
+	%tmp193 = getelementptr inbounds %struct.StructNode, %struct.StructNode* %tmp172, i32 0, i32 2
+	%tmp194 = load %struct.Argument*, %struct.Argument** %tmp193
+	%tmp195 = getelementptr inbounds %struct.Argument, %struct.Argument* %tmp194, i32 %tmp192
+	%tmp196 = load i16, i16* %tmp195
+	store i16 %tmp196, i16* %v16
+	%tmp197 = getelementptr inbounds %struct.GenericStructDefinedField, %struct.GenericStructDefinedField* %v16, i32 0, i32 2
+	%tmp198 = getelementptr inbounds %struct.Argument, %struct.Argument* %tmp195, i32 0, i32 1
+	%tmp199 = getelementptr inbounds %struct.StructNode, %struct.StructNode* %tmp172, i32 0, i32 3
+	%tmp200 = getelementptr inbounds %struct.GenericStructDefinedField, %struct.GenericStructDefinedField* %v16, i32 0, i32 1
+	%tmp201 = call i1 @comp_type.get_compiler_type_generic(%struct.Type* %tmp198, %struct.Path* %path, %struct.SymbolTable* %symbol_table, %"struct.vector.Vec<ui16>"* %tmp199, %struct.comp_type.CompilerType* %tmp200)
+	store i1 %tmp201, i1* %tmp197
+	%tmp202 = load %struct.GenericStructSymbolTableEntry*, %struct.GenericStructSymbolTableEntry** %v14
+	%tmp203 = load %struct.GenericStructDefinedField, %struct.GenericStructDefinedField* %v16
+	call void @"vector.push<%struct.GenericStructDefinedField>"(%"struct.vector.Vec<%struct.GenericStructDefinedField>"* %tmp202, %struct.GenericStructDefinedField %tmp203)
+	%tmp204 = load i32, i32* %v15
+	%tmp205 = add i32 %tmp204, 1
+	store i32 %tmp205, i32* %v15
+	br label %loop_cond21
+loop_body21_exit:
+; Variable sdf is out.
+	%tmp206 = load i32, i32* %tmp176
+	%tmp207 = or i32 %tmp206, 8
+	store i32 %tmp207, i32* %tmp176
+	%tmp208 = load i32, i32* %v0
+	%tmp209 = add i32 %tmp208, 1
+	store i32 %tmp209, i32* %v0
+	br label %loop_body0
+endif20:
+	%tmp210 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp176, i32 0, i32 2
+	%tmp211 = load i8*, i8** %tmp210
+	store %struct.StructSymbolTableEntry* %tmp211, %struct.StructSymbolTableEntry** %v17
+	%tmp212 = getelementptr inbounds %struct.StructNode, %struct.StructNode* %tmp172, i32 0, i32 2
+	%tmp213 = getelementptr inbounds %"struct.vector.Vec<%struct.Argument>", %"struct.vector.Vec<%struct.Argument>"* %tmp212, i32 0, i32 1
+	%tmp214 = load i32, i32* %tmp213
+	store i32 0, i32* %v18
 	br label %loop_cond23
 loop_cond23:
-	%tmp279 = load i32, i32* %v24
-	%tmp280 = getelementptr inbounds %struct.EnumNode, %struct.EnumNode* %tmp258, i32 0, i32 4
-	%tmp281 = getelementptr inbounds %"struct.vector.Vec<%struct.EnumField>", %"struct.vector.Vec<%struct.EnumField>"* %tmp280, i32 0, i32 1
-	%tmp282 = load i32, i32* %tmp281
-	%tmp283 = icmp uge i32 %tmp279, %tmp282
-	br i1 %tmp283, label %then24, label %endif24
+	%tmp215 = load i32, i32* %v18
+	%tmp216 = getelementptr inbounds %struct.StructNode, %struct.StructNode* %tmp172, i32 0, i32 2
+	%tmp217 = getelementptr inbounds %"struct.vector.Vec<%struct.Argument>", %"struct.vector.Vec<%struct.Argument>"* %tmp216, i32 0, i32 1
+	%tmp218 = load i32, i32* %tmp217
+	%tmp219 = icmp uge i32 %tmp215, %tmp218
+	br i1 %tmp219, label %then24, label %endif24
 then24:
 	br label %loop_body23_exit
 endif24:
-	%tmp285 = load i32, i32* %v24
-	%tmp286 = getelementptr inbounds %struct.EnumNode, %struct.EnumNode* %tmp258, i32 0, i32 4
-	%tmp287 = load %struct.EnumField*, %struct.EnumField** %tmp286
-	%tmp288 = getelementptr inbounds %struct.EnumField, %struct.EnumField* %tmp287, i32 %tmp285
-	%tmp289 = load i16, i16* %tmp288
-	store i16 %tmp289, i16* %v25
-	%tmp290 = getelementptr inbounds %struct.EnumField, %struct.EnumField* %tmp288, i32 0, i32 1
-	%tmp291 = load i1, i1* %tmp290
-	br i1 %tmp291, label %then25, label %endif25
-then25:
-	%tmp292 = getelementptr inbounds %struct.EnumField, %struct.EnumField* %tmp288, i32 0, i32 2
-	%tmp293 = call %struct.Rvalue @constant_evaluate_expression(%struct.Expression* %tmp292, %struct.SymbolTable* %symbol_table)
-	store %struct.Rvalue %tmp293, %struct.Rvalue* %v26
-	%tmp294 = load i32, i32* %v26
-	%tmp295 = icmp ne i32 %tmp294, 1
-	br i1 %tmp295, label %then26, label %endif26
-then26:
-	call void @process.throw(i8* @.str.327)
-	br label %endif26
-endif26:
-	%tmp296 = getelementptr inbounds %struct.Rvalue, %struct.Rvalue* %v26, i32 0, i32 1
-	%tmp297 = load i8*, i8** %tmp296
-	%tmp298 = ptrtoint i8* %tmp297 to i64
-	store i64 %tmp298, i64* %v23
-; Variable rval is out.
-	br label %endif25
-endif25:
-	%tmp299 = getelementptr inbounds %struct.EnumDefinedField, %struct.EnumDefinedField* %v25, i32 0, i32 1
-	%tmp300 = load i64, i64* %v23
-	store i64 %tmp300, i64* %tmp299
-	%tmp301 = load i64, i64* %v23
-	%tmp302 = add i64 %tmp301, 1
-	store i64 %tmp302, i64* %v23
-	%tmp303 = getelementptr inbounds %struct.EnumSymbolTableEntry, %struct.EnumSymbolTableEntry* %tmp263, i32 0, i32 1
-	%tmp304 = load %struct.EnumDefinedField, %struct.EnumDefinedField* %v25
-	call void @"vector.push<%struct.EnumDefinedField>"(%"struct.vector.Vec<%struct.EnumDefinedField>"* %tmp303, %struct.EnumDefinedField %tmp304)
-	%tmp305 = load i32, i32* %v24
-	%tmp306 = add i32 %tmp305, 1
-	store i32 %tmp306, i32* %v24
+	%tmp221 = load i32, i32* %v18
+	%tmp222 = getelementptr inbounds %struct.StructNode, %struct.StructNode* %tmp172, i32 0, i32 2
+	%tmp223 = load %struct.Argument*, %struct.Argument** %tmp222
+	%tmp224 = getelementptr inbounds %struct.Argument, %struct.Argument* %tmp223, i32 %tmp221
+	%tmp225 = load i16, i16* %tmp224
+	store i16 %tmp225, i16* %v19
+	%tmp226 = getelementptr inbounds %struct.StructDefinedField, %struct.StructDefinedField* %v19, i32 0, i32 1
+	%tmp227 = getelementptr inbounds %struct.Argument, %struct.Argument* %tmp224, i32 0, i32 1
+	%tmp228 = call %struct.comp_type.CompilerType @comp_type.get_compiler_type(%struct.Type* %tmp227, %struct.Path* %path, %struct.SymbolTable* %symbol_table)
+	store %struct.comp_type.CompilerType %tmp228, %struct.comp_type.CompilerType* %tmp226
+	%tmp229 = load %struct.StructSymbolTableEntry*, %struct.StructSymbolTableEntry** %v17
+	%tmp230 = load %struct.StructDefinedField, %struct.StructDefinedField* %v19
+	call void @"vector.push<%struct.StructDefinedField>"(%"struct.vector.Vec<%struct.StructDefinedField>"* %tmp229, %struct.StructDefinedField %tmp230)
+	%tmp231 = load i32, i32* %v18
+	%tmp232 = add i32 %tmp231, 1
+	store i32 %tmp232, i32* %v18
 	br label %loop_cond23
 loop_body23_exit:
-; Variable edf is out.
-	%tmp307 = load i32, i32* %tmp262
-	%tmp308 = or i32 %tmp307, 8
-	store i32 %tmp308, i32* %tmp262
-	%tmp309 = load i32, i32* %v0
-	%tmp310 = add i32 %tmp309, 1
-	store i32 %tmp310, i32* %v0
+; Variable sdf is out.
+	%tmp233 = load i32, i32* %tmp176
+	%tmp234 = or i32 %tmp233, 8
+	store i32 %tmp234, i32* %tmp176
+	%tmp235 = load i32, i32* %v0
+	%tmp236 = add i32 %tmp235, 1
+	store i32 %tmp236, i32* %v0
 	br label %loop_body0
-; Variable dec_path is out.
-else21:
-	%tmp311 = load %struct.Stmt*, %struct.Stmt** %v2
-	%tmp312 = load i8, i8* %tmp311
-	%tmp313 = icmp eq i8 %tmp312, 14
-	br i1 %tmp313, label %then27, label %else27
-then27:
-	%tmp314 = load %struct.Stmt*, %struct.Stmt** %v2
-	%tmp315 = getelementptr inbounds %struct.Stmt, %struct.Stmt* %tmp314, i32 0, i32 1
-	%tmp316 = load i8*, i8** %tmp315
-	%tmp317 = load %struct.Path, %struct.Path* %path
-	store %struct.Path %tmp317, %struct.Path* %v27
-	%tmp318 = load i8, i8* %v27
-	%tmp319 = icmp eq i8 %tmp318, 8
-	br i1 %tmp319, label %then28, label %endif28
+; Variable struct_path is out.
+else19:
+	%tmp237 = load %struct.Stmt*, %struct.Stmt** %v2
+	%tmp238 = load i8, i8* %tmp237
+	%tmp239 = icmp eq i8 %tmp238, 13
+	br i1 %tmp239, label %then25, label %else25
+then25:
+	%tmp240 = load %struct.Stmt*, %struct.Stmt** %v2
+	%tmp241 = getelementptr inbounds %struct.Stmt, %struct.Stmt* %tmp240, i32 0, i32 1
+	%tmp242 = load i8*, i8** %tmp241
+	%tmp243 = load i16, i16* %tmp242
+	%tmp244 = call %struct.PathEx @path_to_path_ex_name(%struct.Path* %path, i16 %tmp243)
+	store %struct.PathEx %tmp244, %struct.PathEx* %v20
+	%tmp245 = load %struct.PathEx, %struct.PathEx* %v20
+	%tmp246 = call %struct.SymbolTableEntry* @get_symbol_from_table(%struct.SymbolTable* %symbol_table, %struct.PathEx %tmp245)
+	%tmp247 = call i8* @mem.malloc(i64 40)
+	%tmp248 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp246, i32 0, i32 2
+	store i8* %tmp247, i8** %tmp248
+	%tmp249 = getelementptr inbounds %struct.EnumSymbolTableEntry, %struct.EnumSymbolTableEntry* %tmp247, i32 0, i32 2
+	%tmp250 = getelementptr inbounds %struct.EnumNode, %struct.EnumNode* %tmp242, i32 0, i32 1
+	%tmp251 = load i8, i8* %tmp250
+	store i8 %tmp251, i8* %tmp249
+	%tmp252 = load %struct.primitives.PrimitiveTypeInfo*, %struct.primitives.PrimitiveTypeInfo** @primitives.DEFAULT_INTEGER_TYPE
+	store i32 2, i32* %v21
+	%tmp253 = getelementptr inbounds %struct.comp_type.CompilerType, %struct.comp_type.CompilerType* %v21, i32 0, i32 1
+	%tmp254 = ptrtoint %struct.primitives.PrimitiveTypeInfo* %tmp252 to i64
+	store i64 %tmp254, i64* %tmp253
+	%tmp255 = load %struct.comp_type.CompilerType, %struct.comp_type.CompilerType* %v21
+	store %struct.comp_type.CompilerType %tmp255, %struct.comp_type.CompilerType* %tmp247
+	%tmp256 = getelementptr inbounds %struct.EnumNode, %struct.EnumNode* %tmp242, i32 0, i32 2
+	%tmp257 = load i1, i1* %tmp256
+	br i1 %tmp257, label %then28, label %endif28
 then28:
-	call void @process.throw(i8* @.str.321)
+	%tmp258 = getelementptr inbounds %struct.EnumNode, %struct.EnumNode* %tmp242, i32 0, i32 3
+	%tmp259 = call %struct.comp_type.CompilerType @comp_type.get_compiler_type(%struct.Type* %tmp258, %struct.Path* %path, %struct.SymbolTable* %symbol_table)
+	store %struct.comp_type.CompilerType %tmp259, %struct.comp_type.CompilerType* %tmp247
 	br label %endif28
 endif28:
-	%tmp320 = getelementptr inbounds %struct.Path, %struct.Path* %v27, i32 0, i32 1
-	%tmp321 = load i8, i8* %v27
-	%tmp322 = getelementptr inbounds [8 x i16], [8 x i16]* %tmp320, i32 0, i8 %tmp321
-	%tmp323 = load i16, i16* %tmp316
-	store i16 %tmp323, i16* %tmp322
-	%tmp324 = load i8, i8* %v27
-	%tmp325 = add i8 %tmp324, 1
-	store i8 %tmp325, i8* %v27
-	%tmp326 = getelementptr inbounds %struct.NamespaceNode, %struct.NamespaceNode* %tmp316, i32 0, i32 1
-	call void @compile_internal_sym_table(%struct.Path* %v27, %"struct.vector.Vec<%struct.Stmt>"* %tmp326, %struct.SymbolTable* %symbol_table, %struct.string.String* %stdout)
-	%tmp327 = load i32, i32* %v0
-	%tmp328 = add i32 %tmp327, 1
-	store i32 %tmp328, i32* %v0
-	br label %loop_body0
-; Variable path is out.
-else27:
-	%tmp329 = load %struct.Stmt*, %struct.Stmt** %v2
-	%tmp330 = load i8, i8* %tmp329
-	%tmp331 = icmp eq i8 %tmp330, 1
-	br i1 %tmp331, label %then29, label %endif29
-then29:
-	%tmp332 = load %struct.Stmt*, %struct.Stmt** %v2
-	%tmp333 = getelementptr inbounds %struct.Stmt, %struct.Stmt* %tmp332, i32 0, i32 1
-	%tmp334 = load i8*, i8** %tmp333
-	%tmp335 = load i16, i16* %tmp334
-	%tmp336 = call %struct.PathEx @path_to_path_ex_name(%struct.Path* %path, i16 %tmp335)
-	store %struct.PathEx %tmp336, %struct.PathEx* %v28
-	%tmp337 = load %struct.PathEx, %struct.PathEx* %v28
-	%tmp338 = call %struct.SymbolTableEntry* @get_symbol_from_table(%struct.SymbolTable* %symbol_table, %struct.PathEx %tmp337)
-	%tmp339 = icmp eq %struct.SymbolTableEntry* %tmp338, null
-	br i1 %tmp339, label %then30, label %endif30
+	%tmp260 = getelementptr inbounds %struct.EnumSymbolTableEntry, %struct.EnumSymbolTableEntry* %tmp247, i32 0, i32 1
+	%tmp261 = call %"struct.vector.Vec<%struct.EnumDefinedField>" @"vector.new<%struct.EnumDefinedField>"()
+	store %"struct.vector.Vec<%struct.EnumDefinedField>" %tmp261, %"struct.vector.Vec<%struct.EnumDefinedField>"* %tmp260
+	store i64 0, i64* %v22
+	%tmp262 = getelementptr inbounds %struct.EnumNode, %struct.EnumNode* %tmp242, i32 0, i32 4
+	%tmp263 = getelementptr inbounds %"struct.vector.Vec<%struct.EnumField>", %"struct.vector.Vec<%struct.EnumField>"* %tmp262, i32 0, i32 1
+	%tmp264 = load i32, i32* %tmp263
+	store i32 0, i32* %v23
+	br label %loop_cond29
+loop_cond29:
+	%tmp265 = load i32, i32* %v23
+	%tmp266 = getelementptr inbounds %struct.EnumNode, %struct.EnumNode* %tmp242, i32 0, i32 4
+	%tmp267 = getelementptr inbounds %"struct.vector.Vec<%struct.EnumField>", %"struct.vector.Vec<%struct.EnumField>"* %tmp266, i32 0, i32 1
+	%tmp268 = load i32, i32* %tmp267
+	%tmp269 = icmp uge i32 %tmp265, %tmp268
+	br i1 %tmp269, label %then30, label %endif30
 then30:
-	call void @process.throw(i8* @.str.328)
-	br label %endif30
+	br label %loop_body29_exit
 endif30:
-	%tmp340 = getelementptr inbounds %struct.DeclarationNode, %struct.DeclarationNode* %tmp334, i32 0, i32 4
-	%tmp341 = load i8, i8* %tmp340
-	%tmp342 = icmp eq i8 %tmp341, 2
-	br i1 %tmp342, label %then31, label %else31
+	%tmp271 = load i32, i32* %v23
+	%tmp272 = getelementptr inbounds %struct.EnumNode, %struct.EnumNode* %tmp242, i32 0, i32 4
+	%tmp273 = load %struct.EnumField*, %struct.EnumField** %tmp272
+	%tmp274 = getelementptr inbounds %struct.EnumField, %struct.EnumField* %tmp273, i32 %tmp271
+	%tmp275 = load i16, i16* %tmp274
+	store i16 %tmp275, i16* %v24
+	%tmp276 = getelementptr inbounds %struct.EnumField, %struct.EnumField* %tmp274, i32 0, i32 1
+	%tmp277 = load i1, i1* %tmp276
+	br i1 %tmp277, label %then31, label %endif31
 then31:
-	%tmp343 = call i8* @mem.malloc(i64 32)
-	%tmp344 = getelementptr inbounds %struct.DeclarationNode, %struct.DeclarationNode* %tmp334, i32 0, i32 3
-	%tmp345 = call %struct.CompilerType @get_compiler_type(%struct.Type* %tmp344, %struct.Path* %path, %struct.SymbolTable* %symbol_table)
-	store %struct.CompilerType %tmp345, %struct.CompilerType* %tmp343
-	%tmp346 = getelementptr inbounds %struct.ConstantSymbolTableEntry, %struct.ConstantSymbolTableEntry* %tmp343, i32 0, i32 1
-	%tmp347 = getelementptr inbounds %struct.DeclarationNode, %struct.DeclarationNode* %tmp334, i32 0, i32 2
-	%tmp348 = call %struct.Rvalue @constant_evaluate_expression(%struct.Expression* %tmp347, %struct.SymbolTable* %symbol_table)
-	store %struct.Rvalue %tmp348, %struct.Rvalue* %tmp346
-	%tmp349 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp338, i32 0, i32 2
-	store i8* %tmp343, i8** %tmp349
-	%tmp350 = load i32, i32* %tmp338
-	%tmp351 = or i32 %tmp350, 8
-	store i32 %tmp351, i32* %tmp338
-	br label %endif31
-else31:
-	%tmp352 = getelementptr inbounds %struct.DeclarationNode, %struct.DeclarationNode* %tmp334, i32 0, i32 4
-	%tmp353 = load i8, i8* %tmp352
-	%tmp354 = icmp eq i8 %tmp353, 1
-	br i1 %tmp354, label %then32, label %endif32
+	%tmp278 = getelementptr inbounds %struct.EnumField, %struct.EnumField* %tmp274, i32 0, i32 2
+	%tmp279 = call %struct.rvalue.Rvalue @expression_compiler.constant_expression_evaluation(%struct.Expression* %tmp278, %struct.SymbolTable* %symbol_table)
+	store %struct.rvalue.Rvalue %tmp279, %struct.rvalue.Rvalue* %v25
+	%tmp280 = load i32, i32* %v25
+	%tmp281 = icmp ne i32 %tmp280, 1
+	br i1 %tmp281, label %then32, label %endif32
 then32:
-	%tmp355 = call i8* @mem.malloc(i64 40)
-	%tmp356 = getelementptr inbounds %struct.StaticSymbolTableEntry, %struct.StaticSymbolTableEntry* %tmp355, i32 0, i32 1
-	store i1 false, i1* %tmp356
-	%tmp357 = getelementptr inbounds %struct.DeclarationNode, %struct.DeclarationNode* %tmp334, i32 0, i32 1
-	%tmp358 = load i1, i1* %tmp357
-	br i1 %tmp358, label %then33, label %endif33
-then33:
-	%tmp359 = getelementptr inbounds %struct.StaticSymbolTableEntry, %struct.StaticSymbolTableEntry* %tmp355, i32 0, i32 1
-	store i1 true, i1* %tmp359
-	%tmp360 = getelementptr inbounds %struct.DeclarationNode, %struct.DeclarationNode* %tmp334, i32 0, i32 2
-	%tmp361 = call %struct.Rvalue @constant_evaluate_expression(%struct.Expression* %tmp360, %struct.SymbolTable* %symbol_table)
-	store %struct.Rvalue %tmp361, %struct.Rvalue* %v29
-	br label %endif33
-endif33:
-	%tmp362 = getelementptr inbounds %struct.DeclarationNode, %struct.DeclarationNode* %tmp334, i32 0, i32 3
-	%tmp363 = call %struct.CompilerType @get_compiler_type(%struct.Type* %tmp362, %struct.Path* %path, %struct.SymbolTable* %symbol_table)
-	store %struct.CompilerType %tmp363, %struct.CompilerType* %tmp355
-	%tmp364 = getelementptr inbounds %struct.StaticSymbolTableEntry, %struct.StaticSymbolTableEntry* %tmp355, i32 0, i32 2
-	%tmp365 = load %struct.Rvalue, %struct.Rvalue* %v29
-	store %struct.Rvalue %tmp365, %struct.Rvalue* %tmp364
-	%tmp366 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp338, i32 0, i32 2
-	store i8* %tmp355, i8** %tmp366
-	%tmp367 = load i32, i32* %tmp338
-	%tmp368 = or i32 %tmp367, 8
-	store i32 %tmp368, i32* %tmp338
-; Variable expr is out.
+	call void @process.throw(i8* @.str.349)
 	br label %endif32
 endif32:
+	%tmp282 = getelementptr inbounds %struct.rvalue.Rvalue, %struct.rvalue.Rvalue* %v25, i32 0, i32 1
+	%tmp283 = load i64, i64* %tmp282
+	store i64 %tmp283, i64* %v22
+; Variable rval is out.
 	br label %endif31
 endif31:
-	%tmp369 = load i32, i32* %v0
-	%tmp370 = add i32 %tmp369, 1
-	store i32 %tmp370, i32* %v0
+	%tmp284 = getelementptr inbounds %struct.EnumDefinedField, %struct.EnumDefinedField* %v24, i32 0, i32 1
+	%tmp285 = load i64, i64* %v22
+	store i64 %tmp285, i64* %tmp284
+	%tmp286 = load i64, i64* %v22
+	%tmp287 = add i64 %tmp286, 1
+	store i64 %tmp287, i64* %v22
+	%tmp288 = getelementptr inbounds %struct.EnumSymbolTableEntry, %struct.EnumSymbolTableEntry* %tmp247, i32 0, i32 1
+	%tmp289 = load %struct.EnumDefinedField, %struct.EnumDefinedField* %v24
+	call void @"vector.push<%struct.EnumDefinedField>"(%"struct.vector.Vec<%struct.EnumDefinedField>"* %tmp288, %struct.EnumDefinedField %tmp289)
+	%tmp290 = load i32, i32* %v23
+	%tmp291 = add i32 %tmp290, 1
+	store i32 %tmp291, i32* %v23
+	br label %loop_cond29
+loop_body29_exit:
+; Variable edf is out.
+	%tmp292 = load i32, i32* %tmp246
+	%tmp293 = or i32 %tmp292, 8
+	store i32 %tmp293, i32* %tmp246
+	%tmp294 = load i32, i32* %v0
+	%tmp295 = add i32 %tmp294, 1
+	store i32 %tmp295, i32* %v0
 	br label %loop_body0
 ; Variable dec_path is out.
-endif29:
-	store i32 0, i32* %v30
-	br label %loop_cond34
-loop_cond34:
-	%tmp371 = load i32, i32* %v30
-	%tmp372 = icmp uge i32 %tmp371, 3
-	br i1 %tmp372, label %then35, label %endif35
+else25:
+	%tmp296 = load %struct.Stmt*, %struct.Stmt** %v2
+	%tmp297 = load i8, i8* %tmp296
+	%tmp298 = icmp eq i8 %tmp297, 14
+	br i1 %tmp298, label %then33, label %else33
+then33:
+	%tmp299 = load %struct.Stmt*, %struct.Stmt** %v2
+	%tmp300 = getelementptr inbounds %struct.Stmt, %struct.Stmt* %tmp299, i32 0, i32 1
+	%tmp301 = load i8*, i8** %tmp300
+	%tmp302 = load %struct.Path, %struct.Path* %path
+	store %struct.Path %tmp302, %struct.Path* %v26
+	%tmp303 = load i8, i8* %v26
+	%tmp304 = icmp eq i8 %tmp303, 8
+	br i1 %tmp304, label %then34, label %endif34
+then34:
+	call void @process.throw(i8* @.str.344)
+	br label %endif34
+endif34:
+	%tmp305 = getelementptr inbounds %struct.Path, %struct.Path* %v26, i32 0, i32 1
+	%tmp306 = load i8, i8* %v26
+	%tmp307 = getelementptr inbounds [8 x i16], [8 x i16]* %tmp305, i32 0, i8 %tmp306
+	%tmp308 = load i16, i16* %tmp301
+	store i16 %tmp308, i16* %tmp307
+	%tmp309 = load i8, i8* %v26
+	%tmp310 = add i8 %tmp309, 1
+	store i8 %tmp310, i8* %v26
+	%tmp311 = getelementptr inbounds %struct.NamespaceNode, %struct.NamespaceNode* %tmp301, i32 0, i32 1
+	call void @compile_internal_sym_table(%struct.Path* %v26, %"struct.vector.Vec<%struct.Stmt>"* %tmp311, %struct.SymbolTable* %symbol_table, %struct.string.String* %stdout)
+	%tmp312 = load i32, i32* %v0
+	%tmp313 = add i32 %tmp312, 1
+	store i32 %tmp313, i32* %v0
+	br label %loop_body0
+; Variable path is out.
+else33:
+	%tmp314 = load %struct.Stmt*, %struct.Stmt** %v2
+	%tmp315 = load i8, i8* %tmp314
+	%tmp316 = icmp eq i8 %tmp315, 1
+	br i1 %tmp316, label %then35, label %endif35
 then35:
-	br label %loop_body34_exit
+	%tmp317 = load %struct.Stmt*, %struct.Stmt** %v2
+	%tmp318 = getelementptr inbounds %struct.Stmt, %struct.Stmt* %tmp317, i32 0, i32 1
+	%tmp319 = load i8*, i8** %tmp318
+	%tmp320 = load i16, i16* %tmp319
+	%tmp321 = call %struct.PathEx @path_to_path_ex_name(%struct.Path* %path, i16 %tmp320)
+	store %struct.PathEx %tmp321, %struct.PathEx* %v27
+	%tmp322 = load %struct.PathEx, %struct.PathEx* %v27
+	%tmp323 = call %struct.SymbolTableEntry* @get_symbol_from_table(%struct.SymbolTable* %symbol_table, %struct.PathEx %tmp322)
+	%tmp324 = icmp eq %struct.SymbolTableEntry* %tmp323, null
+	br i1 %tmp324, label %then36, label %endif36
+then36:
+	call void @process.throw(i8* @.str.350)
+	br label %endif36
+endif36:
+	%tmp325 = getelementptr inbounds %struct.DeclarationNode, %struct.DeclarationNode* %tmp319, i32 0, i32 4
+	%tmp326 = load i8, i8* %tmp325
+	%tmp327 = icmp eq i8 %tmp326, 2
+	br i1 %tmp327, label %then37, label %else37
+then37:
+	%tmp328 = call i8* @mem.malloc(i64 32)
+	%tmp329 = getelementptr inbounds %struct.DeclarationNode, %struct.DeclarationNode* %tmp319, i32 0, i32 3
+	%tmp330 = call %struct.comp_type.CompilerType @comp_type.get_compiler_type(%struct.Type* %tmp329, %struct.Path* %path, %struct.SymbolTable* %symbol_table)
+	store %struct.comp_type.CompilerType %tmp330, %struct.comp_type.CompilerType* %tmp328
+	%tmp331 = getelementptr inbounds %struct.ConstantSymbolTableEntry, %struct.ConstantSymbolTableEntry* %tmp328, i32 0, i32 1
+	%tmp332 = getelementptr inbounds %struct.DeclarationNode, %struct.DeclarationNode* %tmp319, i32 0, i32 2
+	%tmp333 = call %struct.rvalue.Rvalue @expression_compiler.constant_expression_evaluation(%struct.Expression* %tmp332, %struct.SymbolTable* %symbol_table)
+	store %struct.rvalue.Rvalue %tmp333, %struct.rvalue.Rvalue* %tmp331
+	%tmp334 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp323, i32 0, i32 2
+	store i8* %tmp328, i8** %tmp334
+	%tmp335 = load i32, i32* %tmp323
+	%tmp336 = or i32 %tmp335, 8
+	store i32 %tmp336, i32* %tmp323
+	br label %endif37
+else37:
+	%tmp337 = getelementptr inbounds %struct.DeclarationNode, %struct.DeclarationNode* %tmp319, i32 0, i32 4
+	%tmp338 = load i8, i8* %tmp337
+	%tmp339 = icmp eq i8 %tmp338, 1
+	br i1 %tmp339, label %then38, label %endif38
+then38:
+	%tmp340 = call i8* @mem.malloc(i64 40)
+	%tmp341 = getelementptr inbounds %struct.StaticSymbolTableEntry, %struct.StaticSymbolTableEntry* %tmp340, i32 0, i32 1
+	store i1 false, i1* %tmp341
+	%tmp342 = getelementptr inbounds %struct.DeclarationNode, %struct.DeclarationNode* %tmp319, i32 0, i32 1
+	%tmp343 = load i1, i1* %tmp342
+	br i1 %tmp343, label %then39, label %endif39
+then39:
+	%tmp344 = getelementptr inbounds %struct.StaticSymbolTableEntry, %struct.StaticSymbolTableEntry* %tmp340, i32 0, i32 1
+	store i1 true, i1* %tmp344
+	%tmp345 = getelementptr inbounds %struct.DeclarationNode, %struct.DeclarationNode* %tmp319, i32 0, i32 2
+	%tmp346 = call %struct.rvalue.Rvalue @expression_compiler.constant_expression_evaluation(%struct.Expression* %tmp345, %struct.SymbolTable* %symbol_table)
+	store %struct.rvalue.Rvalue %tmp346, %struct.rvalue.Rvalue* %v28
+	br label %endif39
+endif39:
+	%tmp347 = getelementptr inbounds %struct.DeclarationNode, %struct.DeclarationNode* %tmp319, i32 0, i32 3
+	%tmp348 = call %struct.comp_type.CompilerType @comp_type.get_compiler_type(%struct.Type* %tmp347, %struct.Path* %path, %struct.SymbolTable* %symbol_table)
+	store %struct.comp_type.CompilerType %tmp348, %struct.comp_type.CompilerType* %tmp340
+	%tmp349 = getelementptr inbounds %struct.StaticSymbolTableEntry, %struct.StaticSymbolTableEntry* %tmp340, i32 0, i32 2
+	%tmp350 = load %struct.rvalue.Rvalue, %struct.rvalue.Rvalue* %v28
+	store %struct.rvalue.Rvalue %tmp350, %struct.rvalue.Rvalue* %tmp349
+	%tmp351 = getelementptr inbounds %struct.SymbolTableEntry, %struct.SymbolTableEntry* %tmp323, i32 0, i32 2
+	store i8* %tmp340, i8** %tmp351
+	%tmp352 = load i32, i32* %tmp323
+	%tmp353 = or i32 %tmp352, 8
+	store i32 %tmp353, i32* %tmp323
+; Variable expr is out.
+	br label %endif38
+endif38:
+	br label %endif37
+endif37:
+	%tmp354 = load i32, i32* %v0
+	%tmp355 = add i32 %tmp354, 1
+	store i32 %tmp355, i32* %v0
+	br label %loop_body0
+; Variable dec_path is out.
 endif35:
-	%tmp373 = load i32, i32* %v0
-	%tmp374 = load i32, i32* %v30
-	%tmp375 = add i32 %tmp373, %tmp374
-	%tmp376 = load %struct.Stmt*, %struct.Stmt** %statement_vector
-	%tmp377 = getelementptr inbounds %struct.Stmt, %struct.Stmt* %tmp376, i32 %tmp375
-	%tmp378 = load i8, i8* %tmp377
-	%tmp379 = zext i8 %tmp378 to i64
-	call void @console.println_i64(i64 %tmp379)
-	call void @console.write(i8* @.str.324, i32 6)
-	%tmp380 = load i32, i32* %v30
-	%tmp381 = add i32 %tmp380, 1
-	store i32 %tmp381, i32* %v30
-	br label %loop_cond34
-loop_body34_exit:
-	call void @process.throw(i8* @.str.325)
-	br label %loop_body0
-loop_body0:
-	br label %loop_start0
-loop_body0_exit:
-	ret void
-}
-define void @compile_body(%"struct.vector.Vec<%struct.Stmt>"* %statement_vector, %struct.Path* %body_path, %"struct.vector.Vec<%struct.string.String>"* %symbol_vector, %struct.string.String* %stdout){
-	%v0 = alloca i32
-	%v1 = alloca i32
-	%v2 = alloca %struct.Stmt*
-	%v3 = alloca i32
-	store i32 0, i32* %v0
-	%tmp0 = getelementptr inbounds %"struct.vector.Vec<%struct.Stmt>", %"struct.vector.Vec<%struct.Stmt>"* %statement_vector, i32 0, i32 1
-	%tmp1 = load i32, i32* %tmp0
-	store i32 %tmp1, i32* %v1
-	%tmp2 = load %struct.string.String*, %struct.string.String** %symbol_vector
-	br label %loop_start0
-loop_start0:
-	%tmp3 = load i32, i32* %v0
-	%tmp4 = load i32, i32* %v1
-	%tmp5 = icmp ult i32 %tmp3, %tmp4
-	br i1 %tmp5, label %endif1, label %else1
-else1:
-	br label %loop_body0_exit
-endif1:
-	%tmp6 = load i32, i32* %v0
-	%tmp7 = load %struct.Stmt*, %struct.Stmt** %statement_vector
-	%tmp8 = getelementptr inbounds %struct.Stmt, %struct.Stmt* %tmp7, i32 %tmp6
-	store %struct.Stmt* %tmp8, %struct.Stmt** %v2
-	%tmp9 = load %struct.Stmt*, %struct.Stmt** %v2
-	%tmp10 = load i8, i8* %tmp9
-	%tmp11 = icmp eq i8 %tmp10, 1
-	br i1 %tmp11, label %then2, label %else2
-then2:
-	%tmp12 = load %struct.Stmt*, %struct.Stmt** %v2
-	%tmp13 = getelementptr inbounds %struct.Stmt, %struct.Stmt* %tmp12, i32 0, i32 1
-	%tmp14 = load i8*, i8** %tmp13
-	%tmp15 = getelementptr inbounds %struct.DeclarationNode, %struct.DeclarationNode* %tmp14, i32 0, i32 4
-	%tmp16 = load i8, i8* %tmp15
-	%tmp17 = icmp eq i8 %tmp16, 2
-	br i1 %tmp17, label %then3, label %else3
-then3:
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.329, i32 7)
-	br label %endif3
-else3:
-	%tmp18 = getelementptr inbounds %struct.DeclarationNode, %struct.DeclarationNode* %tmp14, i32 0, i32 4
-	%tmp19 = load i8, i8* %tmp18
-	%tmp20 = icmp eq i8 %tmp19, 1
-	br i1 %tmp20, label %then4, label %else4
-then4:
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.330, i32 8)
-	br label %endif4
-else4:
-	%tmp21 = getelementptr inbounds %struct.DeclarationNode, %struct.DeclarationNode* %tmp14, i32 0, i32 4
-	%tmp22 = load i8, i8* %tmp21
-	%tmp23 = icmp eq i8 %tmp22, 0
-	br i1 %tmp23, label %then5, label %endif5
-then5:
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.331, i32 5)
-	br label %endif5
-endif5:
-	br label %endif4
-endif4:
-	br label %endif3
-endif3:
-	%tmp24 = load i16, i16* %tmp14
-	%tmp25 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp2, i16 %tmp24
-	%tmp26 = load i8*, i8** %tmp25
-	%tmp27 = load i16, i16* %tmp14
-	%tmp28 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp2, i16 %tmp27
-	%tmp29 = getelementptr inbounds %struct.string.String, %struct.string.String* %tmp28, i32 0, i32 1
-	%tmp30 = load i32, i32* %tmp29
-	call void @string.append_str(%struct.string.String* %stdout, i8* %tmp26, i32 %tmp30)
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.332, i32 3)
-	%tmp31 = getelementptr inbounds %struct.DeclarationNode, %struct.DeclarationNode* %tmp14, i32 0, i32 3
-	call void @debug_dump_type(%struct.Type* %tmp31, %"struct.vector.Vec<%struct.string.String>"* %symbol_vector, %struct.string.String* %stdout)
-	%tmp32 = getelementptr inbounds %struct.DeclarationNode, %struct.DeclarationNode* %tmp14, i32 0, i32 1
-	%tmp33 = load i1, i1* %tmp32
-	br i1 %tmp33, label %then6, label %endif6
-then6:
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.313, i32 3)
-	%tmp34 = getelementptr inbounds %struct.DeclarationNode, %struct.DeclarationNode* %tmp14, i32 0, i32 2
-	call void @debug_dump_expression(%struct.Expression* %tmp34, %"struct.vector.Vec<%struct.string.String>"* %symbol_vector, %struct.string.String* %stdout)
-	br label %endif6
-endif6:
-	call void @string.append(%struct.string.String* %stdout, i8 10)
-	%tmp35 = load i32, i32* %v0
-	%tmp36 = add i32 %tmp35, 1
-	store i32 %tmp36, i32* %v0
-	br label %loop_body0
-else2:
-	%tmp37 = load %struct.Stmt*, %struct.Stmt** %v2
-	%tmp38 = load i8, i8* %tmp37
-	%tmp39 = icmp eq i8 %tmp38, 2
-	br i1 %tmp39, label %then7, label %else7
-then7:
-	%tmp40 = load %struct.Stmt*, %struct.Stmt** %v2
-	%tmp41 = getelementptr inbounds %struct.Stmt, %struct.Stmt* %tmp40, i32 0, i32 1
-	%tmp42 = load i8*, i8** %tmp41
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.172, i32 1)
-	call void @debug_dump_expression(%struct.Expression* %tmp42, %"struct.vector.Vec<%struct.string.String>"* %symbol_vector, %struct.string.String* %stdout)
-	call void @string.append(%struct.string.String* %stdout, i8 10)
-	%tmp43 = load i32, i32* %v0
-	%tmp44 = add i32 %tmp43, 1
-	store i32 %tmp44, i32* %v0
-	br label %loop_body0
-else7:
-	%tmp45 = load %struct.Stmt*, %struct.Stmt** %v2
-	%tmp46 = load i8, i8* %tmp45
-	%tmp47 = icmp eq i8 %tmp46, 10
-	br i1 %tmp47, label %then8, label %else8
-then8:
-	%tmp48 = load %struct.Stmt*, %struct.Stmt** %v2
-	%tmp49 = getelementptr inbounds %struct.Stmt, %struct.Stmt* %tmp48, i32 0, i32 1
-	%tmp50 = load i8*, i8** %tmp49
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.333, i32 7)
-	%tmp51 = load i1, i1* %tmp50
-	br i1 %tmp51, label %then9, label %endif9
-then9:
-	call void @string.append(%struct.string.String* %stdout, i8 32)
-	%tmp52 = getelementptr inbounds %struct.ReturnNode, %struct.ReturnNode* %tmp50, i32 0, i32 1
-	call void @debug_dump_expression(%struct.Expression* %tmp52, %"struct.vector.Vec<%struct.string.String>"* %symbol_vector, %struct.string.String* %stdout)
-	br label %endif9
-endif9:
-	call void @string.append(%struct.string.String* %stdout, i8 10)
-	%tmp53 = load i32, i32* %v0
-	%tmp54 = add i32 %tmp53, 1
-	store i32 %tmp54, i32* %v0
-	br label %loop_body0
-else8:
-	%tmp55 = load %struct.Stmt*, %struct.Stmt** %v2
-	%tmp56 = load i8, i8* %tmp55
-	%tmp57 = icmp eq i8 %tmp56, 3
-	br i1 %tmp57, label %then10, label %else10
-then10:
-	%tmp58 = load %struct.Stmt*, %struct.Stmt** %v2
-	%tmp59 = getelementptr inbounds %struct.Stmt, %struct.Stmt* %tmp58, i32 0, i32 1
-	%tmp60 = load i8*, i8** %tmp59
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.334, i32 4)
-	call void @debug_dump_expression(%struct.Expression* %tmp60, %"struct.vector.Vec<%struct.string.String>"* %symbol_vector, %struct.string.String* %stdout)
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.335, i32 3)
-	%tmp61 = getelementptr inbounds %struct.IfStmt, %struct.IfStmt* %tmp60, i32 0, i32 1
-	call void @compile_body(%"struct.vector.Vec<%struct.Stmt>"* %tmp61, %struct.Path* %body_path, %"struct.vector.Vec<%struct.string.String>"* %symbol_vector, %struct.string.String* %stdout)
-	%tmp62 = getelementptr inbounds %struct.IfStmt, %struct.IfStmt* %tmp60, i32 0, i32 2
-	%tmp63 = getelementptr inbounds %"struct.vector.Vec<%struct.Stmt>", %"struct.vector.Vec<%struct.Stmt>"* %tmp62, i32 0, i32 1
-	%tmp64 = load i32, i32* %tmp63
-	%tmp65 = icmp ne i32 %tmp64, 0
-	br i1 %tmp65, label %then11, label %else11
-then11:
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.336, i32 10)
-	%tmp66 = getelementptr inbounds %struct.IfStmt, %struct.IfStmt* %tmp60, i32 0, i32 2
-	call void @compile_body(%"struct.vector.Vec<%struct.Stmt>"* %tmp66, %struct.Path* %body_path, %"struct.vector.Vec<%struct.string.String>"* %symbol_vector, %struct.string.String* %stdout)
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.337, i32 3)
-	br label %endif11
-else11:
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.337, i32 3)
-	br label %endif11
-endif11:
-	%tmp67 = load i32, i32* %v0
-	%tmp68 = add i32 %tmp67, 1
-	store i32 %tmp68, i32* %v0
-	br label %loop_body0
-else10:
-	%tmp69 = load %struct.Stmt*, %struct.Stmt** %v2
-	%tmp70 = load i8, i8* %tmp69
-	%tmp71 = icmp eq i8 %tmp70, 4
-	br i1 %tmp71, label %then12, label %else12
-then12:
-	%tmp72 = load %struct.Stmt*, %struct.Stmt** %v2
-	%tmp73 = getelementptr inbounds %struct.Stmt, %struct.Stmt* %tmp72, i32 0, i32 1
-	%tmp74 = load i8*, i8** %tmp73
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.338, i32 7)
-	call void @compile_body(%"struct.vector.Vec<%struct.Stmt>"* %tmp74, %struct.Path* %body_path, %"struct.vector.Vec<%struct.string.String>"* %symbol_vector, %struct.string.String* %stdout)
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.337, i32 3)
-	%tmp75 = load i32, i32* %v0
-	%tmp76 = add i32 %tmp75, 1
-	store i32 %tmp76, i32* %v0
-	br label %loop_body0
-else12:
-	%tmp77 = load %struct.Stmt*, %struct.Stmt** %v2
-	%tmp78 = load i8, i8* %tmp77
-	%tmp79 = icmp eq i8 %tmp78, 5
-	br i1 %tmp79, label %then13, label %else13
-then13:
-	%tmp80 = load %struct.Stmt*, %struct.Stmt** %v2
-	%tmp81 = getelementptr inbounds %struct.Stmt, %struct.Stmt* %tmp80, i32 0, i32 1
-	%tmp82 = load i8*, i8** %tmp81
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.339, i32 7)
-	call void @debug_dump_expression(%struct.Expression* %tmp82, %"struct.vector.Vec<%struct.string.String>"* %symbol_vector, %struct.string.String* %stdout)
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.340, i32 2)
-	%tmp83 = getelementptr inbounds %struct.WhileStmt, %struct.WhileStmt* %tmp82, i32 0, i32 1
-	call void @compile_body(%"struct.vector.Vec<%struct.Stmt>"* %tmp83, %struct.Path* %body_path, %"struct.vector.Vec<%struct.string.String>"* %symbol_vector, %struct.string.String* %stdout)
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.337, i32 3)
-	%tmp84 = load i32, i32* %v0
-	%tmp85 = add i32 %tmp84, 1
-	store i32 %tmp85, i32* %v0
-	br label %loop_body0
-else13:
-	%tmp86 = load %struct.Stmt*, %struct.Stmt** %v2
-	%tmp87 = load i8, i8* %tmp86
-	%tmp88 = icmp eq i8 %tmp87, 7
-	br i1 %tmp88, label %then14, label %else14
-then14:
-	%tmp89 = load %struct.Stmt*, %struct.Stmt** %v2
-	%tmp90 = getelementptr inbounds %struct.Stmt, %struct.Stmt* %tmp89, i32 0, i32 1
-	%tmp91 = load i8*, i8** %tmp90
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.341, i32 5)
-	call void @debug_dump_expression(%struct.Expression* %tmp91, %"struct.vector.Vec<%struct.string.String>"* %symbol_vector, %struct.string.String* %stdout)
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.342, i32 4)
-	%tmp92 = getelementptr inbounds %struct.ForStmt, %struct.ForStmt* %tmp91, i32 0, i32 1
-	call void @debug_dump_expression(%struct.Expression* %tmp92, %"struct.vector.Vec<%struct.string.String>"* %symbol_vector, %struct.string.String* %stdout)
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.340, i32 2)
-	%tmp93 = getelementptr inbounds %struct.ForStmt, %struct.ForStmt* %tmp91, i32 0, i32 2
-	call void @compile_body(%"struct.vector.Vec<%struct.Stmt>"* %tmp93, %struct.Path* %body_path, %"struct.vector.Vec<%struct.string.String>"* %symbol_vector, %struct.string.String* %stdout)
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.337, i32 3)
-	%tmp94 = load i32, i32* %v0
-	%tmp95 = add i32 %tmp94, 1
-	store i32 %tmp95, i32* %v0
-	br label %loop_body0
-else14:
-	%tmp96 = load %struct.Stmt*, %struct.Stmt** %v2
-	%tmp97 = load i8, i8* %tmp96
-	%tmp98 = icmp eq i8 %tmp97, 6
-	br i1 %tmp98, label %then15, label %else15
-then15:
-	%tmp99 = load %struct.Stmt*, %struct.Stmt** %v2
-	%tmp100 = getelementptr inbounds %struct.Stmt, %struct.Stmt* %tmp99, i32 0, i32 1
-	%tmp101 = load i8*, i8** %tmp100
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.343, i32 5)
-	%tmp102 = getelementptr inbounds %struct.DoWhileStmt, %struct.DoWhileStmt* %tmp101, i32 0, i32 1
-	call void @compile_body(%"struct.vector.Vec<%struct.Stmt>"* %tmp102, %struct.Path* %body_path, %"struct.vector.Vec<%struct.string.String>"* %symbol_vector, %struct.string.String* %stdout)
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.344, i32 8)
-	call void @debug_dump_expression(%struct.Expression* %tmp101, %"struct.vector.Vec<%struct.string.String>"* %symbol_vector, %struct.string.String* %stdout)
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.345, i32 2)
-	%tmp103 = load i32, i32* %v0
-	%tmp104 = add i32 %tmp103, 1
-	store i32 %tmp104, i32* %v0
-	br label %loop_body0
-else15:
-	%tmp105 = load %struct.Stmt*, %struct.Stmt** %v2
-	%tmp106 = load i8, i8* %tmp105
-	%tmp107 = icmp eq i8 %tmp106, 9
-	br i1 %tmp107, label %then16, label %else16
-then16:
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.346, i32 11)
-	%tmp108 = load i32, i32* %v0
-	%tmp109 = add i32 %tmp108, 1
-	store i32 %tmp109, i32* %v0
-	br label %loop_body0
-else16:
-	%tmp110 = load %struct.Stmt*, %struct.Stmt** %v2
-	%tmp111 = load i8, i8* %tmp110
-	%tmp112 = icmp eq i8 %tmp111, 8
-	br i1 %tmp112, label %then17, label %endif17
-then17:
-	call void @string.append_str(%struct.string.String* %stdout, i8* @.str.347, i32 8)
-	%tmp113 = load i32, i32* %v0
-	%tmp114 = add i32 %tmp113, 1
-	store i32 %tmp114, i32* %v0
-	br label %loop_body0
-endif17:
-	store i32 0, i32* %v3
-	br label %loop_cond18
-loop_cond18:
-	%tmp115 = load i32, i32* %v3
-	%tmp116 = icmp uge i32 %tmp115, 3
-	br i1 %tmp116, label %then19, label %endif19
-then19:
-	br label %loop_body18_exit
-endif19:
-	%tmp117 = load i32, i32* %v0
-	%tmp118 = load i32, i32* %v3
-	%tmp119 = add i32 %tmp117, %tmp118
-	%tmp120 = load %struct.Stmt*, %struct.Stmt** %statement_vector
-	%tmp121 = getelementptr inbounds %struct.Stmt, %struct.Stmt* %tmp120, i32 %tmp119
-	%tmp122 = load i8, i8* %tmp121
-	%tmp123 = zext i8 %tmp122 to i64
-	call void @console.println_i64(i64 %tmp123)
-	call void @console.write(i8* @.str.324, i32 6)
-	%tmp124 = load i32, i32* %v3
-	%tmp125 = add i32 %tmp124, 1
-	store i32 %tmp125, i32* %v3
-	br label %loop_cond18
-loop_body18_exit:
+	store i32 0, i32* %v29
+	br label %loop_cond40
+loop_cond40:
+	%tmp356 = load i32, i32* %v29
+	%tmp357 = icmp uge i32 %tmp356, 3
+	br i1 %tmp357, label %then41, label %endif41
+then41:
+	br label %loop_body40_exit
+endif41:
+	%tmp358 = load i32, i32* %v0
+	%tmp359 = load i32, i32* %v29
+	%tmp360 = add i32 %tmp358, %tmp359
+	%tmp361 = load %struct.Stmt*, %struct.Stmt** %statement_vector
+	%tmp362 = getelementptr inbounds %struct.Stmt, %struct.Stmt* %tmp361, i32 %tmp360
+	%tmp363 = load i8, i8* %tmp362
+	%tmp364 = zext i8 %tmp363 to i64
+	call void @console.println_i64(i64 %tmp364)
+	call void @console.write(i8* @.str.347, i32 6)
+	%tmp365 = load i32, i32* %v29
+	%tmp366 = add i32 %tmp365, 1
+	store i32 %tmp366, i32* %v29
+	br label %loop_cond40
+loop_body40_exit:
 	call void @process.throw(i8* @.str.348)
 	br label %loop_body0
 loop_body0:
@@ -14273,7 +15323,8 @@ loop_body0_exit:
 define void @compile(%"struct.vector.Vec<%struct.Stmt>"* %statement_vector, %"struct.vector.Vec<%struct.string.String>"* %symbol_vector, %struct.string.String* %stdout){
 	%v0 = alloca %struct.SymbolTable
 	%v1 = alloca %struct.Path
-	call void @STATIC_FILL_PRIMITIVE_TYPES_INFO()
+	call void @layout.STATIC_layout()
+	call void @primitives.STATIC_primitives()
 	%tmp0 = call %"struct.vector.Vec<%struct.SymbolTableEntry>" @"vector.new<%struct.SymbolTableEntry>"()
 	store %"struct.vector.Vec<%struct.SymbolTableEntry>" %tmp0, %"struct.vector.Vec<%struct.SymbolTableEntry>"* %v0
 	%tmp1 = getelementptr inbounds %struct.SymbolTable, %struct.SymbolTable* %v0, i32 0, i32 1
@@ -14281,6 +15332,7 @@ define void @compile(%"struct.vector.Vec<%struct.Stmt>"* %statement_vector, %"st
 	store i8 0, i8* %v1
 	call void @compile_internal_sym_table_prefill(%struct.Path* %v1, %"struct.vector.Vec<%struct.Stmt>"* %statement_vector, %struct.SymbolTable* %v0, %struct.string.String* %stdout)
 	call void @compile_internal_sym_table(%struct.Path* %v1, %"struct.vector.Vec<%struct.Stmt>"* %statement_vector, %struct.SymbolTable* %v0, %struct.string.String* %stdout)
+	call void @compile_internals.sym_table_push_functions(%struct.SymbolTable* %v0, %struct.string.String* %stdout)
 	call void @compile_internals.sym_table_push_structs(%struct.SymbolTable* %v0, %struct.string.String* %stdout)
 	call void @compile_internals.sym_table_push_structs_generic(%struct.SymbolTable* %v0, %struct.string.String* %stdout)
 	call void @compile_internals.sym_table_push_external(%struct.SymbolTable* %v0, %struct.string.String* %stdout)
@@ -14375,281 +15427,10 @@ endif2:
 loop_body0_exit:
 	ret void
 }
-define void @add_to_scope(%struct.Variable %val, %struct.Scope* %scope){
-	call void @"vector.push<%struct.Variable>"(%"struct.vector.Vec<%struct.Variable>"* %scope, %struct.Variable %val)
-; Variable val is out.
-	ret void
-}
 define i32 @_fltused(){
 	ret i32 0
 }
 define void @__chkstk(){
-	ret void
-}
-define void @STATIC_FILL_PRIMITIVE_TYPES_INFO(){
-	%v0 = alloca %struct.Layout
-	%v1 = alloca %struct.PrimitiveTypeInfo
-	%v2 = alloca %struct.Layout
-	%v3 = alloca %struct.PrimitiveTypeInfo
-	%v4 = alloca %struct.Layout
-	%v5 = alloca %struct.PrimitiveTypeInfo
-	%v6 = alloca %struct.Layout
-	%v7 = alloca %struct.PrimitiveTypeInfo
-	%v8 = alloca %struct.Layout
-	%v9 = alloca %struct.PrimitiveTypeInfo
-	%v10 = alloca %struct.Layout
-	%v11 = alloca %struct.PrimitiveTypeInfo
-	%v12 = alloca %struct.Layout
-	%v13 = alloca %struct.PrimitiveTypeInfo
-	%v14 = alloca %struct.Layout
-	%v15 = alloca %struct.PrimitiveTypeInfo
-	%v16 = alloca %struct.Layout
-	%v17 = alloca %struct.PrimitiveTypeInfo
-	%v18 = alloca %struct.Layout
-	%v19 = alloca %struct.PrimitiveTypeInfo
-	%v20 = alloca %struct.Layout
-	%v21 = alloca %struct.PrimitiveTypeInfo
-	%v22 = alloca %struct.Layout
-	%v23 = alloca %struct.PrimitiveTypeInfo
-	%v24 = alloca %struct.Layout
-	%v25 = alloca %struct.PrimitiveTypeInfo
-	%v26 = alloca %struct.Layout
-	%v27 = alloca %struct.PrimitiveTypeInfo
-	%v28 = alloca %struct.Layout
-	%v29 = alloca %struct.PrimitiveTypeInfo
-	%v30 = alloca %struct.Layout
-	store i16 8, i16* %v0
-	%tmp0 = getelementptr inbounds %struct.Layout, %struct.Layout* %v0, i32 0, i32 1
-	store i16 8, i16* %tmp0
-	%tmp1 = load %struct.Layout, %struct.Layout* %v0
-	store %struct.Layout %tmp1, %struct.Layout* @POINTER_LAYOUT
-	store i16 0, i16* %v2
-	%tmp2 = getelementptr inbounds %struct.Layout, %struct.Layout* %v2, i32 0, i32 1
-	store i16 1, i16* %tmp2
-	%tmp3 = load %struct.Layout, %struct.Layout* %v2
-	store i8* @.str.300, i8** %v1
-	%tmp4 = getelementptr inbounds %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v1, i32 0, i32 1
-	store i8* @.str.300, i8** %tmp4
-	%tmp5 = getelementptr inbounds %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v1, i32 0, i32 2
-	store %struct.Layout %tmp3, %struct.Layout* %tmp5
-	%tmp6 = getelementptr inbounds %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v1, i32 0, i32 3
-	store i32 0, i32* %tmp6
-	%tmp7 = load %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v1
-	store %struct.PrimitiveTypeInfo %tmp7, %struct.PrimitiveTypeInfo* @PRIMITIVE_TYPES_INFO
-	store i16 1, i16* %v4
-	%tmp8 = getelementptr inbounds %struct.Layout, %struct.Layout* %v4, i32 0, i32 1
-	store i16 1, i16* %tmp8
-	%tmp9 = load %struct.Layout, %struct.Layout* %v4
-; Variable x is out.
-	store i8* @.str.301, i8** %v3
-	%tmp10 = getelementptr inbounds %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v3, i32 0, i32 1
-	store i8* @.str.349, i8** %tmp10
-	%tmp11 = getelementptr inbounds %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v3, i32 0, i32 2
-	store %struct.Layout %tmp9, %struct.Layout* %tmp11
-	%tmp12 = getelementptr inbounds %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v3, i32 0, i32 3
-	store i32 1, i32* %tmp12
-	%tmp13 = getelementptr inbounds [15 x %struct.PrimitiveTypeInfo], [15 x %struct.PrimitiveTypeInfo]* @PRIMITIVE_TYPES_INFO, i32 0, i64 1
-	%tmp14 = load %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v3
-	store %struct.PrimitiveTypeInfo %tmp14, %struct.PrimitiveTypeInfo* %tmp13
-	store i16 1, i16* %v6
-	%tmp15 = getelementptr inbounds %struct.Layout, %struct.Layout* %v6, i32 0, i32 1
-	store i16 1, i16* %tmp15
-	%tmp16 = load %struct.Layout, %struct.Layout* %v6
-; Variable x is out.
-	store i8* @.str.290, i8** %v5
-	%tmp17 = getelementptr inbounds %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v5, i32 0, i32 1
-	store i8* @.str.290, i8** %tmp17
-	%tmp18 = getelementptr inbounds %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v5, i32 0, i32 2
-	store %struct.Layout %tmp16, %struct.Layout* %tmp18
-	%tmp19 = getelementptr inbounds %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v5, i32 0, i32 3
-	store i32 2, i32* %tmp19
-	%tmp20 = getelementptr inbounds [15 x %struct.PrimitiveTypeInfo], [15 x %struct.PrimitiveTypeInfo]* @PRIMITIVE_TYPES_INFO, i32 0, i64 2
-	%tmp21 = load %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v5
-	store %struct.PrimitiveTypeInfo %tmp21, %struct.PrimitiveTypeInfo* %tmp20
-	store i16 2, i16* %v8
-	%tmp22 = getelementptr inbounds %struct.Layout, %struct.Layout* %v8, i32 0, i32 1
-	store i16 2, i16* %tmp22
-	%tmp23 = load %struct.Layout, %struct.Layout* %v8
-; Variable x is out.
-	store i8* @.str.292, i8** %v7
-	%tmp24 = getelementptr inbounds %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v7, i32 0, i32 1
-	store i8* @.str.292, i8** %tmp24
-	%tmp25 = getelementptr inbounds %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v7, i32 0, i32 2
-	store %struct.Layout %tmp23, %struct.Layout* %tmp25
-	%tmp26 = getelementptr inbounds %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v7, i32 0, i32 3
-	store i32 2, i32* %tmp26
-	%tmp27 = getelementptr inbounds [15 x %struct.PrimitiveTypeInfo], [15 x %struct.PrimitiveTypeInfo]* @PRIMITIVE_TYPES_INFO, i32 0, i64 3
-	%tmp28 = load %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v7
-	store %struct.PrimitiveTypeInfo %tmp28, %struct.PrimitiveTypeInfo* %tmp27
-	store i16 4, i16* %v10
-	%tmp29 = getelementptr inbounds %struct.Layout, %struct.Layout* %v10, i32 0, i32 1
-	store i16 4, i16* %tmp29
-	%tmp30 = load %struct.Layout, %struct.Layout* %v10
-; Variable x is out.
-	store i8* @.str.293, i8** %v9
-	%tmp31 = getelementptr inbounds %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v9, i32 0, i32 1
-	store i8* @.str.293, i8** %tmp31
-	%tmp32 = getelementptr inbounds %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v9, i32 0, i32 2
-	store %struct.Layout %tmp30, %struct.Layout* %tmp32
-	%tmp33 = getelementptr inbounds %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v9, i32 0, i32 3
-	store i32 2, i32* %tmp33
-	%tmp34 = getelementptr inbounds [15 x %struct.PrimitiveTypeInfo], [15 x %struct.PrimitiveTypeInfo]* @PRIMITIVE_TYPES_INFO, i32 0, i64 4
-	%tmp35 = load %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v9
-	store %struct.PrimitiveTypeInfo %tmp35, %struct.PrimitiveTypeInfo* %tmp34
-	store i16 8, i16* %v12
-	%tmp36 = getelementptr inbounds %struct.Layout, %struct.Layout* %v12, i32 0, i32 1
-	store i16 8, i16* %tmp36
-	%tmp37 = load %struct.Layout, %struct.Layout* %v12
-; Variable x is out.
-	store i8* @.str.294, i8** %v11
-	%tmp38 = getelementptr inbounds %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v11, i32 0, i32 1
-	store i8* @.str.294, i8** %tmp38
-	%tmp39 = getelementptr inbounds %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v11, i32 0, i32 2
-	store %struct.Layout %tmp37, %struct.Layout* %tmp39
-	%tmp40 = getelementptr inbounds %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v11, i32 0, i32 3
-	store i32 2, i32* %tmp40
-	%tmp41 = getelementptr inbounds [15 x %struct.PrimitiveTypeInfo], [15 x %struct.PrimitiveTypeInfo]* @PRIMITIVE_TYPES_INFO, i32 0, i64 5
-	%tmp42 = load %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v11
-	store %struct.PrimitiveTypeInfo %tmp42, %struct.PrimitiveTypeInfo* %tmp41
-	store i16 8, i16* %v14
-	%tmp43 = getelementptr inbounds %struct.Layout, %struct.Layout* %v14, i32 0, i32 1
-	store i16 8, i16* %tmp43
-	%tmp44 = load %struct.Layout, %struct.Layout* %v14
-; Variable x is out.
-	store i8* @.str.303, i8** %v13
-	%tmp45 = getelementptr inbounds %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v13, i32 0, i32 1
-	store i8* @.str.294, i8** %tmp45
-	%tmp46 = getelementptr inbounds %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v13, i32 0, i32 2
-	store %struct.Layout %tmp44, %struct.Layout* %tmp46
-	%tmp47 = getelementptr inbounds %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v13, i32 0, i32 3
-	store i32 2, i32* %tmp47
-	%tmp48 = getelementptr inbounds [15 x %struct.PrimitiveTypeInfo], [15 x %struct.PrimitiveTypeInfo]* @PRIMITIVE_TYPES_INFO, i32 0, i64 6
-	%tmp49 = load %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v13
-	store %struct.PrimitiveTypeInfo %tmp49, %struct.PrimitiveTypeInfo* %tmp48
-	store i16 1, i16* %v16
-	%tmp50 = getelementptr inbounds %struct.Layout, %struct.Layout* %v16, i32 0, i32 1
-	store i16 1, i16* %tmp50
-	%tmp51 = load %struct.Layout, %struct.Layout* %v16
-; Variable x is out.
-	store i8* @.str.291, i8** %v15
-	%tmp52 = getelementptr inbounds %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v15, i32 0, i32 1
-	store i8* @.str.290, i8** %tmp52
-	%tmp53 = getelementptr inbounds %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v15, i32 0, i32 2
-	store %struct.Layout %tmp51, %struct.Layout* %tmp53
-	%tmp54 = getelementptr inbounds %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v15, i32 0, i32 3
-	store i32 3, i32* %tmp54
-	%tmp55 = getelementptr inbounds [15 x %struct.PrimitiveTypeInfo], [15 x %struct.PrimitiveTypeInfo]* @PRIMITIVE_TYPES_INFO, i32 0, i64 7
-	%tmp56 = load %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v15
-	store %struct.PrimitiveTypeInfo %tmp56, %struct.PrimitiveTypeInfo* %tmp55
-	store i16 2, i16* %v18
-	%tmp57 = getelementptr inbounds %struct.Layout, %struct.Layout* %v18, i32 0, i32 1
-	store i16 2, i16* %tmp57
-	%tmp58 = load %struct.Layout, %struct.Layout* %v18
-; Variable x is out.
-	store i8* @.str.350, i8** %v17
-	%tmp59 = getelementptr inbounds %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v17, i32 0, i32 1
-	store i8* @.str.292, i8** %tmp59
-	%tmp60 = getelementptr inbounds %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v17, i32 0, i32 2
-	store %struct.Layout %tmp58, %struct.Layout* %tmp60
-	%tmp61 = getelementptr inbounds %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v17, i32 0, i32 3
-	store i32 3, i32* %tmp61
-	%tmp62 = getelementptr inbounds [15 x %struct.PrimitiveTypeInfo], [15 x %struct.PrimitiveTypeInfo]* @PRIMITIVE_TYPES_INFO, i32 0, i64 8
-	%tmp63 = load %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v17
-	store %struct.PrimitiveTypeInfo %tmp63, %struct.PrimitiveTypeInfo* %tmp62
-	store i16 4, i16* %v20
-	%tmp64 = getelementptr inbounds %struct.Layout, %struct.Layout* %v20, i32 0, i32 1
-	store i16 4, i16* %tmp64
-	%tmp65 = load %struct.Layout, %struct.Layout* %v20
-; Variable x is out.
-	store i8* @.str.295, i8** %v19
-	%tmp66 = getelementptr inbounds %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v19, i32 0, i32 1
-	store i8* @.str.293, i8** %tmp66
-	%tmp67 = getelementptr inbounds %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v19, i32 0, i32 2
-	store %struct.Layout %tmp65, %struct.Layout* %tmp67
-	%tmp68 = getelementptr inbounds %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v19, i32 0, i32 3
-	store i32 3, i32* %tmp68
-	%tmp69 = getelementptr inbounds [15 x %struct.PrimitiveTypeInfo], [15 x %struct.PrimitiveTypeInfo]* @PRIMITIVE_TYPES_INFO, i32 0, i64 9
-	%tmp70 = load %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v19
-	store %struct.PrimitiveTypeInfo %tmp70, %struct.PrimitiveTypeInfo* %tmp69
-	store i16 8, i16* %v22
-	%tmp71 = getelementptr inbounds %struct.Layout, %struct.Layout* %v22, i32 0, i32 1
-	store i16 8, i16* %tmp71
-	%tmp72 = load %struct.Layout, %struct.Layout* %v22
-; Variable x is out.
-	store i8* @.str.296, i8** %v21
-	%tmp73 = getelementptr inbounds %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v21, i32 0, i32 1
-	store i8* @.str.294, i8** %tmp73
-	%tmp74 = getelementptr inbounds %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v21, i32 0, i32 2
-	store %struct.Layout %tmp72, %struct.Layout* %tmp74
-	%tmp75 = getelementptr inbounds %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v21, i32 0, i32 3
-	store i32 3, i32* %tmp75
-	%tmp76 = getelementptr inbounds [15 x %struct.PrimitiveTypeInfo], [15 x %struct.PrimitiveTypeInfo]* @PRIMITIVE_TYPES_INFO, i32 0, i64 10
-	%tmp77 = load %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v21
-	store %struct.PrimitiveTypeInfo %tmp77, %struct.PrimitiveTypeInfo* %tmp76
-	store i16 8, i16* %v24
-	%tmp78 = getelementptr inbounds %struct.Layout, %struct.Layout* %v24, i32 0, i32 1
-	store i16 8, i16* %tmp78
-	%tmp79 = load %struct.Layout, %struct.Layout* %v24
-; Variable x is out.
-	store i8* @.str.302, i8** %v23
-	%tmp80 = getelementptr inbounds %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v23, i32 0, i32 1
-	store i8* @.str.294, i8** %tmp80
-	%tmp81 = getelementptr inbounds %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v23, i32 0, i32 2
-	store %struct.Layout %tmp79, %struct.Layout* %tmp81
-	%tmp82 = getelementptr inbounds %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v23, i32 0, i32 3
-	store i32 3, i32* %tmp82
-	%tmp83 = getelementptr inbounds [15 x %struct.PrimitiveTypeInfo], [15 x %struct.PrimitiveTypeInfo]* @PRIMITIVE_TYPES_INFO, i32 0, i64 11
-	%tmp84 = load %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v23
-	store %struct.PrimitiveTypeInfo %tmp84, %struct.PrimitiveTypeInfo* %tmp83
-	store i16 2, i16* %v26
-	%tmp85 = getelementptr inbounds %struct.Layout, %struct.Layout* %v26, i32 0, i32 1
-	store i16 2, i16* %tmp85
-	%tmp86 = load %struct.Layout, %struct.Layout* %v26
-; Variable x is out.
-	store i8* @.str.297, i8** %v25
-	%tmp87 = getelementptr inbounds %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v25, i32 0, i32 1
-	store i8* @.str.351, i8** %tmp87
-	%tmp88 = getelementptr inbounds %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v25, i32 0, i32 2
-	store %struct.Layout %tmp86, %struct.Layout* %tmp88
-	%tmp89 = getelementptr inbounds %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v25, i32 0, i32 3
-	store i32 4, i32* %tmp89
-	%tmp90 = getelementptr inbounds [15 x %struct.PrimitiveTypeInfo], [15 x %struct.PrimitiveTypeInfo]* @PRIMITIVE_TYPES_INFO, i32 0, i64 12
-	%tmp91 = load %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v25
-	store %struct.PrimitiveTypeInfo %tmp91, %struct.PrimitiveTypeInfo* %tmp90
-	store i16 4, i16* %v28
-	%tmp92 = getelementptr inbounds %struct.Layout, %struct.Layout* %v28, i32 0, i32 1
-	store i16 4, i16* %tmp92
-	%tmp93 = load %struct.Layout, %struct.Layout* %v28
-; Variable x is out.
-	store i8* @.str.298, i8** %v27
-	%tmp94 = getelementptr inbounds %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v27, i32 0, i32 1
-	store i8* @.str.352, i8** %tmp94
-	%tmp95 = getelementptr inbounds %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v27, i32 0, i32 2
-	store %struct.Layout %tmp93, %struct.Layout* %tmp95
-	%tmp96 = getelementptr inbounds %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v27, i32 0, i32 3
-	store i32 4, i32* %tmp96
-	%tmp97 = getelementptr inbounds [15 x %struct.PrimitiveTypeInfo], [15 x %struct.PrimitiveTypeInfo]* @PRIMITIVE_TYPES_INFO, i32 0, i64 13
-	%tmp98 = load %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v27
-	store %struct.PrimitiveTypeInfo %tmp98, %struct.PrimitiveTypeInfo* %tmp97
-	store i16 8, i16* %v30
-	%tmp99 = getelementptr inbounds %struct.Layout, %struct.Layout* %v30, i32 0, i32 1
-	store i16 8, i16* %tmp99
-	%tmp100 = load %struct.Layout, %struct.Layout* %v30
-; Variable x is out.
-	store i8* @.str.299, i8** %v29
-	%tmp101 = getelementptr inbounds %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v29, i32 0, i32 1
-	store i8* @.str.353, i8** %tmp101
-	%tmp102 = getelementptr inbounds %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v29, i32 0, i32 2
-	store %struct.Layout %tmp100, %struct.Layout* %tmp102
-	%tmp103 = getelementptr inbounds %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v29, i32 0, i32 3
-	store i32 4, i32* %tmp103
-	%tmp104 = getelementptr inbounds [15 x %struct.PrimitiveTypeInfo], [15 x %struct.PrimitiveTypeInfo]* @PRIMITIVE_TYPES_INFO, i32 0, i64 14
-	%tmp105 = load %struct.PrimitiveTypeInfo, %struct.PrimitiveTypeInfo* %v29
-	store %struct.PrimitiveTypeInfo %tmp105, %struct.PrimitiveTypeInfo* %tmp104
-	store %struct.PrimitiveTypeInfo* @PRIMITIVE_TYPES_INFO, %struct.PrimitiveTypeInfo** @VOID_TYPE
-	%tmp106 = getelementptr inbounds [15 x %struct.PrimitiveTypeInfo], [15 x %struct.PrimitiveTypeInfo]* @PRIMITIVE_TYPES_INFO, i32 0, i64 9
-	store %struct.PrimitiveTypeInfo* %tmp106, %struct.PrimitiveTypeInfo** @DEFAULT_INTEGER_TYPE
-; Variable x is out.
 	ret void
 }
 define void @"vector.push_bulk<i8>"(%"struct.vector.Vec<i8>"* %vec, i8* %data, i32 %data_len){
@@ -14672,51 +15453,6 @@ endif1:
 	store i32 %tmp6, i32* %v0
 	br label %loop_cond0
 loop_body0_exit:
-	ret void
-}
-define void @"vector.push<%struct.Variable>"(%"struct.vector.Vec<%struct.Variable>"* %vec, %struct.Variable %data){
-	%v0 = alloca i32
-	%tmp0 = getelementptr inbounds %"struct.vector.Vec<%struct.Variable>", %"struct.vector.Vec<%struct.Variable>"* %vec, i32 0, i32 1
-	%tmp1 = load i32, i32* %tmp0
-	%tmp2 = getelementptr inbounds %"struct.vector.Vec<%struct.Variable>", %"struct.vector.Vec<%struct.Variable>"* %vec, i32 0, i32 2
-	%tmp3 = load i32, i32* %tmp2
-	%tmp4 = icmp uge i32 %tmp1, %tmp3
-	br i1 %tmp4, label %then0, label %endif0
-then0:
-	store i32 4, i32* %v0
-	%tmp5 = getelementptr inbounds %"struct.vector.Vec<%struct.Variable>", %"struct.vector.Vec<%struct.Variable>"* %vec, i32 0, i32 2
-	%tmp6 = load i32, i32* %tmp5
-	%tmp7 = icmp ne i32 %tmp6, 0
-	br i1 %tmp7, label %then1, label %endif1
-then1:
-	%tmp8 = getelementptr inbounds %"struct.vector.Vec<%struct.Variable>", %"struct.vector.Vec<%struct.Variable>"* %vec, i32 0, i32 2
-	%tmp9 = load i32, i32* %tmp8
-	%tmp10 = mul i32 %tmp9, 2
-	store i32 %tmp10, i32* %v0
-	br label %endif1
-endif1:
-	%tmp11 = load i32, i32* %v0
-	%tmp12 = zext i32 %tmp11 to i64
-	%tmp13 = mul i64 4, %tmp12
-	%tmp14 = load %struct.Variable*, %struct.Variable** %vec
-	%tmp15 = call i8* @mem.realloc(i8* %tmp14, i64 %tmp13)
-	store %struct.Variable* %tmp15, %struct.Variable** %vec
-	%tmp16 = getelementptr inbounds %"struct.vector.Vec<%struct.Variable>", %"struct.vector.Vec<%struct.Variable>"* %vec, i32 0, i32 2
-	%tmp17 = load i32, i32* %v0
-	store i32 %tmp17, i32* %tmp16
-	br label %endif0
-endif0:
-	%tmp18 = getelementptr inbounds %"struct.vector.Vec<%struct.Variable>", %"struct.vector.Vec<%struct.Variable>"* %vec, i32 0, i32 1
-	%tmp19 = load i32, i32* %tmp18
-	%tmp20 = load %struct.Variable*, %struct.Variable** %vec
-	%tmp21 = getelementptr inbounds %struct.Variable, %struct.Variable* %tmp20, i32 %tmp19
-	store %struct.Variable %data, %struct.Variable* %tmp21
-	%tmp22 = getelementptr inbounds %"struct.vector.Vec<%struct.Variable>", %"struct.vector.Vec<%struct.Variable>"* %vec, i32 0, i32 1
-	%tmp23 = getelementptr inbounds %"struct.vector.Vec<%struct.Variable>", %"struct.vector.Vec<%struct.Variable>"* %vec, i32 0, i32 1
-	%tmp24 = load i32, i32* %tmp23
-	%tmp25 = add i32 %tmp24, 1
-	store i32 %tmp25, i32* %tmp22
-; Variable data is out.
 	ret void
 }
 define void @"vector.push<%struct.EnumDefinedField>"(%"struct.vector.Vec<%struct.EnumDefinedField>"* %vec, %struct.EnumDefinedField %data){
@@ -14848,140 +15584,6 @@ endif0:
 	store %struct.GenericStructDefinedField %data, %struct.GenericStructDefinedField* %tmp21
 	%tmp22 = getelementptr inbounds %"struct.vector.Vec<%struct.GenericStructDefinedField>", %"struct.vector.Vec<%struct.GenericStructDefinedField>"* %vec, i32 0, i32 1
 	%tmp23 = getelementptr inbounds %"struct.vector.Vec<%struct.GenericStructDefinedField>", %"struct.vector.Vec<%struct.GenericStructDefinedField>"* %vec, i32 0, i32 1
-	%tmp24 = load i32, i32* %tmp23
-	%tmp25 = add i32 %tmp24, 1
-	store i32 %tmp25, i32* %tmp22
-; Variable data is out.
-	ret void
-}
-define void @"vector.push<ui32>"(%"struct.vector.Vec<ui32>"* %vec, i32 %data){
-	%v0 = alloca i32
-	%tmp0 = getelementptr inbounds %"struct.vector.Vec<ui32>", %"struct.vector.Vec<ui32>"* %vec, i32 0, i32 1
-	%tmp1 = load i32, i32* %tmp0
-	%tmp2 = getelementptr inbounds %"struct.vector.Vec<ui32>", %"struct.vector.Vec<ui32>"* %vec, i32 0, i32 2
-	%tmp3 = load i32, i32* %tmp2
-	%tmp4 = icmp uge i32 %tmp1, %tmp3
-	br i1 %tmp4, label %then0, label %endif0
-then0:
-	store i32 4, i32* %v0
-	%tmp5 = getelementptr inbounds %"struct.vector.Vec<ui32>", %"struct.vector.Vec<ui32>"* %vec, i32 0, i32 2
-	%tmp6 = load i32, i32* %tmp5
-	%tmp7 = icmp ne i32 %tmp6, 0
-	br i1 %tmp7, label %then1, label %endif1
-then1:
-	%tmp8 = getelementptr inbounds %"struct.vector.Vec<ui32>", %"struct.vector.Vec<ui32>"* %vec, i32 0, i32 2
-	%tmp9 = load i32, i32* %tmp8
-	%tmp10 = mul i32 %tmp9, 2
-	store i32 %tmp10, i32* %v0
-	br label %endif1
-endif1:
-	%tmp11 = load i32, i32* %v0
-	%tmp12 = zext i32 %tmp11 to i64
-	%tmp13 = mul i64 4, %tmp12
-	%tmp14 = load i32*, i32** %vec
-	%tmp15 = call i8* @mem.realloc(i8* %tmp14, i64 %tmp13)
-	store i32* %tmp15, i32** %vec
-	%tmp16 = getelementptr inbounds %"struct.vector.Vec<ui32>", %"struct.vector.Vec<ui32>"* %vec, i32 0, i32 2
-	%tmp17 = load i32, i32* %v0
-	store i32 %tmp17, i32* %tmp16
-	br label %endif0
-endif0:
-	%tmp18 = getelementptr inbounds %"struct.vector.Vec<ui32>", %"struct.vector.Vec<ui32>"* %vec, i32 0, i32 1
-	%tmp19 = load i32, i32* %tmp18
-	%tmp20 = load i32*, i32** %vec
-	%tmp21 = getelementptr inbounds i32, i32* %tmp20, i32 %tmp19
-	store i32 %data, i32* %tmp21
-	%tmp22 = getelementptr inbounds %"struct.vector.Vec<ui32>", %"struct.vector.Vec<ui32>"* %vec, i32 0, i32 1
-	%tmp23 = getelementptr inbounds %"struct.vector.Vec<ui32>", %"struct.vector.Vec<ui32>"* %vec, i32 0, i32 1
-	%tmp24 = load i32, i32* %tmp23
-	%tmp25 = add i32 %tmp24, 1
-	store i32 %tmp25, i32* %tmp22
-	ret void
-}
-define void @"vector.push<%struct.vector.Vec<%struct.CompilerType>>"(%"struct.vector.Vec<%struct.vector.Vec<%struct.CompilerType>>"* %vec, %"struct.vector.Vec<%struct.CompilerType>" %data){
-	%v0 = alloca i32
-	%tmp0 = getelementptr inbounds %"struct.vector.Vec<%struct.vector.Vec<%struct.CompilerType>>", %"struct.vector.Vec<%struct.vector.Vec<%struct.CompilerType>>"* %vec, i32 0, i32 1
-	%tmp1 = load i32, i32* %tmp0
-	%tmp2 = getelementptr inbounds %"struct.vector.Vec<%struct.vector.Vec<%struct.CompilerType>>", %"struct.vector.Vec<%struct.vector.Vec<%struct.CompilerType>>"* %vec, i32 0, i32 2
-	%tmp3 = load i32, i32* %tmp2
-	%tmp4 = icmp uge i32 %tmp1, %tmp3
-	br i1 %tmp4, label %then0, label %endif0
-then0:
-	store i32 4, i32* %v0
-	%tmp5 = getelementptr inbounds %"struct.vector.Vec<%struct.vector.Vec<%struct.CompilerType>>", %"struct.vector.Vec<%struct.vector.Vec<%struct.CompilerType>>"* %vec, i32 0, i32 2
-	%tmp6 = load i32, i32* %tmp5
-	%tmp7 = icmp ne i32 %tmp6, 0
-	br i1 %tmp7, label %then1, label %endif1
-then1:
-	%tmp8 = getelementptr inbounds %"struct.vector.Vec<%struct.vector.Vec<%struct.CompilerType>>", %"struct.vector.Vec<%struct.vector.Vec<%struct.CompilerType>>"* %vec, i32 0, i32 2
-	%tmp9 = load i32, i32* %tmp8
-	%tmp10 = mul i32 %tmp9, 2
-	store i32 %tmp10, i32* %v0
-	br label %endif1
-endif1:
-	%tmp11 = load i32, i32* %v0
-	%tmp12 = zext i32 %tmp11 to i64
-	%tmp13 = mul i64 16, %tmp12
-	%tmp14 = load %"struct.vector.Vec<%struct.CompilerType>"*, %"struct.vector.Vec<%struct.CompilerType>"** %vec
-	%tmp15 = call i8* @mem.realloc(i8* %tmp14, i64 %tmp13)
-	store %"struct.vector.Vec<%struct.CompilerType>"* %tmp15, %"struct.vector.Vec<%struct.CompilerType>"** %vec
-	%tmp16 = getelementptr inbounds %"struct.vector.Vec<%struct.vector.Vec<%struct.CompilerType>>", %"struct.vector.Vec<%struct.vector.Vec<%struct.CompilerType>>"* %vec, i32 0, i32 2
-	%tmp17 = load i32, i32* %v0
-	store i32 %tmp17, i32* %tmp16
-	br label %endif0
-endif0:
-	%tmp18 = getelementptr inbounds %"struct.vector.Vec<%struct.vector.Vec<%struct.CompilerType>>", %"struct.vector.Vec<%struct.vector.Vec<%struct.CompilerType>>"* %vec, i32 0, i32 1
-	%tmp19 = load i32, i32* %tmp18
-	%tmp20 = load %"struct.vector.Vec<%struct.CompilerType>"*, %"struct.vector.Vec<%struct.CompilerType>"** %vec
-	%tmp21 = getelementptr inbounds %"struct.vector.Vec<%struct.CompilerType>", %"struct.vector.Vec<%struct.CompilerType>"* %tmp20, i32 %tmp19
-	store %"struct.vector.Vec<%struct.CompilerType>" %data, %"struct.vector.Vec<%struct.CompilerType>"* %tmp21
-	%tmp22 = getelementptr inbounds %"struct.vector.Vec<%struct.vector.Vec<%struct.CompilerType>>", %"struct.vector.Vec<%struct.vector.Vec<%struct.CompilerType>>"* %vec, i32 0, i32 1
-	%tmp23 = getelementptr inbounds %"struct.vector.Vec<%struct.vector.Vec<%struct.CompilerType>>", %"struct.vector.Vec<%struct.vector.Vec<%struct.CompilerType>>"* %vec, i32 0, i32 1
-	%tmp24 = load i32, i32* %tmp23
-	%tmp25 = add i32 %tmp24, 1
-	store i32 %tmp25, i32* %tmp22
-; Variable data is out.
-	ret void
-}
-define void @"vector.push<%struct.CompilerType>"(%"struct.vector.Vec<%struct.CompilerType>"* %vec, %struct.CompilerType %data){
-	%v0 = alloca i32
-	%tmp0 = getelementptr inbounds %"struct.vector.Vec<%struct.CompilerType>", %"struct.vector.Vec<%struct.CompilerType>"* %vec, i32 0, i32 1
-	%tmp1 = load i32, i32* %tmp0
-	%tmp2 = getelementptr inbounds %"struct.vector.Vec<%struct.CompilerType>", %"struct.vector.Vec<%struct.CompilerType>"* %vec, i32 0, i32 2
-	%tmp3 = load i32, i32* %tmp2
-	%tmp4 = icmp uge i32 %tmp1, %tmp3
-	br i1 %tmp4, label %then0, label %endif0
-then0:
-	store i32 4, i32* %v0
-	%tmp5 = getelementptr inbounds %"struct.vector.Vec<%struct.CompilerType>", %"struct.vector.Vec<%struct.CompilerType>"* %vec, i32 0, i32 2
-	%tmp6 = load i32, i32* %tmp5
-	%tmp7 = icmp ne i32 %tmp6, 0
-	br i1 %tmp7, label %then1, label %endif1
-then1:
-	%tmp8 = getelementptr inbounds %"struct.vector.Vec<%struct.CompilerType>", %"struct.vector.Vec<%struct.CompilerType>"* %vec, i32 0, i32 2
-	%tmp9 = load i32, i32* %tmp8
-	%tmp10 = mul i32 %tmp9, 2
-	store i32 %tmp10, i32* %v0
-	br label %endif1
-endif1:
-	%tmp11 = load i32, i32* %v0
-	%tmp12 = zext i32 %tmp11 to i64
-	%tmp13 = mul i64 16, %tmp12
-	%tmp14 = load %struct.CompilerType*, %struct.CompilerType** %vec
-	%tmp15 = call i8* @mem.realloc(i8* %tmp14, i64 %tmp13)
-	store %struct.CompilerType* %tmp15, %struct.CompilerType** %vec
-	%tmp16 = getelementptr inbounds %"struct.vector.Vec<%struct.CompilerType>", %"struct.vector.Vec<%struct.CompilerType>"* %vec, i32 0, i32 2
-	%tmp17 = load i32, i32* %v0
-	store i32 %tmp17, i32* %tmp16
-	br label %endif0
-endif0:
-	%tmp18 = getelementptr inbounds %"struct.vector.Vec<%struct.CompilerType>", %"struct.vector.Vec<%struct.CompilerType>"* %vec, i32 0, i32 1
-	%tmp19 = load i32, i32* %tmp18
-	%tmp20 = load %struct.CompilerType*, %struct.CompilerType** %vec
-	%tmp21 = getelementptr inbounds %struct.CompilerType, %struct.CompilerType* %tmp20, i32 %tmp19
-	store %struct.CompilerType %data, %struct.CompilerType* %tmp21
-	%tmp22 = getelementptr inbounds %"struct.vector.Vec<%struct.CompilerType>", %"struct.vector.Vec<%struct.CompilerType>"* %vec, i32 0, i32 1
-	%tmp23 = getelementptr inbounds %"struct.vector.Vec<%struct.CompilerType>", %"struct.vector.Vec<%struct.CompilerType>"* %vec, i32 0, i32 1
 	%tmp24 = load i32, i32* %tmp23
 	%tmp25 = add i32 %tmp24, 1
 	store i32 %tmp25, i32* %tmp22
@@ -15392,6 +15994,230 @@ endif0:
 ; Variable data is out.
 	ret void
 }
+define void @"vector.push<%struct.Implementation>"(%"struct.vector.Vec<%struct.Implementation>"* %vec, %struct.Implementation %data){
+	%v0 = alloca i32
+	%tmp0 = getelementptr inbounds %"struct.vector.Vec<%struct.Implementation>", %"struct.vector.Vec<%struct.Implementation>"* %vec, i32 0, i32 1
+	%tmp1 = load i32, i32* %tmp0
+	%tmp2 = getelementptr inbounds %"struct.vector.Vec<%struct.Implementation>", %"struct.vector.Vec<%struct.Implementation>"* %vec, i32 0, i32 2
+	%tmp3 = load i32, i32* %tmp2
+	%tmp4 = icmp uge i32 %tmp1, %tmp3
+	br i1 %tmp4, label %then0, label %endif0
+then0:
+	store i32 4, i32* %v0
+	%tmp5 = getelementptr inbounds %"struct.vector.Vec<%struct.Implementation>", %"struct.vector.Vec<%struct.Implementation>"* %vec, i32 0, i32 2
+	%tmp6 = load i32, i32* %tmp5
+	%tmp7 = icmp ne i32 %tmp6, 0
+	br i1 %tmp7, label %then1, label %endif1
+then1:
+	%tmp8 = getelementptr inbounds %"struct.vector.Vec<%struct.Implementation>", %"struct.vector.Vec<%struct.Implementation>"* %vec, i32 0, i32 2
+	%tmp9 = load i32, i32* %tmp8
+	%tmp10 = mul i32 %tmp9, 2
+	store i32 %tmp10, i32* %v0
+	br label %endif1
+endif1:
+	%tmp11 = load i32, i32* %v0
+	%tmp12 = zext i32 %tmp11 to i64
+	%tmp13 = mul i64 40, %tmp12
+	%tmp14 = load %struct.Implementation*, %struct.Implementation** %vec
+	%tmp15 = call i8* @mem.realloc(i8* %tmp14, i64 %tmp13)
+	store %struct.Implementation* %tmp15, %struct.Implementation** %vec
+	%tmp16 = getelementptr inbounds %"struct.vector.Vec<%struct.Implementation>", %"struct.vector.Vec<%struct.Implementation>"* %vec, i32 0, i32 2
+	%tmp17 = load i32, i32* %v0
+	store i32 %tmp17, i32* %tmp16
+	br label %endif0
+endif0:
+	%tmp18 = getelementptr inbounds %"struct.vector.Vec<%struct.Implementation>", %"struct.vector.Vec<%struct.Implementation>"* %vec, i32 0, i32 1
+	%tmp19 = load i32, i32* %tmp18
+	%tmp20 = load %struct.Implementation*, %struct.Implementation** %vec
+	%tmp21 = getelementptr inbounds %struct.Implementation, %struct.Implementation* %tmp20, i32 %tmp19
+	store %struct.Implementation %data, %struct.Implementation* %tmp21
+	%tmp22 = getelementptr inbounds %"struct.vector.Vec<%struct.Implementation>", %"struct.vector.Vec<%struct.Implementation>"* %vec, i32 0, i32 1
+	%tmp23 = getelementptr inbounds %"struct.vector.Vec<%struct.Implementation>", %"struct.vector.Vec<%struct.Implementation>"* %vec, i32 0, i32 1
+	%tmp24 = load i32, i32* %tmp23
+	%tmp25 = add i32 %tmp24, 1
+	store i32 %tmp25, i32* %tmp22
+; Variable data is out.
+	ret void
+}
+define void @"vector.push<%struct.comp_type.CompilerType>"(%"struct.vector.Vec<%struct.comp_type.CompilerType>"* %vec, %struct.comp_type.CompilerType %data){
+	%v0 = alloca i32
+	%tmp0 = getelementptr inbounds %"struct.vector.Vec<%struct.comp_type.CompilerType>", %"struct.vector.Vec<%struct.comp_type.CompilerType>"* %vec, i32 0, i32 1
+	%tmp1 = load i32, i32* %tmp0
+	%tmp2 = getelementptr inbounds %"struct.vector.Vec<%struct.comp_type.CompilerType>", %"struct.vector.Vec<%struct.comp_type.CompilerType>"* %vec, i32 0, i32 2
+	%tmp3 = load i32, i32* %tmp2
+	%tmp4 = icmp uge i32 %tmp1, %tmp3
+	br i1 %tmp4, label %then0, label %endif0
+then0:
+	store i32 4, i32* %v0
+	%tmp5 = getelementptr inbounds %"struct.vector.Vec<%struct.comp_type.CompilerType>", %"struct.vector.Vec<%struct.comp_type.CompilerType>"* %vec, i32 0, i32 2
+	%tmp6 = load i32, i32* %tmp5
+	%tmp7 = icmp ne i32 %tmp6, 0
+	br i1 %tmp7, label %then1, label %endif1
+then1:
+	%tmp8 = getelementptr inbounds %"struct.vector.Vec<%struct.comp_type.CompilerType>", %"struct.vector.Vec<%struct.comp_type.CompilerType>"* %vec, i32 0, i32 2
+	%tmp9 = load i32, i32* %tmp8
+	%tmp10 = mul i32 %tmp9, 2
+	store i32 %tmp10, i32* %v0
+	br label %endif1
+endif1:
+	%tmp11 = load i32, i32* %v0
+	%tmp12 = zext i32 %tmp11 to i64
+	%tmp13 = mul i64 16, %tmp12
+	%tmp14 = load %struct.comp_type.CompilerType*, %struct.comp_type.CompilerType** %vec
+	%tmp15 = call i8* @mem.realloc(i8* %tmp14, i64 %tmp13)
+	store %struct.comp_type.CompilerType* %tmp15, %struct.comp_type.CompilerType** %vec
+	%tmp16 = getelementptr inbounds %"struct.vector.Vec<%struct.comp_type.CompilerType>", %"struct.vector.Vec<%struct.comp_type.CompilerType>"* %vec, i32 0, i32 2
+	%tmp17 = load i32, i32* %v0
+	store i32 %tmp17, i32* %tmp16
+	br label %endif0
+endif0:
+	%tmp18 = getelementptr inbounds %"struct.vector.Vec<%struct.comp_type.CompilerType>", %"struct.vector.Vec<%struct.comp_type.CompilerType>"* %vec, i32 0, i32 1
+	%tmp19 = load i32, i32* %tmp18
+	%tmp20 = load %struct.comp_type.CompilerType*, %struct.comp_type.CompilerType** %vec
+	%tmp21 = getelementptr inbounds %struct.comp_type.CompilerType, %struct.comp_type.CompilerType* %tmp20, i32 %tmp19
+	store %struct.comp_type.CompilerType %data, %struct.comp_type.CompilerType* %tmp21
+	%tmp22 = getelementptr inbounds %"struct.vector.Vec<%struct.comp_type.CompilerType>", %"struct.vector.Vec<%struct.comp_type.CompilerType>"* %vec, i32 0, i32 1
+	%tmp23 = getelementptr inbounds %"struct.vector.Vec<%struct.comp_type.CompilerType>", %"struct.vector.Vec<%struct.comp_type.CompilerType>"* %vec, i32 0, i32 1
+	%tmp24 = load i32, i32* %tmp23
+	%tmp25 = add i32 %tmp24, 1
+	store i32 %tmp25, i32* %tmp22
+; Variable data is out.
+	ret void
+}
+define void @"vector.push<%struct.output.LLVMInstruction>"(%"struct.vector.Vec<%struct.output.LLVMInstruction>"* %vec, %struct.output.LLVMInstruction %data){
+	%v0 = alloca i32
+	%tmp0 = getelementptr inbounds %"struct.vector.Vec<%struct.output.LLVMInstruction>", %"struct.vector.Vec<%struct.output.LLVMInstruction>"* %vec, i32 0, i32 1
+	%tmp1 = load i32, i32* %tmp0
+	%tmp2 = getelementptr inbounds %"struct.vector.Vec<%struct.output.LLVMInstruction>", %"struct.vector.Vec<%struct.output.LLVMInstruction>"* %vec, i32 0, i32 2
+	%tmp3 = load i32, i32* %tmp2
+	%tmp4 = icmp uge i32 %tmp1, %tmp3
+	br i1 %tmp4, label %then0, label %endif0
+then0:
+	store i32 4, i32* %v0
+	%tmp5 = getelementptr inbounds %"struct.vector.Vec<%struct.output.LLVMInstruction>", %"struct.vector.Vec<%struct.output.LLVMInstruction>"* %vec, i32 0, i32 2
+	%tmp6 = load i32, i32* %tmp5
+	%tmp7 = icmp ne i32 %tmp6, 0
+	br i1 %tmp7, label %then1, label %endif1
+then1:
+	%tmp8 = getelementptr inbounds %"struct.vector.Vec<%struct.output.LLVMInstruction>", %"struct.vector.Vec<%struct.output.LLVMInstruction>"* %vec, i32 0, i32 2
+	%tmp9 = load i32, i32* %tmp8
+	%tmp10 = mul i32 %tmp9, 2
+	store i32 %tmp10, i32* %v0
+	br label %endif1
+endif1:
+	%tmp11 = load i32, i32* %v0
+	%tmp12 = zext i32 %tmp11 to i64
+	%tmp13 = mul i64 16, %tmp12
+	%tmp14 = load %struct.output.LLVMInstruction*, %struct.output.LLVMInstruction** %vec
+	%tmp15 = call i8* @mem.realloc(i8* %tmp14, i64 %tmp13)
+	store %struct.output.LLVMInstruction* %tmp15, %struct.output.LLVMInstruction** %vec
+	%tmp16 = getelementptr inbounds %"struct.vector.Vec<%struct.output.LLVMInstruction>", %"struct.vector.Vec<%struct.output.LLVMInstruction>"* %vec, i32 0, i32 2
+	%tmp17 = load i32, i32* %v0
+	store i32 %tmp17, i32* %tmp16
+	br label %endif0
+endif0:
+	%tmp18 = getelementptr inbounds %"struct.vector.Vec<%struct.output.LLVMInstruction>", %"struct.vector.Vec<%struct.output.LLVMInstruction>"* %vec, i32 0, i32 1
+	%tmp19 = load i32, i32* %tmp18
+	%tmp20 = load %struct.output.LLVMInstruction*, %struct.output.LLVMInstruction** %vec
+	%tmp21 = getelementptr inbounds %struct.output.LLVMInstruction, %struct.output.LLVMInstruction* %tmp20, i32 %tmp19
+	store %struct.output.LLVMInstruction %data, %struct.output.LLVMInstruction* %tmp21
+	%tmp22 = getelementptr inbounds %"struct.vector.Vec<%struct.output.LLVMInstruction>", %"struct.vector.Vec<%struct.output.LLVMInstruction>"* %vec, i32 0, i32 1
+	%tmp23 = getelementptr inbounds %"struct.vector.Vec<%struct.output.LLVMInstruction>", %"struct.vector.Vec<%struct.output.LLVMInstruction>"* %vec, i32 0, i32 1
+	%tmp24 = load i32, i32* %tmp23
+	%tmp25 = add i32 %tmp24, 1
+	store i32 %tmp25, i32* %tmp22
+; Variable data is out.
+	ret void
+}
+define void @"vector.push<%struct.scope.Variable>"(%"struct.vector.Vec<%struct.scope.Variable>"* %vec, %struct.scope.Variable %data){
+	%v0 = alloca i32
+	%tmp0 = getelementptr inbounds %"struct.vector.Vec<%struct.scope.Variable>", %"struct.vector.Vec<%struct.scope.Variable>"* %vec, i32 0, i32 1
+	%tmp1 = load i32, i32* %tmp0
+	%tmp2 = getelementptr inbounds %"struct.vector.Vec<%struct.scope.Variable>", %"struct.vector.Vec<%struct.scope.Variable>"* %vec, i32 0, i32 2
+	%tmp3 = load i32, i32* %tmp2
+	%tmp4 = icmp uge i32 %tmp1, %tmp3
+	br i1 %tmp4, label %then0, label %endif0
+then0:
+	store i32 4, i32* %v0
+	%tmp5 = getelementptr inbounds %"struct.vector.Vec<%struct.scope.Variable>", %"struct.vector.Vec<%struct.scope.Variable>"* %vec, i32 0, i32 2
+	%tmp6 = load i32, i32* %tmp5
+	%tmp7 = icmp ne i32 %tmp6, 0
+	br i1 %tmp7, label %then1, label %endif1
+then1:
+	%tmp8 = getelementptr inbounds %"struct.vector.Vec<%struct.scope.Variable>", %"struct.vector.Vec<%struct.scope.Variable>"* %vec, i32 0, i32 2
+	%tmp9 = load i32, i32* %tmp8
+	%tmp10 = mul i32 %tmp9, 2
+	store i32 %tmp10, i32* %v0
+	br label %endif1
+endif1:
+	%tmp11 = load i32, i32* %v0
+	%tmp12 = zext i32 %tmp11 to i64
+	%tmp13 = mul i64 32, %tmp12
+	%tmp14 = load %struct.scope.Variable*, %struct.scope.Variable** %vec
+	%tmp15 = call i8* @mem.realloc(i8* %tmp14, i64 %tmp13)
+	store %struct.scope.Variable* %tmp15, %struct.scope.Variable** %vec
+	%tmp16 = getelementptr inbounds %"struct.vector.Vec<%struct.scope.Variable>", %"struct.vector.Vec<%struct.scope.Variable>"* %vec, i32 0, i32 2
+	%tmp17 = load i32, i32* %v0
+	store i32 %tmp17, i32* %tmp16
+	br label %endif0
+endif0:
+	%tmp18 = getelementptr inbounds %"struct.vector.Vec<%struct.scope.Variable>", %"struct.vector.Vec<%struct.scope.Variable>"* %vec, i32 0, i32 1
+	%tmp19 = load i32, i32* %tmp18
+	%tmp20 = load %struct.scope.Variable*, %struct.scope.Variable** %vec
+	%tmp21 = getelementptr inbounds %struct.scope.Variable, %struct.scope.Variable* %tmp20, i32 %tmp19
+	store %struct.scope.Variable %data, %struct.scope.Variable* %tmp21
+	%tmp22 = getelementptr inbounds %"struct.vector.Vec<%struct.scope.Variable>", %"struct.vector.Vec<%struct.scope.Variable>"* %vec, i32 0, i32 1
+	%tmp23 = getelementptr inbounds %"struct.vector.Vec<%struct.scope.Variable>", %"struct.vector.Vec<%struct.scope.Variable>"* %vec, i32 0, i32 1
+	%tmp24 = load i32, i32* %tmp23
+	%tmp25 = add i32 %tmp24, 1
+	store i32 %tmp25, i32* %tmp22
+; Variable data is out.
+	ret void
+}
+define void @"vector.push<ui32>"(%"struct.vector.Vec<ui32>"* %vec, i32 %data){
+	%v0 = alloca i32
+	%tmp0 = getelementptr inbounds %"struct.vector.Vec<ui32>", %"struct.vector.Vec<ui32>"* %vec, i32 0, i32 1
+	%tmp1 = load i32, i32* %tmp0
+	%tmp2 = getelementptr inbounds %"struct.vector.Vec<ui32>", %"struct.vector.Vec<ui32>"* %vec, i32 0, i32 2
+	%tmp3 = load i32, i32* %tmp2
+	%tmp4 = icmp uge i32 %tmp1, %tmp3
+	br i1 %tmp4, label %then0, label %endif0
+then0:
+	store i32 4, i32* %v0
+	%tmp5 = getelementptr inbounds %"struct.vector.Vec<ui32>", %"struct.vector.Vec<ui32>"* %vec, i32 0, i32 2
+	%tmp6 = load i32, i32* %tmp5
+	%tmp7 = icmp ne i32 %tmp6, 0
+	br i1 %tmp7, label %then1, label %endif1
+then1:
+	%tmp8 = getelementptr inbounds %"struct.vector.Vec<ui32>", %"struct.vector.Vec<ui32>"* %vec, i32 0, i32 2
+	%tmp9 = load i32, i32* %tmp8
+	%tmp10 = mul i32 %tmp9, 2
+	store i32 %tmp10, i32* %v0
+	br label %endif1
+endif1:
+	%tmp11 = load i32, i32* %v0
+	%tmp12 = zext i32 %tmp11 to i64
+	%tmp13 = mul i64 4, %tmp12
+	%tmp14 = load i32*, i32** %vec
+	%tmp15 = call i8* @mem.realloc(i8* %tmp14, i64 %tmp13)
+	store i32* %tmp15, i32** %vec
+	%tmp16 = getelementptr inbounds %"struct.vector.Vec<ui32>", %"struct.vector.Vec<ui32>"* %vec, i32 0, i32 2
+	%tmp17 = load i32, i32* %v0
+	store i32 %tmp17, i32* %tmp16
+	br label %endif0
+endif0:
+	%tmp18 = getelementptr inbounds %"struct.vector.Vec<ui32>", %"struct.vector.Vec<ui32>"* %vec, i32 0, i32 1
+	%tmp19 = load i32, i32* %tmp18
+	%tmp20 = load i32*, i32** %vec
+	%tmp21 = getelementptr inbounds i32, i32* %tmp20, i32 %tmp19
+	store i32 %data, i32* %tmp21
+	%tmp22 = getelementptr inbounds %"struct.vector.Vec<ui32>", %"struct.vector.Vec<ui32>"* %vec, i32 0, i32 1
+	%tmp23 = getelementptr inbounds %"struct.vector.Vec<ui32>", %"struct.vector.Vec<ui32>"* %vec, i32 0, i32 1
+	%tmp24 = load i32, i32* %tmp23
+	%tmp25 = add i32 %tmp24, 1
+	store i32 %tmp25, i32* %tmp22
+	ret void
+}
 define void @"vector.push<%struct.string.String>"(%"struct.vector.Vec<%struct.string.String>"* %vec, %struct.string.String %data){
 	%v0 = alloca i32
 	%tmp0 = getelementptr inbounds %"struct.vector.Vec<%struct.string.String>", %"struct.vector.Vec<%struct.string.String>"* %vec, i32 0, i32 1
@@ -15481,26 +16307,26 @@ endif0:
 	store i32 %tmp25, i32* %tmp22
 	ret void
 }
-define %struct.Variable @"vector.pop<%struct.Variable>"(%"struct.vector.Vec<%struct.Variable>"* %vec){
-	%tmp0 = getelementptr inbounds %"struct.vector.Vec<%struct.Variable>", %"struct.vector.Vec<%struct.Variable>"* %vec, i32 0, i32 1
+define %struct.scope.Variable @"vector.pop<%struct.scope.Variable>"(%"struct.vector.Vec<%struct.scope.Variable>"* %vec){
+	%tmp0 = getelementptr inbounds %"struct.vector.Vec<%struct.scope.Variable>", %"struct.vector.Vec<%struct.scope.Variable>"* %vec, i32 0, i32 1
 	%tmp1 = load i32, i32* %tmp0
 	%tmp2 = icmp eq i32 %tmp1, 0
 	br i1 %tmp2, label %then0, label %endif0
 then0:
-	call void @process.throw(i8* @.str.354)
+	call void @process.throw(i8* @.str.351)
 	br label %endif0
 endif0:
-	%tmp3 = getelementptr inbounds %"struct.vector.Vec<%struct.Variable>", %"struct.vector.Vec<%struct.Variable>"* %vec, i32 0, i32 1
-	%tmp4 = getelementptr inbounds %"struct.vector.Vec<%struct.Variable>", %"struct.vector.Vec<%struct.Variable>"* %vec, i32 0, i32 1
+	%tmp3 = getelementptr inbounds %"struct.vector.Vec<%struct.scope.Variable>", %"struct.vector.Vec<%struct.scope.Variable>"* %vec, i32 0, i32 1
+	%tmp4 = getelementptr inbounds %"struct.vector.Vec<%struct.scope.Variable>", %"struct.vector.Vec<%struct.scope.Variable>"* %vec, i32 0, i32 1
 	%tmp5 = load i32, i32* %tmp4
 	%tmp6 = sub i32 %tmp5, 1
 	store i32 %tmp6, i32* %tmp3
-	%tmp7 = getelementptr inbounds %"struct.vector.Vec<%struct.Variable>", %"struct.vector.Vec<%struct.Variable>"* %vec, i32 0, i32 1
+	%tmp7 = getelementptr inbounds %"struct.vector.Vec<%struct.scope.Variable>", %"struct.vector.Vec<%struct.scope.Variable>"* %vec, i32 0, i32 1
 	%tmp8 = load i32, i32* %tmp7
-	%tmp9 = load %struct.Variable*, %struct.Variable** %vec
-	%tmp10 = getelementptr inbounds %struct.Variable, %struct.Variable* %tmp9, i32 %tmp8
-	%tmp11 = load %struct.Variable, %struct.Variable* %tmp10
-	ret %struct.Variable %tmp11
+	%tmp9 = load %struct.scope.Variable*, %struct.scope.Variable** %vec
+	%tmp10 = getelementptr inbounds %struct.scope.Variable, %struct.scope.Variable* %tmp9, i32 %tmp8
+	%tmp11 = load %struct.scope.Variable, %struct.scope.Variable* %tmp10
+	ret %struct.scope.Variable %tmp11
 }
 define i32 @"vector.pop<ui32>"(%"struct.vector.Vec<ui32>"* %vec){
 	%tmp0 = getelementptr inbounds %"struct.vector.Vec<ui32>", %"struct.vector.Vec<ui32>"* %vec, i32 0, i32 1
@@ -15508,7 +16334,7 @@ define i32 @"vector.pop<ui32>"(%"struct.vector.Vec<ui32>"* %vec){
 	%tmp2 = icmp eq i32 %tmp1, 0
 	br i1 %tmp2, label %then0, label %endif0
 then0:
-	call void @process.throw(i8* @.str.354)
+	call void @process.throw(i8* @.str.351)
 	br label %endif0
 endif0:
 	%tmp3 = getelementptr inbounds %"struct.vector.Vec<ui32>", %"struct.vector.Vec<ui32>"* %vec, i32 0, i32 1
@@ -15556,16 +16382,16 @@ define %"struct.vector.Vec<%struct.StructDefinedField>" @"vector.new<%struct.Str
 ; Variable vec is out.
 	ret %"struct.vector.Vec<%struct.StructDefinedField>" %tmp2
 }
-define %"struct.vector.Vec<%struct.vector.Vec<%struct.CompilerType>>" @"vector.new<%struct.vector.Vec<%struct.CompilerType>>"(){
-	%v0 = alloca %"struct.vector.Vec<%struct.vector.Vec<%struct.CompilerType>>"
-	store %"struct.vector.Vec<%struct.CompilerType>"* null, %"struct.vector.Vec<%struct.CompilerType>"** %v0
-	%tmp0 = getelementptr inbounds %"struct.vector.Vec<%struct.vector.Vec<%struct.CompilerType>>", %"struct.vector.Vec<%struct.vector.Vec<%struct.CompilerType>>"* %v0, i32 0, i32 1
+define %"struct.vector.Vec<%struct.Implementation>" @"vector.new<%struct.Implementation>"(){
+	%v0 = alloca %"struct.vector.Vec<%struct.Implementation>"
+	store %struct.Implementation* null, %struct.Implementation** %v0
+	%tmp0 = getelementptr inbounds %"struct.vector.Vec<%struct.Implementation>", %"struct.vector.Vec<%struct.Implementation>"* %v0, i32 0, i32 1
 	store i32 0, i32* %tmp0
-	%tmp1 = getelementptr inbounds %"struct.vector.Vec<%struct.vector.Vec<%struct.CompilerType>>", %"struct.vector.Vec<%struct.vector.Vec<%struct.CompilerType>>"* %v0, i32 0, i32 2
+	%tmp1 = getelementptr inbounds %"struct.vector.Vec<%struct.Implementation>", %"struct.vector.Vec<%struct.Implementation>"* %v0, i32 0, i32 2
 	store i32 0, i32* %tmp1
-	%tmp2 = load %"struct.vector.Vec<%struct.vector.Vec<%struct.CompilerType>>", %"struct.vector.Vec<%struct.vector.Vec<%struct.CompilerType>>"* %v0
+	%tmp2 = load %"struct.vector.Vec<%struct.Implementation>", %"struct.vector.Vec<%struct.Implementation>"* %v0
 ; Variable vec is out.
-	ret %"struct.vector.Vec<%struct.vector.Vec<%struct.CompilerType>>" %tmp2
+	ret %"struct.vector.Vec<%struct.Implementation>" %tmp2
 }
 define %"struct.vector.Vec<%struct.GenericStructDefinedField>" @"vector.new<%struct.GenericStructDefinedField>"(){
 	%v0 = alloca %"struct.vector.Vec<%struct.GenericStructDefinedField>"
@@ -15577,39 +16403,6 @@ define %"struct.vector.Vec<%struct.GenericStructDefinedField>" @"vector.new<%str
 	%tmp2 = load %"struct.vector.Vec<%struct.GenericStructDefinedField>", %"struct.vector.Vec<%struct.GenericStructDefinedField>"* %v0
 ; Variable vec is out.
 	ret %"struct.vector.Vec<%struct.GenericStructDefinedField>" %tmp2
-}
-define %"struct.vector.Vec<%struct.CompilerType>" @"vector.new<%struct.CompilerType>"(){
-	%v0 = alloca %"struct.vector.Vec<%struct.CompilerType>"
-	store %struct.CompilerType* null, %struct.CompilerType** %v0
-	%tmp0 = getelementptr inbounds %"struct.vector.Vec<%struct.CompilerType>", %"struct.vector.Vec<%struct.CompilerType>"* %v0, i32 0, i32 1
-	store i32 0, i32* %tmp0
-	%tmp1 = getelementptr inbounds %"struct.vector.Vec<%struct.CompilerType>", %"struct.vector.Vec<%struct.CompilerType>"* %v0, i32 0, i32 2
-	store i32 0, i32* %tmp1
-	%tmp2 = load %"struct.vector.Vec<%struct.CompilerType>", %"struct.vector.Vec<%struct.CompilerType>"* %v0
-; Variable vec is out.
-	ret %"struct.vector.Vec<%struct.CompilerType>" %tmp2
-}
-define %"struct.vector.Vec<ui32>" @"vector.new<ui32>"(){
-	%v0 = alloca %"struct.vector.Vec<ui32>"
-	store i32* null, i32** %v0
-	%tmp0 = getelementptr inbounds %"struct.vector.Vec<ui32>", %"struct.vector.Vec<ui32>"* %v0, i32 0, i32 1
-	store i32 0, i32* %tmp0
-	%tmp1 = getelementptr inbounds %"struct.vector.Vec<ui32>", %"struct.vector.Vec<ui32>"* %v0, i32 0, i32 2
-	store i32 0, i32* %tmp1
-	%tmp2 = load %"struct.vector.Vec<ui32>", %"struct.vector.Vec<ui32>"* %v0
-; Variable vec is out.
-	ret %"struct.vector.Vec<ui32>" %tmp2
-}
-define %"struct.vector.Vec<%struct.Variable>" @"vector.new<%struct.Variable>"(){
-	%v0 = alloca %"struct.vector.Vec<%struct.Variable>"
-	store %struct.Variable* null, %struct.Variable** %v0
-	%tmp0 = getelementptr inbounds %"struct.vector.Vec<%struct.Variable>", %"struct.vector.Vec<%struct.Variable>"* %v0, i32 0, i32 1
-	store i32 0, i32* %tmp0
-	%tmp1 = getelementptr inbounds %"struct.vector.Vec<%struct.Variable>", %"struct.vector.Vec<%struct.Variable>"* %v0, i32 0, i32 2
-	store i32 0, i32* %tmp1
-	%tmp2 = load %"struct.vector.Vec<%struct.Variable>", %"struct.vector.Vec<%struct.Variable>"* %v0
-; Variable vec is out.
-	ret %"struct.vector.Vec<%struct.Variable>" %tmp2
 }
 define %"struct.vector.Vec<%struct.EnumField>" @"vector.new<%struct.EnumField>"(){
 	%v0 = alloca %"struct.vector.Vec<%struct.EnumField>"
@@ -15699,6 +16492,50 @@ define %"struct.vector.Vec<%struct.Stmt>" @"vector.new<%struct.Stmt>"(){
 ; Variable vec is out.
 	ret %"struct.vector.Vec<%struct.Stmt>" %tmp2
 }
+define %"struct.vector.Vec<%struct.comp_type.CompilerType>" @"vector.new<%struct.comp_type.CompilerType>"(){
+	%v0 = alloca %"struct.vector.Vec<%struct.comp_type.CompilerType>"
+	store %struct.comp_type.CompilerType* null, %struct.comp_type.CompilerType** %v0
+	%tmp0 = getelementptr inbounds %"struct.vector.Vec<%struct.comp_type.CompilerType>", %"struct.vector.Vec<%struct.comp_type.CompilerType>"* %v0, i32 0, i32 1
+	store i32 0, i32* %tmp0
+	%tmp1 = getelementptr inbounds %"struct.vector.Vec<%struct.comp_type.CompilerType>", %"struct.vector.Vec<%struct.comp_type.CompilerType>"* %v0, i32 0, i32 2
+	store i32 0, i32* %tmp1
+	%tmp2 = load %"struct.vector.Vec<%struct.comp_type.CompilerType>", %"struct.vector.Vec<%struct.comp_type.CompilerType>"* %v0
+; Variable vec is out.
+	ret %"struct.vector.Vec<%struct.comp_type.CompilerType>" %tmp2
+}
+define %"struct.vector.Vec<%struct.output.LLVMInstruction>" @"vector.new<%struct.output.LLVMInstruction>"(){
+	%v0 = alloca %"struct.vector.Vec<%struct.output.LLVMInstruction>"
+	store %struct.output.LLVMInstruction* null, %struct.output.LLVMInstruction** %v0
+	%tmp0 = getelementptr inbounds %"struct.vector.Vec<%struct.output.LLVMInstruction>", %"struct.vector.Vec<%struct.output.LLVMInstruction>"* %v0, i32 0, i32 1
+	store i32 0, i32* %tmp0
+	%tmp1 = getelementptr inbounds %"struct.vector.Vec<%struct.output.LLVMInstruction>", %"struct.vector.Vec<%struct.output.LLVMInstruction>"* %v0, i32 0, i32 2
+	store i32 0, i32* %tmp1
+	%tmp2 = load %"struct.vector.Vec<%struct.output.LLVMInstruction>", %"struct.vector.Vec<%struct.output.LLVMInstruction>"* %v0
+; Variable vec is out.
+	ret %"struct.vector.Vec<%struct.output.LLVMInstruction>" %tmp2
+}
+define %"struct.vector.Vec<ui32>" @"vector.new<ui32>"(){
+	%v0 = alloca %"struct.vector.Vec<ui32>"
+	store i32* null, i32** %v0
+	%tmp0 = getelementptr inbounds %"struct.vector.Vec<ui32>", %"struct.vector.Vec<ui32>"* %v0, i32 0, i32 1
+	store i32 0, i32* %tmp0
+	%tmp1 = getelementptr inbounds %"struct.vector.Vec<ui32>", %"struct.vector.Vec<ui32>"* %v0, i32 0, i32 2
+	store i32 0, i32* %tmp1
+	%tmp2 = load %"struct.vector.Vec<ui32>", %"struct.vector.Vec<ui32>"* %v0
+; Variable vec is out.
+	ret %"struct.vector.Vec<ui32>" %tmp2
+}
+define %"struct.vector.Vec<%struct.scope.Variable>" @"vector.new<%struct.scope.Variable>"(){
+	%v0 = alloca %"struct.vector.Vec<%struct.scope.Variable>"
+	store %struct.scope.Variable* null, %struct.scope.Variable** %v0
+	%tmp0 = getelementptr inbounds %"struct.vector.Vec<%struct.scope.Variable>", %"struct.vector.Vec<%struct.scope.Variable>"* %v0, i32 0, i32 1
+	store i32 0, i32* %tmp0
+	%tmp1 = getelementptr inbounds %"struct.vector.Vec<%struct.scope.Variable>", %"struct.vector.Vec<%struct.scope.Variable>"* %v0, i32 0, i32 2
+	store i32 0, i32* %tmp1
+	%tmp2 = load %"struct.vector.Vec<%struct.scope.Variable>", %"struct.vector.Vec<%struct.scope.Variable>"* %v0
+; Variable vec is out.
+	ret %"struct.vector.Vec<%struct.scope.Variable>" %tmp2
+}
 define %"struct.vector.Vec<i64>" @"vector.new<i64>"(){
 	%v0 = alloca %"struct.vector.Vec<i64>"
 	store i64* null, i64** %v0
@@ -15732,22 +16569,6 @@ define %"struct.vector.Vec<i8>" @"vector.new<i8>"(){
 ; Variable vec is out.
 	ret %"struct.vector.Vec<i8>" %tmp2
 }
-define void @"vector.free<%struct.CompilerType>"(%"struct.vector.Vec<%struct.CompilerType>"* %vec){
-	%tmp0 = load %struct.CompilerType*, %struct.CompilerType** %vec
-	%tmp1 = icmp ne %struct.CompilerType* %tmp0, null
-	br i1 %tmp1, label %then0, label %endif0
-then0:
-	%tmp2 = load %struct.CompilerType*, %struct.CompilerType** %vec
-	call void @mem.free(i8* %tmp2)
-	br label %endif0
-endif0:
-	store %struct.CompilerType* null, %struct.CompilerType** %vec
-	%tmp3 = getelementptr inbounds %"struct.vector.Vec<%struct.CompilerType>", %"struct.vector.Vec<%struct.CompilerType>"* %vec, i32 0, i32 1
-	store i32 0, i32* %tmp3
-	%tmp4 = getelementptr inbounds %"struct.vector.Vec<%struct.CompilerType>", %"struct.vector.Vec<%struct.CompilerType>"* %vec, i32 0, i32 2
-	store i32 0, i32* %tmp4
-	ret void
-}
 define void @"vector.free<%struct.Stmt>"(%"struct.vector.Vec<%struct.Stmt>"* %vec){
 	%tmp0 = load %struct.Stmt*, %struct.Stmt** %vec
 	%tmp1 = icmp ne %struct.Stmt* %tmp0, null
@@ -15761,6 +16582,54 @@ endif0:
 	%tmp3 = getelementptr inbounds %"struct.vector.Vec<%struct.Stmt>", %"struct.vector.Vec<%struct.Stmt>"* %vec, i32 0, i32 1
 	store i32 0, i32* %tmp3
 	%tmp4 = getelementptr inbounds %"struct.vector.Vec<%struct.Stmt>", %"struct.vector.Vec<%struct.Stmt>"* %vec, i32 0, i32 2
+	store i32 0, i32* %tmp4
+	ret void
+}
+define void @"vector.free<%struct.comp_type.CompilerType>"(%"struct.vector.Vec<%struct.comp_type.CompilerType>"* %vec){
+	%tmp0 = load %struct.comp_type.CompilerType*, %struct.comp_type.CompilerType** %vec
+	%tmp1 = icmp ne %struct.comp_type.CompilerType* %tmp0, null
+	br i1 %tmp1, label %then0, label %endif0
+then0:
+	%tmp2 = load %struct.comp_type.CompilerType*, %struct.comp_type.CompilerType** %vec
+	call void @mem.free(i8* %tmp2)
+	br label %endif0
+endif0:
+	store %struct.comp_type.CompilerType* null, %struct.comp_type.CompilerType** %vec
+	%tmp3 = getelementptr inbounds %"struct.vector.Vec<%struct.comp_type.CompilerType>", %"struct.vector.Vec<%struct.comp_type.CompilerType>"* %vec, i32 0, i32 1
+	store i32 0, i32* %tmp3
+	%tmp4 = getelementptr inbounds %"struct.vector.Vec<%struct.comp_type.CompilerType>", %"struct.vector.Vec<%struct.comp_type.CompilerType>"* %vec, i32 0, i32 2
+	store i32 0, i32* %tmp4
+	ret void
+}
+define void @"vector.free<ui32>"(%"struct.vector.Vec<ui32>"* %vec){
+	%tmp0 = load i32*, i32** %vec
+	%tmp1 = icmp ne i32* %tmp0, null
+	br i1 %tmp1, label %then0, label %endif0
+then0:
+	%tmp2 = load i32*, i32** %vec
+	call void @mem.free(i8* %tmp2)
+	br label %endif0
+endif0:
+	store i32* null, i32** %vec
+	%tmp3 = getelementptr inbounds %"struct.vector.Vec<ui32>", %"struct.vector.Vec<ui32>"* %vec, i32 0, i32 1
+	store i32 0, i32* %tmp3
+	%tmp4 = getelementptr inbounds %"struct.vector.Vec<ui32>", %"struct.vector.Vec<ui32>"* %vec, i32 0, i32 2
+	store i32 0, i32* %tmp4
+	ret void
+}
+define void @"vector.free<%struct.scope.Variable>"(%"struct.vector.Vec<%struct.scope.Variable>"* %vec){
+	%tmp0 = load %struct.scope.Variable*, %struct.scope.Variable** %vec
+	%tmp1 = icmp ne %struct.scope.Variable* %tmp0, null
+	br i1 %tmp1, label %then0, label %endif0
+then0:
+	%tmp2 = load %struct.scope.Variable*, %struct.scope.Variable** %vec
+	call void @mem.free(i8* %tmp2)
+	br label %endif0
+endif0:
+	store %struct.scope.Variable* null, %struct.scope.Variable** %vec
+	%tmp3 = getelementptr inbounds %"struct.vector.Vec<%struct.scope.Variable>", %"struct.vector.Vec<%struct.scope.Variable>"* %vec, i32 0, i32 1
+	store i32 0, i32* %tmp3
+	%tmp4 = getelementptr inbounds %"struct.vector.Vec<%struct.scope.Variable>", %"struct.vector.Vec<%struct.scope.Variable>"* %vec, i32 0, i32 2
 	store i32 0, i32* %tmp4
 	ret void
 }
@@ -15928,34 +16797,19 @@ define void @"list.new_node<i32>"(%"struct.list.ListNode<i32>"* %list){
 	ret void
 }
 
-;func STATIC_FILL_PRIMITIVE_TYPES_INFO []
 ;func __chkstk ["no_lazy"]
 ;func _fltused ["no_lazy"]
-;func add_to_scope []
 ;func append_path []
 ;func append_path_ex []
 ;func compile []
-;func compile_body []
 ;func compile_internal_sym_table []
 ;func compile_internal_sym_table_prefill []
-;func compiler_type_push []
-;func constant_evaluate_expression []
 ;func debug_dump_expression []
 ;func debug_dump_symbol_table []
 ;func debug_dump_type []
-;func eight_layout []
-;func enter_scope []
-;func exit_scope []
 ;func expect []
-;func find_primitive_type []
-;func find_variable []
-;func four_layout []
 ;func free_type []
 ;func get_binary_op []
-;func get_compiler_type []
-;func get_compiler_type_generic []
-;func get_compiler_type_generic_internal []
-;func get_compiler_type_internal []
 ;func get_flags []
 ;func get_symbol_from_table []
 ;func get_unary_op []
@@ -15966,14 +16820,11 @@ define void @"list.new_node<i32>"(%"struct.list.ListNode<i32>"* %list){
 ;func handle_symbol []
 ;func insert_symbol []
 ;func insert_symbol_into_table []
-;func invalid_layout []
 ;func is_expression_starter []
 ;func is_modifier []
 ;func is_prefix_operator []
 ;func lex []
 ;func main []
-;func new_scope []
-;func one_layout []
 ;func parse []
 ;func parse_argument_comma []
 ;func parse_body []
@@ -15995,9 +16846,7 @@ define void @"list.new_node<i32>"(%"struct.list.ListNode<i32>"* %list){
 ;func skip_if_statement []
 ;func skip_nested []
 ;func token_type_to_string []
-;func two_layout []
 ;func wrap_in_pointers []
-;func zero_layout []
 ;func char_utils.is_alnum []
 ;func char_utils.is_alpha []
 ;func char_utils.is_cntrl []
@@ -16011,7 +16860,25 @@ define void @"list.new_node<i32>"(%"struct.list.ListNode<i32>"* %list){
 ;func char_utils.is_xdigit []
 ;func char_utils.to_lower []
 ;func char_utils.to_upper []
+;func comp_type.compiler_type_push []
+;func comp_type.compiler_type_push_internal []
+;func comp_type.constant_array []
+;func comp_type.def_integer []
+;func comp_type.equal []
+;func comp_type.free []
+;func comp_type.get_compiler_type []
+;func comp_type.get_compiler_type_generic []
+;func comp_type.get_compiler_type_generic_internal []
+;func comp_type.get_compiler_type_internal []
+;func comp_type.implementation []
+;func comp_type.placeholder []
+;func comp_type.pointer []
+;func comp_type.primitive []
+;func comp_type.structure []
+;func comp_type.void []
+;func compile_internals.compile_body []
 ;func compile_internals.sym_table_push_external []
+;func compile_internals.sym_table_push_functions []
 ;func compile_internals.sym_table_push_static []
 ;func compile_internals.sym_table_push_structs []
 ;func compile_internals.sym_table_push_structs_generic []
@@ -16023,11 +16890,27 @@ define void @"list.new_node<i32>"(%"struct.list.ListNode<i32>"* %list){
 ;func console.write []
 ;func console.write_string []
 ;func console.writeln []
+;func expression_compiler.compile []
+;func expression_compiler.constant_expression_evaluation []
+;func expression_compiler.cv_integer []
+;func expression_compiler.cv_to_register []
+;func expression_compiler.expect_anything []
+;func expression_compiler.expect_compiler_type []
+;func expression_compiler.expect_nothing []
 ;func fs.create_file []
 ;func fs.delete_file []
 ;func fs.file_exists []
 ;func fs.read_full_file_as_string []
+;func fs.read_full_file_as_string_string []
 ;func fs.write_to_file []
+;func layout.STATIC_layout []
+;func layout.eight []
+;func layout.equal []
+;func layout.four []
+;func layout.invalid []
+;func layout.one []
+;func layout.two []
+;func layout.void []
 ;func list.extend []
 ;func list.free []
 ;func list.new []
@@ -16042,9 +16925,32 @@ define void @"list.new_node<i32>"(%"struct.list.ListNode<i32>"* %list){
 ;func mem.malloc []
 ;func mem.realloc []
 ;func mem.zero_fill []
+;func output.branch []
+;func output.jump_to []
+;func output.label []
+;func output.push_instruction []
+;func output.push_instructions []
+;func output.ret []
+;func output.ret_void []
+;func output.unreachable []
+;func primitives.STATIC_primitives []
+;func primitives.find_primitive_type []
+;func primitives.find_primitive_type_index []
 ;func process.get_executable_env_path []
 ;func process.get_executable_path []
 ;func process.throw ["no_return"]
+;func rvalue.boolean []
+;func rvalue.decimal []
+;func rvalue.integer []
+;func rvalue.nil []
+;func rvalue.register []
+;func rvalue.void []
+;func scope.add_to_scope []
+;func scope.enter_scope []
+;func scope.exit_scope []
+;func scope.find_variable []
+;func scope.free []
+;func scope.new []
 ;func stdlib.atoi []
 ;func stdlib.rand []
 ;func stdlib.srand []
@@ -16052,6 +16958,7 @@ define void @"list.new_node<i32>"(%"struct.list.ListNode<i32>"* %list){
 ;func string.append ["ExtensionOf"]
 ;func string.append_c_string ["ExtentionOf"]
 ;func string.append_str ["ExtensionOf"]
+;func string.append_u64 ["ExtensionOf"]
 ;func string.as_c_string_stalloc ["ExtentionOf"]
 ;func string.clone ["ExtentionOf"]
 ;func string.empty []
@@ -16102,7 +17009,6 @@ define void @"list.new_node<i32>"(%"struct.list.ListNode<i32>"* %list){
 ;type CallExpr
 ;type CastExpr
 ;type CharExpr
-;type CompilerType
 ;type ConstantSizeArrayType
 ;type ConstantSymbolTableEntry
 ;type DecimalExpr
@@ -16119,15 +17025,14 @@ define void @"list.new_node<i32>"(%"struct.list.ListNode<i32>"* %list){
 ;type FunctionSymbolTableEntry
 ;type FunctionType
 ;type GenericFunctionSymbolTableEntry
-;type GenericImplementationCompilerType
 ;type GenericStructDefinedField
 ;type GenericStructSymbolTableEntry
 ;type GenericType
 ;type HintNode
 ;type IfStmt
+;type Implementation
 ;type IndexExpr
 ;type IntegerExpr
-;type Layout
 ;type LoopStmt
 ;type MemberAccessExpr
 ;type NameExpr
@@ -16137,13 +17042,9 @@ define void @"list.new_node<i32>"(%"struct.list.ListNode<i32>"* %list){
 ;type NamespaceNode
 ;type Path
 ;type PathEx
-;type PointerCompilerType
 ;type PointerType
-;type PrimitiveTypeInfo
 ;type RangeExpr
 ;type ReturnNode
-;type Rvalue
-;type Scope
 ;type StaticAccessExpr
 ;type StaticSymbolTableEntry
 ;type Stmt
@@ -16159,11 +17060,21 @@ define void @"list.new_node<i32>"(%"struct.list.ListNode<i32>"* %list){
 ;type Type
 ;type TypeExpr
 ;type UnaryOpExpr
-;type Variable
 ;type WhileStmt
+;type comp_type.CompilerType
+;type comp_type.ConstantArrayCompilerType
+;type comp_type.PointerCompilerType
+;type expression_compiler.CompiledValue
+;type expression_compiler.Expected
+;type layout.Layout
 ;type list.List
 ;type list.ListNode
 ;type mem.PROCESS_HEAP_ENTRY
+;type output.LLVMInstruction
+;type primitives.PrimitiveTypeInfo
+;type rvalue.Rvalue
+;type scope.Scope
+;type scope.Variable
 ;type string.String
 ;type vector.Vec
 ;type window.BITMAP

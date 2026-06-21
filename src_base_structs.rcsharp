@@ -40,7 +40,7 @@ namespace process{
     fn get_executable_path() : string::String {
         const size: u32 = 260;
         let string : string::String = string::with_size(size as i32);
-        const len : u32 = GetModuleFileNameA(null, string.data, string.len as u32);
+        const len : u32 = GetModuleFileNameA(null, string.data, string.capacity as u32);
         string.len = len as i32;
         return string;
     }
@@ -413,7 +413,6 @@ namespace string{
         if len > 0 {
             x.data = mem::malloc(len as i64) as &i8;
             mem::copy(data, x.data, len as i64);
-            x.data[len] = 0;
         }
         return x;
     }
@@ -430,11 +429,11 @@ namespace string{
     fn with_size(size: i32) : String{
         let x: String = String::{
             data: null,
-            len: 0,
-            capacity: 0,
+            len: size,
+            capacity: size,
         };
         if size > 0 {
-            x.data = mem::malloc((size + 1) as i64) as &i8;
+            x.data = mem::malloc(size as i64) as &i8;
             mem::zero_fill(x.data, size as i64);
         }
         return x;
@@ -466,7 +465,15 @@ namespace string{
     }
     #[ExtentionOf(String)]
     fn append_c_string(src_string: &String, c_string: &i8) : String {
-        append_str(src_string, c_string, string_utils::c_str_len(c_string));
+        let c_len: i32 = string_utils::c_str_len(c_string);
+        let new_str: String = with_size(src_string.len + c_len);
+        if src_string.len > 0 {
+            mem::copy(src_string.data, new_str.data, src_string.len as i64);
+        }
+        if c_len > 0 {
+            mem::copy(c_string, new_str.data + src_string.len as i64, c_len as i64);
+        }
+        return new_str;
     }
     #[ExtensionOf(String)]
     fn append_str(src_string: &String, buffer: &i8, buffer_len: i32) {
@@ -482,6 +489,23 @@ namespace string{
         src_string.data[src_string.len as i64] = ch;
         src_string.len = src_string.len + 1; 
     }
+    #[ExtensionOf(String)]
+    fn append_u64(src_string: &String, n: u64) {
+        if n == 0 { append(src_string, '0'); return; }
+        let i: i32 = 20;
+
+        const buffer : &i8 = stalloc::<i8>(21);
+        let mut_n: u64 = n;
+        do {
+            buffer[i] = (mut_n % 10) as i8 + '0';
+            mut_n = mut_n / 10;
+            i = i - 1;
+        } while mut_n != 0;
+
+        const start_ptr : &i8 = &buffer[i + 1];
+        const len: i32 = 20 as i32 - i;
+        append_str(src_string, start_ptr, len);
+    }
     #[ExtentionOf(String)]
     fn equal(first: &String, second: &String) : bool{
         if first.len != second.len { return false; }
@@ -494,6 +518,7 @@ namespace string{
             mem::free(bitcast::<&void>(str.data));
         }
         str.len = 0;
+        str.capacity = 0; 
         str.data = null;
     }
     // Use data only inside function where it was called, because stack will be "freed" upon leaving function and data will be corrupted
@@ -539,6 +564,7 @@ namespace string_utils{
             dest[i] = src[i];
             i = i + 1;
         }
+        dest[i] = 0; 
         return dest;
     }
     pub fn c_str_n_copy(dest: &i8, src: &i8, n: i32) : &i8 {
@@ -679,6 +705,11 @@ namespace fs{
 
         return (success != 0 && bytes_written == content_len) as i32;
     }
+    fn read_full_file_as_string_string(path: &string::String) : string::String {
+        const x: &i8 = stalloc::<i8>(path.len + 1);
+        string::as_c_string_stalloc(path, x);
+        return read_full_file_as_string(x);
+    }
     fn read_full_file_as_string(path: &i8) : string::String {
         const GENERIC_READ: u32 = 0x80000000;
         const OPEN_EXISTING: u32 = 3; 
@@ -704,7 +735,6 @@ namespace fs{
             process::throw("File read failed");
         }
         buffer.len = file_size as i32;
-        buffer.data[buffer.len] = 0;
         return buffer;
     }
     fn create_file(path: &i8) : i32 {
