@@ -18,7 +18,7 @@ enum SymbolTableTag{
 
     Solved = 8, // Flags
 }
-struct SymbolTableEntry {  tag: SymbolTableTag, path: PathEx, val: &void }
+struct SymbolTableEntry { tag: SymbolTableTag, path: PathEx, data_index: u32 }
 
 struct EnumDefinedField    { name: u16, value: u64 }
 struct EnumSymbolTableEntry { representative_type: comp_type::CompilerType, fields: vector::Vec<EnumDefinedField>, flags: u8 }
@@ -40,6 +40,14 @@ struct StaticSymbolTableEntry { type: comp_type::CompilerType, has_initialized_v
 struct SymbolTable{
     symbols: vector::Vec<SymbolTableEntry>,
     symbol_vector: &vector::Vec<string::String>,
+
+    functions: vector::Vec<FunctionSymbolTableEntry>,
+    generic_functions: vector::Vec<GenericFunctionSymbolTableEntry>,
+    structs: vector::Vec<StructSymbolTableEntry>,
+    generic_structs: vector::Vec<GenericStructSymbolTableEntry>,
+    enums: vector::Vec<EnumSymbolTableEntry>,
+    constants: vector::Vec<ConstantSymbolTableEntry>,
+    statics: vector::Vec<StaticSymbolTableEntry>,
 }
 fn insert_symbol_into_table(table: &SymbolTable, entry: SymbolTableEntry){
     let entry: SymbolTableEntry = entry;
@@ -329,15 +337,6 @@ fn debug_dump_expression(expr: &Expression, symbol_vector: &vector::Vec<string::
         debug_dump_type(&data.to, symbol_vector, stdout);
         return;
     }
-    if expr.type == ExpressionType::Boolean{
-        const data: &BoolExpr = expr.val as &BoolExpr;
-        if data.val{
-            string::append_str(stdout, "true", 4);
-        }else{
-            string::append_str(stdout, "false", 5);
-        }
-        return;
-    }
     if expr.type == ExpressionType::BinaryOp{
         const data: &BinaryOpExpr = expr.val as &BinaryOpExpr;
         debug_dump_expression(&data.lval, symbol_vector, stdout);
@@ -435,7 +434,7 @@ fn compile_internal_sym_table_prefill(path: &Path, statement_vector: &vector::Ve
             let struct_path: PathEx = path_to_path_ex_name(path, node.name);
             let sym_t_entry: SymbolTableEntry;
             sym_t_entry.path = struct_path;
-            sym_t_entry.val = null;
+            sym_t_entry.data_index = 4294967295 as u32;
             if node.generic.length != 0{
                 sym_t_entry.tag = SymbolTableTag::GenericFunction;
             }else{
@@ -452,28 +451,32 @@ fn compile_internal_sym_table_prefill(path: &Path, statement_vector: &vector::Ve
             sym_t_entry.path = struct_path;
             if node.generic.length != 0{
                 sym_t_entry.tag = SymbolTableTag::GenericStruct;
-                let sym_entry: &GenericStructSymbolTableEntry = mem::malloc(size_of::<GenericStructSymbolTableEntry>()) as &GenericStructSymbolTableEntry;
-                sym_t_entry.val = bitcast::<&void>(sym_entry);
-                sym_entry.flags = node.flags;
-                sym_entry.fields = vector::new::<GenericStructDefinedField>();
-                sym_entry.implementations = vector::new::<Implementation>();
-                sym_entry.generic_tokens = vector::new::<u16>();
+                let llvm_signature: string::String = string::from_c_string("struct.");
+                append_path_ex(&sym_t_entry.path, symbol_table.symbol_vector.array, &llvm_signature);
+                let sym_entry: GenericStructSymbolTableEntry = GenericStructSymbolTableEntry::{
+                    flags: node.flags,
+                    fields: vector::new::<GenericStructDefinedField>(),
+                    implementations: vector::new::<Implementation>(),
+                    generic_tokens: vector::new::<u16>(),
+                    llvm_signature_base: llvm_signature
+                };
                 for x in 0 as u32 .. node.generic.length{
                     vector::push::<u16>(&sym_entry.generic_tokens, node.generic.array[x]);
                 }
-                let llvm_signature: string::String = string::from_c_string("struct.");
-                append_path_ex(&sym_t_entry.path, symbol_table.symbol_vector.array, &llvm_signature);
-                sym_entry.llvm_signature_base = llvm_signature;
+                vector::push::<GenericStructSymbolTableEntry>(&symbol_table.generic_structs, sym_entry);
+                sym_t_entry.data_index = symbol_table.generic_structs.length - 1;
             }else{
                 sym_t_entry.tag = SymbolTableTag::Struct;
-                let sym_entry: &StructSymbolTableEntry = mem::malloc(size_of::<StructSymbolTableEntry>()) as &StructSymbolTableEntry;
-                sym_t_entry.val = bitcast::<&void>(sym_entry);
-                sym_entry.flags = node.flags;
-                sym_entry.fields = vector::new::<StructDefinedField>();
-                sym_entry.layout = layout::invalid();
                 let llvm_signature: string::String = string::from_c_string("struct.");
                 append_path_ex(&sym_t_entry.path, symbol_table.symbol_vector.array, &llvm_signature);
-                sym_entry.llvm_signature = llvm_signature;
+                let sym_entry: StructSymbolTableEntry = StructSymbolTableEntry::{
+                    flags: node.flags,
+                    fields: vector::new::<StructDefinedField>(),
+                    layout: layout::invalid(),
+                    llvm_signature: llvm_signature
+                };
+                vector::push::<StructSymbolTableEntry>(&symbol_table.structs, sym_entry);
+                sym_t_entry.data_index = symbol_table.structs.length - 1;
             }
             insert_symbol_into_table(symbol_table, sym_t_entry);
             index = index + 1;
@@ -485,7 +488,7 @@ fn compile_internal_sym_table_prefill(path: &Path, statement_vector: &vector::Ve
             let sym_t_entry: SymbolTableEntry;
             sym_t_entry.path = enum_path;
             sym_t_entry.tag = SymbolTableTag::Enum;
-            sym_t_entry.val = null;
+            sym_t_entry.data_index = 4294967295 as u32; 
             insert_symbol_into_table(symbol_table, sym_t_entry);
             index = index + 1;
             continue;
@@ -517,7 +520,7 @@ fn compile_internal_sym_table_prefill(path: &Path, statement_vector: &vector::Ve
             }else if node.var_comp_type == VarType::Stack{
                 process::throw("let is not allowed in top scope");
             }
-            sym_t_entry.val = null;
+            sym_t_entry.data_index = 4294967295 as u32;
             insert_symbol_into_table(symbol_table, sym_t_entry);
             index = index + 1;
             continue;
@@ -536,7 +539,7 @@ fn compile_internal_sym_table(path: &Path, statement_vector: &vector::Vec<Stmt>,
     let len: u32 = statement_vector.length;
     const symbol_vector: &vector::Vec<string::String> = symbol_table.symbol_vector;
     const sym_array: &string::String = symbol_vector.array;
-    
+    let loc: PathEx = path_to_path_ex(path);
     while index < len {
         let statement: &Stmt = &statement_vector.array[index];
         if statement.statement_type == StatementType::CompilerHint{
@@ -580,16 +583,25 @@ fn compile_internal_sym_table(path: &Path, statement_vector: &vector::Vec<Stmt>,
             let func_path: PathEx = path_to_path_ex_name(path, node.name);
             const sym_t_entry: &SymbolTableEntry = get_symbol_from_table(symbol_table, func_path);
 
+            let llvm_signature: string::String = string::empty();
+            append_path_ex(&sym_t_entry.path, symbol_table.symbol_vector.array, &llvm_signature);
+
             if node.generic.length != 0{
-                let sym_entry: &GenericFunctionSymbolTableEntry = mem::malloc(size_of::<GenericFunctionSymbolTableEntry>()) as &GenericFunctionSymbolTableEntry;
-                sym_t_entry.val = bitcast::<&void>(sym_entry);
-                sym_entry.flags = node.flags;
-                sym_entry.arguments = vector::new::<GenericStructDefinedField>();
+                let sym_entry: GenericFunctionSymbolTableEntry = GenericFunctionSymbolTableEntry::{
+                    flags: node.flags,
+                    arguments: vector::new::<GenericStructDefinedField>(),
+                    return_type: comp_type::void(),
+                    is_generic_return: false,
+                    body: node.nodes,
+                    implementations: vector::new::<Implementation>(),
+                    llvm_signature_base: llvm_signature,
+                    generic_tokens: vector::new::<u16>(),
+                };
                 if node.has_value{
                     sym_entry.is_generic_return = comp_type::get_compiler_type_generic(&node.return_type, path, symbol_table, &node.generic, &sym_entry.return_type);
-                }else{
-                    sym_entry.is_generic_return = false;
-                    sym_entry.return_type = comp_type::void();
+                }
+                for x in 0 as u32 .. node.generic.length{
+                    vector::push::<u16>(&sym_entry.generic_tokens, node.generic.array[x]);
                 }
                 for x in 0 as u32 .. node.arguments.length{
                     const arg: &Argument = &node.arguments.array[x];
@@ -598,17 +610,22 @@ fn compile_internal_sym_table(path: &Path, statement_vector: &vector::Vec<Stmt>,
                     sdf.is_generic = comp_type::get_compiler_type_generic(&arg.type, path, symbol_table, &node.generic, &sdf.type);
                     vector::push::<GenericStructDefinedField>(&sym_entry.arguments, sdf);
                 }
+                vector::push::<GenericFunctionSymbolTableEntry>(&symbol_table.generic_functions, sym_entry);
+                sym_t_entry.data_index = symbol_table.generic_functions.length - 1;
+                sym_t_entry.tag = sym_t_entry.tag | SymbolTableTag::Solved;
                 index = index + 1;
                 continue;
             }
-            let sym_entry: &FunctionSymbolTableEntry = mem::malloc(size_of::<FunctionSymbolTableEntry>()) as &FunctionSymbolTableEntry;
-            sym_t_entry.val = bitcast::<&void>(sym_entry);
-            sym_entry.flags = node.flags;
-            sym_entry.arguments = vector::new::<StructDefinedField>();
+
+            let sym_entry: FunctionSymbolTableEntry = FunctionSymbolTableEntry::{
+                flags: node.flags,
+                arguments: vector::new::<StructDefinedField>(),
+                return_type: comp_type::void(),
+                body: node.nodes,
+                llvm_signature: llvm_signature
+            };
             if node.has_value{
                 sym_entry.return_type = comp_type::get_compiler_type(&node.return_type, path, symbol_table);
-            }else{
-                sym_entry.return_type = comp_type::void();
             }
             for x in 0 as u32 .. node.arguments.length{
                 const arg: &Argument = &node.arguments.array[x];
@@ -617,7 +634,9 @@ fn compile_internal_sym_table(path: &Path, statement_vector: &vector::Vec<Stmt>,
                 sf.type = comp_type::get_compiler_type(&arg.type, path, symbol_table);
                 vector::push::<StructDefinedField>(&sym_entry.arguments, sf);
             }
-            sym_entry.body = node.nodes;
+            vector::push::<FunctionSymbolTableEntry>(&symbol_table.functions, sym_entry);
+            sym_t_entry.data_index = symbol_table.functions.length - 1;
+
             sym_t_entry.tag = sym_t_entry.tag | SymbolTableTag::Solved;
             index = index + 1;
             continue;
@@ -627,7 +646,7 @@ fn compile_internal_sym_table(path: &Path, statement_vector: &vector::Vec<Stmt>,
             let struct_path: PathEx = path_to_path_ex_name(path, node.name);
             const sym_t_entry: &SymbolTableEntry = get_symbol_from_table(symbol_table, struct_path);
             if node.generic.length != 0{
-                let sym_entry: &GenericStructSymbolTableEntry = sym_t_entry.val as &GenericStructSymbolTableEntry;
+                const sym_entry: &GenericStructSymbolTableEntry = &symbol_table.generic_structs.array[sym_t_entry.data_index];
                 for x in 0 as u32 .. node.fields.length{
                     const arg: &Argument = &node.fields.array[x];
                     let sdf: GenericStructDefinedField;
@@ -639,7 +658,7 @@ fn compile_internal_sym_table(path: &Path, statement_vector: &vector::Vec<Stmt>,
                 index = index + 1;
                 continue;
             }
-            let sym_entry: &StructSymbolTableEntry = sym_t_entry.val as &StructSymbolTableEntry;
+            const sym_entry: &StructSymbolTableEntry = &symbol_table.structs.array[sym_t_entry.data_index];
             for x in 0 as u32 .. node.fields.length{
                 const node: &Argument = &node.fields.array[x];
                 let sdf: StructDefinedField;
@@ -655,21 +674,21 @@ fn compile_internal_sym_table(path: &Path, statement_vector: &vector::Vec<Stmt>,
             
             let dec_path: PathEx = path_to_path_ex_name(path, node.name);
             const sym_t_entry: &SymbolTableEntry = get_symbol_from_table(symbol_table, dec_path);
-            const sym_entry: &EnumSymbolTableEntry = mem::malloc(size_of::<EnumSymbolTableEntry>()) as &EnumSymbolTableEntry;
-            sym_t_entry.val = bitcast::<&void>(sym_entry);
-            sym_entry.flags = node.flags;
-            sym_entry.representative_type = comp_type::def_integer();
+            let sym_entry: EnumSymbolTableEntry = EnumSymbolTableEntry::{
+                flags: node.flags,
+                representative_type: comp_type::def_integer(),
+                fields: vector::new::<EnumDefinedField>(),
+            };
             if node.has_value{
                 sym_entry.representative_type = comp_type::get_compiler_type(&node.enum_type, path, symbol_table);
             }
-            sym_entry.fields = vector::new::<EnumDefinedField>();
             let indexer: u64 = 0;
             for x in 0 as u32 .. node.fields.length{
                 const node: &EnumField = &node.fields.array[x];
                 let edf: EnumDefinedField;
                 edf.name = node.name;
                 if node.has_value{
-                    let rval: rvalue::Rvalue = expression_compiler::constant_expression_evaluation(&node.value, symbol_table);
+                    let rval: rvalue::Rvalue = expression_compiler::constant_expression_evaluation(&node.value, symbol_table, &loc);
                     if rval.kind != rvalue::RvalueKind::Integer{
                         process::throw("TODO");
                     }
@@ -680,7 +699,8 @@ fn compile_internal_sym_table(path: &Path, statement_vector: &vector::Vec<Stmt>,
                 vector::push::<EnumDefinedField>(&sym_entry.fields, edf);
             }
             sym_t_entry.tag = sym_t_entry.tag | SymbolTableTag::Solved;
-            
+            vector::push::<EnumSymbolTableEntry>(&symbol_table.enums, sym_entry);
+            sym_t_entry.data_index = symbol_table.enums.length - 1;
             index = index + 1;
             continue;
         } else if statement.statement_type == StatementType::Namespace{
@@ -703,23 +723,26 @@ fn compile_internal_sym_table(path: &Path, statement_vector: &vector::Vec<Stmt>,
                 process::throw("compile_internal_sym_table_prefill fucked up");
             }
             if node.var_comp_type == VarType::Constant{
-                const sym_entry: &ConstantSymbolTableEntry = mem::malloc(size_of::<ConstantSymbolTableEntry>()) as &ConstantSymbolTableEntry;
-                sym_entry.type = comp_type::get_compiler_type(&node.var_type, path, symbol_table);
-                sym_entry.defined_value = expression_compiler::constant_expression_evaluation(&node.expression, symbol_table);
-                sym_t_entry.val = bitcast::<&void>(sym_entry);
+                let sym_entry: ConstantSymbolTableEntry = ConstantSymbolTableEntry::{
+                    type: comp_type::get_compiler_type(&node.var_type, path, symbol_table),
+                    defined_value: expression_compiler::constant_expression_evaluation(&node.expression, symbol_table, &loc),
+                };
                 sym_t_entry.tag = sym_t_entry.tag | SymbolTableTag::Solved;
+                vector::push::<ConstantSymbolTableEntry>(&symbol_table.constants, sym_entry);
+                sym_t_entry.data_index = symbol_table.constants.length - 1;
             } else if node.var_comp_type == VarType::Static{
-                const sym_entry: &StaticSymbolTableEntry = mem::malloc(size_of::<StaticSymbolTableEntry>()) as &StaticSymbolTableEntry;
-                let expr: rvalue::Rvalue; 
-                sym_entry.has_initialized_value = false;
+                let sym_entry: StaticSymbolTableEntry = StaticSymbolTableEntry::{
+                    has_initialized_value: false,
+                    initialized_value: rvalue::void(),
+                    type: comp_type::get_compiler_type(&node.var_type, path, symbol_table)
+                };
                 if node.has_value{
                     sym_entry.has_initialized_value = true;
-                    expr = expression_compiler::constant_expression_evaluation(&node.expression, symbol_table);
+                    sym_entry.initialized_value = expression_compiler::constant_expression_evaluation(&node.expression, symbol_table, &loc);
                 }
-                sym_entry.type = comp_type::get_compiler_type(&node.var_type, path, symbol_table);
-                sym_entry.initialized_value = expr;
-                sym_t_entry.val = bitcast::<&void>(sym_entry);
                 sym_t_entry.tag = sym_t_entry.tag | SymbolTableTag::Solved;
+                vector::push::<StaticSymbolTableEntry>(&symbol_table.statics, sym_entry);
+                sym_t_entry.data_index = symbol_table.statics.length - 1;
             }
             index = index + 1;
             continue;
@@ -740,7 +763,7 @@ namespace compile_internals{
         const sym_array: &string::String = symbol_table.symbol_vector.array;
         for i in 0 as u32 .. len{
             if (ptr[i].tag & SymbolTableTag::OnlyTypesMask) == SymbolTableTag::Function{
-                const node: &FunctionSymbolTableEntry = ptr[i].val as &FunctionSymbolTableEntry;
+                const node: &FunctionSymbolTableEntry = &symbol_table.functions.array[ptr[i].data_index];
                 if (node.flags & Flags::External) == 0{
                     continue;
                 }
@@ -750,11 +773,7 @@ namespace compile_internals{
                 string::append_str(stdout, "declare dllimport ", 18);
                 comp_type::compiler_type_push(&node.return_type, &loc, symbol_table, stdout);
                 string::append_str(stdout, "\t@", 2);
-                let q: PathEx = ptr[i].path;
-                q.data[0] = q.data[q.len - 1];
-                q.len = 1;
-                append_path_ex(&q, sym_array, stdout);
-
+                string::append_str(stdout, node.llvm_signature.data, node.llvm_signature.len);
                 string::append_str(stdout, "(", 1);            
                 for x in 0 as u32 .. node.arguments.length{
                     const arg: &StructDefinedField = &node.arguments.array[x];
@@ -776,7 +795,7 @@ namespace compile_internals{
         const sym_array: &string::String = symbol_table.symbol_vector.array;
         for i in 0 as u32 .. len{
             if (ptr[i].tag & SymbolTableTag::OnlyTypesMask) == SymbolTableTag::Static{
-                const node: &StaticSymbolTableEntry = ptr[i].val as &StaticSymbolTableEntry;
+                const node: &StaticSymbolTableEntry = &symbol_table.statics.array[ptr[i].data_index];
                 let loc: PathEx = ptr[i].path;
                 loc.len = loc.len - 1;
 
@@ -794,7 +813,7 @@ namespace compile_internals{
         const sym_array: &string::String = symbol_table.symbol_vector.array;
         for i in 0 as u32 .. len{
             if (ptr[i].tag & SymbolTableTag::OnlyTypesMask) == SymbolTableTag::Struct{
-                const node: &StructSymbolTableEntry = ptr[i].val as &StructSymbolTableEntry;
+                const node: &StructSymbolTableEntry = &symbol_table.structs.array[ptr[i].data_index];
                 string::append(stdout, '%');
                 string::append_str(stdout, node.llvm_signature.data, node.llvm_signature.len);
                 string::append_str(stdout, " = type ", 8);
@@ -815,7 +834,7 @@ namespace compile_internals{
         const sym_array: &string::String = symbol_table.symbol_vector.array;
         for i in 0 as u32 .. len{
             if (ptr[i].tag & SymbolTableTag::OnlyTypesMask) == SymbolTableTag::GenericStruct{
-                const node: &GenericStructSymbolTableEntry = ptr[i].val as &GenericStructSymbolTableEntry;
+                const node: &GenericStructSymbolTableEntry = &symbol_table.generic_structs.array[ptr[i].data_index];
                 const ilen: u32 = node.implementations.length;
                 const iarr: &Implementation = node.implementations.array;
                 if node.implementations.length == 0{
@@ -827,7 +846,12 @@ namespace compile_internals{
                     string::append_str(stdout, current_impl.llvm_signature.data, current_impl.llvm_signature.len);
                     string::append_str(stdout, " = type { ", 10);
                     for x in 0 as u32 .. node.fields.length{
-                        comp_type::compiler_type_push(&node.fields.array[x].type, &ptr[i].path, symbol_table, stdout); 
+                        if !node.fields.array[x].is_generic{
+                            comp_type::compiler_type_push(&node.fields.array[x].type, &ptr[i].path, symbol_table, stdout);
+                        }else{
+                            string::append_str(stdout, "ptr", 3);
+                        }
+                        
                         if x != node.fields.length - 1{
                             string::append_str(stdout, ", ", 2);
                         }
@@ -847,7 +871,7 @@ namespace compile_internals{
         const sym_array: &string::String = symbol_table.symbol_vector.array;
         for i in 0 as u32 .. len{
             if (ptr[i].tag & SymbolTableTag::OnlyTypesMask) == SymbolTableTag::Function{
-                const node: &FunctionSymbolTableEntry = ptr[i].val as &FunctionSymbolTableEntry;
+                const node: &FunctionSymbolTableEntry = &symbol_table.functions.array[ptr[i].data_index];
                 if (node.flags & Flags::External) != 0{
                     continue;
                 }
@@ -858,7 +882,7 @@ namespace compile_internals{
                 comp_type::compiler_type_push(&node.return_type, &ptr[i].path, symbol_table, stdout);
                 
                 string::append_str(stdout, " @", 2);
-                append_path_ex(&ptr[i].path, sym_array, stdout);
+                string::append_str(stdout, node.llvm_signature.data, node.llvm_signature.len);
                 string::append(stdout, '(');
                 for x in 0 as u32 .. node.arguments.length{
                     const arg: &StructDefinedField = &node.arguments.array[x];
@@ -896,12 +920,44 @@ namespace compile_internals{
         }
     }
     fn compile_body(statement_vector: &vector::Vec<Stmt>, function_index: u32, implementation_index: u32, scope: &scope::Scope, symbol_table: &SymbolTable, output: &vector::Vec<output::LLVMInstruction>) {
+        const p: &SymbolTableEntry = &symbol_table.symbols.array[function_index];
+        let f_path: PathEx = p.path;
+        let env_path: Path;
+        env_path.len = f_path.len - 1;
+        for i in 0 as u8 .. env_path.len{
+            env_path.data[i] = f_path.data[i];
+        }
+        let loc: PathEx = f_path;
+        loc.len = loc.len - 1;
+
         let index: u32 = 0;
         const len: u32 = statement_vector.length;
         while index < len {
             const statement: &Stmt = &statement_vector.array[index];
             if statement.statement_type == StatementType::VarDec{
                 const node: &DeclarationNode = statement.node_ptr as &DeclarationNode;
+                const v_type: &Type = &node.var_type;
+                const vc_type: comp_type::CompilerType = comp_type::get_compiler_type(v_type, &env_path, symbol_table);
+                let var: scope::Variable;
+                var.name = node.name;
+                var.type = vc_type;
+                if node.var_comp_type == VarType::Static{
+                    var.is_static = true;   
+                }else if node.var_comp_type == VarType::Constant{
+                    var.is_constant = true;
+                }
+                const var_id: u32 = scope.temp_counter; scope.temp_counter = scope.temp_counter + 1;
+
+                const str: &string::String = mem::malloc(size_of::<string::String>()) as &string::String;
+                *str = string::empty(); 
+                comp_type::compiler_type_push(&var.type, &loc, symbol_table, str);
+                vector::push::<output::LLVMInstruction>(output, output::alloc(var_id, str));
+                /////////////////
+                if node.has_value{
+                    let cv: expression_compiler::CompiledValue = expression_compiler::compile(&node.expression, expression_compiler::expect_compiler_type(&var.type), scope, symbol_table, output, &loc);
+
+                }
+                scope::add_to_scope(scope, var);
                 index = index + 1;
                 continue;
             }
@@ -912,15 +968,15 @@ namespace compile_internals{
                     index = index + 1;
                     continue;
                 }
-                let check_val: expression_compiler::CompiledValue = expression_compiler::compile(&statement.expression, expression_compiler::expect_anything(), scope, symbol_table, output);
-                const check_val_reg: u32 = expression_compiler::cv_to_register(&check_val, scope, symbol_table, output);
+                let check_val: expression_compiler::CompiledValue = expression_compiler::compile(&statement.expression, expression_compiler::expect_anything(), scope, symbol_table, output, &loc);
+                const check_val_reg: u32 = expression_compiler::cv_to_register(&check_val, scope, symbol_table, output, &loc);
                 vector::push::<output::LLVMInstruction>(output, output::ret(check_val_reg));
                 index = index + 1;
                 continue;
             }
             if statement.statement_type == StatementType::Expression{
                 const node: &ExpressionNode = statement.node_ptr as &ExpressionNode;
-                let check_val: expression_compiler::CompiledValue = expression_compiler::compile(&node.expression, expression_compiler::expect_nothing(), scope, symbol_table, output);
+                let check_val: expression_compiler::CompiledValue = expression_compiler::compile(&node.expression, expression_compiler::expect_nothing(), scope, symbol_table, output, &loc);
                 index = index + 1;
                 continue;
             }
@@ -974,8 +1030,8 @@ namespace compile_internals{
                 vector::push::<output::LLVMInstruction>(output, output::label(loop_entry));
 
 
-                let check_val: expression_compiler::CompiledValue = expression_compiler::compile(&statement.cond, expression_compiler::expect_anything(), scope, symbol_table, output);
-                const check_val_reg: u32 = expression_compiler::cv_to_register(&check_val, scope, symbol_table, output);
+                let check_val: expression_compiler::CompiledValue = expression_compiler::compile(&statement.cond, expression_compiler::expect_anything(), scope, symbol_table, output, &loc);
+                const check_val_reg: u32 = expression_compiler::cv_to_register(&check_val, scope, symbol_table, output, &loc);
                 vector::push::<output::LLVMInstruction>(output, output::branch(check_val_reg, loop_cond, loop_exit));
                 vector::push::<output::LLVMInstruction>(output, output::label(loop_cond));
 
@@ -1008,8 +1064,8 @@ namespace compile_internals{
                 compile_body(&statement.body, function_index, implementation_index, scope, symbol_table, output);
                 scope::exit_scope(scope);
 
-                let check_val: expression_compiler::CompiledValue = expression_compiler::compile(&statement.cond, expression_compiler::expect_anything(), scope, symbol_table, output);
-                const check_val_reg: u32 = expression_compiler::cv_to_register(&check_val, scope, symbol_table, output);
+                let check_val: expression_compiler::CompiledValue = expression_compiler::compile(&statement.cond, expression_compiler::expect_anything(), scope, symbol_table, output, &loc);
+                const check_val_reg: u32 = expression_compiler::cv_to_register(&check_val, scope, symbol_table, output, &loc);
                 vector::push::<output::LLVMInstruction>(output, output::branch(check_val_reg, loop_cond, loop_exit));
 
 
@@ -1025,14 +1081,16 @@ namespace compile_internals{
                 const statement: &IfStmt = bitcast::<&IfStmt>(statement.node_ptr);
                 const base_id: i32 = scope.current_logic_id as i32;
                 
-                let check_val: expression_compiler::CompiledValue = expression_compiler::compile(&statement.cond, expression_compiler::expect_anything(), scope, symbol_table, output);
-                const check_val_reg: u32 = expression_compiler::cv_to_register(&check_val, scope, symbol_table, output);
+                let check_val: expression_compiler::CompiledValue = expression_compiler::compile(&statement.cond, expression_compiler::expect_anything(), scope, symbol_table, output, &loc);
+                const check_val_reg: u32 = expression_compiler::cv_to_register(&check_val, scope, symbol_table, output, &loc);
 
                 const entry_lbl: u32 = scope.logic_counter; 
                 const else_lbl: u32 = scope.logic_counter + 1;
                 let end_lbl: u32 = scope.logic_counter + 2;
+                scope.logic_counter = scope.logic_counter + 3;
                 if statement.else_body.length == 0{
                     end_lbl = else_lbl;
+                    scope.logic_counter = scope.logic_counter - 1;
                 }
                 vector::push::<output::LLVMInstruction>(output, output::branch(check_val_reg, entry_lbl, else_lbl));
 
@@ -1045,10 +1103,6 @@ namespace compile_internals{
                     vector::push::<output::LLVMInstruction>(output, output::jump_to(end_lbl));
                 }
                 vector::push::<output::LLVMInstruction>(output, output::label(end_lbl));
-                scope.logic_counter = scope.logic_counter + 3;
-                if statement.else_body.length == 0{
-                    scope.logic_counter = scope.logic_counter - 1;
-                }
                 scope.current_logic_id = base_id;
                 index = index + 1;
                 continue;
@@ -1071,16 +1125,29 @@ fn compile(statement_vector: &vector::Vec<Stmt>, symbol_vector: &vector::Vec<str
     let sym_table: SymbolTable;
     sym_table.symbols = vector::new::<SymbolTableEntry>();
     sym_table.symbol_vector = symbol_vector;
+
+    sym_table.functions = vector::new::<FunctionSymbolTableEntry>();
+    sym_table.generic_functions = vector::new::<GenericFunctionSymbolTableEntry>();
+    sym_table.structs = vector::new::<StructSymbolTableEntry>();
+    sym_table.generic_structs = vector::new::<GenericStructSymbolTableEntry>();
+    sym_table.enums = vector::new::<EnumSymbolTableEntry>();
+    sym_table.constants = vector::new::<ConstantSymbolTableEntry>();
+    sym_table.statics = vector::new::<StaticSymbolTableEntry>();
     
     let path: Path; path.len = 0;
     compile_internal_sym_table_prefill(&path, statement_vector, &sym_table, stdout);
     compile_internal_sym_table(&path, statement_vector, &sym_table, stdout);
 
-    compile_internals::sym_table_push_functions(&sym_table, stdout);
     compile_internals::sym_table_push_structs(&sym_table, stdout);
+
+    let function_out: string::String = string::empty();
+    compile_internals::sym_table_push_functions(&sym_table, &function_out);
     compile_internals::sym_table_push_structs_generic(&sym_table, stdout);
     compile_internals::sym_table_push_external(&sym_table, stdout);
     compile_internals::sym_table_push_static(&sym_table, stdout);
+
+    string::append_str(stdout, function_out.data, function_out.len);
+    string::free(&function_out);
 }
 fn debug_dump_symbol_table(table: &SymbolTable, stdout: &string::String){
     const len: u32 = table.symbols.length;
@@ -1091,7 +1158,7 @@ fn debug_dump_symbol_table(table: &SymbolTable, stdout: &string::String){
             continue;
         }
         if (ptr[i].tag & SymbolTableTag::OnlyTypesMask) == SymbolTableTag::Enum{
-            const node: &EnumSymbolTableEntry = ptr[i].val as &EnumSymbolTableEntry;
+            const node: &EnumSymbolTableEntry = &table.enums.array[ptr[i].data_index];
             let loc: PathEx = ptr[i].path;
             loc.len = loc.len - 1;
             string::append_str(stdout, ";enum ", 6);
@@ -1111,7 +1178,7 @@ fn debug_dump_symbol_table(table: &SymbolTable, stdout: &string::String){
             //string::append_str(stdout, sym_array[node.name].data, sym_array[node.name].len);
             
         } else if (ptr[i].tag & SymbolTableTag::OnlyTypesMask) == SymbolTableTag::Constant{
-            const node: &ConstantSymbolTableEntry = ptr[i].val as &ConstantSymbolTableEntry;
+            const node: &ConstantSymbolTableEntry = &table.constants.array[ptr[i].data_index];
             let loc: PathEx = ptr[i].path;
             loc.len = loc.len - 1;
 
@@ -1122,7 +1189,7 @@ fn debug_dump_symbol_table(table: &SymbolTable, stdout: &string::String){
             string::append_str(stdout, "\n", 1);
             //string::append_str(stdout, sym_array[node.name].data, sym_array[node.name].len);
         } else if (ptr[i].tag & SymbolTableTag::OnlyTypesMask) == SymbolTableTag::Function{
-            const node: &FunctionSymbolTableEntry = ptr[i].val as &FunctionSymbolTableEntry;
+            const node: &FunctionSymbolTableEntry = &table.functions.array[ptr[i].data_index];
             let loc: PathEx = ptr[i].path;
             loc.len = loc.len - 1;
             
@@ -1172,16 +1239,56 @@ namespace expression_compiler{
         type: comp_type::CompilerType,
         rvalue: rvalue::Rvalue,
     }
-    pub fn cv_integer(integer: u64) : CompiledValue {let x: CompiledValue; x.kind = CompiledValueKind::Value; x.type = comp_type::def_integer(); x.rvalue = rvalue::integer(integer); return x;}
+    pub fn cv_integer(integer: u64) : CompiledValue {let x: CompiledValue = CompiledValue::{kind: CompiledValueKind::Value, type: comp_type::def_integer(), rvalue: rvalue::integer(integer)}; return x;}
+    pub fn cv_bool(val: bool) : CompiledValue {let x: CompiledValue = CompiledValue::{kind: CompiledValueKind::Value, type: comp_type::def_bool(), rvalue: rvalue::boolean(val)}; return x;}
+    pub fn cv_null_untyped() : CompiledValue {let x: CompiledValue = CompiledValue::{kind: CompiledValueKind::Value, type: comp_type::def_pointer(), rvalue: rvalue::nil()}; return x;}
     
-    pub fn cv_to_register(cv: &CompiledValue, scope: &scope::Scope, symbol_table: &SymbolTable, output: &vector::Vec<output::LLVMInstruction>) : u32 {
+    pub fn cv_to_register(cv: &CompiledValue, scope: &scope::Scope, symbol_table: &SymbolTable, output: &vector::Vec<output::LLVMInstruction>, env_path: &PathEx) : u32 {
+        if cv.kind != CompiledValueKind::Value{
+            process::throw("cv_to_register");
+        }
+        if cv.rvalue.kind == rvalue::RvalueKind::Register{
+            return cv.rvalue.data as u32;
+        } else if cv.rvalue.kind == rvalue::RvalueKind::Integer || cv.rvalue.kind == rvalue::RvalueKind::Boolean{
+            const temp_id: u32 = scope.temp_counter; scope.temp_counter = scope.temp_counter + 1;
+            const str: &string::String = mem::malloc(size_of::<string::String>()) as &string::String;
+            *str = string::empty(); 
+            comp_type::compiler_type_push(&cv.type, env_path, symbol_table, str);
+            vector::push::<output::LLVMInstruction>(output, output::load_integer(temp_id, str, cv.rvalue.data as u64));
+            return temp_id;
+        } else if cv.rvalue.kind == rvalue::RvalueKind::Null{
+            const temp_id: u32 = scope.temp_counter; scope.temp_counter = scope.temp_counter + 1;
+            const str: &string::String = mem::malloc(size_of::<string::String>()) as &string::String;
+            *str = string::empty(); 
+            comp_type::compiler_type_push(&cv.type, env_path, symbol_table, str);
+            vector::push::<output::LLVMInstruction>(output, output::load_null(temp_id, str));
+            return temp_id;
+        }
+        
         return 555;
     }
-    pub fn compile(expression: &Expression, expect: Expected, scope: &scope::Scope, symbol_table: &SymbolTable, output: &vector::Vec<output::LLVMInstruction>) : expression_compiler::CompiledValue{
+    pub fn compile(expression: &Expression, expect: Expected, scope: &scope::Scope, symbol_table: &SymbolTable, output: &vector::Vec<output::LLVMInstruction>, env_path: &PathEx) : expression_compiler::CompiledValue{
+        return compile_rval(expression, expect, scope, symbol_table, output, env_path);
+    }
+    pub fn compile_rval(expression: &Expression, expect: Expected, scope: &scope::Scope, symbol_table: &SymbolTable, output: &vector::Vec<output::LLVMInstruction>, env_path: &PathEx) : expression_compiler::CompiledValue{
+        let expect: Expected = expect;
+        if expression.type == ExpressionType::Boolean{
+            const data: &BoolExpr = expression.val as &BoolExpr;
+            return cv_bool(data.val);
+        }
+        if expression.type == ExpressionType::NullPtr{
+            if expect.kind == ExpectedKind::Type{
+                return cv_null_untyped();
+            }else if expect.kind == ExpectedKind::Anything{
+                return cv_null_untyped();
+            }
+        }
         return cv_integer(1337);
     }
-    
-    fn constant_expression_evaluation(expr: &Expression, table: &SymbolTable) : rvalue::Rvalue{
+    pub fn compile_lval(expression: &Expression, scope: &scope::Scope, symbol_table: &SymbolTable, output: &vector::Vec<output::LLVMInstruction>, env_path: &PathEx) : expression_compiler::CompiledValue{
+        return cv_integer(1337);
+    }
+    fn constant_expression_evaluation(expr: &Expression, table: &SymbolTable, env_path: &PathEx) : rvalue::Rvalue{
         return rvalue::integer(19999991);
     }
 }
@@ -1190,6 +1297,8 @@ namespace scope{
         name: u16,
         type: comp_type::CompilerType,
         is_argument: bool,
+        is_static: bool,
+        is_constant: bool,
     }
     pub struct Scope{
         values: vector::Vec<Variable>,
@@ -1215,7 +1324,7 @@ namespace scope{
         vector::free::<Variable>(&scope.values);
         vector::free::<u32>(&scope.scope_index);
     }
-    pub fn add_to_scope(val: Variable, scope: &Scope){
+    pub fn add_to_scope(scope: &Scope, val: Variable){
         vector::push::<Variable>(&scope.values, val);
     }
     pub fn enter_scope(scope: &Scope){
@@ -1229,6 +1338,13 @@ namespace scope{
         while scope.values.length > start_index {
             const var: Variable = vector::pop::<Variable>(&scope.values);
         }
+    }
+    pub fn last_variable(name: u16, scope: &Scope) : &Variable{
+        const v_len: u32 = scope.values.length;
+        if v_len == 0{
+            return null;
+        }
+        return &scope.values.array[v_len - 1];
     }
     pub fn find_variable(name: u16, scope: &Scope) : &Variable{
         const v_len: u32 = scope.values.length;
@@ -1244,14 +1360,16 @@ namespace scope{
     }
 }
 namespace comp_type{
-    pub enum CompilerTypeKind{
-        Pointer, ConstantSizeArray,
+    pub enum CompilerTypeKind: u8{
+        ConstantSizeArray,
         Primitive, Struct,
         GenericPlaceholder, GenericImplementation,
     }
     pub struct CompilerType{
         kind: CompilerTypeKind,
-        data: u64
+        pointered_deep: u8,
+        extra: u32,
+        data: u64,
     }
     pub struct PointerCompilerType{
         deep: u8,
@@ -1263,21 +1381,21 @@ namespace comp_type{
     }
     pub inline fn void() : CompilerType => primitive(primitives::VOID_TYPE);
     pub inline fn def_integer() : CompilerType => primitive(primitives::DEFAULT_INTEGER_TYPE);
-    pub inline fn primitive(val: &primitives::PrimitiveTypeInfo) : CompilerType {let x: CompilerType; x.kind = CompilerTypeKind::Primitive; x.data = bitcast::<u64>(val); return x;}
+    pub inline fn def_bool() : CompilerType => primitive(primitives::DEFAULT_BOOL_TYPE);
+    pub inline fn def_decimal() : CompilerType => primitive(primitives::DEFAULT_DECIMAL_TYPE);
+    pub inline fn def_pointer() : CompilerType{let x: CompilerType = primitive(primitives::VOID_TYPE); x.pointered_deep = 1; return x;}
+    pub inline fn primitive(val: &primitives::PrimitiveTypeInfo) : CompilerType {let x: CompilerType = CompilerType::{kind:CompilerTypeKind::Primitive, pointered_deep: 0, extra:0, data: bitcast::<u64>(val)}; return x;}
 
-    pub inline fn structure(structure_index: i32) : CompilerType {let x: CompilerType; x.kind = CompilerTypeKind::Struct; x.data = structure_index as u64; return x;}
-    pub inline fn placeholder(placeholder_name: u16) : CompilerType {let x: CompilerType; x.kind = CompilerTypeKind::GenericPlaceholder; x.data = placeholder_name as u64; return x;}
-    pub inline fn implementation(structure_index: u32, implementation_index: u32) : CompilerType {let x: CompilerType; x.kind = CompilerTypeKind::GenericImplementation; x.data = ((structure_index as u64) << 32) | (implementation_index as u64); return x;}
+    pub inline fn structure(structure_index: i32) : CompilerType {let x: CompilerType = CompilerType::{kind:CompilerTypeKind::Struct, pointered_deep: 0, extra:0, data: structure_index as u64}; return x;}
+    pub inline fn placeholder(placeholder_name: u16) : CompilerType {let x: CompilerType = CompilerType::{kind:CompilerTypeKind::GenericPlaceholder, pointered_deep: 0, extra:0, data: placeholder_name as u64}; return x;}
+    pub inline fn implementation(structure_index: u32, implementation_index: u32) : CompilerType {let x: CompilerType = CompilerType::{kind:CompilerTypeKind::GenericImplementation, pointered_deep: 0, extra: implementation_index, data: structure_index as u64}; return x;}    
     pub inline fn pointer(type: CompilerType, pointer_deep: u8) : CompilerType {
-        let x: CompilerType; x.kind = CompilerTypeKind::Pointer; 
-        const ptr: &PointerCompilerType = mem::malloc(size_of::<PointerCompilerType>()) as &PointerCompilerType;
-        ptr.deep = pointer_deep;
-        ptr.inner = type;
-        x.data = bitcast::<u64>(ptr);
+        let x: CompilerType = type;
+        x.pointered_deep = x.pointered_deep + pointer_deep;
         return x;
     }
     pub inline fn constant_array(type: CompilerType, elements_count: u32) : CompilerType {
-        let x: CompilerType; x.kind = CompilerTypeKind::ConstantSizeArray; 
+        let x: CompilerType = CompilerType::{kind:CompilerTypeKind::ConstantSizeArray, pointered_deep: 0, extra: 0, data: 0};
         const ptr: &ConstantArrayCompilerType = mem::malloc(size_of::<ConstantArrayCompilerType>()) as &ConstantArrayCompilerType;
         ptr.elements_count = elements_count;
         ptr.inner = type;
@@ -1344,7 +1462,7 @@ namespace comp_type{
             for i in 0 as u32 .. node.gen_args.length{
                 vector::push::<CompilerType>(&c, get_compiler_type(&node.gen_args.array[i], g_path, table));
             }
-            const gi: &GenericStructSymbolTableEntry = ptr.val as &GenericStructSymbolTableEntry;
+            const gi: &GenericStructSymbolTableEntry = &table.generic_structs.array[ptr.data_index];
             
             let impl_index: u32 = 65535;
             for i in 0 as u32 .. gi.implementations.length{
@@ -1381,7 +1499,8 @@ namespace comp_type{
         } else if type.type == TypeType::ConstantSizeArray{
             const node: &ConstantSizeArrayType = type.val as &ConstantSizeArrayType;
             const inner: CompilerType = get_compiler_type_internal(&node.inner, l_path, g_path, table);
-            let ev: rvalue::Rvalue = expression_compiler::constant_expression_evaluation(&node.size, table);
+            let loc: PathEx = path_to_path_ex(g_path);
+            let ev: rvalue::Rvalue = expression_compiler::constant_expression_evaluation(&node.size, table, &loc);
             if ev.kind != rvalue::RvalueKind::Integer{
                 process::throw("TODO, ERROR");
             }
@@ -1442,68 +1561,74 @@ namespace comp_type{
     pub fn compiler_type_push_internal(type: &CompilerType, path: &PathEx, symbol_table: &SymbolTable, stdout: &string::String, inside_generic: bool){
         if type.kind == CompilerTypeKind::Primitive{
             const node: &primitives::PrimitiveTypeInfo = bitcast::<&primitives::PrimitiveTypeInfo>(type.data);
-            string::append_str(stdout, node.llvm_signature, string_utils::c_str_len(node.llvm_signature));
+            if type.pointered_deep > 0 && node.layout.size == 0{
+                string::append_str(stdout, "ptr", 3);
+                return;
+            }else{
+                string::append_str(stdout, node.llvm_signature, string_utils::c_str_len(node.llvm_signature));
+            }
         } else if type.kind == CompilerTypeKind::Struct{
-            const struct_index: u32 = bitcast::<usize>(type.data) as u32;
+            const struct_index: u32 = type.data as u32;
             const s: &SymbolTableEntry = &symbol_table.symbols.array[struct_index];
             if (s.tag & SymbolTableTag::OnlyTypesMask) == SymbolTableTag::Struct{
-                const c: &StructSymbolTableEntry = s.val as &StructSymbolTableEntry;
-                if !inside_generic{
-                    string::append(stdout, '%');
-                }
+                const c: &StructSymbolTableEntry = &symbol_table.structs.array[s.data_index];
+                if !inside_generic{ string::append(stdout, '%'); }
                 string::append_str(stdout, c.llvm_signature.data, c.llvm_signature.len);
             } else if (s.tag & SymbolTableTag::OnlyTypesMask) == SymbolTableTag::Enum{
-                const e: &EnumSymbolTableEntry = s.val as &EnumSymbolTableEntry;
+                const e: &EnumSymbolTableEntry = &symbol_table.enums.array[s.data_index];
                 compiler_type_push_internal(&e.representative_type, path, symbol_table, stdout, inside_generic);
-            }else{
-                process::throw("Not expected!");
             }
-        } else if type.kind == CompilerTypeKind::Pointer{
-            string::append_str(stdout, "ptr", 3);
-            //const node: &PointerCompilerType = bitcast::<&PointerCompilerType>(type.data);
-            //compiler_type_push_internal(&node.inner,path, symbol_table, stdout, inside_generic);
-            //for i in 0 as u8 .. node.deep{
-            //    string::append(stdout, '*');
-            //}
         } else if type.kind == CompilerTypeKind::GenericImplementation{
-            let structure_index: u32 = (type.data >> 32) as u32;
-            let implementation_index: u32 = (type.data & 0xFFFFFFFF) as u32;
+            let structure_index: u32 = type.data as u32;
+            let implementation_index: u32 = type.extra;
 
             const s: &SymbolTableEntry = &symbol_table.symbols.array[structure_index];
-            if (s.tag & SymbolTableTag::OnlyTypesMask) == SymbolTableTag::GenericStruct{
-                const c: &GenericStructSymbolTableEntry = s.val as &GenericStructSymbolTableEntry;
-                const x: &Implementation = &c.implementations.array[implementation_index];
-                if !inside_generic{
-                    string::append(stdout, '%');
-                }
-                string::append_str(stdout, x.llvm_signature.data, x.llvm_signature.len);
-            } else{
-                process::throw("Not expected! S");
-            }
+            const c: &GenericStructSymbolTableEntry = &symbol_table.generic_structs.array[s.data_index];
+            const imp: &Implementation = &c.implementations.array[implementation_index];
+            
+            if !inside_generic{ string::append(stdout, '%'); }
+            string::append_str(stdout, imp.llvm_signature.data, imp.llvm_signature.len);
+            
         } else if type.kind == CompilerTypeKind::ConstantSizeArray{
             const node: &ConstantArrayCompilerType = bitcast::<&ConstantArrayCompilerType>(type.data);
             string::append(stdout, '[');
-
             string::append_u64(stdout, node.elements_count as u64);
-
             string::append_str(stdout, " x ", 3);
+            
             compiler_type_push_internal(&node.inner, path, symbol_table, stdout, inside_generic);
             string::append(stdout, ']');
-        } 
+        }
+        if type.pointered_deep > 0 {
+            for i in 0 as u8 .. type.pointered_deep { string::append(stdout, '*'); }
+            //string::append_str(stdout, "ptr", 3);
+        }
+    }
+
+    pub fn clone(var: &CompilerType) : CompilerType{
+        let x: CompilerType = CompilerType::{
+            kind: var.kind, 
+            pointered_deep: var.pointered_deep, 
+            extra: var.extra, 
+            data: var.data
+        };
+        return x;
     }
     pub fn equal(l: &CompilerType, r: &CompilerType): bool{
-        if l.kind != r.kind{
+        if l.kind != r.kind || l.pointered_deep != r.pointered_deep {
             return false;
         }
-        if l.kind == CompilerTypeKind::Pointer{
-            const lp: &PointerCompilerType = bitcast::<&PointerCompilerType>(l.data as usize);
-            const rp: &PointerCompilerType = bitcast::<&PointerCompilerType>(r.data as usize);
-            return lp.deep == rp.deep && equal(&lp.inner, &rp.inner);
+        if l.kind == CompilerTypeKind::ConstantSizeArray {
+            const lp: &ConstantArrayCompilerType = bitcast::<&ConstantArrayCompilerType>(l.data as usize);
+            const rp: &ConstantArrayCompilerType = bitcast::<&ConstantArrayCompilerType>(r.data as usize);
+            return lp.elements_count == rp.elements_count && equal(&lp.inner, &rp.inner);
         }
-        return l.data == r.data;
+        return l.data == r.data && l.extra == r.extra;
     }
     pub fn free(var: &CompilerType){
-        if var.kind == CompilerTypeKind::Pointer && var.data != 0{
+        if var.kind == CompilerTypeKind::ConstantSizeArray && var.data != 0 {
+            const ptr: &ConstantArrayCompilerType = bitcast::<&ConstantArrayCompilerType>(var.data as usize);
+            comp_type::free(&ptr.inner);
+            
             mem::free(bitcast::<&void>(var.data));
             var.data = 0;
         }
@@ -1520,12 +1645,12 @@ namespace rvalue{
         kind: RvalueKind,
         data: u64
     }
-    pub fn register(val: u32) : Rvalue {let x: Rvalue; x.kind = RvalueKind::Register; x.data = val as u64; return x;}
-    pub fn integer(val: u64) : Rvalue {let x: Rvalue; x.kind = RvalueKind::Integer; x.data = val; return x;}
-    pub fn decimal(val: f64) : Rvalue {let x: Rvalue; x.kind = RvalueKind::Decimal; x.data = bitcast::<u64>(val); return x;}
-    pub fn boolean(val: bool) : Rvalue {let x: Rvalue; x.kind = RvalueKind::Boolean; x.data = val as u64; return x;}
-    pub fn nil() : Rvalue {let x: Rvalue; x.kind = RvalueKind::Null; return x;}
-    pub fn void() : Rvalue {let x: Rvalue; x.kind = RvalueKind::Void; return x;}
+    pub fn register(val: u32) : Rvalue {let x: Rvalue = Rvalue::{kind:RvalueKind::Register, data: val as u64}; return x;}
+    pub fn integer(val: u64) : Rvalue {let x: Rvalue = Rvalue::{kind:RvalueKind::Integer, data: val}; return x;}
+    pub fn decimal(val: f64) : Rvalue {let x: Rvalue = Rvalue::{kind:RvalueKind::Decimal, data: bitcast::<u64>(val)}; return x;}
+    pub fn boolean(val: bool) : Rvalue {let x: Rvalue = Rvalue::{kind:RvalueKind::Boolean, data: val as u64}; return x;}
+    pub fn nil() : Rvalue {let x: Rvalue = Rvalue::{kind:RvalueKind::Null, data:0}; return x;}
+    pub fn void() : Rvalue {let x: Rvalue = Rvalue::{kind:RvalueKind::Void, data:0}; return x;}
 }
 namespace layout{
     pub struct Layout { size: u16, align: u16 }
@@ -1553,9 +1678,11 @@ namespace primitives{
     }
     pub static VOID_TYPE: &PrimitiveTypeInfo;
     pub static DEFAULT_INTEGER_TYPE: &PrimitiveTypeInfo;
+    pub static DEFAULT_BOOL_TYPE: &PrimitiveTypeInfo;
+    pub static DEFAULT_DECIMAL_TYPE: &PrimitiveTypeInfo;
     pub static PRIMITIVE_TYPES_INFO: [PrimitiveTypeInfo; 15];
     pub fn STATIC_primitives() {
-            let x: PrimitiveTypeInfo = PrimitiveTypeInfo::{
+        let x: PrimitiveTypeInfo = PrimitiveTypeInfo::{
             name: "void",llvm_signature: "void",
             layout: layout::void(),
             kind: PrimitiveKind::Void
@@ -1639,7 +1766,9 @@ namespace primitives{
 
 
         VOID_TYPE = &PRIMITIVE_TYPES_INFO[0];
+        DEFAULT_BOOL_TYPE = &PRIMITIVE_TYPES_INFO[1];
         DEFAULT_INTEGER_TYPE = &PRIMITIVE_TYPES_INFO[9];
+        DEFAULT_DECIMAL_TYPE = &PRIMITIVE_TYPES_INFO[13];
     }
     fn find_primitive_type(name: &i8, len: i32) : &PrimitiveTypeInfo{
         const idx: i32 = find_primitive_type_index(name, len);
@@ -1708,21 +1837,14 @@ namespace primitives{
 }
 namespace output{
     pub enum LLVMInstructionKind{
-        ReturnVoid,
-        Unreachable,
-        Empty,
-
-        Label,
-        JumpTo,
-        Return,
-
-        Branch,
+        ReturnVoid, Unreachable, Empty,
+        Label, JumpTo, Return, Branch,
+        StackAlloc, BinaryOp, Load, LoadIntegerValue, LoadNull,
+        Store, GetElementPtr, GetElementPtrArray, Cast, ReturnOp,
     }
     pub struct LLVMInstruction{
         kind: LLVMInstructionKind,
-        data_1: u32,
-        data_2: u32,
-        data_3: u32,
+        data: [u8; 32]
     }
     pub fn push_instructions(instructions: &vector::Vec<LLVMInstruction>, sym_table: &SymbolTable, output: &string::String){
         for x in 0 as u32 .. instructions.length{
@@ -1737,19 +1859,19 @@ namespace output{
         }else if instruction.kind == LLVMInstructionKind::Empty{
             string::append_str(output, "\tadd i32 0, 0\n", 14);
         }else if instruction.kind == LLVMInstructionKind::Label{
-            const id: u32 = instruction.data_1 as u32;
+            const id: u32 = *(&instruction.data[0] as &u32);
             string::append(output, 'l');
             string::append_u64(output, id as u64);
             string::append_str(output, ":\n", 2);
         }else if instruction.kind == LLVMInstructionKind::JumpTo{
-            const id: u32 = instruction.data_1 as u32;
+            const id: u32 = *(&instruction.data[0] as &u32);
             string::append_str(output, "\tbr label %l", 12);
             string::append_u64(output, id as u64);
             string::append(output, '\n');
         }else if instruction.kind == LLVMInstructionKind::Branch{
-            const id: u32 = instruction.data_1 as u32;
-            const thn: u32 = instruction.data_2 as u32;
-            const els: u32 = instruction.data_3 as u32;
+            const id: u32 = *(&instruction.data[0] as &u32);
+            const thn: u32 = *(&instruction.data[4] as &u32);
+            const els: u32 = *(&instruction.data[8] as &u32);
 
             string::append_str(output, "\tbr i1 %t", 9);
             string::append_u64(output, id as u64);
@@ -1759,16 +1881,236 @@ namespace output{
             string::append_u64(output, els as u64);
             string::append(output, '\n');
         }else if instruction.kind == LLVMInstructionKind::Return{
-            const id: u32 = instruction.data_1 as u32;
+            const id: u32 = *(&instruction.data[0] as &u32);
             string::append_str(output, "\tret %t", 7);
             string::append_u64(output, id as u64);
+            string::append(output, '\n');
+        }else if instruction.kind == LLVMInstructionKind::StackAlloc{
+            const x: &string::String = *(&instruction.data[8] as &&string::String);
+            string::append_str(output, "\t%t", 3);
+            string::append_u64(output, *(&instruction.data[0] as &u32) as u64);
+            string::append_str(output, " = alloca ", 10);
+            string::append_str(output, x.data, x.len);
+            if *(&instruction.data[4] as &u32) != 4294967295{
+                string::append_str(output, ", i32 %t", 8);
+                string::append_u64(output, *(&instruction.data[4] as &u32) as u64);
+            }
+            string::append(output, '\n');
+        }else if instruction.kind == LLVMInstructionKind::BinaryOp{
+            const target: u32 = *(&instruction.data[0] as &u32);
+            const src1: u32 = *(&instruction.data[4] as &u32);
+            const src2: u32 = *(&instruction.data[8] as &u32);
+            const op: &i8 = *(&instruction.data[16] as &&i8);
+            const ty: &string::String = *(&instruction.data[24] as &&string::String);
+
+            string::append_str(output, "\t%t", 3);
+            string::append_u64(output, target as u64);
+            string::append_str(output, " = ", 3);
+            
+            string::append_str(output, op, string_utils::c_str_len(op));
+
+            string::append_str(output, " ", 1);
+            string::append_str(output, ty.data, ty.len);
+            string::append_str(output, " %t", 3);
+            string::append_u64(output, src1 as u64);
+            string::append_str(output, ", %t", 4);
+            string::append_u64(output, src2 as u64);
+            string::append(output, '\n');
+        }else if instruction.kind == LLVMInstructionKind::Cast{
+            const target: u32 = *(&instruction.data[0] as &u32);
+            const src: u32 = *(&instruction.data[4] as &u32);
+            const op: &i8 = *(&instruction.data[8] as &&i8);
+            const from_ty: &string::String = *(&instruction.data[16] as &&string::String);
+            const to_ty: &string::String = *(&instruction.data[24] as &&string::String);
+
+            string::append_str(output, "\t%t", 3);
+            string::append_u64(output, target as u64);
+            string::append_str(output, " = ", 3);
+            
+            string::append_str(output, op, string_utils::c_str_len(op));
+
+            string::append_str(output, " ", 1);
+            string::append_str(output, from_ty.data, from_ty.len);
+            string::append_str(output, " %t", 3);
+            string::append_u64(output, src as u64);
+            string::append_str(output, " to ", 4);
+            string::append_str(output, to_ty.data, to_ty.len);
+            string::append(output, '\n');
+        }else if instruction.kind == LLVMInstructionKind::Load{
+            const target: u32 = *(&instruction.data[0] as &u32);
+            const src: u32 = *(&instruction.data[4] as &u32);
+            const ty: &string::String = *(&instruction.data[8] as &&string::String);
+
+            string::append_str(output, "\t%t", 3);
+            string::append_u64(output, target as u64);
+            string::append_str(output, " = load ", 8);
+            string::append_str(output, ty.data, ty.len);
+            string::append_str(output, ", ", 2);
+            string::append_str(output, ty.data, ty.len);
+            string::append_str(output, "* %t", 4);
+            string::append_u64(output, src as u64);
+            string::append(output, '\n');
+        }else if instruction.kind == LLVMInstructionKind::LoadIntegerValue{
+            const target: u32 = *(&instruction.data[0] as &u32);
+            const val: u64 = *(&instruction.data[4] as &u64);
+            const ty: &string::String = *(&instruction.data[12] as &&string::String);
+            string::append_str(output, "\t%t", 3);
+            string::append_u64(output, target as u64);
+            string::append_str(output, " = add ", 7);
+            string::append_str(output, ty.data, ty.len);
+            string::append_str(output, " ", 1);
+            string::append_u64(output, val);
+            string::append_str(output, ", 0", 3);
+            string::append(output, '\n');
+        }else if instruction.kind == LLVMInstructionKind::LoadNull{
+            const target: u32 = *(&instruction.data[0] as &u32);
+            const ty: &string::String = *(&instruction.data[12] as &&string::String);
+            string::append_str(output, "\t%t", 3);
+            string::append_u64(output, target as u64);
+            string::append_str(output, " = inttoptr i64 0 to ", 21);
+            string::append_str(output, ty.data, ty.len);
+            string::append(output, '\n');
+        }else if instruction.kind == LLVMInstructionKind::Store{
+            const target: u32 = *(&instruction.data[0] as &u32);
+            const src: u32 = *(&instruction.data[4] as &u32);
+            const ty: &string::String = *(&instruction.data[8] as &&string::String);
+
+            string::append_str(output, "\tstore ", 7);
+            string::append_str(output, ty.data, ty.len);
+            string::append_str(output, " %t", 3);
+            string::append_u64(output, src as u64);
+            string::append_str(output, ", ", 2);
+            string::append_str(output, ty.data, ty.len);
+            string::append_str(output, "* %t", 4);
+            string::append_u64(output, target as u64);
+            string::append(output, '\n');
+        }else if instruction.kind == LLVMInstructionKind::GetElementPtr{
+            const target: u32 = *(&instruction.data[0] as &u32);
+            const src: u32 = *(&instruction.data[4] as &u32);
+            const element: u32 = *(&instruction.data[8] as &u32);
+            const ty: &string::String = *(&instruction.data[16] as &&string::String);
+
+            string::append_str(output, "\t%t", 3);
+            string::append_u64(output, target as u64);
+            string::append_str(output, " = getelementptr inbounds ", 27);
+            string::append_str(output, ty.data, ty.len);
+            string::append_str(output, ", ", 2);
+            string::append_str(output, ty.data, ty.len);
+            string::append_str(output, "* %t", 4);
+            string::append_u64(output, src as u64);
+            string::append_str(output, ", i32 0, i32 ", 13);
+            string::append_u64(output, element as u64);
+            string::append(output, '\n');
+        }else if instruction.kind == LLVMInstructionKind::GetElementPtrArray{
+            const target: u32 = *(&instruction.data[0] as &u32);
+            const src: u32 = *(&instruction.data[4] as &u32);
+            const element: u32 = *(&instruction.data[8] as &u32);
+            const ty: &string::String = *(&instruction.data[16] as &&string::String);
+
+            string::append_str(output, "\t%t", 3);
+            string::append_u64(output, target as u64);
+            string::append_str(output, " = getelementptr inbounds ", 27);
+            string::append_str(output, ty.data, ty.len);
+            string::append_str(output, ", ", 2);
+            string::append_str(output, ty.data, ty.len);
+            string::append_str(output, "* %t", 4);
+            string::append_u64(output, src as u64);
+            string::append_str(output, ", i32 ", 6);
+            string::append_u64(output, element as u64);
+            string::append(output, '\n');
+        }else if instruction.kind == LLVMInstructionKind::ReturnOp{
+            const src: u32 = *(&instruction.data[0] as &u32);
+            const ty: &string::String = *(&instruction.data[8] as &&string::String);
+
+            string::append_str(output, "\tret ", 5);
+            string::append_str(output, ty.data, ty.len);
+            string::append_str(output, " %t", 3);
+            string::append_u64(output, src as u64);
             string::append(output, '\n');
         }
     }
     pub fn ret_void() : LLVMInstruction {let x: LLVMInstruction; x.kind = LLVMInstructionKind::ReturnVoid; return x;}
     pub fn unreachable() : LLVMInstruction {let x: LLVMInstruction; x.kind = LLVMInstructionKind::Unreachable; return x;}
-    pub fn ret(register: u32) : LLVMInstruction {let x: LLVMInstruction; x.kind = LLVMInstructionKind::Return; x.data_1 = register; return x;}
-    pub fn label(label_id: u32) : LLVMInstruction {let x: LLVMInstruction; x.kind = LLVMInstructionKind::Label; x.data_1 = label_id; return x;}
-    pub fn jump_to(label_id: u32) : LLVMInstruction {let x: LLVMInstruction; x.kind = LLVMInstructionKind::JumpTo; x.data_1 = label_id; return x;}
-    pub fn branch(condition_register: u32, then_label: u32, else_label: u32) : LLVMInstruction {let x: LLVMInstruction; x.kind = LLVMInstructionKind::Branch; x.data_1 = condition_register; x.data_2 = then_label; x.data_3 = else_label; return x;}
+    
+    pub fn ret(register: u32) : LLVMInstruction {let x: LLVMInstruction; x.kind = LLVMInstructionKind::Return; *(&x.data[0] as &u32) = register; return x;}
+    pub fn label(label_id: u32) : LLVMInstruction {let x: LLVMInstruction; x.kind = LLVMInstructionKind::Label; *(&x.data[0] as &u32) = label_id; return x;}
+    pub fn jump_to(label_id: u32) : LLVMInstruction {let x: LLVMInstruction; x.kind = LLVMInstructionKind::JumpTo; *(&x.data[0] as &u32) = label_id; return x;}
+    pub fn branch(condition_register: u32, then_label: u32, else_label: u32) : LLVMInstruction {let x: LLVMInstruction; x.kind = LLVMInstructionKind::Branch; *(&x.data[0] as &u32) = condition_register; *(&x.data[4] as &u32) = then_label; *(&x.data[8] as &u32) = else_label; return x;}
+    
+    pub fn alloc_stack(target_reg: u32, count_register: u32, alloc_type_llvm_string: &string::String) : LLVMInstruction {let x: LLVMInstruction; x.kind = LLVMInstructionKind::StackAlloc;*(&x.data[0] as &u32) = target_reg; *(&x.data[4] as &u32) = count_register;*(&x.data[8] as &&string::String) = alloc_type_llvm_string;return x;}
+    pub fn alloc(target_reg: u32, alloc_type_llvm_string: &string::String) : LLVMInstruction {let x: LLVMInstruction; x.kind = LLVMInstructionKind::StackAlloc;*(&x.data[0] as &u32) = target_reg; *(&x.data[4] as &u32) = 4294967295;*(&x.data[8] as &&string::String) = alloc_type_llvm_string;return x;}
+
+    pub fn binary_operator(target_reg: u32, operation: &i8, type_llvm_string: &string::String, src_1_reg: u32, src_2_reg: u32) : LLVMInstruction {
+        let x: LLVMInstruction; x.kind = LLVMInstructionKind::BinaryOp;
+        *(&x.data[0] as &u32) = target_reg;
+        *(&x.data[4] as &u32) = src_1_reg;
+        *(&x.data[8] as &u32) = src_2_reg;
+        *(&x.data[16] as &&i8) = operation;
+        *(&x.data[24] as &&string::String) = type_llvm_string;
+        return x;
+    }
+
+    pub fn cast(target_reg: u32, operation: &i8, from_type_llvm_string: &string::String, to_type_llvm_string: &string::String, src_reg: u32) : LLVMInstruction {
+        let x: LLVMInstruction; x.kind = LLVMInstructionKind::Cast;
+        *(&x.data[0] as &u32) = target_reg;
+        *(&x.data[4] as &u32) = src_reg;
+        *(&x.data[8] as &&i8) = operation;
+        *(&x.data[16] as &&string::String) = from_type_llvm_string;
+        *(&x.data[24] as &&string::String) = to_type_llvm_string;
+        return x;
+    }
+
+    pub fn load(target_reg: u32, type_llvm_string: &string::String, src_reg: u32) : LLVMInstruction {
+        let x: LLVMInstruction; x.kind = LLVMInstructionKind::Load;
+        *(&x.data[0] as &u32) = target_reg;
+        *(&x.data[4] as &u32) = src_reg;
+        *(&x.data[8] as &&string::String) = type_llvm_string;
+        return x;
+    }
+    pub fn load_integer(target_reg: u32, type_llvm_string: &string::String, val: u64) : LLVMInstruction {
+        let x: LLVMInstruction; x.kind = LLVMInstructionKind::LoadIntegerValue;
+        *(&x.data[0] as &u32) = target_reg;
+        *(&x.data[4] as &u64) = val;
+        *(&x.data[12] as &&string::String) = type_llvm_string;
+        return x;
+    }
+    pub fn load_null(target_reg: u32, type_llvm_string: &string::String) : LLVMInstruction {
+        let x: LLVMInstruction; x.kind = LLVMInstructionKind::LoadNull;
+        *(&x.data[0] as &u32) = target_reg;
+        *(&x.data[4] as &u64) = 0;
+        *(&x.data[12] as &&string::String) = type_llvm_string;
+        return x;
+    }
+    pub fn store(target_reg: u32, type_llvm_string: &string::String, src_reg: u32) : LLVMInstruction {
+        let x: LLVMInstruction; x.kind = LLVMInstructionKind::Store;
+        *(&x.data[0] as &u32) = target_reg;
+        *(&x.data[4] as &u32) = src_reg;
+        *(&x.data[8] as &&string::String) = type_llvm_string;
+        return x;
+    }
+
+    pub fn get_element_ptr(target_reg: u32, type_llvm_string: &string::String, src_reg: u32, element: u32) : LLVMInstruction {
+        let x: LLVMInstruction; x.kind = LLVMInstructionKind::GetElementPtr;
+        *(&x.data[0] as &u32) = target_reg;
+        *(&x.data[4] as &u32) = src_reg;
+        *(&x.data[8] as &u32) = element;
+        *(&x.data[16] as &&string::String) = type_llvm_string;
+        return x;
+    }
+
+    pub fn get_element_ptr_in_array(target_reg: u32, type_llvm_string: &string::String, src_reg: u32, element: u32) : LLVMInstruction {
+        let x: LLVMInstruction; x.kind = LLVMInstructionKind::GetElementPtrArray;
+        *(&x.data[0] as &u32) = target_reg;
+        *(&x.data[4] as &u32) = src_reg;
+        *(&x.data[8] as &u32) = element;
+        *(&x.data[16] as &&string::String) = type_llvm_string;
+        return x;
+    }
+
+    pub fn return_op(type_llvm_string: &string::String, src_reg: u32) : LLVMInstruction {
+        let x: LLVMInstruction; x.kind = LLVMInstructionKind::ReturnOp;
+        *(&x.data[0] as &u32) = src_reg;
+        *(&x.data[8] as &&string::String) = type_llvm_string;
+        return x;
+    }
 }
