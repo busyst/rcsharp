@@ -614,6 +614,7 @@ fn parse(token_array: &TokenData, token_len: u32, symbol_vector: &vector::Vec<st
             }else if tokens[index].token_type == TokenType::FatArrow {
                 index = index + 1;
                 const expr_node: &ReturnNode = mem::malloc(size_of::<ReturnNode>()) as &ReturnNode;
+                expr_node.has_value = true;
                 expr_node.expression = parse_expression(tokens, &index, len);
                 expect(tokens, &index, len, TokenType::SemiColon, "Expected ';' after expression function");
                 let stmt: Stmt = Stmt::{

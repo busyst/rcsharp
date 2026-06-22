@@ -1498,7 +1498,8 @@ define %struct.layout.Layout @layout.eight(){
 	ret %t1
 }
 define i1 @layout.equal(%struct.layout.Layout* %a0, %struct.layout.Layout* %a1){
-	ret void
+	%t2 = add i32 1337, 0
+	ret %t2
 }
 define void @layout.STATIC_layout(){
 	ret void
@@ -2289,7 +2290,8 @@ define i1 @char_utils.is_alnum(i8 %a0){
 	ret %t1
 }
 define i1 @char_utils.is_alpha(i8 %a0){
-	ret void
+	%t1 = add i32 1337, 0
+	ret %t1
 }
 define i1 @char_utils.is_cntrl(i8 %a0){
 	%t1 = add i32 1337, 0

@@ -11167,6 +11167,7 @@ then22:
 	%tmp132 = add i32 %tmp131, 1
 	store i32 %tmp132, i32* %v0
 	%tmp133 = call i8* @mem.malloc(i64 24)
+	store i1 true, i1* %tmp133
 	%tmp134 = getelementptr inbounds %struct.ReturnNode, %struct.ReturnNode* %tmp133, i32 0, i32 1
 	%tmp135 = call %struct.Expression @parse_expression(%struct.TokenData* %token_array, i32* %v0, i32 %token_len)
 	store %struct.Expression %tmp135, %struct.Expression* %tmp134
