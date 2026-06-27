@@ -4,7 +4,7 @@
 #include("./parser_type.rcsharp")
 #include("./parser.rcsharp")
 fn main(){
-    rcsharp_compile("D:/Projects/rcsharp/src.rcsharp", "D:/Projects/rcsharp/output_v2.ll");
+    rcsharp_compile("D:/Projects/rcsharp/.code_snippets/compier_tests/hello_world/test.rcsharp", "D:/Projects/rcsharp/output_v2.ll");
 }
 enum SymbolTableTag{ 
     Function = 0,
@@ -40,6 +40,7 @@ struct StaticSymbolTableEntry { type: comp_type::CompilerType, has_initialized_v
 struct SymbolTable{
     symbols: vector::Vec<SymbolTableEntry>,
     symbol_vector: &vector::Vec<string::String>,
+    constant_strings_used: vector::Vec<u32>,
 
     functions: vector::Vec<FunctionSymbolTableEntry>,
     generic_functions: vector::Vec<GenericFunctionSymbolTableEntry>,
@@ -261,61 +262,7 @@ fn debug_dump_type(expr: &Type, symbol_vector: &vector::Vec<string::String>, std
     }
 }
 fn debug_dump_expression(expr: &Expression, symbol_vector: &vector::Vec<string::String>, stdout: &string::String) {
-    if expr.type == ExpressionType::Integer || expr.type == ExpressionType::Decimal || expr.type == ExpressionType::Name{
-        const data: &IntegerExpr = expr.val as &IntegerExpr;
-        string::append_str(stdout, symbol_vector.array[data.idx].data, symbol_vector.array[data.idx].len);
-        return;
-    }
-    if expr.type == ExpressionType::Char{
-        const data: &CharExpr = expr.val as &CharExpr;
-        string::append(stdout, '\'');
-        if data.val == '\\'{
-            string::append(stdout, '\\');
-            string::append(stdout, '\\');
-        } else if data.val == '\''{
-            string::append(stdout, '\\');
-            string::append(stdout, '\'');
-        }
-        string::append(stdout, '\'');
-        return;
-    }
-    if expr.type == ExpressionType::NullPtr{
-        string::append_str(stdout, "null", 4);
-        return;
-    }
-    if expr.type == ExpressionType::StringConst{
-        const data: &StringConstExpr = expr.val as &StringConstExpr;
-        string::append(stdout, '"');
-        string::append_str(stdout, symbol_vector.array[data.idx].data, symbol_vector.array[data.idx].len);
-        string::append(stdout, '"');
-        return;
-    }
-    if expr.type == ExpressionType::Call{
-        const data: &CallExpr = expr.val as &CallExpr;
-        debug_dump_expression(&data.lval, symbol_vector, stdout);
-        if data.generics.length != 0{
-            string::append(stdout, ':');
-            string::append(stdout, ':');
-            string::append(stdout, '<');
-            for i in 0 as u32 .. data.generics.length{
-                debug_dump_type(&data.generics.array[i], symbol_vector, stdout);
-                if i != data.generics.length - 1{
-                    string::append_str(stdout, ", ", 2);
-                }
-            }
-            string::append(stdout, '>');
-        }
 
-        string::append(stdout, '(');
-        for i in 0 as u32 .. data.expr.length{
-            debug_dump_expression(&data.expr.array[i], symbol_vector, stdout);
-            if i != data.expr.length - 1{
-                string::append_str(stdout, ", ", 2);
-            }
-        }
-        string::append(stdout, ')');
-        return;
-    }
     if expr.type == ExpressionType::StaticAccess{
         const data: &StaticAccessExpr = expr.val as &StaticAccessExpr;
         debug_dump_expression(&data.rval, symbol_vector, stdout);
@@ -679,7 +626,7 @@ fn compile_internal_sym_table(path: &Path, statement_vector: &vector::Vec<Stmt>,
                 representative_type: comp_type::def_integer(),
                 fields: vector::new::<EnumDefinedField>(),
             };
-            if node.has_value{
+            if node.has_value {
                 sym_entry.representative_type = comp_type::get_compiler_type(&node.enum_type, path, symbol_table);
             }
             let indexer: u64 = 0;
@@ -687,7 +634,7 @@ fn compile_internal_sym_table(path: &Path, statement_vector: &vector::Vec<Stmt>,
                 const node: &EnumField = &node.fields.array[x];
                 let edf: EnumDefinedField;
                 edf.name = node.name;
-                if node.has_value{
+                if node.has_value {
                     let rval: rvalue::Rvalue = expression_compiler::constant_expression_evaluation(&node.value, symbol_table, &loc);
                     if rval.kind != rvalue::RvalueKind::Integer{
                         process::throw("TODO");
@@ -736,7 +683,7 @@ fn compile_internal_sym_table(path: &Path, statement_vector: &vector::Vec<Stmt>,
                     initialized_value: rvalue::void(),
                     type: comp_type::get_compiler_type(&node.var_type, path, symbol_table)
                 };
-                if node.has_value{
+                if node.has_value {
                     sym_entry.has_initialized_value = true;
                     sym_entry.initialized_value = expression_compiler::constant_expression_evaluation(&node.expression, symbol_table, &loc);
                 }
@@ -899,7 +846,7 @@ namespace compile_internals{
                 let llvm_ir_vec: vector::Vec<output::LLVMInstruction> = vector::new::<output::LLVMInstruction>();
                 let scope: scope::Scope = scope::new();
                 scope.temp_counter = node.arguments.length;
-                compile_body(&node.body, 0, 0, &scope, symbol_table, &llvm_ir_vec);
+                compile_body(&node.body, i, 0, &scope, symbol_table, &llvm_ir_vec);
                 let vd: comp_type::CompilerType = comp_type::void();
                 if comp_type::equal(&node.return_type, &vd){
                     let rv: bool = false;
@@ -919,6 +866,20 @@ namespace compile_internals{
             }
         }
     }
+    fn sym_table_push_constant_data(symbol_table: &SymbolTable, stdout: &string::String) {
+        const len: u32 = symbol_table.constant_strings_used.length;
+        const ptr: &u32 = symbol_table.constant_strings_used.array;
+        const sym_array: &string::String = symbol_table.symbol_vector.array;
+        for i in 0 as u32 .. len{
+            string::append_str(stdout, "@.d", 3);
+            string::append_u64(stdout, i as u64);
+            string::append_str(stdout, " = constant [", 13);
+            string::append_u64(stdout, sym_array[ptr[i]].len as u64);
+            string::append_str(stdout, " x i8] c\"", 9);
+            string::append_str(stdout, sym_array[ptr[i]].data, sym_array[ptr[i]].len);
+            string::append_str(stdout, "\"\n", 2);
+        }
+    }
     fn compile_body(statement_vector: &vector::Vec<Stmt>, function_index: u32, implementation_index: u32, scope: &scope::Scope, symbol_table: &SymbolTable, output: &vector::Vec<output::LLVMInstruction>) {
         const p: &SymbolTableEntry = &symbol_table.symbols.array[function_index];
         let f_path: PathEx = p.path;
@@ -929,7 +890,7 @@ namespace compile_internals{
         }
         let loc: PathEx = f_path;
         loc.len = loc.len - 1;
-
+        const func: &FunctionSymbolTableEntry = &symbol_table.functions.array[p.data_index];
         let index: u32 = 0;
         const len: u32 = statement_vector.length;
         while index < len {
@@ -947,15 +908,17 @@ namespace compile_internals{
                     var.is_constant = true;
                 }
                 const var_id: u32 = scope.temp_counter; scope.temp_counter = scope.temp_counter + 1;
-
+                var.register = var_id;
+                
                 const str: &string::String = mem::malloc(size_of::<string::String>()) as &string::String;
                 *str = string::empty(); 
                 comp_type::compiler_type_push(&var.type, &loc, symbol_table, str);
                 vector::push::<output::LLVMInstruction>(output, output::alloc(var_id, str));
                 /////////////////
-                if node.has_value{
+                if node.has_value {
                     let cv: expression_compiler::CompiledValue = expression_compiler::compile(&node.expression, expression_compiler::expect_compiler_type(&var.type), scope, symbol_table, output, &loc);
-
+                    let val_reg: u32 = expression_compiler::cv_to_register(&cv, scope, symbol_table, output, &loc);
+                    vector::push::<output::LLVMInstruction>(output, output::store(var_id, str, val_reg));
                 }
                 scope::add_to_scope(scope, var);
                 index = index + 1;
@@ -965,14 +928,16 @@ namespace compile_internals{
                 const statement: &ReturnNode = bitcast::<&ReturnNode>(statement.node_ptr);
                 if !statement.has_value{
                     vector::push::<output::LLVMInstruction>(output, output::ret_void());
-                    index = index + 1;
-                    continue;
+                    break; // Skip dead code
                 }
+                const str: &string::String = mem::malloc(size_of::<string::String>()) as &string::String;
+                *str = string::empty(); 
+                comp_type::compiler_type_push(&func.return_type, &loc, symbol_table, str);
+
                 let check_val: expression_compiler::CompiledValue = expression_compiler::compile(&statement.expression, expression_compiler::expect_anything(), scope, symbol_table, output, &loc);
                 const check_val_reg: u32 = expression_compiler::cv_to_register(&check_val, scope, symbol_table, output, &loc);
-                vector::push::<output::LLVMInstruction>(output, output::ret(check_val_reg));
-                index = index + 1;
-                continue;
+                vector::push::<output::LLVMInstruction>(output, output::return_op(str, check_val_reg));
+                break; // Skip dead code
             }
             if statement.statement_type == StatementType::Expression{
                 const node: &ExpressionNode = statement.node_ptr as &ExpressionNode;
@@ -985,16 +950,14 @@ namespace compile_internals{
                     process::throw("Continue outside of loop");
                 }
                 vector::push::<output::LLVMInstruction>(output, output::jump_to(scope.current_logic_id as u32));
-                index = index + 1;
-                continue;
+                break; // Skip dead code
             }
             if statement.statement_type == StatementType::Break{
                 if scope.current_logic_id == -1{
                     process::throw("Break outside of loop");
                 }
                 vector::push::<output::LLVMInstruction>(output, output::jump_to((scope.current_logic_id + 1) as u32));
-                index = index + 1;
-                continue;
+                break; // Skip dead code
             }
             if statement.statement_type == StatementType::Loop{
                 const statement: &LoopStmt = bitcast::<&LoopStmt>(statement.node_ptr);
@@ -1003,6 +966,8 @@ namespace compile_internals{
                 const loop_exit: u32 = scope.logic_counter; scope.logic_counter = scope.logic_counter + 1;
                 scope.current_logic_id = loop_entry as i32;
 
+                // Explicit fallthrough required by LLVM IR
+                vector::push::<output::LLVMInstruction>(output, output::jump_to(loop_entry));
                 vector::push::<output::LLVMInstruction>(output, output::label(loop_entry));
 
                 scope::enter_scope(scope);
@@ -1010,7 +975,7 @@ namespace compile_internals{
                 scope::exit_scope(scope);
 
                 vector::push::<output::LLVMInstruction>(output, output::jump_to(loop_entry));
-                vector::push::<output::LLVMInstruction>(output, output::jump_to(loop_exit));
+                // Do not emit `jump_to(loop_exit)` here, double terminators are illegal.
                 vector::push::<output::LLVMInstruction>(output, output::label(loop_exit));
                 scope.current_logic_id = base_id;
 
@@ -1027,8 +992,9 @@ namespace compile_internals{
 
                 scope.current_logic_id = loop_entry as i32;
 
+                // Explicit fallthrough
+                vector::push::<output::LLVMInstruction>(output, output::jump_to(loop_entry));
                 vector::push::<output::LLVMInstruction>(output, output::label(loop_entry));
-
 
                 let check_val: expression_compiler::CompiledValue = expression_compiler::compile(&statement.cond, expression_compiler::expect_anything(), scope, symbol_table, output, &loc);
                 const check_val_reg: u32 = expression_compiler::cv_to_register(&check_val, scope, symbol_table, output, &loc);
@@ -1040,7 +1006,7 @@ namespace compile_internals{
                 scope::exit_scope(scope);
 
                 vector::push::<output::LLVMInstruction>(output, output::jump_to(loop_entry));
-                vector::push::<output::LLVMInstruction>(output, output::jump_to(loop_exit));
+                // Again, strip illegal double terminator to `loop_exit`
                 vector::push::<output::LLVMInstruction>(output, output::label(loop_exit));
                 scope.current_logic_id = base_id;
 
@@ -1057,7 +1023,10 @@ namespace compile_internals{
 
                 scope.current_logic_id = loop_entry as i32;
 
+                // Provide explicit branch to break sequence and prevent stacking unbranched labels
+                vector::push::<output::LLVMInstruction>(output, output::jump_to(loop_entry));
                 vector::push::<output::LLVMInstruction>(output, output::label(loop_entry));
+                vector::push::<output::LLVMInstruction>(output, output::jump_to(loop_cond));
                 vector::push::<output::LLVMInstruction>(output, output::label(loop_cond));
 
                 scope::enter_scope(scope);
@@ -1068,9 +1037,7 @@ namespace compile_internals{
                 const check_val_reg: u32 = expression_compiler::cv_to_register(&check_val, scope, symbol_table, output, &loc);
                 vector::push::<output::LLVMInstruction>(output, output::branch(check_val_reg, loop_cond, loop_exit));
 
-
-                vector::push::<output::LLVMInstruction>(output, output::jump_to(loop_entry));
-                vector::push::<output::LLVMInstruction>(output, output::jump_to(loop_exit));
+                // Terminations are implicitly done via the branch above so skip the illegal end block jumps
                 vector::push::<output::LLVMInstruction>(output, output::label(loop_exit));
                 scope.current_logic_id = base_id;
 
@@ -1113,8 +1080,7 @@ namespace compile_internals{
                 continue;
             }
             vector::push::<output::LLVMInstruction>(output, output::unreachable());
-            index = index + 1;
-            continue;
+            break; // Skip dead code
         }
     }
 }
@@ -1126,6 +1092,7 @@ fn compile(statement_vector: &vector::Vec<Stmt>, symbol_vector: &vector::Vec<str
     sym_table.symbols = vector::new::<SymbolTableEntry>();
     sym_table.symbol_vector = symbol_vector;
 
+    sym_table.constant_strings_used = vector::new::<u32>();
     sym_table.functions = vector::new::<FunctionSymbolTableEntry>();
     sym_table.generic_functions = vector::new::<GenericFunctionSymbolTableEntry>();
     sym_table.structs = vector::new::<StructSymbolTableEntry>();
@@ -1145,83 +1112,10 @@ fn compile(statement_vector: &vector::Vec<Stmt>, symbol_vector: &vector::Vec<str
     compile_internals::sym_table_push_structs_generic(&sym_table, stdout);
     compile_internals::sym_table_push_external(&sym_table, stdout);
     compile_internals::sym_table_push_static(&sym_table, stdout);
+    compile_internals::sym_table_push_constant_data(&sym_table, stdout);
 
     string::append_str(stdout, function_out.data, function_out.len);
     string::free(&function_out);
-}
-fn debug_dump_symbol_table(table: &SymbolTable, stdout: &string::String){
-    const len: u32 = table.symbols.length;
-    const ptr: &SymbolTableEntry = table.symbols.array;
-    const sym_array: &string::String = table.symbol_vector.array;
-    for i in 0 as u32 .. len{
-        if (ptr[i].tag & SymbolTableTag::Solved) == 0{
-            continue;
-        }
-        if (ptr[i].tag & SymbolTableTag::OnlyTypesMask) == SymbolTableTag::Enum{
-            const node: &EnumSymbolTableEntry = &table.enums.array[ptr[i].data_index];
-            let loc: PathEx = ptr[i].path;
-            loc.len = loc.len - 1;
-            string::append_str(stdout, ";enum ", 6);
-            append_path_ex(&ptr[i].path, sym_array, stdout);
-            string::append_str(stdout, ": ", 2);
-            comp_type::compiler_type_push(&node.representative_type, &loc, table, stdout);
-            string::append_str(stdout, "{ ", 2);
-            for x in 0 as u32 .. node.fields.length{
-                string::append_str(stdout, sym_array[node.fields.array[x].name].data, sym_array[node.fields.array[x].name].len);
-                string::append_str(stdout, ": ", 2);
-                string::append_u64(stdout, node.fields.array[x].value as u64);
-                if x != node.fields.length - 1{
-                    string::append_str(stdout, ", ", 2);
-                }
-            }
-            string::append_str(stdout, " }\n", 3);
-            //string::append_str(stdout, sym_array[node.name].data, sym_array[node.name].len);
-            
-        } else if (ptr[i].tag & SymbolTableTag::OnlyTypesMask) == SymbolTableTag::Constant{
-            const node: &ConstantSymbolTableEntry = &table.constants.array[ptr[i].data_index];
-            let loc: PathEx = ptr[i].path;
-            loc.len = loc.len - 1;
-
-            string::append_str(stdout, ";constant ", 10);
-            append_path_ex(&ptr[i].path, sym_array, stdout);
-            string::append_str(stdout, " = ", 3);
-            comp_type::compiler_type_push(&node.type, &loc, table, stdout);
-            string::append_str(stdout, "\n", 1);
-            //string::append_str(stdout, sym_array[node.name].data, sym_array[node.name].len);
-        } else if (ptr[i].tag & SymbolTableTag::OnlyTypesMask) == SymbolTableTag::Function{
-            const node: &FunctionSymbolTableEntry = &table.functions.array[ptr[i].data_index];
-            let loc: PathEx = ptr[i].path;
-            loc.len = loc.len - 1;
-            
-            string::append_str(stdout, "define ", 7);
-            if (node.flags & Flags::External) != 0{
-                string::append_str(stdout, "dllimport ", 10);
-            }
-            comp_type::compiler_type_push(&node.return_type, &loc, table, stdout);
-            string::append_str(stdout, " @", 2);
-            if (node.flags & Flags::External) != 0{
-                let q: PathEx = ptr[i].path;
-                q.data[0] = q.data[q.len - 1];
-                q.len = 1;
-                append_path_ex(&q, sym_array, stdout);
-            }else{
-                append_path_ex(&ptr[i].path, sym_array, stdout);
-            }
-            string::append_str(stdout, "(", 1);            
-            for x in 0 as u32 .. node.arguments.length{
-                const arg: &StructDefinedField = &node.arguments.array[x];
-                comp_type::compiler_type_push(&arg.type, &loc, table, stdout);
-                string::append_str(stdout, " %", 2);
-                string::append_str(stdout, sym_array[arg.name].data, sym_array[arg.name].len);
-                if x != node.arguments.length - 1{
-                    string::append_str(stdout, ", ", 2);
-                }
-            }
-            string::append_str(stdout, ")", 1);
-            string::append_str(stdout, "\n", 1);
-            //string::append_str(stdout, sym_array[node.name].data, sym_array[node.name].len);
-        }
-    }
 }
 namespace expression_compiler{
     pub enum ExpectedKind { Nothing, Type, Anything }
@@ -1239,7 +1133,9 @@ namespace expression_compiler{
         type: comp_type::CompilerType,
         rvalue: rvalue::Rvalue,
     }
+    pub fn cv_register(register: u32, type: comp_type::CompilerType) : CompiledValue {let x: CompiledValue = CompiledValue::{kind: CompiledValueKind::Value, type: type, rvalue: rvalue::register(register)}; return x;}
     pub fn cv_integer(integer: u64) : CompiledValue {let x: CompiledValue = CompiledValue::{kind: CompiledValueKind::Value, type: comp_type::def_integer(), rvalue: rvalue::integer(integer)}; return x;}
+    pub fn cv_decimal(decimal: f64) : CompiledValue {let x: CompiledValue = CompiledValue::{kind: CompiledValueKind::Value, type: comp_type::def_decimal(), rvalue: rvalue::decimal(decimal)}; return x;}
     pub fn cv_bool(val: bool) : CompiledValue {let x: CompiledValue = CompiledValue::{kind: CompiledValueKind::Value, type: comp_type::def_bool(), rvalue: rvalue::boolean(val)}; return x;}
     pub fn cv_null_untyped() : CompiledValue {let x: CompiledValue = CompiledValue::{kind: CompiledValueKind::Value, type: comp_type::def_pointer(), rvalue: rvalue::nil()}; return x;}
     
@@ -1264,7 +1160,7 @@ namespace expression_compiler{
             vector::push::<output::LLVMInstruction>(output, output::load_null(temp_id, str));
             return temp_id;
         }
-        
+        process::throw("cv_to_register");
         return 555;
     }
     pub fn compile(expression: &Expression, expect: Expected, scope: &scope::Scope, symbol_table: &SymbolTable, output: &vector::Vec<output::LLVMInstruction>, env_path: &PathEx) : expression_compiler::CompiledValue{
@@ -1272,6 +1168,28 @@ namespace expression_compiler{
     }
     pub fn compile_rval(expression: &Expression, expect: Expected, scope: &scope::Scope, symbol_table: &SymbolTable, output: &vector::Vec<output::LLVMInstruction>, env_path: &PathEx) : expression_compiler::CompiledValue{
         let expect: Expected = expect;
+        if expression.type == ExpressionType::Integer{
+            const data: &IntegerExpr = expression.val as &IntegerExpr;
+            const str: &string::String = &symbol_table.symbol_vector.array[data.idx];
+            const integer: &u64 = str.data as &u64;
+            if expect.kind != ExpectedKind::Type {
+                return cv_integer(*integer);
+            }
+            const compiler_type: &comp_type::CompilerType = expect.compiler_type;
+            let c: CompiledValue = cv_integer(*integer);
+            c.type = comp_type::clone(compiler_type);
+            return c;
+        }
+        if expression.type == ExpressionType::Decimal{
+            const data: &DecimalExpr = expression.val as &DecimalExpr;
+            const str: &string::String = &symbol_table.symbol_vector.array[data.idx];
+            const decimal: &f64 = str.data as &f64;
+            if expect.kind != ExpectedKind::Type {
+                return cv_decimal(*decimal);
+            }
+            console::println_i64(*decimal as i64);
+            return cv_decimal(*decimal);
+        }
         if expression.type == ExpressionType::Boolean{
             const data: &BoolExpr = expression.val as &BoolExpr;
             return cv_bool(data.val);
@@ -1283,11 +1201,124 @@ namespace expression_compiler{
                 return cv_null_untyped();
             }
         }
+        if expression.type == ExpressionType::BinaryOp{
+            const data: &BinaryOpExpr = expression.val as &BinaryOpExpr;
+            if data.op == BinaryOp::Less || data.op == BinaryOp::Greater || data.op == BinaryOp::LessEqual || data.op == BinaryOp::GreaterEqual
+            || data.op == BinaryOp::Equals || data.op == BinaryOp::NotEqual 
+            || data.op == BinaryOp::And || data.op == BinaryOp::Or{
+                return cv_bool(false);
+            }
+            if data.op == BinaryOp::Assign{
+                return cv_integer(312);
+            }
+
+            return cv_integer(312);
+        }
+        if expression.type == ExpressionType::UnaryOp{
+            const data: &UnaryOpExpr = expression.val as &UnaryOpExpr;
+            if data.op == UnaryOp::Not{
+                return cv_bool(false);
+            }
+            if data.op == UnaryOp::Pointer{
+                return cv_null_untyped();
+            }
+            return cv_integer(55523);
+        }
+        if expression.type == ExpressionType::Name{
+            const data: &NameExpr = expression.val as &NameExpr;
+            
+        }
+        if expression.type == ExpressionType::StaticAccess{
+            const data: &StaticAccessExpr = expression.val as &StaticAccessExpr;
+            
+        }
+        if expression.type == ExpressionType::Char{
+            const data: &CharExpr = expression.val as &CharExpr;
+        }
+        if expression.type == ExpressionType::StringConst{
+            const data: &StringConstExpr = expression.val as &StringConstExpr;
+            let index: i32 = -1;
+            for i in 0 as u32 .. symbol_table.constant_strings_used.length{
+                if symbol_table.constant_strings_used.array[i] == data.idx as u32{
+                    index = i as i32;
+                    break;
+                }
+            }
+            if index == -1{
+                index = symbol_table.constant_strings_used.length as i32;
+                vector::push::<u32>(&symbol_table.constant_strings_used, data.idx as u32);
+            }
+            const temp_id: u32 = scope.temp_counter; scope.temp_counter = scope.temp_counter + 1;
+            vector::push::<output::LLVMInstruction>(output, output::load_bytes(temp_id, index as u32));
+            let r: CompiledValue = cv_null_untyped();
+            r.rvalue = rvalue::register(temp_id);
+            return r;
+        }
+        if expression.type == ExpressionType::Call{
+            const data: &CallExpr = expression.val as &CallExpr;
+            let call_site: lvalue::Lvalue = compile_lval(&data.lval, scope, symbol_table, output, env_path);
+            if call_site.type.kind != comp_type::CompilerTypeKind::Function{
+                process::throw("Tried to call not a function");
+            }
+            const ptr: &comp_type::FunctionCompilerType = bitcast::<&comp_type::FunctionCompilerType>(call_site.type.data);
+
+            const cs: &string::String = mem::malloc(size_of::<string::String>()) as &string::String;
+            *cs = string::empty();
+            comp_type::compiler_type_push(&ptr.return_type, env_path, symbol_table, cs);
+            string::append(cs, ' ');
+            string::append_str(cs, call_site.location.data, call_site.location.len);
+
+
+
+            const ag: &string::String = mem::malloc(size_of::<string::String>()) as &string::String;
+            *ag = string::empty();
+            for i in 0 as u32 .. ptr.arguments.length{
+                let x: expression_compiler::CompiledValue = compile_rval(&data.expr.array[i], expect_anything(), scope, symbol_table, output, env_path);
+                comp_type::compiler_type_push(&ptr.arguments.array[i], env_path, symbol_table, ag);
+                string::append_str(ag, " %t", 3);
+                string::append_u64(ag, cv_to_register(&x, scope, symbol_table, output, env_path) as u64);
+                if i != ptr.arguments.length - 1{
+                    string::append_str(ag, ", ", 2);
+                }
+            }
+
+            const temp_id: u32 = scope.temp_counter; scope.temp_counter = scope.temp_counter + 1;
+            vector::push::<output::LLVMInstruction>(output, output::call(temp_id, cs, ag));
+            return cv_register(temp_id, comp_type::clone(&ptr.return_type));
+        }
         return cv_integer(1337);
     }
-    pub fn compile_lval(expression: &Expression, scope: &scope::Scope, symbol_table: &SymbolTable, output: &vector::Vec<output::LLVMInstruction>, env_path: &PathEx) : expression_compiler::CompiledValue{
-        return cv_integer(1337);
+    pub fn compile_lval(expression: &Expression, scope: &scope::Scope, symbol_table: &SymbolTable, output: &vector::Vec<output::LLVMInstruction>, env_path: &PathEx) : lvalue::Lvalue{
+        let lval: lvalue::Lvalue;
+        if expression.type == ExpressionType::Name{
+            const data: &NameExpr = expression.val as &NameExpr;
+            const var: &scope::Variable = scope::find_variable(scope, data.idx);
+            if var != null{
+
+                return lval;
+            }
+            let glob: PathEx = *env_path;
+            glob.data[glob.len] = data.idx;
+            glob.len = glob.len + 1;
+            const ste: &SymbolTableEntry = get_symbol_from_table(symbol_table, glob);
+            if (ste.tag & SymbolTableTag::OnlyTypesMask) == SymbolTableTag::Function{
+                const node: &FunctionSymbolTableEntry = &symbol_table.functions.array[ste.data_index];
+                lval.location = string::empty();
+                string::append(&lval.location, '@');
+                string::append_str(&lval.location, node.llvm_signature.data, node.llvm_signature.len);
+                let x: vector::Vec<comp_type::CompilerType> = vector::new::<comp_type::CompilerType>();
+                for i in 0 as u32 .. node.arguments.length{
+                    vector::push::<comp_type::CompilerType>(&x, comp_type::clone(&node.arguments.array[i].type));
+                }
+                lval.type = comp_type::function(comp_type::clone(&node.return_type), x);
+                return lval;
+
+            }
+        }
+        return lval;
     }
+
+
     fn constant_expression_evaluation(expr: &Expression, table: &SymbolTable, env_path: &PathEx) : rvalue::Rvalue{
         return rvalue::integer(19999991);
     }
@@ -1299,6 +1330,7 @@ namespace scope{
         is_argument: bool,
         is_static: bool,
         is_constant: bool,
+        register: u32,
     }
     pub struct Scope{
         values: vector::Vec<Variable>,
@@ -1339,14 +1371,14 @@ namespace scope{
             const var: Variable = vector::pop::<Variable>(&scope.values);
         }
     }
-    pub fn last_variable(name: u16, scope: &Scope) : &Variable{
+    pub fn last_variable(scope: &Scope) : &Variable{
         const v_len: u32 = scope.values.length;
         if v_len == 0{
             return null;
         }
         return &scope.values.array[v_len - 1];
     }
-    pub fn find_variable(name: u16, scope: &Scope) : &Variable{
+    pub fn find_variable(scope: &Scope, name: u16) : &Variable{
         const v_len: u32 = scope.values.length;
         let i: u32 = scope.values.length;
         while i > 0{
@@ -1362,7 +1394,7 @@ namespace scope{
 namespace comp_type{
     pub enum CompilerTypeKind: u8{
         ConstantSizeArray,
-        Primitive, Struct,
+        Primitive, Struct, Function,
         GenericPlaceholder, GenericImplementation,
     }
     pub struct CompilerType{
@@ -1371,13 +1403,13 @@ namespace comp_type{
         extra: u32,
         data: u64,
     }
-    pub struct PointerCompilerType{
-        deep: u8,
-        inner: CompilerType,
-    }
     pub struct ConstantArrayCompilerType{
         elements_count: u32,
         inner: CompilerType,
+    }
+    pub struct FunctionCompilerType{
+        return_type: CompilerType,
+        arguments: vector::Vec<CompilerType>,
     }
     pub inline fn void() : CompilerType => primitive(primitives::VOID_TYPE);
     pub inline fn def_integer() : CompilerType => primitive(primitives::DEFAULT_INTEGER_TYPE);
@@ -1388,7 +1420,7 @@ namespace comp_type{
 
     pub inline fn structure(structure_index: i32) : CompilerType {let x: CompilerType = CompilerType::{kind:CompilerTypeKind::Struct, pointered_deep: 0, extra:0, data: structure_index as u64}; return x;}
     pub inline fn placeholder(placeholder_name: u16) : CompilerType {let x: CompilerType = CompilerType::{kind:CompilerTypeKind::GenericPlaceholder, pointered_deep: 0, extra:0, data: placeholder_name as u64}; return x;}
-    pub inline fn implementation(structure_index: u32, implementation_index: u32) : CompilerType {let x: CompilerType = CompilerType::{kind:CompilerTypeKind::GenericImplementation, pointered_deep: 0, extra: implementation_index, data: structure_index as u64}; return x;}    
+    pub inline fn implementation(structure_index: u32, implementation_index: u32) : CompilerType {let x: CompilerType = CompilerType::{kind:CompilerTypeKind::GenericImplementation, pointered_deep: 0, extra: implementation_index, data: structure_index as u64}; return x;}
     pub inline fn pointer(type: CompilerType, pointer_deep: u8) : CompilerType {
         let x: CompilerType = type;
         x.pointered_deep = x.pointered_deep + pointer_deep;
@@ -1399,6 +1431,14 @@ namespace comp_type{
         const ptr: &ConstantArrayCompilerType = mem::malloc(size_of::<ConstantArrayCompilerType>()) as &ConstantArrayCompilerType;
         ptr.elements_count = elements_count;
         ptr.inner = type;
+        x.data = bitcast::<u64>(ptr);
+        return x;
+    }
+    pub inline fn function(return_type: CompilerType, arguments: vector::Vec<CompilerType>) : CompilerType {
+        let x: CompilerType = CompilerType::{kind:CompilerTypeKind::Function, pointered_deep: 0, extra: 0, data: 0};
+        const ptr: &FunctionCompilerType = mem::malloc(size_of::<FunctionCompilerType>()) as &FunctionCompilerType;
+        ptr.return_type = return_type;
+        ptr.arguments = arguments;
         x.data = bitcast::<u64>(ptr);
         return x;
     }
@@ -1631,7 +1671,27 @@ namespace comp_type{
             
             mem::free(bitcast::<&void>(var.data));
             var.data = 0;
+        }else if var.kind == CompilerTypeKind::Function && var.data != 0 {
+            const ptr: &FunctionCompilerType = bitcast::<&FunctionCompilerType>(var.data as usize);
+            comp_type::free(&ptr.return_type);
+            for i in 0 as u32 .. ptr.arguments.length{
+                const x: &CompilerType = &ptr.arguments.array[i];
+                comp_type::free(x);
+            }
+            vector::free::<CompilerType>(&ptr.arguments);
+            mem::free(bitcast::<&void>(var.data));
+            var.data = 0;
         }
+    }
+}
+namespace lvalue{
+    pub enum LvalueKind{
+    }
+    pub struct Lvalue{
+        kind: LvalueKind,
+        location: string::String,
+        data: u64,
+        type: comp_type::CompilerType,
     }
 }
 namespace rvalue{
@@ -1838,9 +1898,9 @@ namespace primitives{
 namespace output{
     pub enum LLVMInstructionKind{
         ReturnVoid, Unreachable, Empty,
-        Label, JumpTo, Return, Branch,
-        StackAlloc, BinaryOp, Load, LoadIntegerValue, LoadNull,
-        Store, GetElementPtr, GetElementPtrArray, Cast, ReturnOp,
+        Label, JumpTo, Branch,
+        StackAlloc, BinaryOp, Load, LoadIntegerValue, LoadNull, LoadBytes,
+        Store, GetElementPtr, GetElementPtrArray, Cast, ReturnOp, Call,
     }
     pub struct LLVMInstruction{
         kind: LLVMInstructionKind,
@@ -1879,11 +1939,6 @@ namespace output{
             string::append_u64(output, thn as u64);
             string::append_str(output, ", label %l", 10);
             string::append_u64(output, els as u64);
-            string::append(output, '\n');
-        }else if instruction.kind == LLVMInstructionKind::Return{
-            const id: u32 = *(&instruction.data[0] as &u32);
-            string::append_str(output, "\tret %t", 7);
-            string::append_u64(output, id as u64);
             string::append(output, '\n');
         }else if instruction.kind == LLVMInstructionKind::StackAlloc{
             const x: &string::String = *(&instruction.data[8] as &&string::String);
@@ -1970,6 +2025,17 @@ namespace output{
             string::append_str(output, " = inttoptr i64 0 to ", 21);
             string::append_str(output, ty.data, ty.len);
             string::append(output, '\n');
+        }else if instruction.kind == LLVMInstructionKind::LoadBytes{
+            const target: u32 = *(&instruction.data[0] as &u32);
+            const src: u32 = *(&instruction.data[4] as &u32);
+            string::append_str(output, "\t%t", 3);
+            string::append_u64(output, target as u64);
+            string::append_str(output, " = bitcast [", 12);
+            string::append_u64(output, sym_table.symbol_vector.array[sym_table.constant_strings_used.array[src]].len as u64);
+            string::append_str(output, " x i8]* @.d", 11);
+            string::append_u64(output, src as u64);
+            string::append_str(output, " to i8*", 7);
+            string::append(output, '\n');
         }else if instruction.kind == LLVMInstructionKind::Store{
             const target: u32 = *(&instruction.data[0] as &u32);
             const src: u32 = *(&instruction.data[4] as &u32);
@@ -2027,12 +2093,23 @@ namespace output{
             string::append_str(output, " %t", 3);
             string::append_u64(output, src as u64);
             string::append(output, '\n');
+        }else if instruction.kind == LLVMInstructionKind::Call{
+            const src: u32 = *(&instruction.data[0] as &u32);
+            const ts: &string::String = *(&instruction.data[8] as &&string::String);
+            const ta: &string::String = *(&instruction.data[16] as &&string::String);
+
+            string::append_str(output, "\t%t", 3);
+            string::append_u64(output, src as u64);
+            string::append_str(output, " = call ", 8);
+            string::append_str(output, ts.data, ts.len);
+            string::append_str(output, "(", 1);
+            string::append_str(output, ta.data, ta.len);
+            string::append_str(output, ")\n", 2);
         }
     }
     pub fn ret_void() : LLVMInstruction {let x: LLVMInstruction; x.kind = LLVMInstructionKind::ReturnVoid; return x;}
     pub fn unreachable() : LLVMInstruction {let x: LLVMInstruction; x.kind = LLVMInstructionKind::Unreachable; return x;}
     
-    pub fn ret(register: u32) : LLVMInstruction {let x: LLVMInstruction; x.kind = LLVMInstructionKind::Return; *(&x.data[0] as &u32) = register; return x;}
     pub fn label(label_id: u32) : LLVMInstruction {let x: LLVMInstruction; x.kind = LLVMInstructionKind::Label; *(&x.data[0] as &u32) = label_id; return x;}
     pub fn jump_to(label_id: u32) : LLVMInstruction {let x: LLVMInstruction; x.kind = LLVMInstructionKind::JumpTo; *(&x.data[0] as &u32) = label_id; return x;}
     pub fn branch(condition_register: u32, then_label: u32, else_label: u32) : LLVMInstruction {let x: LLVMInstruction; x.kind = LLVMInstructionKind::Branch; *(&x.data[0] as &u32) = condition_register; *(&x.data[4] as &u32) = then_label; *(&x.data[8] as &u32) = else_label; return x;}
@@ -2081,6 +2158,12 @@ namespace output{
         *(&x.data[12] as &&string::String) = type_llvm_string;
         return x;
     }
+    pub fn load_bytes(target_reg: u32, stc_index: u32) : LLVMInstruction {
+        let x: LLVMInstruction; x.kind = LLVMInstructionKind::LoadBytes;
+        *(&x.data[0] as &u32) = target_reg;
+        *(&x.data[4] as &u32) = stc_index;
+        return x;
+    }
     pub fn store(target_reg: u32, type_llvm_string: &string::String, src_reg: u32) : LLVMInstruction {
         let x: LLVMInstruction; x.kind = LLVMInstructionKind::Store;
         *(&x.data[0] as &u32) = target_reg;
@@ -2111,6 +2194,13 @@ namespace output{
         let x: LLVMInstruction; x.kind = LLVMInstructionKind::ReturnOp;
         *(&x.data[0] as &u32) = src_reg;
         *(&x.data[8] as &&string::String) = type_llvm_string;
+        return x;
+    }
+    pub fn call(target_reg: u32, call_site: &string::String, arguments: &string::String) : LLVMInstruction {
+        let x: LLVMInstruction; x.kind = LLVMInstructionKind::Call;
+        *(&x.data[0] as &u32) = target_reg;
+        *(&x.data[8] as &&string::String) = call_site;
+        *(&x.data[16] as &&string::String) = arguments;
         return x;
     }
 }
