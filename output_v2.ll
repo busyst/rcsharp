@@ -8,8 +8,7 @@ define i32 @main(){
 	%t3 = bitcast [12 x i8]* @.d0 to i8*
 	%t4 = add i32 12, 0
 	%t5 = inttoptr i64 0 to ptr
-	%t6 = inttoptr i64 0 to ptr
-	%t7 = call i32 @WriteConsoleA(i8* %t2, i8* %t3, i32 %t4, i32* %t5, i8* %t6)
-	%t8 = add i32 0, 0
-	ret i32 %t8
+	%t6 = call i32 @WriteConsoleA(i8* %t2, i8* %t3, i32 %t4, i32* %t0, i8* %t5)
+	%t7 = add i32 0, 0
+	ret i32 %t7
 }

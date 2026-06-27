@@ -211,55 +211,7 @@ fn rcsharp_compile(input_file_path: &i8, output_file_path: &i8) {
     process::ExitProcess(0);
 }
 fn debug_dump_type(expr: &Type, symbol_vector: &vector::Vec<string::String>, stdout: &string::String) {
-    const sym_array: &string::String = symbol_vector.array;
-    if expr.type == TypeType::Named{
-        const node: &NamedType = expr.val as &NamedType;
-        string::append_str(stdout, sym_array[node.idx].data, sym_array[node.idx].len);
-    }else if expr.type == TypeType::Pointer{
-        const node: &PointerType = expr.val as &PointerType;
-        const inner: &Type = &node.inner as &Type;
-        for i in 0 as u8 .. node.deep {
-            string::append(stdout, '&');
-        }
-        debug_dump_type(inner, symbol_vector, stdout);
-    }else if expr.type == TypeType::Function{
-        const node: &FunctionType = expr.val as &FunctionType;
-        string::append_str(stdout, "fn(", 3);
-        for i in 0 as u32 .. node.args.length {
-            debug_dump_type(&node.args.array[i], symbol_vector, stdout);
-            if i != node.args.length - 1{
-                string::append_str(stdout, ", ", 2);
-            }
-        }
-        string::append_str(stdout, ") : ", 4);
-        debug_dump_type(&node.return_type, symbol_vector, stdout);
-    }else if expr.type == TypeType::NamespaceLink{
-        const node: &NamespaceLinkType = expr.val as &NamespaceLinkType;
-        for i in 0 as u8 .. node.path.len {
-            string::append_str(stdout, sym_array[node.path.data[i]].data, sym_array[node.path.data[i]].len);
-            string::append_str(stdout, "::", 2);
-        }
-        const inner: &Type = &node.rval as &Type;
-        debug_dump_type(inner, symbol_vector, stdout);
-    }else if expr.type == TypeType::Generic{
-        const node: &GenericType = expr.val as &GenericType;
-        string::append_str(stdout, sym_array[node.idx].data, sym_array[node.idx].len);
-        string::append(stdout, '<');
-        for i in 0 as u32 .. node.gen_args.length {
-            debug_dump_type(&node.gen_args.array[i], symbol_vector, stdout);
-            if i != node.gen_args.length - 1{
-                string::append_str(stdout, ", ", 2);
-            }
-        }
-        string::append(stdout, '>');
-    }else if expr.type == TypeType::ConstantSizeArray{
-        const node: &ConstantSizeArrayType = expr.val as &ConstantSizeArrayType;
-        string::append(stdout, '[');
-        debug_dump_type(&node.inner, symbol_vector, stdout);
-        string::append_str(stdout, "; ", 2);
-        debug_dump_expression(&node.size, symbol_vector, stdout);
-        string::append(stdout, ']');
-    }
+    
 }
 fn debug_dump_expression(expr: &Expression, symbol_vector: &vector::Vec<string::String>, stdout: &string::String) {
 
@@ -282,15 +234,6 @@ fn debug_dump_expression(expr: &Expression, symbol_vector: &vector::Vec<string::
         debug_dump_expression(&data.rval, symbol_vector, stdout);
         string::append_str(stdout, " as ", 4);
         debug_dump_type(&data.to, symbol_vector, stdout);
-        return;
-    }
-    if expr.type == ExpressionType::BinaryOp{
-        const data: &BinaryOpExpr = expr.val as &BinaryOpExpr;
-        debug_dump_expression(&data.lval, symbol_vector, stdout);
-        string::append(stdout, ' ');
-
-        string::append(stdout, ' ');
-        debug_dump_expression(&data.rval, symbol_vector, stdout);
         return;
     }
     if expr.type == ExpressionType::UnaryOp{
@@ -1163,6 +1106,12 @@ namespace expression_compiler{
         process::throw("cv_to_register");
         return 555;
     }
+    pub fn lv_to_register(lv: &lvalue::Lvalue, scope: &scope::Scope, symbol_table: &SymbolTable, output: &vector::Vec<output::LLVMInstruction>, env_path: &PathEx) : u32 {
+        if lv.kind == lvalue::LvalueKind::Variable{
+            return lv.data as u32;
+        }
+        return 4567456;
+    }
     pub fn compile(expression: &Expression, expect: Expected, scope: &scope::Scope, symbol_table: &SymbolTable, output: &vector::Vec<output::LLVMInstruction>, env_path: &PathEx) : expression_compiler::CompiledValue{
         return compile_rval(expression, expect, scope, symbol_table, output, env_path);
     }
@@ -1220,7 +1169,10 @@ namespace expression_compiler{
                 return cv_bool(false);
             }
             if data.op == UnaryOp::Pointer{
-                return cv_null_untyped();
+                let data: lvalue::Lvalue = compile_lval(&data.rval, scope, symbol_table, output, env_path);
+                let cv: CompiledValue = cv_register(lv_to_register(&data, scope, symbol_table, output, env_path), data.type);
+                cv.type.pointered_deep = cv.type.pointered_deep + 1;
+                return cv;
             }
             return cv_integer(55523);
         }
@@ -1294,7 +1246,9 @@ namespace expression_compiler{
             const data: &NameExpr = expression.val as &NameExpr;
             const var: &scope::Variable = scope::find_variable(scope, data.idx);
             if var != null{
-
+                lval.kind = lvalue::LvalueKind::Variable;
+                lval.data = var.register as u64;
+                lval.type = comp_type::clone(&var.type);
                 return lval;
             }
             let glob: PathEx = *env_path;
@@ -1302,6 +1256,7 @@ namespace expression_compiler{
             glob.len = glob.len + 1;
             const ste: &SymbolTableEntry = get_symbol_from_table(symbol_table, glob);
             if (ste.tag & SymbolTableTag::OnlyTypesMask) == SymbolTableTag::Function{
+                lval.kind = lvalue::LvalueKind::Function;
                 const node: &FunctionSymbolTableEntry = &symbol_table.functions.array[ste.data_index];
                 lval.location = string::empty();
                 string::append(&lval.location, '@');
@@ -1686,6 +1641,8 @@ namespace comp_type{
 }
 namespace lvalue{
     pub enum LvalueKind{
+        Function,
+        Variable,
     }
     pub struct Lvalue{
         kind: LvalueKind,
