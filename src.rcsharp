@@ -1386,6 +1386,10 @@ namespace expression_compiler{
     }
     pub fn compile_lval(expression: &Expression, scope: &scope::Scope, symbol_table: &SymbolTable, output: &vector::Vec<output::LLVMInstruction>, env_path: &PathEx) : lvalue::Lvalue{
         let lval: lvalue::Lvalue;
+        lval.kind = lvalue::LvalueKind::Variable;
+        lval.location = string::empty();
+        lval.data = 0;
+        lval.type = comp_type::void();
         if expression.type == ExpressionType::Name{
             const data: &NameExpr = expression.val as &NameExpr;
             const var: &scope::Variable = scope::find_variable(scope, data.idx);
@@ -1399,9 +1403,10 @@ namespace expression_compiler{
             glob.data[glob.len] = data.idx;
             glob.len = glob.len + 1;
             const ste: &SymbolTableEntry = get_symbol_from_table(symbol_table, glob);
-            if (ste.tag & SymbolTableTag::OnlyTypesMask) == SymbolTableTag::Function{
+            if ste != null && (ste.tag & SymbolTableTag::OnlyTypesMask) == SymbolTableTag::Function{
                 lval.kind = lvalue::LvalueKind::Function;
                 const node: &FunctionSymbolTableEntry = &symbol_table.functions.array[ste.data_index];
+                string::free(&lval.location);
                 lval.location = string::empty();
                 string::append(&lval.location, '@');
                 string::append_str(&lval.location, node.llvm_signature.data, node.llvm_signature.len);
@@ -1998,6 +2003,10 @@ namespace primitives{
 }
 namespace output{
     fn helper_decimal_to_prec_hex(val: f64, size: u16, output: &string::String){
+        if size == 8 && val == 0.0{
+            string::append_str(output, "0.0", 3);
+            return;
+        }
         let val: f64 = val;
         string::append_str(output, "0x", 2);
         let bits: u64 = 0;
