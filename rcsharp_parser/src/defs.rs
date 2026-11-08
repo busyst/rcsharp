@@ -64,29 +64,29 @@ pub struct ParsedStruct {
 pub struct ParsedEnum {
     pub attributes: Box<[Attribute]>,
     pub name: LexerSymbolIndex,
-    pub fields: Box<[(LexerSymbolIndex, Expr)]>,
+    pub fields: Box<[(LexerSymbolIndex, Option<Expr>)]>,
     pub enum_type: Option<ParserType>,
     pub prefixes: Box<[String]>,
 }
-#[derive(Debug, Clone, PartialEq)]
-pub struct ParsedTrait {
-    pub path: Box<str>,
-    pub attributes: Box<[Attribute]>,
-    pub name: Box<str>,
-    pub functions: Box<[ParsedFunction]>,
-    pub generic_params: Box<[GenericParam]>,
-    pub prefixes: Box<[String]>,
-}
-#[derive(Debug, Clone, PartialEq)]
-pub struct ParsedImplementation {
-    pub trait_name: Option<Box<ParserType>>,
-    pub implementing_for: Box<ParserType>,
-    pub path: Box<str>,
-    pub attributes: Box<[Attribute]>,
-    pub body: Box<[StmtData]>,
-    pub generic_params: Box<[GenericParam]>,
-    pub prefixes: Box<[String]>,
-}
+//#[derive(Debug, Clone, PartialEq)]
+//pub struct ParsedTrait {
+//    pub path: Box<str>,
+//    pub attributes: Box<[Attribute]>,
+//    pub name: Box<str>,
+//    pub functions: Box<[ParsedFunction]>,
+//    pub generic_params: Box<[GenericParam]>,
+//    pub prefixes: Box<[String]>,
+//}
+//#[derive(Debug, Clone, PartialEq)]
+//pub struct ParsedImplementation {
+//    pub trait_name: Option<Box<ParserType>>,
+//    pub implementing_for: Box<ParserType>,
+//    pub path: Box<str>,
+//    pub attributes: Box<[Attribute]>,
+//    pub body: Box<[StmtData]>,
+//    pub generic_params: Box<[GenericParam]>,
+//    pub prefixes: Box<[String]>,
+//}
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParsedFunction {
     pub attributes: Box<[Attribute]>,
@@ -131,11 +131,11 @@ pub enum Stmt {
     Struct(ParsedStruct),                           // struct foo <T> { bar : i8, ... }
     Enum(ParsedEnum),                               // enum foo 'base_type' { bar = ..., ... }
     Namespace(LexerSymbolIndex, Box<[StmtData]>),   // namespace foo { fn bar(...): ... {...} ... }
-    Impl(ParsedImplementation),                     // impl Foo { fn bar(...): ... {...} ...}
-    TraitDeclaration(ParsedTrait),                  // trait Foo { fn bar(...): ...; ... }
-    Block(Box<[StmtData]>),                         // ; { ... }
-    Debug(String),                                  // ; 'debug statement'
-    CompilerDud,                                    // ; does absolutely nothing
+    //Impl(ParsedImplementation),                     // impl Foo { fn bar(...): ... {...} ...}
+    //TraitDeclaration(ParsedTrait),                  // trait Foo { fn bar(...): ...; ... }
+    Block(Box<[StmtData]>), // ; { ... }
+    Debug(String),          // ; 'debug statement'
+    CompilerDud,            // ; does absolutely nothing
 }
 impl Stmt {
     pub fn recursive_statement_count(&self) -> u64 {
@@ -162,13 +162,13 @@ impl Stmt {
                     .map(|x| x.stmt.recursive_statement_count())
                     .sum::<u64>()
             }
-            Self::Impl(imp) => {
-                one + imp
-                    .body
-                    .iter()
-                    .map(|x| x.stmt.recursive_statement_count())
-                    .sum::<u64>()
-            }
+            //Self::Impl(imp) => {
+            //    one + imp
+            //        .body
+            //        .iter()
+            //        .map(|x| x.stmt.recursive_statement_count())
+            //        .sum::<u64>()
+            //}
             Self::Function(func) => {
                 one + func
                     .body
@@ -176,19 +176,19 @@ impl Stmt {
                     .map(|x| x.stmt.recursive_statement_count())
                     .sum::<u64>()
             }
-            Self::TraitDeclaration(tr) => {
-                one + tr
-                    .functions
-                    .iter()
-                    .map(|f| {
-                        1 + f
-                            .body
-                            .iter()
-                            .map(|x| x.stmt.recursive_statement_count())
-                            .sum::<u64>()
-                    })
-                    .sum::<u64>()
-            }
+            //Self::TraitDeclaration(tr) => {
+            //    one + tr
+            //        .functions
+            //        .iter()
+            //        .map(|f| {
+            //            1 + f
+            //                .body
+            //                .iter()
+            //                .map(|x| x.stmt.recursive_statement_count())
+            //                .sum::<u64>()
+            //        })
+            //        .sum::<u64>()
+            //}
             _ => one,
         }
     }

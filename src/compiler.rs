@@ -148,12 +148,13 @@ struct FunctionVectorEntry {
     return_type: CompilerTypeImplementationIndex,
     path: CompilerPath,
     llvm_signature: String,
+    body: Box<[StmtData]>,
 }
 struct EnumVectorEntry {
     base_type: CompilerTypeImplementationIndex,
     path: CompilerPath,
     asscoiated_functions: Vec<(String, FunctionTypeAssociation)>,
-    fields: Box<[(LexerSymbolIndex, Expr)]>,
+    fields: Box<[(LexerSymbolIndex, Option<Expr>)]>,
 }
 struct StaticOrConstantVariableEntry {
     var_type: CompilerTypeImplementationIndex,
@@ -220,6 +221,7 @@ fn fill_symbol_table_from_statement_part_1(
                 path: function_path,
                 return_type: 0,
                 argument_name_types: vec![].into_boxed_slice(),
+                body: vec![].into_boxed_slice(),
             });
         }
         Enum(ps) => {
@@ -255,6 +257,7 @@ fn fill_symbol_table_from_statement_part_1(
         _ => {}
     }
 }
+// Fills types of functions and enums and members of other structs, along with types of constant and static fields.
 fn fill_symbol_table_from_statement_part_2(
     statement: &StmtData,
     table: &mut SymbolTable,
@@ -313,6 +316,7 @@ fn fill_symbol_table_from_statement_part_2(
                 ));
             }
             table.function_vector[func_index].argument_name_types = args.into_boxed_slice();
+            table.function_vector[func_index].body = ps.body.clone();
         }
         Enum(ps) => {
             let mut enum_path = path.clone();

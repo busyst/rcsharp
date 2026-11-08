@@ -1,7 +1,7 @@
 use crate::{
     defs::{
-        Attribute, GenericParam, ParsedEnum, ParsedFunction, ParsedImplementation, ParsedStruct,
-        ParsedTrait, ParsedVariable, ParserError, ParserResult, Span, Stmt, StmtData, VarType,
+        Attribute, GenericParam, ParsedEnum, ParsedFunction, ParsedStruct, ParsedVariable,
+        ParserError, ParserResult, Span, Stmt, StmtData, VarType,
     },
     expression_parser::{Expr, ExpressionParser},
 };
@@ -234,8 +234,8 @@ impl<'a> GeneralParser<'a> {
             Token::KeywordFunction => self.parse_function(attributes, start_span),
             Token::KeywordStruct => self.parse_struct(attributes, start_span),
             Token::KeywordEnum => self.parse_enum(attributes, start_span),
-            Token::KeywordTrait => self.parse_trait(attributes, start_span),
-            Token::KeywordImpl => self.parse_impl(attributes, start_span),
+            //Token::KeywordTrait => self.parse_trait(attributes, start_span),
+            //Token::KeywordImpl => self.parse_impl(attributes, start_span),
             Token::KeywordNamespace => {
                 if !attributes.is_empty() {
                     return Err((
@@ -625,19 +625,17 @@ impl<'a> GeneralParser<'a> {
 
         self.consume(&Token::LBrace)?;
         let mut values = Vec::with_capacity(8);
-        let mut counter = 0;
 
         while self.peek().token != Token::RBrace && !self.is_at_end() {
             let name = self.consume_name_symbol()?;
             let expr = if self.peek().token == Token::Equal {
                 self.advance();
-                self.parse_expression()?
+                Some(self.parse_expression()?)
             } else {
-                Expr::Integer(counter)
+                None
             };
 
             values.push((name, expr));
-            counter += 1;
 
             if self.peek().token == Token::Comma {
                 self.advance();
@@ -657,77 +655,77 @@ impl<'a> GeneralParser<'a> {
         })
     }
 
-    fn parse_trait(
-        &mut self,
-        attributes: Vec<Attribute>,
-        start_span: Span,
-    ) -> ParserResult<StmtData> {
-        let start = start_span.start;
-        self.advance(); // trait
-        let name = self.consume_name()?;
-        let generic_types = self.parse_generic_params()?;
-        self.consume(&Token::LBrace)?;
-        let mut items = vec![];
-        while self.peek().token != Token::RBrace && !self.is_at_end() {
-            match self.parse_toplevel_item()? {
-                StmtData {
-                    stmt: Stmt::Function(func),
-                    span: _,
-                } => {
-                    items.push(func);
-                }
-                _ => unimplemented!(),
-            }
-        }
-        self.consume(&Token::RBrace)?;
-        return Ok(StmtData {
-            stmt: Stmt::TraitDeclaration(ParsedTrait {
-                path: "".into(),
-                attributes: attributes.into_boxed_slice(),
-                name: name.into(),
-                functions: items.into_boxed_slice(),
-                generic_params: generic_types.into_boxed_slice(),
-                prefixes: Box::new([]),
-            }),
-            span: start..self.cursor,
-        });
-    }
-
-    fn parse_impl(
-        &mut self,
-        attributes: Vec<Attribute>,
-        start_span: Span,
-    ) -> ParserResult<StmtData> {
-        let start = start_span.start;
-        self.advance(); // impl
-        let first_type = self.parse_type()?;
-        let (trait_name, implementing_for) = if self.peek().token == Token::KeywordFor {
-            self.advance();
-            let for_type = self.parse_type()?;
-            (Some(Box::new(first_type)), Box::new(for_type))
-        } else {
-            (None, Box::new(first_type))
-        };
-        let generic_types = self.parse_generic_params()?;
-        self.consume(&Token::LBrace)?;
-        let mut items = vec![];
-        while self.peek().token != Token::RBrace && !self.is_at_end() {
-            items.push(self.parse_toplevel_item()?)
-        }
-        self.consume(&Token::RBrace)?;
-        return Ok(StmtData {
-            stmt: Stmt::Impl(ParsedImplementation {
-                trait_name,
-                implementing_for,
-                path: "".into(),
-                attributes: attributes.into_boxed_slice(),
-                body: items.into_boxed_slice(),
-                generic_params: generic_types.into_boxed_slice(),
-                prefixes: Box::new([]),
-            }),
-            span: start..self.cursor,
-        });
-    }
+    //fn parse_trait(
+    //    &mut self,
+    //    attributes: Vec<Attribute>,
+    //    start_span: Span,
+    //) -> ParserResult<StmtData> {
+    //    let start = start_span.start;
+    //    self.advance(); // trait
+    //    let name = self.consume_name()?;
+    //    let generic_types = self.parse_generic_params()?;
+    //    self.consume(&Token::LBrace)?;
+    //    let mut items = vec![];
+    //    while self.peek().token != Token::RBrace && !self.is_at_end() {
+    //        match self.parse_toplevel_item()? {
+    //            StmtData {
+    //                stmt: Stmt::Function(func),
+    //                span: _,
+    //            } => {
+    //                items.push(func);
+    //            }
+    //            _ => unimplemented!(),
+    //        }
+    //    }
+    //    self.consume(&Token::RBrace)?;
+    //    return Ok(StmtData {
+    //        stmt: Stmt::TraitDeclaration(ParsedTrait {
+    //            path: "".into(),
+    //            attributes: attributes.into_boxed_slice(),
+    //            name: name.into(),
+    //            functions: items.into_boxed_slice(),
+    //            generic_params: generic_types.into_boxed_slice(),
+    //            prefixes: Box::new([]),
+    //        }),
+    //        span: start..self.cursor,
+    //    });
+    //}
+    //
+    //fn parse_impl(
+    //    &mut self,
+    //    attributes: Vec<Attribute>,
+    //    start_span: Span,
+    //) -> ParserResult<StmtData> {
+    //    let start = start_span.start;
+    //    self.advance(); // impl
+    //    let first_type = self.parse_type()?;
+    //    let (trait_name, implementing_for) = if self.peek().token == Token::KeywordFor {
+    //        self.advance();
+    //        let for_type = self.parse_type()?;
+    //        (Some(Box::new(first_type)), Box::new(for_type))
+    //    } else {
+    //        (None, Box::new(first_type))
+    //    };
+    //    let generic_types = self.parse_generic_params()?;
+    //    self.consume(&Token::LBrace)?;
+    //    let mut items = vec![];
+    //    while self.peek().token != Token::RBrace && !self.is_at_end() {
+    //        items.push(self.parse_toplevel_item()?)
+    //    }
+    //    self.consume(&Token::RBrace)?;
+    //    return Ok(StmtData {
+    //        stmt: Stmt::Impl(ParsedImplementation {
+    //            trait_name,
+    //            implementing_for,
+    //            path: "".into(),
+    //            attributes: attributes.into_boxed_slice(),
+    //            body: items.into_boxed_slice(),
+    //            generic_params: generic_types.into_boxed_slice(),
+    //            prefixes: Box::new([]),
+    //        }),
+    //        span: start..self.cursor,
+    //    });
+    //}
     fn parse_statement(&mut self) -> ParserResult<StmtData> {
         let start = self.cursor;
 
