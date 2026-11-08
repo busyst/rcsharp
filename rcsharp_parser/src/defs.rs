@@ -1,4 +1,4 @@
-use rcsharp_lexer::defs::Token;
+use rcsharp_lexer::defs::{LexerSymbolIndex, Token};
 
 use crate::{expression_parser::Expr, parser::ParserType};
 
@@ -54,20 +54,18 @@ pub struct GenericParam {
 }
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParsedStruct {
-    pub path: Box<str>,
     pub attributes: Box<[Attribute]>,
-    pub name: Box<str>,
-    pub fields: Box<[(String, ParserType)]>,
+    pub name: LexerSymbolIndex,
+    pub members: Box<[(LexerSymbolIndex, ParserType)]>,
     pub generic_params: Box<[GenericParam]>,
     pub prefixes: Box<[String]>,
 }
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParsedEnum {
-    pub path: Box<str>,
     pub attributes: Box<[Attribute]>,
-    pub name: Box<str>,
-    pub fields: Box<[(String, Expr)]>,
-    pub enum_type: ParserType,
+    pub name: LexerSymbolIndex,
+    pub fields: Box<[(LexerSymbolIndex, Expr)]>,
+    pub enum_type: Option<ParserType>,
     pub prefixes: Box<[String]>,
 }
 #[derive(Debug, Clone, PartialEq)]
@@ -91,11 +89,10 @@ pub struct ParsedImplementation {
 }
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParsedFunction {
-    pub path: Box<str>,
     pub attributes: Box<[Attribute]>,
-    pub name: Box<str>,
-    pub args: Box<[(String, ParserType)]>,
-    pub return_type: ParserType,
+    pub name: LexerSymbolIndex,
+    pub args: Box<[(LexerSymbolIndex, ParserType)]>,
+    pub return_type: Option<ParserType>,
     pub body: Box<[StmtData]>,
     pub prefixes: Box<[String]>,
     pub generic_params: Box<[GenericParam]>,
@@ -108,9 +105,8 @@ pub enum VarType {
 }
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParsedVariable {
-    pub path: Box<str>,
     pub attributes: Box<[Attribute]>,
-    pub name: Box<str>,
+    pub name: LexerSymbolIndex,
     pub var_type: ParserType,
     pub prefixes: Box<[String]>,
     pub expr: Option<Expr>,
@@ -134,7 +130,7 @@ pub enum Stmt {
     Function(ParsedFunction),                       // fn foo(bar: i8, ...) ... { ... }
     Struct(ParsedStruct),                           // struct foo <T> { bar : i8, ... }
     Enum(ParsedEnum),                               // enum foo 'base_type' { bar = ..., ... }
-    Namespace(String, Box<[StmtData]>),             // namespace foo { fn bar(...): ... {...} ... }
+    Namespace(LexerSymbolIndex, Box<[StmtData]>),   // namespace foo { fn bar(...): ... {...} ... }
     Impl(ParsedImplementation),                     // impl Foo { fn bar(...): ... {...} ...}
     TraitDeclaration(ParsedTrait),                  // trait Foo { fn bar(...): ...; ... }
     Block(Box<[StmtData]>),                         // ; { ... }

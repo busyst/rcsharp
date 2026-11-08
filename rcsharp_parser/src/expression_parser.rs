@@ -2,7 +2,7 @@ use std::fmt::Write;
 
 use rcsharp_lexer::{
     LexerSymbolTable,
-    defs::{DUMMY_EOF_TOKEN, Token, TokenData},
+    defs::{DUMMY_EOF_TOKEN, LexerSymbolIndex, Token, TokenData},
 };
 
 use crate::{
@@ -244,6 +244,20 @@ impl<'a> ExpressionParser<'a> {
             )),
         }
     }
+    #[inline]
+    fn consume_name_symbol(&mut self) -> ParserResult<LexerSymbolIndex> {
+        match &self.peek().token {
+            Token::Name(sym) => {
+                let cl_sym = sym.clone();
+                self.cursor += 1;
+                Ok(cl_sym)
+            }
+            _ => Err((
+                self.cursor..self.cursor + 1,
+                ParserError::ExpectedIdentifier,
+            )),
+        }
+    }
     pub fn parse_expression(&mut self) -> ParserResult<Expr> {
         self.parse_with_precedence(0)
     }
@@ -475,11 +489,12 @@ impl<'a> ExpressionParser<'a> {
 
         match &self.peek().token {
             Token::SemiColon => {
-                let path = expr_to_type_path(&callee);
-                Ok(Expr::Type(Box::new(ParserType::Generic(
-                    path,
-                    generic_types.into_boxed_slice(),
-                ))))
+                //let path = expr_to_type_path(&callee);
+                panic!();
+                //Ok(Expr::Type(Box::new(ParserType::Generic(
+                //    path,
+                //    generic_types.into_boxed_slice(),
+                //))))
             }
             Token::LParen => {
                 self.advance(); // (
@@ -593,12 +608,12 @@ impl<'a> ExpressionParser<'a> {
         self.consume(&Token::RSquareBrace)?;
         Ok(ParserType::ConstantSizeArray(
             Box::new(elem_type),
-            size as i128,
+            size as u64,
         ))
     }
 
     fn parse_named_or_generic_type(&mut self) -> ParserResult<ParserType> {
-        let name = self.consume_name()?;
+        let name = self.consume_name_symbol()?;
 
         match &self.peek().token {
             Token::DoubleColon => {

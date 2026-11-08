@@ -1,5 +1,3 @@
-use crate::parser::ParserType;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Layout {
     pub size: u32,
@@ -71,11 +69,6 @@ impl PrimitiveInfo {
 impl std::fmt::Display for PrimitiveInfo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.name)
-    }
-}
-impl From<&'static PrimitiveInfo> for ParserType {
-    fn from(info: &'static PrimitiveInfo) -> Self {
-        ParserType::Named(info.name.to_string())
     }
 }
 macro_rules! prim {

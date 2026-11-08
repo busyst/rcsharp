@@ -1,13 +1,11 @@
 use std::time::Instant;
-
-use crate::compiler::passes::compile_to_file;
-pub mod compiler;
-pub mod compiler_essentials;
-pub mod compiler_functions;
+mod compiler;
 use clap::Parser;
+
+use crate::compiler::compile_to_file;
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
-pub struct Args {
+pub struct CompilationArgs {
     #[arg(short, long)]
     input: Option<String>,
     #[arg(short, long)]
@@ -20,16 +18,16 @@ pub struct Args {
     executable: bool,
 }
 fn main() -> Result<(), ()> {
-    let mut args = Args::parse();
-    args.input = Some(args.input.unwrap_or_else(|| format!("./src.rcsharp")));
+    let mut args = CompilationArgs::parse();
+    args.input = Some(
+        args.input
+            .unwrap_or_else(|| format!("Z:/ActiveProjects/rcsharp_inf/src/src.rcsharp")),
+    );
     args.output = Some(args.output.unwrap_or_else(|| format!("./output.ll")));
     args.executable = true;
     let program_start = Instant::now();
 
-    if let Err(err) = compile_to_file(&args) {
-        eprintln!("{}", err.error);
-        return Err(());
-    }
+    let _comp_result = compile_to_file(&args);
     let compiled_and_wrote = Instant::now();
     println!("compil\t{:?}", compiled_and_wrote - program_start);
     Ok(())

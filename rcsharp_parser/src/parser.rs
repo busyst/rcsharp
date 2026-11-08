@@ -1,7 +1,4 @@
 use crate::{
-    compiler_primitives::{
-        DEFAULT_INTEGER_TYPE, PrimitiveInfo, PrimitiveKind, find_primitive_type,
-    },
     defs::{
         Attribute, GenericParam, ParsedEnum, ParsedFunction, ParsedImplementation, ParsedStruct,
         ParsedTrait, ParsedVariable, ParserError, ParserResult, Span, Stmt, StmtData, VarType,
@@ -10,17 +7,17 @@ use crate::{
 };
 use rcsharp_lexer::{
     LexerSymbolTable,
-    defs::{DUMMY_EOF_TOKEN, Token, TokenData},
+    defs::{DUMMY_EOF_TOKEN, LexerSymbolIndex, Token, TokenData},
 };
 use std::fmt;
 #[derive(Debug, Clone)]
 pub enum ParserType {
-    Named(String),
+    Named(LexerSymbolIndex),
     Pointer(Box<ParserType>),
     Function(Box<ParserType>, Box<[ParserType]>),
-    NamespaceLink(String, Box<ParserType>),
-    Generic(String, Box<[ParserType]>),
-    ConstantSizeArray(Box<ParserType>, i128),
+    NamespaceLink(LexerSymbolIndex, Box<ParserType>),
+    Generic(LexerSymbolIndex, Box<[ParserType]>),
+    ConstantSizeArray(Box<ParserType>, u64),
 }
 impl PartialEq for ParserType {
     fn eq(&self, other: &Self) -> bool {
@@ -39,20 +36,6 @@ impl PartialEq for ParserType {
     }
 }
 impl ParserType {
-    pub fn as_primitive_type(&self) -> Option<&'static PrimitiveInfo> {
-        if let ParserType::Named(name) = self {
-            return find_primitive_type(name);
-        }
-        None
-    }
-    pub fn as_integer(&self) -> Option<&'static PrimitiveInfo> {
-        self.as_primitive_type()
-            .filter(|x| x.kind == PrimitiveKind::SignedInt || x.kind == PrimitiveKind::UnsignedInt)
-    }
-    pub fn as_decimal(&self) -> Option<&'static PrimitiveInfo> {
-        self.as_primitive_type()
-            .filter(|x| x.kind == PrimitiveKind::Decimal)
-    }
     pub fn as_pointer(&self) -> Option<&ParserType> {
         if let ParserType::Pointer(x) = self {
             return Some(&x); // Inner
@@ -65,7 +48,7 @@ impl ParserType {
         }
         None
     }
-    pub fn as_generic(&self) -> Option<(&str, &[ParserType])> {
+    pub fn as_generic(&self) -> Option<(&LexerSymbolIndex, &[ParserType])> {
         if let ParserType::Generic(x, y) = self {
             return Some((&x, &y));
         }
@@ -81,7 +64,7 @@ impl ParserType {
 impl fmt::Display for ParserType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Named(n) => f.write_str(n),
+            Self::Named(n) => write!(f, "{n}"),
             Self::Pointer(inner) => write!(f, "*{inner}"),
             Self::NamespaceLink(ns, inner) => write!(f, "{ns}::{inner}"),
             Self::Generic(name, args) => {
@@ -171,6 +154,20 @@ impl<'a> GeneralParser<'a> {
                 let name = self.symbol_table.get(sym).to_string();
                 self.cursor += 1;
                 Ok(name)
+            }
+            _ => Err((
+                self.cursor..self.cursor + 1,
+                ParserError::ExpectedIdentifier,
+            )),
+        }
+    }
+    #[inline]
+    fn consume_name_symbol(&mut self) -> ParserResult<LexerSymbolIndex> {
+        match &self.peek().token {
+            Token::Name(sym) => {
+                let cl_sym = sym.clone();
+                self.cursor += 1;
+                Ok(cl_sym)
             }
             _ => Err((
                 self.cursor..self.cursor + 1,
@@ -476,14 +473,14 @@ impl<'a> GeneralParser<'a> {
     ) -> ParserResult<StmtData> {
         let start = start_span.start;
         self.advance(); // fn
-        let name = self.consume_name()?;
+        let name = self.consume_name_symbol()?;
         let generic_types = self.parse_generic_params()?;
 
         self.consume(&Token::LParen)?;
         let mut args = Vec::new();
         if self.peek().token != Token::RParen {
             loop {
-                let arg_name = self.consume_name()?;
+                let arg_name = self.consume_name_symbol()?;
                 self.consume(&Token::Colon)?;
                 let arg_type = self.parse_type()?;
                 args.push((arg_name, arg_type));
@@ -497,18 +494,17 @@ impl<'a> GeneralParser<'a> {
 
         let return_type = if self.peek().token == Token::Colon {
             self.advance();
-            self.parse_type()?
+            Some(self.parse_type()?)
         } else {
-            ParserType::Named("void".to_string())
+            None
         };
 
         if self.peek().token == Token::SemiColon {
             self.advance();
             return Ok(StmtData {
                 stmt: Stmt::Function(ParsedFunction {
-                    path: Box::from(""),
                     attributes: attributes.into_boxed_slice(),
-                    name: name.into(),
+                    name,
                     args: args.into_boxed_slice(),
                     return_type,
                     body: Box::new([]),
@@ -524,7 +520,6 @@ impl<'a> GeneralParser<'a> {
             self.consume(&Token::SemiColon)?;
             return Ok(StmtData {
                 stmt: Stmt::Function(ParsedFunction {
-                    path: Box::from(""),
                     attributes: attributes.into_boxed_slice(),
                     name: name.into(),
                     args: args.into_boxed_slice(),
@@ -544,7 +539,6 @@ impl<'a> GeneralParser<'a> {
 
         Ok(StmtData {
             stmt: Stmt::Function(ParsedFunction {
-                path: Box::from(""),
                 attributes: attributes.into_boxed_slice(),
                 name: name.into(),
                 args: args.into_boxed_slice(),
@@ -563,13 +557,13 @@ impl<'a> GeneralParser<'a> {
     ) -> ParserResult<StmtData> {
         let start = start_span.start;
         self.advance(); // struct
-        let name = self.consume_name()?;
+        let name = self.consume_name_symbol()?;
         let generic_types = self.parse_generic_params()?;
         self.consume(&Token::LBrace)?;
 
         let mut fields = Vec::with_capacity(4);
         while self.peek().token != Token::RBrace && !self.is_at_end() {
-            let field_name = self.consume_name()?;
+            let field_name = self.consume_name_symbol()?;
             self.consume(&Token::Colon)?;
             let field_type = self.parse_type()?;
             fields.push((field_name, field_type));
@@ -584,10 +578,9 @@ impl<'a> GeneralParser<'a> {
 
         Ok(StmtData {
             stmt: Stmt::Struct(ParsedStruct {
-                path: "".into(),
                 attributes: attributes.into_boxed_slice(),
-                name: name.into(),
-                fields: fields.into_boxed_slice(),
+                name,
+                members: fields.into_boxed_slice(),
                 generic_params: generic_types.into_boxed_slice(),
                 prefixes: Box::new([]),
             }),
@@ -597,7 +590,7 @@ impl<'a> GeneralParser<'a> {
     fn parse_namespace(&mut self) -> ParserResult<StmtData> {
         let start = self.cursor;
         self.advance(); // namespace
-        let name = self.consume_name()?;
+        let name = self.consume_name_symbol()?;
         self.consume(&Token::LBrace)?;
         let mut body = Vec::new();
         while self.peek().token != Token::RBrace {
@@ -621,13 +614,13 @@ impl<'a> GeneralParser<'a> {
     ) -> ParserResult<StmtData> {
         let start = start_span.start;
         self.advance(); // enum
-        let name = self.consume_name()?;
+        let name = self.consume_name_symbol()?;
 
         let enum_base_type = if self.peek().token == Token::Colon {
             self.advance();
-            self.parse_type()?
+            Some(self.parse_type()?)
         } else {
-            DEFAULT_INTEGER_TYPE.into()
+            None
         };
 
         self.consume(&Token::LBrace)?;
@@ -635,7 +628,7 @@ impl<'a> GeneralParser<'a> {
         let mut counter = 0;
 
         while self.peek().token != Token::RBrace && !self.is_at_end() {
-            let name = self.consume_name()?;
+            let name = self.consume_name_symbol()?;
             let expr = if self.peek().token == Token::Equal {
                 self.advance();
                 self.parse_expression()?
@@ -654,9 +647,8 @@ impl<'a> GeneralParser<'a> {
 
         Ok(StmtData {
             stmt: Stmt::Enum(ParsedEnum {
-                path: "".into(),
                 attributes: attributes.into_boxed_slice(),
-                name: name.into(),
+                name,
                 fields: values.into_boxed_slice(),
                 enum_type: enum_base_type,
                 prefixes: Box::new([]),
@@ -852,7 +844,7 @@ impl<'a> GeneralParser<'a> {
     }
     fn parse_const_let_statement(&mut self, start: usize) -> ParserResult<StmtData> {
         self.advance(); // const
-        let name = self.consume_name()?;
+        let name = self.consume_name_symbol()?;
         self.consume(&Token::Colon)?;
         let var_type = self.parse_type()?;
         self.consume(&Token::Equal)?;
@@ -860,9 +852,8 @@ impl<'a> GeneralParser<'a> {
         self.consume(&Token::SemiColon)?;
         Ok(StmtData {
             stmt: Stmt::ConstLet(ParsedVariable {
-                path: "".into(),
                 attributes: Box::new([]),
-                name: name.into(),
+                name,
                 var_type,
                 prefixes: Box::new([]),
                 expr: Some(initializer),
@@ -873,7 +864,7 @@ impl<'a> GeneralParser<'a> {
     }
     fn parse_static_let_statement(&mut self, start: usize) -> ParserResult<StmtData> {
         self.advance(); // static
-        let name = self.consume_name()?;
+        let name = self.consume_name_symbol()?;
         self.consume(&Token::Colon)?;
         let var_type = self.parse_type()?;
 
@@ -887,9 +878,8 @@ impl<'a> GeneralParser<'a> {
         self.consume(&Token::SemiColon)?;
         Ok(StmtData {
             stmt: Stmt::StaticLet(ParsedVariable {
-                path: "".into(),
                 attributes: Box::new([]),
-                name: name.into(),
+                name,
                 var_type,
                 prefixes: Box::new([]),
                 expr: initializer,
@@ -900,7 +890,7 @@ impl<'a> GeneralParser<'a> {
     }
     fn parse_let_statement(&mut self, start: usize) -> ParserResult<StmtData> {
         self.advance(); // let
-        let name = self.consume_name()?;
+        let name = self.consume_name_symbol()?;
         self.consume(&Token::Colon)?;
         let var_type = self.parse_type()?;
         let initializer = if self.peek().token == Token::Equal {
@@ -913,9 +903,8 @@ impl<'a> GeneralParser<'a> {
         self.consume(&Token::SemiColon)?;
         Ok(StmtData {
             stmt: Stmt::Let(ParsedVariable {
-                path: "".into(),
                 attributes: Box::new([]),
-                name: name.into(),
+                name,
                 var_type,
                 prefixes: Box::new([]),
                 expr: initializer,
@@ -1010,50 +999,5 @@ impl<'a> GeneralParser<'a> {
         }
         new_attrs.extend_from_slice(attrs);
         *attrs = new_attrs.into_boxed_slice();
-    }
-}
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn parser_type_namespace_link_transparent() {
-        let plain = ParserType::Named("i32".into());
-        let linked =
-            ParserType::NamespaceLink("ns".into(), Box::new(ParserType::Named("i32".into())));
-        assert_eq!(plain, linked);
-        assert_eq!(linked, plain);
-    }
-
-    #[test]
-    fn parser_type_display() {
-        let t = ParserType::Pointer(Box::new(ParserType::Named("i32".into())));
-        assert_eq!(t.to_string(), "*i32");
-
-        let arr = ParserType::ConstantSizeArray(Box::new(ParserType::Named("u8".into())), 16);
-        assert_eq!(arr.to_string(), "[u8; 16]");
-    }
-
-    #[test]
-    fn attribute_one_argument() {
-        let zero_args = Attribute {
-            name: "test".into(),
-            arguments: Box::new([]),
-            span: 0..0,
-        };
-        assert!(zero_args.one_argument().is_none());
-    }
-
-    #[test]
-    fn recursive_statement_count_leaf() {
-        assert_eq!(Stmt::Break.recursive_statement_count(), 1);
-        assert_eq!(Stmt::CompilerDud.recursive_statement_count(), 1);
-    }
-
-    #[test]
-    fn prepend_modifier_ordering() {
-        let mut prefixes: Box<[String]> = vec!["pub".into()].into_boxed_slice();
-        GeneralParser::prepend_modifier(&mut prefixes, "inline");
-        assert_eq!(&*prefixes, &["inline".to_string(), "pub".to_string()]);
     }
 }

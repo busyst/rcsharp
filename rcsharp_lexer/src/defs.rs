@@ -1,5 +1,5 @@
 use crate::LexerSymbolTable;
-use std::io::Write;
+use std::{fmt::Display, io::Write};
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
     LParen,
@@ -72,10 +72,10 @@ pub enum Token {
     KeywordFalse,
     KeywordNull,
 
-    Name(Symbol),
-    Integer(Symbol),
-    Decimal(Symbol),
-    String(Symbol),
+    Name(LexerSymbolIndex),
+    Integer(LexerSymbolIndex),
+    Decimal(LexerSymbolIndex),
+    String(LexerSymbolIndex),
     Char(char),
     DummyToken,
 }
@@ -145,8 +145,8 @@ pub const TRIPLE_CHAR_TO_TOKEN: phf::Map<(char, char, char), Token> = phf::phf_m
     ('.', '.', '=') => Token::RangeDotsInclusive,
 );
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Symbol(u32);
-impl Symbol {
+pub struct LexerSymbolIndex(u32);
+impl LexerSymbolIndex {
     pub fn new(ind: u32) -> Self {
         Self(ind)
     }
@@ -163,6 +163,12 @@ impl Symbol {
     }
     pub fn index(&self) -> usize {
         self.0 as usize
+    }
+}
+impl Display for LexerSymbolIndex {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)?;
+        Ok(())
     }
 }
 pub(crate) type Span = std::ops::Range<usize>;

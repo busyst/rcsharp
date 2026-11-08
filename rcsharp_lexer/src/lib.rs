@@ -1,6 +1,6 @@
 pub mod defs;
 use crate::defs::{
-    DOUBLE_CHAR_TO_TOKEN, LexerError, LexerResult, SINGLE_CHAR_TO_TOKEN, Span, Symbol,
+    DOUBLE_CHAR_TO_TOKEN, LexerError, LexerResult, LexerSymbolIndex, SINGLE_CHAR_TO_TOKEN, Span,
     TRIPLE_CHAR_TO_TOKEN, Token, TokenData, get_keyword,
 };
 use std::{
@@ -10,10 +10,10 @@ use std::{
 };
 const ALLOWED_FILE_SIZE: u64 = 1024 * 1024 * 16; // 16 MB
 const STREAM_BUFFER_CAP: usize = 8192; // 8 KB
-
+#[derive(Debug, Default)]
 pub struct LexerSymbolTable {
     strings: Vec<String>,
-    indices: HashMap<String, Symbol>,
+    indices: HashMap<String, LexerSymbolIndex>,
 }
 impl LexerSymbolTable {
     pub fn new() -> Self {
@@ -23,16 +23,16 @@ impl LexerSymbolTable {
         }
     }
 
-    pub fn get_or_intern(&mut self, s: String) -> Symbol {
+    pub fn get_or_intern(&mut self, s: String) -> LexerSymbolIndex {
         if let Some(x) = self.indices.get(&s) {
             return x.clone();
         }
-        let len = Symbol::new(self.strings.len().try_into().unwrap());
+        let len = LexerSymbolIndex::new(self.strings.len().try_into().unwrap());
         self.strings.push(s.clone());
         self.indices.insert(s, len);
         len
     }
-    pub fn get(&self, s: &Symbol) -> &str {
+    pub fn get(&self, s: &LexerSymbolIndex) -> &str {
         &self.strings[s.index()]
     }
 }
