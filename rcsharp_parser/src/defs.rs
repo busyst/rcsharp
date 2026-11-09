@@ -30,16 +30,11 @@ pub enum ParserError {
 pub type ParserResult<T> = Result<T, (Span, ParserError)>;
 #[derive(Debug, Clone, PartialEq)]
 pub struct Attribute {
-    pub name: Box<str>,
+    pub name: LexerSymbolIndex,
     pub arguments: Box<[Expr]>,
     pub span: Span,
 }
 impl Attribute {
-    #[inline]
-    pub fn name_equals(&self, to: &str) -> bool {
-        &*self.name == to
-    }
-
     pub fn one_argument(&self) -> Option<&Expr> {
         match self.arguments.as_ref() {
             [arg] => Some(arg),
@@ -49,8 +44,8 @@ impl Attribute {
 }
 #[derive(Debug, Clone, PartialEq)]
 pub struct GenericParam {
-    pub name: String,
-    pub bounds: Vec<String>,
+    pub name: LexerSymbolIndex,
+    pub bounds: Vec<LexerSymbolIndex>,
 }
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParsedStruct {
@@ -114,23 +109,23 @@ pub struct ParsedVariable {
 }
 #[derive(Debug, Clone, PartialEq)]
 pub enum Stmt {
-    CompilerHint(Attribute),                        // #...
-    Let(ParsedVariable),                            // let x : ...
-    ConstLet(ParsedVariable),                       // const x : ...
-    StaticLet(ParsedVariable),                      // static x : ...
-    Expr(Expr),                                     // a = 1 + b
-    If(Expr, Box<[StmtData]>, Box<[StmtData]>),     // if 1 == 1 {} `else `if` {}`
-    Loop(Box<[StmtData]>),                          // loop { ... }
-    WhileLoop(Box<Expr>, Box<[StmtData]>),          // while ... { ... }
-    DoWhileLoop(Box<Expr>, Box<[StmtData]>),        // do { ... } while ...;
-    ForLoop(Box<Expr>, Box<Expr>, Box<[StmtData]>), // for ... in ... { ... }
-    Break,                                          // break
-    Continue,                                       // continue
-    Return(Option<Expr>),                           // return ...
-    Function(ParsedFunction),                       // fn foo(bar: i8, ...) ... { ... }
-    Struct(ParsedStruct),                           // struct foo <T> { bar : i8, ... }
-    Enum(ParsedEnum),                               // enum foo 'base_type' { bar = ..., ... }
-    Namespace(LexerSymbolIndex, Box<[StmtData]>),   // namespace foo { fn bar(...): ... {...} ... }
+    CompilerHint(Attribute),                      // #...
+    Let(ParsedVariable),                          // let x : ...
+    ConstLet(ParsedVariable),                     // const x : ...
+    StaticLet(ParsedVariable),                    // static x : ...
+    Expr(Expr),                                   // a = 1 + b
+    If(Expr, Box<[StmtData]>, Box<[StmtData]>),   // if 1 == 1 {} `else `if` {}`
+    Loop(Box<[StmtData]>),                        // loop { ... }
+    WhileLoop(Expr, Box<[StmtData]>),             // while ... { ... }
+    DoWhileLoop(Expr, Box<[StmtData]>),           // do { ... } while ...;
+    ForLoop(Expr, Expr, Box<[StmtData]>),         // for ... in ... { ... }
+    Break,                                        // break
+    Continue,                                     // continue
+    Return(Option<Expr>),                         // return ...
+    Function(ParsedFunction),                     // fn foo(bar: i8, ...) ... { ... }
+    Struct(ParsedStruct),                         // struct foo <T> { bar : i8, ... }
+    Enum(ParsedEnum),                             // enum foo 'base_type' { bar = ..., ... }
+    Namespace(LexerSymbolIndex, Box<[StmtData]>), // namespace foo { fn bar(...): ... {...} ... }
     //Impl(ParsedImplementation),                     // impl Foo { fn bar(...): ... {...} ...}
     //TraitDeclaration(ParsedTrait),                  // trait Foo { fn bar(...): ...; ... }
     Block(Box<[StmtData]>), // ; { ... }

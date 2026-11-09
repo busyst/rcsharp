@@ -1,5 +1,3 @@
-use std::fmt::Write;
-
 use rcsharp_lexer::{
     LexerSymbolTable,
     defs::{DUMMY_EOF_TOKEN, LexerSymbolIndex, Token, TokenData},
@@ -14,8 +12,8 @@ use crate::{
 pub enum Expr {
     Decimal(f64),
     Integer(i128),
-    Name(String),
-    StringConst(String),
+    Name(LexerSymbolIndex),
+    StringConst(LexerSymbolIndex),
     Type(Box<ParserType>),
 
     BinaryOp(Box<Expr>, BinaryOp, Box<Expr>),
@@ -52,7 +50,7 @@ impl Expr {
             _ => ("{", "}"),
         };
         match self {
-            Self::Name(n) => n.clone(),
+            Self::Name(n) => n.to_string(),
             Self::Integer(n) => n.to_string(),
             Self::Call(callee, args, None) => {
                 let args_str = args
@@ -234,7 +232,7 @@ impl<'a> ExpressionParser<'a> {
     fn consume_name(&mut self) -> ParserResult<String> {
         match &self.peek().token {
             Token::Name(sym) => {
-                let name = self.symbol_table.get(sym).to_string();
+                let name = self.symbol_table.get(*sym).to_string();
                 self.cursor += 1;
                 Ok(name)
             }
@@ -281,8 +279,8 @@ impl<'a> ExpressionParser<'a> {
             Token::Integer(sym) => Ok(Expr::Integer(sym.to_integer(self.symbol_table))),
             Token::Char(c) => Ok(Expr::Integer(c as i128)),
             Token::Decimal(sym) => Ok(Expr::Decimal(sym.to_decimal(self.symbol_table))),
-            Token::String(sym) => Ok(Expr::StringConst(sym.to_string(self.symbol_table))),
-            Token::Name(sym) => Ok(Expr::Name(self.symbol_table.get(&sym).to_string())),
+            Token::String(sym) => Ok(Expr::StringConst(sym)),
+            Token::Name(sym) => Ok(Expr::Name(sym)),
 
             Token::KeywordTrue => Ok(Expr::Boolean(true)),
             Token::KeywordFalse => Ok(Expr::Boolean(false)),
@@ -702,21 +700,5 @@ impl<'a> ExpressionParser<'a> {
             Token::BinaryShiftR => BinaryOp::ShiftRight,
             _ => return None,
         })
-    }
-}
-pub fn expr_to_type_path(expr: &Expr) -> String {
-    let mut buf = String::new();
-    write_expr_path(&mut buf, expr);
-    buf
-}
-fn write_expr_path(w: &mut String, expr: &Expr) {
-    match expr {
-        Expr::Name(n) => w.push_str(n),
-        Expr::NameWithGenerics(n, ..) => write_expr_path(w, n),
-        Expr::StaticAccess(base, member) => {
-            write_expr_path(w, base);
-            let _ = write!(w, ".{member}");
-        }
-        _ => w.push_str("<?>"),
     }
 }

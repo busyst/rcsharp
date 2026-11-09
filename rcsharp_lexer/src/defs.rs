@@ -151,15 +151,15 @@ impl LexerSymbolIndex {
         Self(ind)
     }
     pub fn to_integer(self, symbol_table: &LexerSymbolTable) -> i128 {
-        let s = symbol_table.get(&self);
+        let s = symbol_table.get(self);
         unsafe { s.parse::<i128>().unwrap_unchecked() }
     }
     pub fn to_decimal(self, symbol_table: &LexerSymbolTable) -> f64 {
-        let s = symbol_table.get(&self);
+        let s = symbol_table.get(self);
         unsafe { s.parse::<f64>().unwrap_unchecked() }
     }
     pub fn to_string(self, symbol_table: &LexerSymbolTable) -> String {
-        symbol_table.get(&self).to_string()
+        symbol_table.get(self).to_string()
     }
     pub fn index(&self) -> usize {
         self.0 as usize
@@ -196,16 +196,16 @@ pub fn debug_lex_emit(tokens: &Vec<TokenData>, symbol_table: &LexerSymbolTable) 
         for token_data in tokens {
             match &token_data.token {
                 Token::Name(symbol) => {
-                    str.push_str(&symbol_table.get(symbol));
+                    str.push_str(&symbol_table.get(*symbol));
                 }
                 Token::String(symbol) => {
-                    str.push_str(&format!("\"{}\"", symbol_table.get(symbol)));
+                    str.push_str(&format!("\"{}\"", symbol_table.get(*symbol)));
                 }
                 Token::Integer(symbol) => {
-                    str.push_str(&format!("\"{}\"", symbol_table.get(symbol)));
+                    str.push_str(&format!("\"{}\"", symbol_table.get(*symbol)));
                 }
                 Token::Decimal(symbol) => {
-                    str.push_str(&format!("\"{}\"", symbol_table.get(symbol)));
+                    str.push_str(&format!("\"{}\"", symbol_table.get(*symbol)));
                 }
                 Token::Hint => str.push_str("#"),
                 Token::Comma => str.push_str(", "),

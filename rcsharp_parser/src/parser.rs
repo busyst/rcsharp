@@ -148,20 +148,6 @@ impl<'a> GeneralParser<'a> {
     }
 
     #[inline]
-    fn consume_name(&mut self) -> ParserResult<String> {
-        match &self.peek().token {
-            Token::Name(sym) => {
-                let name = self.symbol_table.get(sym).to_string();
-                self.cursor += 1;
-                Ok(name)
-            }
-            _ => Err((
-                self.cursor..self.cursor + 1,
-                ParserError::ExpectedIdentifier,
-            )),
-        }
-    }
-    #[inline]
     fn consume_name_symbol(&mut self) -> ParserResult<LexerSymbolIndex> {
         match &self.peek().token {
             Token::Name(sym) => {
@@ -382,12 +368,12 @@ impl<'a> GeneralParser<'a> {
                 self.advance();
                 break;
             }
-            let name = self.consume_name()?;
+            let name = self.consume_name_symbol()?;
             let bounds = if self.peek().token == Token::Colon {
                 self.advance(); // :
                 let mut bounds = Vec::new();
                 loop {
-                    bounds.push(self.consume_name()?);
+                    bounds.push(self.consume_name_symbol()?);
                     if self.peek().token == Token::Plus {
                         self.advance();
                     } else {
@@ -421,12 +407,12 @@ impl<'a> GeneralParser<'a> {
         let start = self.cursor;
         self.advance(); // #
         self.advance(); // [
-        let name = self.consume_name()?;
+        let name = self.consume_name_symbol()?;
         let args = self.parse_arg_list_parens()?;
         self.consume(&Token::RSquareBrace)?;
 
         Ok(Attribute {
-            name: name.into_boxed_str(),
+            name: name,
             arguments: args.into_boxed_slice(),
             span: start..self.cursor,
         })
@@ -435,13 +421,13 @@ impl<'a> GeneralParser<'a> {
     fn parse_hint_stmt(&mut self) -> ParserResult<StmtData> {
         let start = self.cursor;
         self.advance(); // #
-        let name = self.consume_name()?;
+        let name = self.consume_name_symbol()?;
         let args = self.parse_arg_list_parens()?;
         let span = start..self.cursor;
 
         Ok(StmtData {
             stmt: Stmt::CompilerHint(Attribute {
-                name: name.into_boxed_str(),
+                name: name,
                 arguments: args.into_boxed_slice(),
                 span: span.clone(),
             }),
@@ -806,7 +792,7 @@ impl<'a> GeneralParser<'a> {
                 let e = self.parse_expression()?;
                 let body = self.parse_block_body()?;
                 return Ok(StmtData {
-                    stmt: Stmt::ForLoop(Box::new(q), Box::new(e), body),
+                    stmt: Stmt::ForLoop(q, e, body),
                     span: start..self.cursor,
                 });
             }
@@ -815,7 +801,7 @@ impl<'a> GeneralParser<'a> {
                 let q = self.parse_expression()?;
                 let body = self.parse_block_body()?;
                 return Ok(StmtData {
-                    stmt: Stmt::WhileLoop(Box::new(q), body),
+                    stmt: Stmt::WhileLoop(q, body),
                     span: start..self.cursor,
                 });
             }
@@ -826,7 +812,7 @@ impl<'a> GeneralParser<'a> {
                 let q = self.parse_expression()?;
                 self.consume(&Token::SemiColon)?;
                 return Ok(StmtData {
-                    stmt: Stmt::DoWhileLoop(Box::new(q), body),
+                    stmt: Stmt::DoWhileLoop(q, body),
                     span: start..self.cursor,
                 });
             }

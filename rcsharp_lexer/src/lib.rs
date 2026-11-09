@@ -32,7 +32,7 @@ impl LexerSymbolTable {
         self.indices.insert(s, len);
         len
     }
-    pub fn get(&self, s: &LexerSymbolIndex) -> &str {
+    pub fn get(&self, s: LexerSymbolIndex) -> &str {
         &self.strings[s.index()]
     }
 }
