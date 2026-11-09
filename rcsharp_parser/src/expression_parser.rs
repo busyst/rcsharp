@@ -21,19 +21,24 @@ pub enum Expr {
     Assign(Box<Expr>, Box<Expr>),
 
     Cast(Box<Expr>, Box<ParserType>),
-    MemberAccess(Box<Expr>, String),
-    StaticAccess(Box<Expr>, String),
+    MemberAccess(Box<Expr>, LexerSymbolIndex),
+    StaticAccess(Box<Expr>, LexerSymbolIndex),
 
     NameWithGenerics(Box<Expr>, Box<[ParserType]>),
 
     Call(Box<Expr>, Box<[Expr]>, Option<Box<[ParserType]>>),
-    MemberCall(Box<Expr>, String, Box<[Expr]>, Option<Box<[ParserType]>>),
+    MemberCall(
+        Box<Expr>,
+        LexerSymbolIndex,
+        Box<[Expr]>,
+        Option<Box<[ParserType]>>,
+    ),
     MacroCall(Box<Expr>, Box<[Expr]>),
     Index(Box<Expr>, Box<Expr>),
 
     Array(Box<[Expr]>),
 
-    StructInit(Box<Expr>, Box<[(String, Expr)]>),
+    StructInit(Box<Expr>, Box<[(LexerSymbolIndex, Expr)]>),
     Range(Box<Expr>, Box<Expr>, bool),
     Boolean(bool),
     NullPtr,
@@ -229,21 +234,7 @@ impl<'a> ExpressionParser<'a> {
     }
 
     #[inline]
-    fn consume_name(&mut self) -> ParserResult<String> {
-        match &self.peek().token {
-            Token::Name(sym) => {
-                let name = self.symbol_table.get(*sym).to_string();
-                self.cursor += 1;
-                Ok(name)
-            }
-            _ => Err((
-                self.cursor..self.cursor + 1,
-                ParserError::ExpectedIdentifier,
-            )),
-        }
-    }
-    #[inline]
-    fn consume_name_symbol(&mut self) -> ParserResult<LexerSymbolIndex> {
+    fn consume_name(&mut self) -> ParserResult<LexerSymbolIndex> {
         match &self.peek().token {
             Token::Name(sym) => {
                 let cl_sym = sym.clone();
@@ -611,7 +602,7 @@ impl<'a> ExpressionParser<'a> {
     }
 
     fn parse_named_or_generic_type(&mut self) -> ParserResult<ParserType> {
-        let name = self.consume_name_symbol()?;
+        let name = self.consume_name()?;
 
         match &self.peek().token {
             Token::DoubleColon => {

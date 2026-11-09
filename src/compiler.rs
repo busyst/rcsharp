@@ -124,16 +124,28 @@ pub enum CompilerIR {
         var_type: CompilerTypeImplementationIndex,
         expr: Expr,
     },
-    Evaluate(Expr),
-    Test(Expr),
+
+    Test(ReferenceTo),
     Label(LabelID),
     JumpTo(LabelID),
     JumpToIf(LabelID),
     JumpToIfNot(LabelID),
+
+    Assign(ReferenceTo, ReferenceTo),
+    PresentResult(ReferenceTo),
     ExitBody,
 }
+#[derive(Debug, Clone, Copy)]
+pub enum ReferenceTo {
+    Register(u64),
+    Variable(u64),
+    Static(u64),
+    Integer(i64),
+    Decimal(f64),
+    StringConst(LexerSymbolIndex),
+}
 pub enum FunctionTypeAssociation {
-    Compiler(fn(CompilerTypeImplementationIndex, &mut Vec<CompilerIR>)),
+    Compiler(fn(ReferenceTo, (ReferenceTo, CompilerTypeImplementationIndex), &mut Vec<CompilerIR>)),
 }
 #[derive(Debug, Clone, PartialEq)]
 pub struct CompilerPath {
@@ -166,6 +178,7 @@ struct TypeVectorEntry {
     members: Vec<(LexerSymbolIndex, CompilerTypeImplementationIndex)>,
     associated_functions: Vec<(String, FunctionTypeAssociation)>,
     path: CompilerPath,
+    is_generic: bool,
     layout: Layout,
 }
 struct FunctionVectorEntry {
@@ -174,6 +187,7 @@ struct FunctionVectorEntry {
     path: CompilerPath,
     llvm_signature: String,
     body: Box<[CompilerIR]>,
+    is_generic: bool,
 }
 struct EnumVectorEntry {
     base_type: CompilerTypeImplementationIndex,
@@ -238,6 +252,7 @@ fn fill_symbol_table_from_statement_part_1(
                 associated_functions: vec![],
                 path: struct_path,
                 layout: Layout::INVALID,
+                is_generic: false,
             });
         }
         Function(ps) => {
@@ -249,6 +264,7 @@ fn fill_symbol_table_from_statement_part_1(
                 return_type: 0,
                 argument_name_types: vec![].into_boxed_slice(),
                 body: vec![].into_boxed_slice(),
+                is_generic: false,
             });
         }
         Enum(ps) => {
@@ -300,6 +316,13 @@ fn fill_symbol_table_from_statement_part_2(
         }
         Struct(ps) => {
             if !ps.generic_params.is_empty() {
+                if ps.generic_params.len() >= GENERIC_PARAMETERS_COUNT {
+                    println!(
+                        "Amount of arguments of struct {:?} exeeds max({})\tSkipped.",
+                        ps, GENERIC_PARAMETERS_COUNT
+                    );
+                    return;
+                }
                 for p in &ps.generic_params {
                     table.generic_indexes.push(p.name);
                 }
@@ -323,6 +346,13 @@ fn fill_symbol_table_from_statement_part_2(
         }
         Function(ps) => {
             if !ps.generic_params.is_empty() {
+                if ps.generic_params.len() >= GENERIC_PARAMETERS_COUNT {
+                    println!(
+                        "Amount of arguments of function {:?} exeeds max({})\tSkipped.",
+                        ps, GENERIC_PARAMETERS_COUNT
+                    );
+                    return;
+                }
                 for p in &ps.generic_params {
                     table.generic_indexes.push(p.name);
                 }
@@ -411,6 +441,7 @@ fn fill_symbol_table_from_statement_part_2(
         _ => {}
     }
 }
+
 #[derive(Debug, Default, Clone)]
 struct FunctionScope {
     current_label: Cell<LabelID>,
@@ -433,10 +464,13 @@ fn stmts_to_ir(
                     var_type: get_impl_index_struct(&var.var_type, path, symbol_table).unwrap(),
                 });
                 if let Some(expr) = &var.expr {
-                    output.push(CompilerIR::Evaluate(Expr::Assign(
-                        Box::new(Expr::Name(var.name)),
-                        Box::new(expr.clone()),
-                    )));
+                    expression_to_ir(
+                        &Expr::Assign(Box::new(Expr::Name(var.name)), Box::new(expr.clone())),
+                        path,
+                        symbol_table,
+                        fscope,
+                        output,
+                    );
                 }
             }
             Stmt::ConstLet(var) => {
@@ -452,20 +486,25 @@ fn stmts_to_ir(
                     var_type: get_impl_index_struct(&var.var_type, path, symbol_table).unwrap(),
                 });
                 if let Some(expr) = &var.expr {
-                    output.push(CompilerIR::Evaluate(Expr::Assign(
-                        Box::new(Expr::Name(var.name)),
-                        Box::new(expr.clone()),
-                    )));
+                    expression_to_ir(
+                        &Expr::Assign(Box::new(Expr::Name(var.name)), Box::new(expr.clone())),
+                        path,
+                        symbol_table,
+                        fscope,
+                        output,
+                    );
                 }
             }
-            Stmt::Return(e) => {
-                if let Some(expr) = &e {
-                    output.push(CompilerIR::Evaluate(expr.clone()));
+            Stmt::Return(expr) => {
+                if let Some(expr) = &expr {
+                    let result = expression_to_ir(expr, path, symbol_table, fscope, output);
+                    output.push(CompilerIR::PresentResult(result));
                 }
                 output.push(CompilerIR::JumpTo(fscope.return_label));
             }
-            Stmt::If(e, then_d, else_d) => {
-                output.push(CompilerIR::Test(e.clone()));
+            Stmt::If(expr, then_d, else_d) => {
+                let cond = expression_to_ir(expr, path, symbol_table, fscope, output);
+                output.push(CompilerIR::Test(cond));
                 let block_else_entry = fscope.current_label.replace(fscope.current_label.get() + 1);
                 let block_exit_label = fscope.current_label.replace(fscope.current_label.get() + 1);
                 output.push(CompilerIR::JumpToIfNot(block_else_entry));
@@ -479,11 +518,12 @@ fn stmts_to_ir(
                 fscope.current_label.set(scope.current_label.get());
                 output.push(CompilerIR::Label(block_exit_label));
             }
-            Stmt::WhileLoop(e, body) => {
+            Stmt::WhileLoop(expr, body) => {
                 let block_entry = fscope.current_label.replace(fscope.current_label.get() + 1);
                 let block_exit = fscope.current_label.replace(fscope.current_label.get() + 1);
                 output.push(CompilerIR::Label(block_entry));
-                output.push(CompilerIR::Test(e.clone()));
+                let cond = expression_to_ir(expr, path, symbol_table, fscope, output);
+                output.push(CompilerIR::Test(cond));
                 output.push(CompilerIR::JumpToIfNot(block_exit));
                 let mut scope = fscope.clone();
                 scope.entry_label = block_entry;
@@ -493,7 +533,7 @@ fn stmts_to_ir(
                 output.push(CompilerIR::JumpTo(block_entry));
                 output.push(CompilerIR::Label(block_exit));
             }
-            Stmt::DoWhileLoop(e, body) => {
+            Stmt::DoWhileLoop(expr, body) => {
                 let block_entry = fscope.current_label.replace(fscope.current_label.get() + 1);
                 let block_cond = fscope.current_label.replace(fscope.current_label.get() + 1);
                 let block_exit = fscope.current_label.replace(fscope.current_label.get() + 1);
@@ -506,7 +546,8 @@ fn stmts_to_ir(
                 fscope.current_label.set(scope.current_label.get());
 
                 output.push(CompilerIR::Label(block_cond));
-                output.push(CompilerIR::Test(e.clone()));
+                let cond = expression_to_ir(expr, path, symbol_table, fscope, output);
+                output.push(CompilerIR::Test(cond));
                 output.push(CompilerIR::JumpToIf(block_entry));
                 output.push(CompilerIR::Label(block_exit));
             }
@@ -528,7 +569,8 @@ fn stmts_to_ir(
                 fscope.current_label.set(scope.current_label.get());
             }
 
-            Stmt::Expr(e) => output.push(CompilerIR::Evaluate(e.clone())),
+            Stmt::Expr(e) => _ = expression_to_ir(e, path, symbol_table, fscope, output),
+
             Stmt::Break => output.push(CompilerIR::JumpTo(fscope.exit_label)),
             Stmt::Continue => output.push(CompilerIR::JumpTo(fscope.entry_label)),
             _ => {}
@@ -737,20 +779,31 @@ fn get_impl_index_struct(
         }
     }
 }
-
+fn expression_to_ir(
+    expr: &Expr,
+    path: &CompilerPath,
+    symbol_table: &mut SymbolTable,
+    fscope: &FunctionScope,
+    output: &mut Vec<CompilerIR>,
+) -> ReferenceTo {
+    match expr {
+        Expr::Integer(i) => return ReferenceTo::Integer(*i as i64),
+        Expr::Decimal(d) => return ReferenceTo::Decimal(*d),
+        Expr::Assign(l, r) => {
+            let ro = expression_to_ir(r, path, symbol_table, fscope, output);
+            let lo = expression_to_ir(l, path, symbol_table, fscope, output);
+            output.push(CompilerIR::Assign(lo, ro.clone()));
+            return ro;
+        }
+        _ => {
+            println!("{:?}", expr);
+            return ReferenceTo::Register(0);
+        }
+    }
+}
 fn default_symbol_table(lexer_symbol_table: LexerSymbolTable) -> SymbolTable {
     let mut table: SymbolTable = SymbolTable::default();
     table.lexer = lexer_symbol_table;
-
-    for i in 0..GENERIC_PARAMETERS_COUNT {
-        table.type_vector.push(TypeVectorEntry {
-            llvm_signature: format!("{}", i),
-            members: vec![],
-            associated_functions: vec![],
-            path: CompilerPath { data: vec![] },
-            layout: Layout::new(0, 0),
-        });
-    }
 
     let primitives = [
         // (name, llvm_sig, size, align)
@@ -779,14 +832,13 @@ fn default_symbol_table(lexer_symbol_table: LexerSymbolTable) -> SymbolTable {
                 data: vec![table.lexer.get_or_intern(name.to_string())],
             },
             layout: Layout::new(*size, *align),
+            is_generic: false,
         });
         table
             .type_implementation_vector
-            .push(TypeImplementationEntry::Normal(
-                GENERIC_PARAMETERS_COUNT as usize + index,
-            ));
+            .push(TypeImplementationEntry::Normal(index));
     }
     return table;
 }
 
-pub const GENERIC_PARAMETERS_COUNT: u8 = 16;
+pub const GENERIC_PARAMETERS_COUNT: usize = 16;

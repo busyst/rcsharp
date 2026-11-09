@@ -148,7 +148,7 @@ impl<'a> GeneralParser<'a> {
     }
 
     #[inline]
-    fn consume_name_symbol(&mut self) -> ParserResult<LexerSymbolIndex> {
+    fn consume_name(&mut self) -> ParserResult<LexerSymbolIndex> {
         match &self.peek().token {
             Token::Name(sym) => {
                 let cl_sym = sym.clone();
@@ -368,12 +368,12 @@ impl<'a> GeneralParser<'a> {
                 self.advance();
                 break;
             }
-            let name = self.consume_name_symbol()?;
+            let name = self.consume_name()?;
             let bounds = if self.peek().token == Token::Colon {
                 self.advance(); // :
                 let mut bounds = Vec::new();
                 loop {
-                    bounds.push(self.consume_name_symbol()?);
+                    bounds.push(self.consume_name()?);
                     if self.peek().token == Token::Plus {
                         self.advance();
                     } else {
@@ -407,7 +407,7 @@ impl<'a> GeneralParser<'a> {
         let start = self.cursor;
         self.advance(); // #
         self.advance(); // [
-        let name = self.consume_name_symbol()?;
+        let name = self.consume_name()?;
         let args = self.parse_arg_list_parens()?;
         self.consume(&Token::RSquareBrace)?;
 
@@ -421,7 +421,7 @@ impl<'a> GeneralParser<'a> {
     fn parse_hint_stmt(&mut self) -> ParserResult<StmtData> {
         let start = self.cursor;
         self.advance(); // #
-        let name = self.consume_name_symbol()?;
+        let name = self.consume_name()?;
         let args = self.parse_arg_list_parens()?;
         let span = start..self.cursor;
 
@@ -459,14 +459,14 @@ impl<'a> GeneralParser<'a> {
     ) -> ParserResult<StmtData> {
         let start = start_span.start;
         self.advance(); // fn
-        let name = self.consume_name_symbol()?;
+        let name = self.consume_name()?;
         let generic_types = self.parse_generic_params()?;
 
         self.consume(&Token::LParen)?;
         let mut args = Vec::new();
         if self.peek().token != Token::RParen {
             loop {
-                let arg_name = self.consume_name_symbol()?;
+                let arg_name = self.consume_name()?;
                 self.consume(&Token::Colon)?;
                 let arg_type = self.parse_type()?;
                 args.push((arg_name, arg_type));
@@ -543,13 +543,13 @@ impl<'a> GeneralParser<'a> {
     ) -> ParserResult<StmtData> {
         let start = start_span.start;
         self.advance(); // struct
-        let name = self.consume_name_symbol()?;
+        let name = self.consume_name()?;
         let generic_types = self.parse_generic_params()?;
         self.consume(&Token::LBrace)?;
 
         let mut fields = Vec::with_capacity(4);
         while self.peek().token != Token::RBrace && !self.is_at_end() {
-            let field_name = self.consume_name_symbol()?;
+            let field_name = self.consume_name()?;
             self.consume(&Token::Colon)?;
             let field_type = self.parse_type()?;
             fields.push((field_name, field_type));
@@ -576,7 +576,7 @@ impl<'a> GeneralParser<'a> {
     fn parse_namespace(&mut self) -> ParserResult<StmtData> {
         let start = self.cursor;
         self.advance(); // namespace
-        let name = self.consume_name_symbol()?;
+        let name = self.consume_name()?;
         self.consume(&Token::LBrace)?;
         let mut body = Vec::new();
         while self.peek().token != Token::RBrace {
@@ -600,7 +600,7 @@ impl<'a> GeneralParser<'a> {
     ) -> ParserResult<StmtData> {
         let start = start_span.start;
         self.advance(); // enum
-        let name = self.consume_name_symbol()?;
+        let name = self.consume_name()?;
 
         let enum_base_type = if self.peek().token == Token::Colon {
             self.advance();
@@ -613,7 +613,7 @@ impl<'a> GeneralParser<'a> {
         let mut values = Vec::with_capacity(8);
 
         while self.peek().token != Token::RBrace && !self.is_at_end() {
-            let name = self.consume_name_symbol()?;
+            let name = self.consume_name()?;
             let expr = if self.peek().token == Token::Equal {
                 self.advance();
                 Some(self.parse_expression()?)
@@ -828,7 +828,7 @@ impl<'a> GeneralParser<'a> {
     }
     fn parse_const_let_statement(&mut self, start: usize) -> ParserResult<StmtData> {
         self.advance(); // const
-        let name = self.consume_name_symbol()?;
+        let name = self.consume_name()?;
         self.consume(&Token::Colon)?;
         let var_type = self.parse_type()?;
         self.consume(&Token::Equal)?;
@@ -848,7 +848,7 @@ impl<'a> GeneralParser<'a> {
     }
     fn parse_static_let_statement(&mut self, start: usize) -> ParserResult<StmtData> {
         self.advance(); // static
-        let name = self.consume_name_symbol()?;
+        let name = self.consume_name()?;
         self.consume(&Token::Colon)?;
         let var_type = self.parse_type()?;
 
@@ -874,7 +874,7 @@ impl<'a> GeneralParser<'a> {
     }
     fn parse_let_statement(&mut self, start: usize) -> ParserResult<StmtData> {
         self.advance(); // let
-        let name = self.consume_name_symbol()?;
+        let name = self.consume_name()?;
         self.consume(&Token::Colon)?;
         let var_type = self.parse_type()?;
         let initializer = if self.peek().token == Token::Equal {
