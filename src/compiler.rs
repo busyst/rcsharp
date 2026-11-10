@@ -41,11 +41,21 @@ pub fn compile_to_file(args: &CompilationArgs) -> CompilationState {
         CompilerPath { data: vec![] },
         lexer_symbol_table,
     );
+    statements.clear();
     println!("Types: {}", filled_symbol_table.type_vector.len());
     println!(
         "Implementations: {}",
         filled_symbol_table.type_implementation_vector.len()
     );
+    //let mut output = std::fs::OpenOptions::new()
+    //    .create(true)
+    //    .read(true)
+    //    .write(true)
+    //    .truncate(true)
+    //    .open(args.output.clone().unwrap())
+    //    .unwrap();
+    //println!("{:#?}", filled_symbol_table.type_implementation_vector);
+
     return result;
 }
 
@@ -109,14 +119,16 @@ fn lex_and_parse_files(
 
 pub type CompilerTypeImplementationIndex = usize;
 pub type LabelID = u32;
+pub type VariableID = u32;
 #[derive(Debug)]
 pub enum CompilerIR {
     DeclareVariable {
-        name: LexerSymbolIndex,
+        id: VariableID,
         var_type: CompilerTypeImplementationIndex,
     },
     DeclareStatic {
         name: LexerSymbolIndex,
+        id: VariableID,
         var_type: CompilerTypeImplementationIndex,
     },
     DeclareConstant {
@@ -138,11 +150,16 @@ pub enum CompilerIR {
 #[derive(Debug, Clone, Copy)]
 pub enum ReferenceTo {
     Register(u64),
-    Variable(u64),
+    Variable(VariableID),
     Static(u64),
+    Constant(u64),
     Integer(i64),
     Decimal(f64),
     StringConst(LexerSymbolIndex),
+}
+#[derive(Debug, Clone, Copy)]
+pub enum CallTo {
+    Register(u64),
 }
 pub enum FunctionTypeAssociation {
     Compiler(fn(ReferenceTo, (ReferenceTo, CompilerTypeImplementationIndex), &mut Vec<CompilerIR>)),
@@ -182,7 +199,7 @@ struct TypeVectorEntry {
     layout: Layout,
 }
 struct FunctionVectorEntry {
-    argument_name_types: Box<[(LexerSymbolIndex, CompilerTypeImplementationIndex)]>,
+    args: Box<[(LexerSymbolIndex, CompilerTypeImplementationIndex)]>,
     return_type: CompilerTypeImplementationIndex,
     path: CompilerPath,
     llvm_signature: String,
@@ -213,7 +230,7 @@ struct SymbolTable {
 }
 
 fn fill_symbol_table(
-    statements: &mut Vec<StmtData>,
+    statements: &[StmtData],
     path: CompilerPath,
     lexer_symbol_table: LexerSymbolTable,
 ) -> SymbolTable {
@@ -225,7 +242,6 @@ fn fill_symbol_table(
     for x in statements.iter() {
         fill_symbol_table_from_statement_part_2(x, &mut table, &path);
     }
-    statements.clear();
 
     table
 }
@@ -262,7 +278,7 @@ fn fill_symbol_table_from_statement_part_1(
                 llvm_signature: String::new(),
                 path: function_path,
                 return_type: 0,
-                argument_name_types: vec![].into_boxed_slice(),
+                args: vec![].into_boxed_slice(),
                 body: vec![].into_boxed_slice(),
                 is_generic: false,
             });
@@ -378,15 +394,15 @@ fn fill_symbol_table_from_statement_part_2(
                     get_impl_index_struct(&x.1, path, table).unwrap(),
                 ));
             }
-            table.function_vector[func_index].argument_name_types = args.into_boxed_slice();
-            let mut fscope = FunctionScope::default();
-            fscope.current_label.set(2);
-            fscope.entry_label = 0;
-            fscope.exit_label = 1;
-            fscope.return_label = 1;
+            let mut fscope = FunctionScope::new(2, 1);
+            for (name, ty) in args.iter() {
+                fscope.add_variable(*name, *ty);
+            }
+            table.function_vector[func_index].args = args.into_boxed_slice();
+
             let mut fbody = vec![];
             fbody.push(CompilerIR::Label(0));
-            stmts_to_ir(&ps.body, path, table, &fscope, &mut fbody);
+            stmts_to_ir(&ps.body, path, table, &mut fscope, &mut fbody);
             fbody.push(CompilerIR::Label(1));
             fbody.push(CompilerIR::ExitBody);
 
@@ -442,35 +458,102 @@ fn fill_symbol_table_from_statement_part_2(
     }
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 struct FunctionScope {
-    current_label: Cell<LabelID>,
-    entry_label: LabelID,
-    exit_label: LabelID,
-    return_label: LabelID,
+    current_label: LabelID,
+    layers: Vec<(
+        Vec<(
+            LexerSymbolIndex,
+            VariableID,
+            CompilerTypeImplementationIndex,
+        )>,
+        Option<(LabelID, LabelID)>,
+        LabelID,
+    )>,
+    next_var: VariableID,
+}
+impl FunctionScope {
+    pub fn new(current_label: LabelID, return_label: LabelID) -> FunctionScope {
+        Self {
+            current_label: current_label,
+            layers: vec![(vec![], None, return_label)],
+            next_var: 0,
+        }
+    }
+    pub fn alloc_label(&mut self) -> LabelID {
+        let id = self.current_label;
+        self.current_label += 1;
+        id
+    }
+    pub fn enter_scope(&mut self, loop_labels: Option<(LabelID, LabelID)>) {
+        self.layers.push((vec![], loop_labels, self.return_label()));
+    }
+    pub fn enter_scope_inherit_loop(&mut self) {
+        self.layers.push((
+            vec![],
+            self.layers.last().and_then(|x| x.1),
+            self.return_label(),
+        ));
+    }
+    pub fn leave_scope(&mut self) {
+        self.layers.pop();
+    }
+    pub fn add_variable(
+        &mut self,
+        name: LexerSymbolIndex,
+        type_index: CompilerTypeImplementationIndex,
+    ) -> VariableID {
+        let id = self.next_var;
+        self.next_var += 1;
+        self.layers
+            .last_mut()
+            .unwrap()
+            .0
+            .push((name, id, type_index));
+        id
+    }
+    pub fn get_variable(
+        &self,
+        var_name: LexerSymbolIndex,
+    ) -> Option<(VariableID, CompilerTypeImplementationIndex)> {
+        for layer in self.layers.iter().rev() {
+            for var in layer.0.iter().rev() {
+                if var.0 == var_name {
+                    return Some((var.1, var.2));
+                }
+            }
+        }
+        return None;
+    }
+    pub fn return_label(&self) -> LabelID {
+        self.layers.last().and_then(|x| Some(x.2)).unwrap()
+    }
+    pub fn entry_label(&self) -> Option<LabelID> {
+        self.layers.last().and_then(|x| x.1).and_then(|x| Some(x.0))
+    }
+    pub fn exit_label(&self) -> Option<LabelID> {
+        self.layers.last().and_then(|x| x.1).and_then(|x| Some(x.1))
+    }
 }
 fn stmts_to_ir(
     body: &[StmtData],
     path: &CompilerPath,
     symbol_table: &mut SymbolTable,
-    fscope: &FunctionScope,
+    fscope: &mut FunctionScope,
     output: &mut Vec<CompilerIR>,
 ) {
     for x in body.iter() {
         match &x.stmt {
             Stmt::Let(var) => {
-                output.push(CompilerIR::DeclareVariable {
-                    name: var.name,
-                    var_type: get_impl_index_struct(&var.var_type, path, symbol_table).unwrap(),
-                });
-                if let Some(expr) = &var.expr {
-                    expression_to_ir(
-                        &Expr::Assign(Box::new(Expr::Name(var.name)), Box::new(expr.clone())),
-                        path,
-                        symbol_table,
-                        fscope,
-                        output,
-                    );
+                let var_type = get_impl_index_struct(&var.var_type, path, symbol_table).unwrap();
+                let rhs = var
+                    .expr
+                    .as_ref()
+                    .map(|e| expression_to_ir(e, path, symbol_table, fscope, output));
+                let id = fscope.add_variable(var.name, var_type);
+                output.push(CompilerIR::DeclareVariable { id, var_type });
+                if let Some(rhs) = rhs {
+                    output.push(CompilerIR::Assign(ReferenceTo::Variable(id), rhs));
                 }
             }
             Stmt::ConstLet(var) => {
@@ -481,18 +564,19 @@ fn stmts_to_ir(
                 });
             }
             Stmt::StaticLet(var) => {
+                let var_type = get_impl_index_struct(&var.var_type, path, symbol_table).unwrap();
+                let rhs = var
+                    .expr
+                    .as_ref()
+                    .map(|e| expression_to_ir(e, path, symbol_table, fscope, output));
+                let id = fscope.add_variable(var.name, var_type);
                 output.push(CompilerIR::DeclareStatic {
                     name: var.name,
-                    var_type: get_impl_index_struct(&var.var_type, path, symbol_table).unwrap(),
+                    id,
+                    var_type,
                 });
-                if let Some(expr) = &var.expr {
-                    expression_to_ir(
-                        &Expr::Assign(Box::new(Expr::Name(var.name)), Box::new(expr.clone())),
-                        path,
-                        symbol_table,
-                        fscope,
-                        output,
-                    );
+                if let Some(rhs) = rhs {
+                    output.push(CompilerIR::Assign(ReferenceTo::Variable(id), rhs));
                 }
             }
             Stmt::Return(expr) => {
@@ -500,50 +584,46 @@ fn stmts_to_ir(
                     let result = expression_to_ir(expr, path, symbol_table, fscope, output);
                     output.push(CompilerIR::PresentResult(result));
                 }
-                output.push(CompilerIR::JumpTo(fscope.return_label));
+                output.push(CompilerIR::JumpTo(fscope.return_label()));
             }
             Stmt::If(expr, then_d, else_d) => {
                 let cond = expression_to_ir(expr, path, symbol_table, fscope, output);
                 output.push(CompilerIR::Test(cond));
-                let block_else_entry = fscope.current_label.replace(fscope.current_label.get() + 1);
-                let block_exit_label = fscope.current_label.replace(fscope.current_label.get() + 1);
+                let block_else_entry = fscope.alloc_label();
+                let block_exit_label = fscope.alloc_label();
                 output.push(CompilerIR::JumpToIfNot(block_else_entry));
-                let scope = fscope.clone();
-                stmts_to_ir(then_d, path, symbol_table, &scope, output);
-                fscope.current_label.set(scope.current_label.get());
+                fscope.enter_scope_inherit_loop();
+                stmts_to_ir(then_d, path, symbol_table, fscope, output);
+                fscope.leave_scope();
                 output.push(CompilerIR::JumpTo(block_exit_label));
                 output.push(CompilerIR::Label(block_else_entry));
-                let scope = fscope.clone();
-                stmts_to_ir(else_d, path, symbol_table, &scope, output);
-                fscope.current_label.set(scope.current_label.get());
+                fscope.enter_scope_inherit_loop();
+                stmts_to_ir(else_d, path, symbol_table, fscope, output);
+                fscope.leave_scope();
                 output.push(CompilerIR::Label(block_exit_label));
             }
             Stmt::WhileLoop(expr, body) => {
-                let block_entry = fscope.current_label.replace(fscope.current_label.get() + 1);
-                let block_exit = fscope.current_label.replace(fscope.current_label.get() + 1);
+                let block_entry = fscope.alloc_label();
+                let block_exit = fscope.alloc_label();
                 output.push(CompilerIR::Label(block_entry));
                 let cond = expression_to_ir(expr, path, symbol_table, fscope, output);
                 output.push(CompilerIR::Test(cond));
                 output.push(CompilerIR::JumpToIfNot(block_exit));
-                let mut scope = fscope.clone();
-                scope.entry_label = block_entry;
-                scope.exit_label = block_exit;
-                stmts_to_ir(body, path, symbol_table, &scope, output);
-                fscope.current_label.set(scope.current_label.get());
+                fscope.enter_scope(Some((block_entry, block_exit)));
+                stmts_to_ir(body, path, symbol_table, fscope, output);
+                fscope.leave_scope();
                 output.push(CompilerIR::JumpTo(block_entry));
                 output.push(CompilerIR::Label(block_exit));
             }
             Stmt::DoWhileLoop(expr, body) => {
-                let block_entry = fscope.current_label.replace(fscope.current_label.get() + 1);
-                let block_cond = fscope.current_label.replace(fscope.current_label.get() + 1);
-                let block_exit = fscope.current_label.replace(fscope.current_label.get() + 1);
+                let block_entry = fscope.alloc_label();
+                let block_cond = fscope.alloc_label();
+                let block_exit = fscope.alloc_label();
                 output.push(CompilerIR::Label(block_entry));
 
-                let mut scope = fscope.clone();
-                scope.entry_label = block_cond;
-                scope.exit_label = block_exit;
-                stmts_to_ir(body, path, symbol_table, &scope, output);
-                fscope.current_label.set(scope.current_label.get());
+                fscope.enter_scope(Some((block_cond, block_exit)));
+                stmts_to_ir(body, path, symbol_table, fscope, output);
+                fscope.leave_scope();
 
                 output.push(CompilerIR::Label(block_cond));
                 let cond = expression_to_ir(expr, path, symbol_table, fscope, output);
@@ -552,27 +632,25 @@ fn stmts_to_ir(
                 output.push(CompilerIR::Label(block_exit));
             }
             Stmt::Loop(body) => {
-                let block_entry = fscope.current_label.replace(fscope.current_label.get() + 1);
-                let block_exit = fscope.current_label.replace(fscope.current_label.get() + 1);
+                let block_entry = fscope.alloc_label();
+                let block_exit = fscope.alloc_label();
                 output.push(CompilerIR::Label(block_entry));
-                let mut scope = fscope.clone();
-                scope.entry_label = block_entry;
-                scope.exit_label = block_exit;
-                stmts_to_ir(body, path, symbol_table, &scope, output);
-                fscope.current_label.set(scope.current_label.get());
+                fscope.enter_scope(Some((block_entry, block_exit)));
+                stmts_to_ir(body, path, symbol_table, fscope, output);
+                fscope.leave_scope();
                 output.push(CompilerIR::JumpTo(block_entry));
                 output.push(CompilerIR::Label(block_exit));
             }
             Stmt::Block(body) => {
-                let scope = fscope.clone();
-                stmts_to_ir(body, path, symbol_table, &scope, output);
-                fscope.current_label.set(scope.current_label.get());
+                fscope.enter_scope_inherit_loop();
+                stmts_to_ir(body, path, symbol_table, fscope, output);
+                fscope.leave_scope();
             }
 
             Stmt::Expr(e) => _ = expression_to_ir(e, path, symbol_table, fscope, output),
 
-            Stmt::Break => output.push(CompilerIR::JumpTo(fscope.exit_label)),
-            Stmt::Continue => output.push(CompilerIR::JumpTo(fscope.entry_label)),
+            Stmt::Continue => output.push(CompilerIR::JumpTo(fscope.entry_label().unwrap())),
+            Stmt::Break => output.push(CompilerIR::JumpTo(fscope.exit_label().unwrap())),
             _ => {}
         }
     }
@@ -787,6 +865,12 @@ fn expression_to_ir(
     output: &mut Vec<CompilerIR>,
 ) -> ReferenceTo {
     match expr {
+        Expr::Name(idx) => {
+            if let Some((var_index, ..)) = fscope.get_variable(*idx) {
+                return ReferenceTo::Variable(var_index);
+            }
+            return ReferenceTo::Register(0);
+        }
         Expr::Integer(i) => return ReferenceTo::Integer(*i as i64),
         Expr::Decimal(d) => return ReferenceTo::Decimal(*d),
         Expr::Assign(l, r) => {
