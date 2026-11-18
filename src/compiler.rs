@@ -1,7 +1,5 @@
 use std::{
-    cell::Cell,
     collections::HashSet,
-    num::{NonZeroU64, NonZeroU8},
     path::{Path, PathBuf},
 };
 
@@ -16,7 +14,14 @@ use rcsharp_parser::{
     parser::{self, ParserType},
 };
 
-use crate::CompilationArgs;
+use crate::{
+    intermediate_representation::{
+        CompilerIR, CompilerPath, CompilerTypeImplementationIndex, ConstantValue, LabelID,
+        ReferenceTo, TypeImplementationEntry, TypeIndex, TypeType, VariableID,
+    },
+    llvm_ir_conversion::{write_all_statics, write_all_used_types, SignatureHolder},
+    CompilationArgs,
+};
 pub struct CompilationState {}
 impl CompilationState {
     pub fn empty() -> CompilationState {
@@ -36,25 +41,33 @@ pub fn compile_to_file(args: &CompilationArgs) -> CompilationState {
         &mut statements,
         &mut result,
     );
-    let filled_symbol_table = fill_symbol_table(
-        &mut statements,
-        CompilerPath { data: vec![] },
-        lexer_symbol_table,
-    );
+    let filled_symbol_table =
+        fill_symbol_table(&mut statements, CompilerPath::default(), lexer_symbol_table);
     statements.clear();
     println!("Types: {}", filled_symbol_table.type_vector.len());
     println!(
         "Implementations: {}",
         filled_symbol_table.type_implementation_vector.len()
     );
-    //let mut output = std::fs::OpenOptions::new()
-    //    .create(true)
-    //    .read(true)
-    //    .write(true)
-    //    .truncate(true)
-    //    .open(args.output.clone().unwrap())
-    //    .unwrap();
-    //println!("{:#?}", filled_symbol_table.type_implementation_vector);
+    let mut output = std::fs::OpenOptions::new()
+        .create(true)
+        .read(true)
+        .write(true)
+        .truncate(true)
+        .open(args.output.clone().unwrap())
+        .unwrap();
+    let mut signatures = SignatureHolder::new(
+        filled_symbol_table.type_implementation_vector.len(),
+        filled_symbol_table.var_vector.len(),
+        0,
+    );
+    write_all_used_types(
+        &mut output,
+        &mut signatures.type_signatures,
+        &filled_symbol_table,
+        true,
+    );
+    write_all_statics(&mut output, &mut signatures, &filled_symbol_table, true);
 
     return result;
 }
@@ -117,88 +130,17 @@ fn lex_and_parse_files(
     CompilationState::empty()
 }
 
-pub type CompilerTypeImplementationIndex = usize;
-pub type LabelID = u32;
-pub type VariableID = u32;
-#[derive(Debug)]
-pub enum CompilerIR {
-    DeclareVariable {
-        id: VariableID,
-        var_type: CompilerTypeImplementationIndex,
-    },
-    DeclareStatic {
-        name: LexerSymbolIndex,
-        id: VariableID,
-        var_type: CompilerTypeImplementationIndex,
-    },
-    DeclareConstant {
-        name: LexerSymbolIndex,
-        var_type: CompilerTypeImplementationIndex,
-        expr: Expr,
-    },
-
-    Test(ReferenceTo),
-    Label(LabelID),
-    JumpTo(LabelID),
-    JumpToIf(LabelID),
-    JumpToIfNot(LabelID),
-
-    Assign(ReferenceTo, ReferenceTo),
-    PresentResult(ReferenceTo),
-    ExitBody,
-}
-#[derive(Debug, Clone, Copy)]
-pub enum ReferenceTo {
-    Register(u64),
-    Variable(VariableID),
-    Static(u64),
-    Constant(u64),
-    Integer(i64),
-    Decimal(f64),
-    StringConst(LexerSymbolIndex),
-}
-#[derive(Debug, Clone, Copy)]
-pub enum CallTo {
-    Register(u64),
-}
 pub enum FunctionTypeAssociation {
     Compiler(fn(ReferenceTo, (ReferenceTo, CompilerTypeImplementationIndex), &mut Vec<CompilerIR>)),
 }
-#[derive(Debug, Clone, PartialEq)]
-pub struct CompilerPath {
-    data: Vec<LexerSymbolIndex>,
+pub struct TypeVectorEntry {
+    pub members: Vec<(LexerSymbolIndex, CompilerTypeImplementationIndex)>,
+    pub associated_functions: Vec<(String, FunctionTypeAssociation)>,
+    pub path: CompilerPath,
+    pub type_type: TypeType,
+    pub layout: Layout,
 }
-#[derive(Debug, Clone, PartialEq)]
-enum TypeImplementationEntry {
-    Normal(usize),
-    Enum(usize),
-    Pointered {
-        base: usize,
-        pointered: NonZeroU8,
-    },
-    GenericImplementation {
-        base: usize,
-        implementation: Box<[usize]>,
-    },
-    Function {
-        arguments: Box<[usize]>,
-        return_type: usize,
-    },
-    ConstantSizeArray {
-        base: usize,
-        size: NonZeroU64,
-    },
-    GenericParameter(usize),
-}
-struct TypeVectorEntry {
-    llvm_signature: String,
-    members: Vec<(LexerSymbolIndex, CompilerTypeImplementationIndex)>,
-    associated_functions: Vec<(String, FunctionTypeAssociation)>,
-    path: CompilerPath,
-    is_generic: bool,
-    layout: Layout,
-}
-struct FunctionVectorEntry {
+pub struct FunctionVectorEntry {
     args: Box<[(LexerSymbolIndex, CompilerTypeImplementationIndex)]>,
     return_type: CompilerTypeImplementationIndex,
     path: CompilerPath,
@@ -206,27 +148,27 @@ struct FunctionVectorEntry {
     body: Box<[CompilerIR]>,
     is_generic: bool,
 }
-struct EnumVectorEntry {
-    base_type: CompilerTypeImplementationIndex,
+pub struct EnumVectorEntry {
+    pub base_type: CompilerTypeImplementationIndex,
     path: CompilerPath,
-    asscoiated_functions: Vec<(String, FunctionTypeAssociation)>,
-    fields: Box<[(LexerSymbolIndex, Option<Expr>)]>,
+    associated_functions: Vec<(String, FunctionTypeAssociation)>,
+    fields: Box<[(LexerSymbolIndex, ConstantValue)]>,
 }
-struct StaticOrConstantVariableEntry {
-    var_type: CompilerTypeImplementationIndex,
-    path: CompilerPath,
-    expression: Option<Expr>,
-    is_static: bool,
+pub struct StaticOrConstantVariableEntry {
+    pub var_type: CompilerTypeImplementationIndex,
+    pub path: CompilerPath,
+    pub expression: Option<Expr>,
+    pub is_static: bool,
 }
 #[derive(Default)]
-struct SymbolTable {
-    type_vector: Vec<TypeVectorEntry>,
-    type_implementation_vector: Vec<TypeImplementationEntry>,
-    function_vector: Vec<FunctionVectorEntry>,
-    enum_vector: Vec<EnumVectorEntry>,
-    var_vector: Vec<StaticOrConstantVariableEntry>,
-    generic_indexes: Vec<LexerSymbolIndex>,
-    lexer: LexerSymbolTable,
+pub struct SymbolTable {
+    pub type_vector: Vec<TypeVectorEntry>,
+    pub type_implementation_vector: Vec<TypeImplementationEntry>,
+    pub function_vector: Vec<FunctionVectorEntry>,
+    pub enum_vector: Vec<EnumVectorEntry>,
+    pub var_vector: Vec<StaticOrConstantVariableEntry>,
+    pub generic_indexes: Vec<LexerSymbolIndex>,
+    pub lexer: LexerSymbolTable,
 }
 
 fn fill_symbol_table(
@@ -253,62 +195,50 @@ fn fill_symbol_table_from_statement_part_1(
 ) {
     match &statement.stmt {
         Namespace(x, y) => {
-            let mut np = path.clone();
-            np.data.push(*x);
+            let extended_path = path.extended(*x);
             for x in y {
-                fill_symbol_table_from_statement_part_1(x, table, &np);
+                fill_symbol_table_from_statement_part_1(x, table, &extended_path);
             }
         }
         Struct(ps) => {
-            let mut struct_path = path.clone();
-            struct_path.data.push(ps.name);
             table.type_vector.push(TypeVectorEntry {
-                llvm_signature: String::new(),
                 members: vec![],
                 associated_functions: vec![],
-                path: struct_path,
+                path: path.extended(ps.name),
                 layout: Layout::INVALID,
-                is_generic: false,
+                type_type: TypeType::Normal,
             });
         }
         Function(ps) => {
-            let mut function_path = path.clone();
-            function_path.data.push(ps.name);
             table.function_vector.push(FunctionVectorEntry {
                 llvm_signature: String::new(),
-                path: function_path,
-                return_type: 0,
+                path: path.extended(ps.name),
+                return_type: VOID_TYPE_ID,
                 args: vec![].into_boxed_slice(),
                 body: vec![].into_boxed_slice(),
                 is_generic: false,
             });
         }
         Enum(ps) => {
-            let mut enum_path = path.clone();
-            enum_path.data.push(ps.name);
             table.enum_vector.push(EnumVectorEntry {
-                base_type: 0,
+                base_type: VOID_TYPE_ID,
                 fields: vec![].into_boxed_slice(),
-                asscoiated_functions: vec![],
-                path: enum_path,
+                associated_functions: vec![],
+                path: path.extended(ps.name),
             });
         }
         StaticLet(ps) => {
-            let mut var_path = path.clone();
-            var_path.data.push(ps.name);
             table.var_vector.push(StaticOrConstantVariableEntry {
-                var_type: 0,
-                path: var_path,
+                var_type: VOID_TYPE_ID,
+                path: path.extended(ps.name),
                 expression: None,
                 is_static: true,
             });
         }
         ConstLet(ps) => {
-            let mut var_path = path.clone();
-            var_path.data.push(ps.name);
             table.var_vector.push(StaticOrConstantVariableEntry {
-                var_type: 0,
-                path: var_path,
+                var_type: VOID_TYPE_ID,
+                path: path.extended(ps.name),
                 expression: None,
                 is_static: false,
             });
@@ -324,10 +254,9 @@ fn fill_symbol_table_from_statement_part_2(
 ) {
     match &statement.stmt {
         Namespace(x, y) => {
-            let mut np = path.clone();
-            np.data.push(*x);
+            let extended_path = path.extended(*x);
             for x in y {
-                fill_symbol_table_from_statement_part_2(x, table, &np);
+                fill_symbol_table_from_statement_part_2(x, table, &extended_path);
             }
         }
         Struct(ps) => {
@@ -343,20 +272,24 @@ fn fill_symbol_table_from_statement_part_2(
                     table.generic_indexes.push(p.name);
                 }
             }
-            let mut struct_path = path.clone();
-            struct_path.data.push(ps.name);
+            let struct_path = path.extended(ps.name);
             let struct_index = table
                 .type_vector
                 .iter()
                 .position(|x| x.path == struct_path)
                 .unwrap();
-            for m in ps.members.iter() {
-                let ii = get_impl_index_struct(&m.1, path, table).unwrap();
+            table.type_vector[struct_index].type_type = if ps.generic_params.is_empty() {
+                TypeType::Normal
+            } else {
+                TypeType::Generic
+            };
+            for (member_name, member_type) in ps.members.iter() {
+                let ii = get_impl_index_struct(&member_type, path, table).unwrap();
                 let type_entry = &mut table.type_vector[struct_index];
-                type_entry.members.push((m.0, ii));
+                type_entry.members.push((*member_name, ii));
             }
+
             table.generic_indexes.clear();
-            // llvm_signature: String::new()
             //    layout: Layout::INVALID,
             // Attributes, prefixes, and generic params
         }
@@ -373,8 +306,7 @@ fn fill_symbol_table_from_statement_part_2(
                     table.generic_indexes.push(p.name);
                 }
             }
-            let mut function_path = path.clone();
-            function_path.data.push(ps.name);
+            let function_path = path.extended(ps.name);
             let func_index = table
                 .function_vector
                 .iter()
@@ -385,7 +317,7 @@ fn fill_symbol_table_from_statement_part_2(
                 let ii = get_impl_index_struct(&x, path, table).unwrap();
                 table.function_vector[func_index].return_type = ii;
             } else {
-                table.function_vector[func_index].return_type = 0;
+                table.function_vector[func_index].return_type = VOID_TYPE_ID;
             }
             let mut args = vec![];
             for x in &ps.args {
@@ -394,16 +326,16 @@ fn fill_symbol_table_from_statement_part_2(
                     get_impl_index_struct(&x.1, path, table).unwrap(),
                 ));
             }
-            let mut fscope = FunctionScope::new(2, 1);
+            let mut fscope = FunctionScope::new(FIRST_DYNAMIC_LABEL, FUNC_RETURN_LABEL);
             for (name, ty) in args.iter() {
                 fscope.add_variable(*name, *ty);
             }
             table.function_vector[func_index].args = args.into_boxed_slice();
 
             let mut fbody = vec![];
-            fbody.push(CompilerIR::Label(0));
+            fbody.push(CompilerIR::Label(FUNC_ENTRY_LABEL));
             stmts_to_ir(&ps.body, path, table, &mut fscope, &mut fbody);
-            fbody.push(CompilerIR::Label(1));
+            fbody.push(CompilerIR::Label(FUNC_RETURN_LABEL));
             fbody.push(CompilerIR::ExitBody);
 
             table.function_vector[func_index].body = fbody.into_boxed_slice();
@@ -413,26 +345,43 @@ fn fill_symbol_table_from_statement_part_2(
             // Attributes, prefixes, and generic params
         }
         Enum(ps) => {
-            let mut enum_path = path.clone();
-            enum_path.data.push(ps.name);
+            let enum_path = path.extended(ps.name);
             let enum_index = table
                 .enum_vector
                 .iter()
                 .position(|x| x.path == enum_path)
                 .unwrap();
 
+            let mut fields = vec![];
+            let mut last_value = ConstantValue::Integer(0);
+            for (fname, fexpr) in ps.fields.iter() {
+                if let Some(expr) = fexpr {
+                    let l = ConstantValue::from_expression(expr, path, table);
+                    fields.push((*fname, l));
+                    last_value = l;
+                } else {
+                    let l = last_value.increment();
+                    fields.push((*fname, l));
+                    last_value = l;
+                }
+            }
+
             if let Some(x) = &ps.enum_type {
                 let ii = get_impl_index_struct(&x, path, table).unwrap();
                 table.enum_vector[enum_index].base_type = ii;
             } else {
-                table.enum_vector[enum_index].base_type = 0;
+                table.enum_vector[enum_index].base_type = SINTEGER32_TYPE_ID;
             }
-            table.enum_vector[enum_index].fields = ps.fields.clone();
+            //let mut fscope = FunctionScope::new(0, 0);
+            //table.enum_vector[enum_index].fields = ps
+            //    .fields
+            //    .iter()
+            //    .map(|x| (x.0, ))
+            //    .collect();
             // Attributes and prefixes
         }
         StaticLet(ps) => {
-            let mut var_path = path.clone();
-            var_path.data.push(ps.name);
+            let var_path = path.extended(ps.name);
             let var_index = table
                 .var_vector
                 .iter()
@@ -443,8 +392,7 @@ fn fill_symbol_table_from_statement_part_2(
             // Attributes and prefixes
         }
         ConstLet(ps) => {
-            let mut var_path = path.clone();
-            var_path.data.push(ps.name);
+            let var_path = path.extended(ps.name);
             let var_index = table
                 .var_vector
                 .iter()
@@ -470,20 +418,18 @@ struct FunctionScope {
         Option<(LabelID, LabelID)>,
         LabelID,
     )>,
-    next_var: VariableID,
+    next_var_id: VariableID,
 }
 impl FunctionScope {
     pub fn new(current_label: LabelID, return_label: LabelID) -> FunctionScope {
         Self {
             current_label: current_label,
             layers: vec![(vec![], None, return_label)],
-            next_var: 0,
+            next_var_id: VariableID(0),
         }
     }
     pub fn alloc_label(&mut self) -> LabelID {
-        let id = self.current_label;
-        self.current_label += 1;
-        id
+        self.current_label.next_id()
     }
     pub fn enter_scope(&mut self, loop_labels: Option<(LabelID, LabelID)>) {
         self.layers.push((vec![], loop_labels, self.return_label()));
@@ -503,8 +449,7 @@ impl FunctionScope {
         name: LexerSymbolIndex,
         type_index: CompilerTypeImplementationIndex,
     ) -> VariableID {
-        let id = self.next_var;
-        self.next_var += 1;
+        let id = self.next_var_id.next_id();
         self.layers
             .last_mut()
             .unwrap()
@@ -526,10 +471,10 @@ impl FunctionScope {
         return None;
     }
     pub fn return_label(&self) -> LabelID {
-        self.layers.last().and_then(|x| Some(x.2)).unwrap()
+        self.layers.last().map(|x| x.2).unwrap()
     }
     pub fn entry_label(&self) -> Option<LabelID> {
-        self.layers.last().and_then(|x| x.1).and_then(|x| Some(x.0))
+        self.layers.last().and_then(|x| x.1).map(|x| x.0)
     }
     pub fn exit_label(&self) -> Option<LabelID> {
         self.layers.last().and_then(|x| x.1).and_then(|x| Some(x.1))
@@ -557,10 +502,12 @@ fn stmts_to_ir(
                 }
             }
             Stmt::ConstLet(var) => {
+                let expr =
+                    ConstantValue::from_expression(var.expr.as_ref().unwrap(), path, symbol_table);
                 output.push(CompilerIR::DeclareConstant {
                     name: var.name,
                     var_type: get_impl_index_struct(&var.var_type, path, symbol_table).unwrap(),
-                    expr: var.expr.clone().unwrap(),
+                    expr,
                 });
             }
             Stmt::StaticLet(var) => {
@@ -646,9 +593,7 @@ fn stmts_to_ir(
                 stmts_to_ir(body, path, symbol_table, fscope, output);
                 fscope.leave_scope();
             }
-
             Stmt::Expr(e) => _ = expression_to_ir(e, path, symbol_table, fscope, output),
-
             Stmt::Continue => output.push(CompilerIR::JumpTo(fscope.entry_label().unwrap())),
             Stmt::Break => output.push(CompilerIR::JumpTo(fscope.exit_label().unwrap())),
             _ => {}
@@ -669,11 +614,11 @@ fn get_impl_index_struct(
             .iter()
             .position(|x| *x == tie)
         {
-            return struct_impl;
+            return CompilerTypeImplementationIndex::new(struct_impl);
         }
         let idx = symbol_table.type_implementation_vector.len();
         symbol_table.type_implementation_vector.push(tie);
-        return idx;
+        return CompilerTypeImplementationIndex::new(idx);
     }
     match parser_type {
         ParserType::Named(lsi) => {
@@ -684,8 +629,7 @@ fn get_impl_index_struct(
                     symbol_table,
                 ));
             }
-            let mut concat_path = path.clone();
-            concat_path.data.push(*lsi);
+            let concat_path = path.extended(*lsi);
             if let Some(enum_index) = symbol_table
                 .enum_vector
                 .iter()
@@ -699,7 +643,7 @@ fn get_impl_index_struct(
             if let Some(enum_index) = symbol_table
                 .enum_vector
                 .iter()
-                .position(|x| x.path.data.len() == 1 && x.path.data[0] == *lsi)
+                .position(|x| x.path.0.len() == 1 && x.path.0[0] == *lsi)
             {
                 return Some(return_format(
                     TypeImplementationEntry::Enum(enum_index),
@@ -713,16 +657,16 @@ fn get_impl_index_struct(
                 .position(|x| x.path == concat_path)
             {
                 return Some(return_format(
-                    TypeImplementationEntry::Normal(struct_index),
+                    TypeImplementationEntry::Normal(TypeIndex(struct_index)),
                     symbol_table,
                 ));
             } else if let Some(struct_index) = symbol_table
                 .type_vector
                 .iter()
-                .position(|x| x.path.data.len() == 1 && x.path.data[0] == *lsi)
+                .position(|x| x.path.0.len() == 1 && x.path.0[0] == *lsi)
             {
                 return Some(return_format(
-                    TypeImplementationEntry::Normal(struct_index),
+                    TypeImplementationEntry::Normal(TypeIndex(struct_index)),
                     symbol_table,
                 ));
             };
@@ -741,10 +685,7 @@ fn get_impl_index_struct(
             }
             if let Some(base) = get_impl_index_struct(current_pointer, path, symbol_table) {
                 return Some(return_format(
-                    TypeImplementationEntry::Pointered {
-                        base,
-                        pointered: NonZeroU8::try_from(pointered).unwrap(),
-                    },
+                    TypeImplementationEntry::Pointered { base, pointered },
                     symbol_table,
                 ));
             }
@@ -761,17 +702,17 @@ fn get_impl_index_struct(
                 let args = arguments
                     .iter()
                     .map(|x| get_impl_index_struct(x, path, symbol_table))
-                    .collect::<Option<Box<[usize]>>>()?;
+                    .collect::<Option<Box<[CompilerTypeImplementationIndex]>>>()?;
                 let mut path = data.clone();
                 path.push(*lsi);
                 if let Some(base) = symbol_table
                     .type_vector
                     .iter()
-                    .position(|x| x.path.data == path)
+                    .position(|x| x.path.0.iter().eq(path.iter()))
                 {
                     return Some(return_format(
                         TypeImplementationEntry::GenericImplementation {
-                            base,
+                            base: TypeIndex(base),
                             implementation: args,
                         },
                         symbol_table,
@@ -779,18 +720,13 @@ fn get_impl_index_struct(
                 }
                 return None;
             }
-            let mut extend = path.data.clone();
-            extend.extend(data.iter());
-
-            if let Some(base) =
-                get_impl_index_struct(current_pointer, &CompilerPath { data }, symbol_table)
-            {
+            let extended = path.extended_slice(&data);
+            if let Some(base) = get_impl_index_struct(current_pointer, &extended, symbol_table) {
                 return Some(base);
             }
-
             if let Some(base) = get_impl_index_struct(
                 current_pointer,
-                &CompilerPath { data: extend },
+                &CompilerPath(data.into_boxed_slice()),
                 symbol_table,
             ) {
                 return Some(base);
@@ -800,10 +736,7 @@ fn get_impl_index_struct(
         ParserType::ConstantSizeArray(base_type, len) => {
             if let Some(base) = get_impl_index_struct(base_type, path, symbol_table) {
                 return Some(return_format(
-                    TypeImplementationEntry::ConstantSizeArray {
-                        base,
-                        size: NonZeroU64::try_from(*len).unwrap(),
-                    },
+                    TypeImplementationEntry::ConstantSizeArray { base, size: *len },
                     symbol_table,
                 ));
             }
@@ -814,7 +747,7 @@ fn get_impl_index_struct(
                 if let Some(args) = arguments
                     .iter()
                     .map(|x| get_impl_index_struct(x, path, symbol_table))
-                    .collect::<Option<Box<[usize]>>>()
+                    .collect::<Option<Box<[CompilerTypeImplementationIndex]>>>()
                 {
                     return Some(return_format(
                         TypeImplementationEntry::Function {
@@ -829,8 +762,7 @@ fn get_impl_index_struct(
             return None;
         }
         ParserType::Generic(lsi, arguments) => {
-            let mut concat_path = path.clone();
-            concat_path.data.push(*lsi);
+            let concat_path = path.extended(*lsi);
             let struct_index = symbol_table
                 .type_vector
                 .iter()
@@ -839,17 +771,17 @@ fn get_impl_index_struct(
                     symbol_table
                         .type_vector
                         .iter()
-                        .position(|x| x.path.data.len() == 1 && x.path.data[0] == *lsi)
+                        .position(|x| x.path.0.len() == 1 && x.path.0[0] == *lsi)
                 })?;
 
             let args = arguments
                 .iter()
                 .map(|x| get_impl_index_struct(x, path, symbol_table))
-                .collect::<Option<Box<[usize]>>>()?;
+                .collect::<Option<Box<[CompilerTypeImplementationIndex]>>>()?;
 
             return Some(return_format(
                 TypeImplementationEntry::GenericImplementation {
-                    base: struct_index,
+                    base: TypeIndex(struct_index),
                     implementation: args,
                 },
                 symbol_table,
@@ -885,6 +817,7 @@ fn expression_to_ir(
         }
     }
 }
+
 fn default_symbol_table(lexer_symbol_table: LexerSymbolTable) -> SymbolTable {
     let mut table: SymbolTable = SymbolTable::default();
     table.lexer = lexer_symbol_table;
@@ -907,22 +840,28 @@ fn default_symbol_table(lexer_symbol_table: LexerSymbolTable) -> SymbolTable {
         ("f32", "float", 4, 4),
         ("f64", "double", 8, 8),
     ];
-    for (index, (name, sig, size, align)) in primitives.iter().enumerate() {
+    for (name, sig, size, align) in primitives.iter() {
         table.type_vector.push(TypeVectorEntry {
-            llvm_signature: sig.to_string(),
             members: vec![],
             associated_functions: vec![],
-            path: CompilerPath {
-                data: vec![table.lexer.get_or_intern(name.to_string())],
-            },
+            path: CompilerPath::default().extended(table.lexer.get_or_intern(name.to_string())),
             layout: Layout::new(*size, *align),
-            is_generic: false,
+            type_type: TypeType::Compiler(sig),
         });
         table
             .type_implementation_vector
-            .push(TypeImplementationEntry::Normal(index));
+            .push(TypeImplementationEntry::Normal(TypeIndex(
+                table.type_vector.len() - 1,
+            )));
     }
     return table;
 }
 
+const FUNC_ENTRY_LABEL: LabelID = LabelID::new(0);
+const FUNC_RETURN_LABEL: LabelID = LabelID::new(1);
+const FIRST_DYNAMIC_LABEL: LabelID = LabelID::new(2);
+
 pub const GENERIC_PARAMETERS_COUNT: usize = 16;
+pub const VOID_TYPE_ID: CompilerTypeImplementationIndex = CompilerTypeImplementationIndex::new(0);
+pub const SINTEGER32_TYPE_ID: CompilerTypeImplementationIndex =
+    CompilerTypeImplementationIndex::new(6);
