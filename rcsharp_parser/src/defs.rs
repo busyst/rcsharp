@@ -1,4 +1,5 @@
-use rcsharp_lexer::defs::{LexerSymbolIndex, Token};
+use rcsharp_lexer::defs::Token;
+use rcsharp_syntax::Symbol;
 
 use crate::{expression_parser::Expr, parser::ParserType};
 
@@ -30,7 +31,7 @@ pub enum ParserError {
 pub type ParserResult<T> = Result<T, (Span, ParserError)>;
 #[derive(Debug, Clone, PartialEq)]
 pub struct Attribute {
-    pub name: LexerSymbolIndex,
+    pub name: Symbol,
     pub arguments: Box<[Expr]>,
     pub span: Span,
 }
@@ -44,22 +45,22 @@ impl Attribute {
 }
 #[derive(Debug, Clone, PartialEq)]
 pub struct GenericParam {
-    pub name: LexerSymbolIndex,
-    pub bounds: Vec<LexerSymbolIndex>,
+    pub name: Symbol,
+    pub bounds: Vec<Symbol>,
 }
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParsedStruct {
     pub attributes: Box<[Attribute]>,
-    pub name: LexerSymbolIndex,
-    pub members: Box<[(LexerSymbolIndex, ParserType)]>,
+    pub name: Symbol,
+    pub members: Box<[(Symbol, ParserType)]>,
     pub generic_params: Box<[GenericParam]>,
     pub prefixes: Box<[String]>,
 }
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParsedEnum {
     pub attributes: Box<[Attribute]>,
-    pub name: LexerSymbolIndex,
-    pub fields: Box<[(LexerSymbolIndex, Option<Expr>)]>,
+    pub name: Symbol,
+    pub fields: Box<[(Symbol, Option<Expr>)]>,
     pub enum_type: Option<ParserType>,
     pub prefixes: Box<[String]>,
 }
@@ -85,8 +86,8 @@ pub struct ParsedEnum {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParsedFunction {
     pub attributes: Box<[Attribute]>,
-    pub name: LexerSymbolIndex,
-    pub args: Box<[(LexerSymbolIndex, ParserType)]>,
+    pub name: Symbol,
+    pub args: Box<[(Symbol, ParserType)]>,
     pub return_type: Option<ParserType>,
     pub body: Box<[StmtData]>,
     pub prefixes: Box<[String]>,
@@ -101,7 +102,7 @@ pub enum VarType {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParsedVariable {
     pub attributes: Box<[Attribute]>,
-    pub name: LexerSymbolIndex,
+    pub name: Symbol,
     pub var_type: ParserType,
     pub prefixes: Box<[String]>,
     pub expr: Option<Expr>,
@@ -125,7 +126,7 @@ pub enum Stmt {
     Function(ParsedFunction),                     // fn foo(bar: i8, ...) ... { ... }
     Struct(ParsedStruct),                         // struct foo <T> { bar : i8, ... }
     Enum(ParsedEnum),                             // enum foo 'base_type' { bar = ..., ... }
-    Namespace(LexerSymbolIndex, Box<[StmtData]>), // namespace foo { fn bar(...): ... {...} ... }
+    Namespace(Symbol, Box<[StmtData]>), // namespace foo { fn bar(...): ... {...} ... }
     //Impl(ParsedImplementation),                     // impl Foo { fn bar(...): ... {...} ...}
     //TraitDeclaration(ParsedTrait),                  // trait Foo { fn bar(...): ...; ... }
     Block(Box<[StmtData]>), // ; { ... }

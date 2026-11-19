@@ -3,9 +3,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use rcsharp_lexer::{defs::LexerSymbolIndex, lex_file, LexerSymbolTable};
+use rcsharp_lexer::lex;
 use rcsharp_parser::{
-    compiler_primitives::Layout,
     defs::{
         Stmt::{self, ConstLet, Enum, Function, Namespace, StaticLet, Struct},
         StmtData,
@@ -13,6 +12,7 @@ use rcsharp_parser::{
     expression_parser::Expr,
     parser::{self, ParserType},
 };
+use rcsharp_syntax::{Interner, SourceFile, Symbol};
 
 use crate::{
     intermediate_representation::{
@@ -30,7 +30,7 @@ impl CompilationState {
 }
 pub fn compile_to_file(args: &CompilationArgs) -> CompilationState {
     let mut result = CompilationState::empty();
-    let mut lexer_symbol_table = LexerSymbolTable::new();
+    let mut lexer_symbol_table = Interner::new();
     let mut compiled_files = HashSet::new();
     let mut statements = vec![];
 
@@ -74,7 +74,7 @@ pub fn compile_to_file(args: &CompilationArgs) -> CompilationState {
 
 fn lex_and_parse_files(
     file_path: &str,
-    lexer_symbol_table: &mut LexerSymbolTable,
+    lexer_symbol_table: &mut Interner,
     compiled_files: &mut HashSet<String>,
     statements: &mut Vec<StmtData>,
     _: &mut CompilationState,
@@ -84,16 +84,15 @@ fn lex_and_parse_files(
         .to_string_lossy()
         .trim_start_matches(r"\\?\")
         .to_string();
-
-    let mut queue = vec![initial_path.clone()];
+    let entry_file = SourceFile::from_path_str(&initial_path);
+    let mut queue = vec![entry_file];
     compiled_files.insert(initial_path);
-
+    let mut interner = Interner::new();
     while let Some(path) = queue.pop() {
-        let current_dir = Path::new(&path).parent().unwrap_or_else(|| Path::new(""));
+        let (tokens, diag) = lex(&path, &mut interner);
 
-        let mut tokens = vec![];
-        lex_file(&path, &mut tokens, lexer_symbol_table).unwrap();
-        let all = parser::GeneralParser::new(&tokens, &lexer_symbol_table)
+        let current_dir = path.enviroment_path();
+        let all = parser::GeneralParser::new(&vec![], &lexer_symbol_table)
             .parse_all()
             .unwrap();
 
@@ -117,7 +116,7 @@ fn lex_and_parse_files(
 
                         if !compiled_files.contains(&full_path) {
                             compiled_files.insert(full_path.clone());
-                            queue.push(full_path);
+                            queue.push(SourceFile::from_path_str(&full_path));
                         }
                     }
                 }
@@ -134,14 +133,14 @@ pub enum FunctionTypeAssociation {
     Compiler(fn(ReferenceTo, (ReferenceTo, CompilerTypeImplementationIndex), &mut Vec<CompilerIR>)),
 }
 pub struct TypeVectorEntry {
-    pub members: Vec<(LexerSymbolIndex, CompilerTypeImplementationIndex)>,
+    pub members: Vec<(Symbol, CompilerTypeImplementationIndex)>,
     pub associated_functions: Vec<(String, FunctionTypeAssociation)>,
     pub path: CompilerPath,
     pub type_type: TypeType,
     pub layout: Layout,
 }
 pub struct FunctionVectorEntry {
-    args: Box<[(LexerSymbolIndex, CompilerTypeImplementationIndex)]>,
+    args: Box<[(Symbol, CompilerTypeImplementationIndex)]>,
     return_type: CompilerTypeImplementationIndex,
     path: CompilerPath,
     llvm_signature: String,
@@ -152,7 +151,7 @@ pub struct EnumVectorEntry {
     pub base_type: CompilerTypeImplementationIndex,
     path: CompilerPath,
     associated_functions: Vec<(String, FunctionTypeAssociation)>,
-    fields: Box<[(LexerSymbolIndex, ConstantValue)]>,
+    fields: Box<[(Symbol, ConstantValue)]>,
 }
 pub struct StaticOrConstantVariableEntry {
     pub var_type: CompilerTypeImplementationIndex,
@@ -167,14 +166,14 @@ pub struct SymbolTable {
     pub function_vector: Vec<FunctionVectorEntry>,
     pub enum_vector: Vec<EnumVectorEntry>,
     pub var_vector: Vec<StaticOrConstantVariableEntry>,
-    pub generic_indexes: Vec<LexerSymbolIndex>,
-    pub lexer: LexerSymbolTable,
+    pub generic_indexes: Vec<Symbol>,
+    pub lexer: Interner,
 }
 
 fn fill_symbol_table(
     statements: &[StmtData],
     path: CompilerPath,
-    lexer_symbol_table: LexerSymbolTable,
+    lexer_symbol_table: Interner,
 ) -> SymbolTable {
     let mut table: SymbolTable = default_symbol_table(lexer_symbol_table);
 
@@ -410,11 +409,7 @@ fn fill_symbol_table_from_statement_part_2(
 struct FunctionScope {
     current_label: LabelID,
     layers: Vec<(
-        Vec<(
-            LexerSymbolIndex,
-            VariableID,
-            CompilerTypeImplementationIndex,
-        )>,
+        Vec<(Symbol, VariableID, CompilerTypeImplementationIndex)>,
         Option<(LabelID, LabelID)>,
         LabelID,
     )>,
@@ -446,7 +441,7 @@ impl FunctionScope {
     }
     pub fn add_variable(
         &mut self,
-        name: LexerSymbolIndex,
+        name: Symbol,
         type_index: CompilerTypeImplementationIndex,
     ) -> VariableID {
         let id = self.next_var_id.next_id();
@@ -459,7 +454,7 @@ impl FunctionScope {
     }
     pub fn get_variable(
         &self,
-        var_name: LexerSymbolIndex,
+        var_name: Symbol,
     ) -> Option<(VariableID, CompilerTypeImplementationIndex)> {
         for layer in self.layers.iter().rev() {
             for var in layer.0.iter().rev() {
@@ -803,22 +798,70 @@ fn expression_to_ir(
             }
             return ReferenceTo::Register(0);
         }
-        Expr::Integer(i) => return ReferenceTo::Integer(*i as i64),
-        Expr::Decimal(d) => return ReferenceTo::Decimal(*d),
+        Expr::Integer(i) => return ReferenceTo::Integer(0), // *i as i64
+        Expr::Decimal(d) => return ReferenceTo::Decimal(0.0), // RODO *d
+        Expr::Char(d) => return ReferenceTo::Char(*d),
+        Expr::Boolean(b) => return ReferenceTo::Boolean(*b),
+        Expr::StringConst(s) => return ReferenceTo::StringConst(*s),
+        Expr::NullPtr => return ReferenceTo::NullPtr,
+
         Expr::Assign(l, r) => {
             let ro = expression_to_ir(r, path, symbol_table, fscope, output);
             let lo = expression_to_ir(l, path, symbol_table, fscope, output);
             output.push(CompilerIR::Assign(lo, ro.clone()));
             return ro;
         }
-        _ => {
-            println!("{:?}", expr);
+        Expr::Cast(expr, to) => {
+            let to_type = get_impl_index_struct(to, path, symbol_table).unwrap();
+            let ro = expression_to_ir(expr, path, symbol_table, fscope, output);
+            let result = ReferenceTo::Register(0);
+            output.push(CompilerIR::CompilerCall {
+                operation: "exp_cast",
+                result,
+                arguments: Box::new([ro, ReferenceTo::Type(to_type)]),
+            });
+            return ro;
+        }
+        Expr::UnaryOp(..) => {
             return ReferenceTo::Register(0);
+        }
+        Expr::Call(..) => {
+            return ReferenceTo::Register(0);
+        }
+        Expr::MemberCall(..) => {
+            return ReferenceTo::Register(0);
+        }
+        Expr::StructInit(..) => {
+            return ReferenceTo::Register(0);
+        }
+        Expr::BinaryOp(..) => {
+            return ReferenceTo::Register(0);
+        }
+        Expr::Index(..) => {
+            return ReferenceTo::Register(0);
+        }
+        Expr::MemberAccess(..) => {
+            return ReferenceTo::Register(0);
+        }
+        Expr::StaticAccess(..) => {
+            return ReferenceTo::Register(0);
+        }
+        Expr::Array(..) => {
+            return ReferenceTo::Register(0);
+        }
+        Expr::Type(e) => {
+            return ReferenceTo::Type(get_impl_index_struct(e, path, symbol_table).unwrap());
+        }
+        Expr::NameWithGenerics(..) => {
+            todo!()
+        }
+        Expr::MacroCall(..) | Expr::Range(..) => {
+            unimplemented!()
         }
     }
 }
 
-fn default_symbol_table(lexer_symbol_table: LexerSymbolTable) -> SymbolTable {
+fn default_symbol_table(lexer_symbol_table: Interner) -> SymbolTable {
     let mut table: SymbolTable = SymbolTable::default();
     table.lexer = lexer_symbol_table;
 
@@ -844,7 +887,7 @@ fn default_symbol_table(lexer_symbol_table: LexerSymbolTable) -> SymbolTable {
         table.type_vector.push(TypeVectorEntry {
             members: vec![],
             associated_functions: vec![],
-            path: CompilerPath::default().extended(table.lexer.get_or_intern(name.to_string())),
+            path: CompilerPath::default().extended(table.lexer.intern(name)),
             layout: Layout::new(*size, *align),
             type_type: TypeType::Compiler(sig),
         });
@@ -865,3 +908,10 @@ pub const GENERIC_PARAMETERS_COUNT: usize = 16;
 pub const VOID_TYPE_ID: CompilerTypeImplementationIndex = CompilerTypeImplementationIndex::new(0);
 pub const SINTEGER32_TYPE_ID: CompilerTypeImplementationIndex =
     CompilerTypeImplementationIndex::new(6);
+pub struct Layout {}
+impl Layout {
+    pub const INVALID: Layout = Layout {};
+    pub const fn new(size: u32, allign: u32) -> Layout {
+        return Layout {};
+    }
+}

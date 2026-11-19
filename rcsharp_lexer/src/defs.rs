@@ -1,5 +1,7 @@
-use crate::LexerSymbolTable;
-use std::{fmt::Display, io::Write};
+use rcsharp_syntax::Symbol;
+
+use crate::Interner;
+use std::io::Write;
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
     LParen,
@@ -72,12 +74,13 @@ pub enum Token {
     KeywordFalse,
     KeywordNull,
 
-    Name(LexerSymbolIndex),
-    Integer(LexerSymbolIndex),
-    Decimal(LexerSymbolIndex),
-    String(LexerSymbolIndex),
-    Char(char),
+    Name(Symbol),
+    Integer(Symbol),
+    Decimal(Symbol),
+    String(Symbol),
+    Char(u32),
     DummyToken,
+    EOF,
 }
 
 pub const KEYWORDS_TO_TOKENS: phf::Map<&'static str, Token> = phf::phf_map!(
@@ -144,33 +147,7 @@ pub const DOUBLE_CHAR_TO_TOKEN: phf::Map<(char, char), Token> = phf::phf_map!(
 pub const TRIPLE_CHAR_TO_TOKEN: phf::Map<(char, char, char), Token> = phf::phf_map!(
     ('.', '.', '=') => Token::RangeDotsInclusive,
 );
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct LexerSymbolIndex(u32);
-impl LexerSymbolIndex {
-    pub fn new(ind: u32) -> Self {
-        Self(ind)
-    }
-    pub fn to_integer(self, symbol_table: &LexerSymbolTable) -> i128 {
-        let s = symbol_table.get(self);
-        unsafe { s.parse::<i128>().unwrap_unchecked() }
-    }
-    pub fn to_decimal(self, symbol_table: &LexerSymbolTable) -> f64 {
-        let s = symbol_table.get(self);
-        unsafe { s.parse::<f64>().unwrap_unchecked() }
-    }
-    pub fn to_string(self, symbol_table: &LexerSymbolTable) -> String {
-        symbol_table.get(self).to_string()
-    }
-    pub fn index(&self) -> usize {
-        self.0 as usize
-    }
-}
-impl Display for LexerSymbolIndex {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)?;
-        Ok(())
-    }
-}
+
 pub(crate) type Span = std::ops::Range<usize>;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -185,7 +162,7 @@ pub static DUMMY_EOF_TOKEN: TokenData = TokenData {
 pub fn get_keyword(ident: &str) -> Option<Token> {
     KEYWORDS_TO_TOKENS.get(ident).cloned()
 }
-pub fn debug_lex_emit(tokens: &Vec<TokenData>, symbol_table: &LexerSymbolTable) {
+pub fn debug_lex_emit(tokens: &Vec<TokenData>, symbol_table: &Interner) {
     if let Ok(mut file) = std::fs::OpenOptions::new()
         .create(true)
         .truncate(true)

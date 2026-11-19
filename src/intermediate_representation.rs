@@ -1,6 +1,6 @@
 use crate::compiler::SymbolTable;
-use rcsharp_lexer::defs::LexerSymbolIndex;
 use rcsharp_parser::expression_parser::Expr;
+use rcsharp_syntax::Symbol;
 use std::ops::Add;
 
 // ------------------------------------ Indexes and id's
@@ -37,19 +37,19 @@ impl CompilerTypeImplementationIndex {
     }
 }
 // ------------------------------------ Instructions
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum CompilerIR {
     DeclareVariable {
         id: VariableID,
         var_type: CompilerTypeImplementationIndex,
     },
     DeclareStatic {
-        name: LexerSymbolIndex,
+        name: Symbol,
         id: VariableID,
         var_type: CompilerTypeImplementationIndex,
     },
     DeclareConstant {
-        name: LexerSymbolIndex,
+        name: Symbol,
         var_type: CompilerTypeImplementationIndex,
         expr: ConstantValue,
     },
@@ -63,6 +63,11 @@ pub enum CompilerIR {
     Assign(ReferenceTo, ReferenceTo),
     PresentResult(ReferenceTo),
     ExitBody,
+    CompilerCall {
+        operation: &'static str,
+        result: ReferenceTo,
+        arguments: Box<[ReferenceTo]>,
+    },
 }
 // ------------------------------------ Reference (or Rvalue)
 #[derive(Debug, Clone, Copy)]
@@ -72,15 +77,19 @@ pub enum ReferenceTo {
     Static(u64),
     Constant(u64),
     Integer(i64),
+    Boolean(bool),
     Decimal(f64),
-    StringConst(LexerSymbolIndex),
+    Char(u32),
+    StringConst(Symbol),
+    NullPtr,
+    Type(CompilerTypeImplementationIndex),
 }
 // ------------------------------------ const Rvalue
 #[derive(Debug, Clone, Copy)]
 pub enum ConstantValue {
     Integer(i64),
     Decimal(f64),
-    StringConst(LexerSymbolIndex),
+    StringConst(Symbol),
 }
 impl ConstantValue {
     pub fn increment(&self) -> ConstantValue {
@@ -92,10 +101,13 @@ impl ConstantValue {
     }
     pub fn from_expression(
         expr: &Expr,
-        path: &CompilerPath,
-        symbol_table: &mut SymbolTable,
+        _path: &CompilerPath,
+        _symbol_table: &mut SymbolTable,
     ) -> Self {
-        ConstantValue::Integer(0)
+        match expr {
+            Expr::Integer(i) => ConstantValue::Integer(0), // RODO *i
+            _ => ConstantValue::Integer(0),
+        }
     }
 }
 // ------------------------------------ target of call (Lvalue)
@@ -142,14 +154,14 @@ pub enum TypeType {
 }
 // ------------------------------------ Compiler path
 #[derive(Debug, Clone, PartialEq, Default)]
-pub struct CompilerPath(pub Box<[LexerSymbolIndex]>);
+pub struct CompilerPath(pub Box<[Symbol]>);
 impl CompilerPath {
-    pub fn extended(&self, with: LexerSymbolIndex) -> Self {
+    pub fn extended(&self, with: Symbol) -> Self {
         let mut temp = self.0.to_vec();
         temp.push(with);
         return Self(temp.into_boxed_slice());
     }
-    pub fn extended_slice(&self, with: &[LexerSymbolIndex]) -> Self {
+    pub fn extended_slice(&self, with: &[Symbol]) -> Self {
         let mut temp = self.0.to_vec();
         temp.extend_from_slice(with);
         return Self(temp.into_boxed_slice());

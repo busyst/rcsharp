@@ -5,18 +5,15 @@ use crate::{
     },
     expression_parser::{Expr, ExpressionParser},
 };
-use rcsharp_lexer::{
-    LexerSymbolTable,
-    defs::{DUMMY_EOF_TOKEN, LexerSymbolIndex, Token, TokenData},
-};
-use std::fmt;
+use rcsharp_lexer::defs::{DUMMY_EOF_TOKEN, Token, TokenData};
+use rcsharp_syntax::{Symbol, Interner};
 #[derive(Debug, Clone)]
 pub enum ParserType {
-    Named(LexerSymbolIndex),
+    Named(Symbol),
     Pointer(Box<ParserType>),
     Function(Box<ParserType>, Box<[ParserType]>),
-    NamespaceLink(LexerSymbolIndex, Box<ParserType>),
-    Generic(LexerSymbolIndex, Box<[ParserType]>),
+    NamespaceLink(Symbol, Box<ParserType>),
+    Generic(Symbol, Box<[ParserType]>),
     ConstantSizeArray(Box<ParserType>, u64),
 }
 impl PartialEq for ParserType {
@@ -48,7 +45,7 @@ impl ParserType {
         }
         None
     }
-    pub fn as_generic(&self) -> Option<(&LexerSymbolIndex, &[ParserType])> {
+    pub fn as_generic(&self) -> Option<(&Symbol, &[ParserType])> {
         if let ParserType::Generic(x, y) = self {
             return Some((&x, &y));
         }
@@ -61,43 +58,13 @@ impl ParserType {
         }
     }
 }
-impl fmt::Display for ParserType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Named(n) => write!(f, "{n}"),
-            Self::Pointer(inner) => write!(f, "*{inner}"),
-            Self::NamespaceLink(ns, inner) => write!(f, "{ns}::{inner}"),
-            Self::Generic(name, args) => {
-                write!(f, "{name}<")?;
-                for (i, a) in args.iter().enumerate() {
-                    if i > 0 {
-                        write!(f, ", ")?;
-                    }
-                    write!(f, "{a}")?;
-                }
-                f.write_str(">")
-            }
-            Self::Function(ret, params) => {
-                write!(f, "fn(")?;
-                for (i, p) in params.iter().enumerate() {
-                    if i > 0 {
-                        write!(f, ", ")?;
-                    }
-                    write!(f, "{p}")?;
-                }
-                write!(f, ") -> {ret}")
-            }
-            Self::ConstantSizeArray(elem, n) => write!(f, "[{elem}; {n}]"),
-        }
-    }
-}
 pub struct GeneralParser<'a> {
     tokens: &'a [TokenData],
-    symbol_table: &'a LexerSymbolTable,
+    symbol_table: &'a Interner,
     cursor: usize,
 }
 impl<'a> GeneralParser<'a> {
-    pub fn new(tokens: &'a [TokenData], symbol_table: &'a LexerSymbolTable) -> Self {
+    pub fn new(tokens: &'a [TokenData], symbol_table: &'a Interner) -> Self {
         Self {
             tokens,
             symbol_table,
@@ -148,7 +115,7 @@ impl<'a> GeneralParser<'a> {
     }
 
     #[inline]
-    fn consume_name(&mut self) -> ParserResult<LexerSymbolIndex> {
+    fn consume_name(&mut self) -> ParserResult<Symbol> {
         match &self.peek().token {
             Token::Name(sym) => {
                 let cl_sym = sym.clone();

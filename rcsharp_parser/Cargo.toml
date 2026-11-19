@@ -4,5 +4,6 @@ version = "1.0.0"
 edition = "2024"
 
 [dependencies]
+rcsharp_syntax = { path = "../rcsharp_syntax" }
 rcsharp_lexer = { path = "../rcsharp_lexer" }
 phf = { version = "0.13.1", features = ["macros"] }

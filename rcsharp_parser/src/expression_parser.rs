@@ -1,7 +1,5 @@
-use rcsharp_lexer::{
-    LexerSymbolTable,
-    defs::{DUMMY_EOF_TOKEN, LexerSymbolIndex, Token, TokenData},
-};
+use rcsharp_lexer::defs::{DUMMY_EOF_TOKEN, Token, TokenData};
+use rcsharp_syntax::{Interner, Symbol};
 
 use crate::{
     defs::{ParserError, ParserResult},
@@ -10,10 +8,11 @@ use crate::{
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
-    Decimal(f64),
-    Integer(i128),
-    Name(LexerSymbolIndex),
-    StringConst(LexerSymbolIndex),
+    Decimal(Symbol),
+    Integer(Symbol),
+    Char(u32),
+    Name(Symbol),
+    StringConst(Symbol),
     Type(Box<ParserType>),
 
     BinaryOp(Box<Expr>, BinaryOp, Box<Expr>),
@@ -21,15 +20,15 @@ pub enum Expr {
     Assign(Box<Expr>, Box<Expr>),
 
     Cast(Box<Expr>, Box<ParserType>),
-    MemberAccess(Box<Expr>, LexerSymbolIndex),
-    StaticAccess(Box<Expr>, LexerSymbolIndex),
+    MemberAccess(Box<Expr>, Symbol),
+    StaticAccess(Box<Expr>, Symbol),
 
     NameWithGenerics(Box<Expr>, Box<[ParserType]>),
 
     Call(Box<Expr>, Box<[Expr]>, Option<Box<[ParserType]>>),
     MemberCall(
         Box<Expr>,
-        LexerSymbolIndex,
+        Symbol,
         Box<[Expr]>,
         Option<Box<[ParserType]>>,
     ),
@@ -38,72 +37,10 @@ pub enum Expr {
 
     Array(Box<[Expr]>),
 
-    StructInit(Box<Expr>, Box<[(LexerSymbolIndex, Expr)]>),
+    StructInit(Box<Expr>, Box<[(Symbol, Expr)]>),
     Range(Box<Expr>, Box<Expr>, bool),
     Boolean(bool),
     NullPtr,
-}
-impl Expr {
-    pub fn debug_emit(&self) -> String {
-        self.debug_emit_inner(0)
-    }
-
-    fn debug_emit_inner(&self, depth: u8) -> String {
-        let (open, close) = match depth % 3 {
-            0 => ("(", ")"),
-            1 => ("[", "]"),
-            _ => ("{", "}"),
-        };
-        match self {
-            Self::Name(n) => n.to_string(),
-            Self::Integer(n) => n.to_string(),
-            Self::Call(callee, args, None) => {
-                let args_str = args
-                    .iter()
-                    .map(|a| a.debug_emit_inner(1))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                format!("CALL|[{}]({})|", callee.debug_emit_inner(depth), args_str)
-            }
-            Self::Call(callee, args, Some(generics)) => {
-                let args_str = args
-                    .iter()
-                    .map(|a| a.debug_emit_inner(1))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                let x_str = generics
-                    .iter()
-                    .map(|a| format!("{:?}", a))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                format!(
-                    "CALLGEN{{{}}}|[{}]({})|",
-                    x_str,
-                    callee.debug_emit_inner(depth),
-                    args_str
-                )
-            }
-            Self::MemberAccess(base, member) => {
-                format!("{}.{member}", base.debug_emit_inner(depth))
-            }
-            Self::StaticAccess(base, member) => {
-                format!("{}::{member}", base.debug_emit_inner(depth))
-            }
-            Self::Index(base, idx) => {
-                format!(
-                    "{}[{}]",
-                    base.debug_emit_inner(depth),
-                    idx.debug_emit_inner(depth)
-                )
-            }
-            Self::BinaryOp(l, op, r) => format!(
-                "{open}{} {op:?} {}{close}",
-                l.debug_emit_inner(depth + 1),
-                r.debug_emit_inner(depth + 1),
-            ),
-            _ => format!("{self:?}"),
-        }
-    }
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum BinaryOp {
@@ -176,13 +113,13 @@ const PREFIX_PRECEDENCE: u8 = 13;
 
 pub struct ExpressionParser<'a> {
     tokens: &'a [TokenData],
-    symbol_table: &'a LexerSymbolTable,
+    symbol_table: &'a Interner,
     cursor: usize,
     pending_gt: bool,
 }
 
 impl<'a> ExpressionParser<'a> {
-    pub fn new(tokens: &'a [TokenData], symbol_table: &'a LexerSymbolTable) -> Self {
+    pub fn new(tokens: &'a [TokenData], symbol_table: &'a Interner) -> Self {
         Self {
             tokens,
             symbol_table,
@@ -234,7 +171,7 @@ impl<'a> ExpressionParser<'a> {
     }
 
     #[inline]
-    fn consume_name(&mut self) -> ParserResult<LexerSymbolIndex> {
+    fn consume_name(&mut self) -> ParserResult<Symbol> {
         match &self.peek().token {
             Token::Name(sym) => {
                 let cl_sym = sym.clone();
@@ -267,9 +204,9 @@ impl<'a> ExpressionParser<'a> {
         let token = self.advance().token.clone();
 
         match token {
-            Token::Integer(sym) => Ok(Expr::Integer(sym.to_integer(self.symbol_table))),
-            Token::Char(c) => Ok(Expr::Integer(c as i128)),
-            Token::Decimal(sym) => Ok(Expr::Decimal(sym.to_decimal(self.symbol_table))),
+            Token::Integer(sym) => Ok(Expr::Integer(sym)),
+            Token::Char(sym) => Ok(Expr::Char(sym)),
+            Token::Decimal(sym) => Ok(Expr::Decimal(sym)),
             Token::String(sym) => Ok(Expr::StringConst(sym)),
             Token::Name(sym) => Ok(Expr::Name(sym)),
 
@@ -586,7 +523,7 @@ impl<'a> ExpressionParser<'a> {
         self.consume(&Token::SemiColon)?;
 
         let size = match &self.advance().token {
-            Token::Integer(n) => n.to_integer(self.symbol_table),
+            Token::Integer(n) => 1984, // RODO n.to_integer(self.symbol_table)
             _ => {
                 return Err((
                     self.cursor..self.cursor + 1,

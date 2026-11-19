@@ -244,6 +244,7 @@ dependencies = [
  "ordered_hash_map",
  "rcsharp_lexer",
  "rcsharp_parser",
+ "rcsharp_syntax",
  "regex",
 ]
 
@@ -252,6 +253,7 @@ name = "rcsharp_lexer"
 version = "1.0.0"
 dependencies = [
  "phf",
+ "rcsharp_syntax",
 ]
 
 [[package]]
@@ -260,7 +262,12 @@ version = "1.0.0"
 dependencies = [
  "phf",
  "rcsharp_lexer",
+ "rcsharp_syntax",
 ]
+
+[[package]]
+name = "rcsharp_syntax"
+version = "1.0.0"
 
 [[package]]
 name = "regex"
