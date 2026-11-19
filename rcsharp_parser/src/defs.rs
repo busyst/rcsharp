@@ -1,88 +1,92 @@
-use rcsharp_lexer::defs::Token;
-use rcsharp_syntax::Symbol;
+use rcsharp_syntax::{Span, Symbol};
 
-use crate::{expression_parser::Expr, parser::ParserType};
-
-pub(crate) type Span = std::ops::Range<usize>;
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum ParserError {
-    ExpectedSemicolon,
-    UnexpectedToken {
-        expected: String,
-        found: Token,
-    },
-    UnexpectedTopLevelToken {
-        found: String,
-    },
-    InvalidModifier {
-        modifier: String,
-        applicable_to: String,
-    },
-    AttributeError(String),
-    ExpressionError(String),
-    TypeError(String),
-    Generic(String),
-    ExpectedIdentifier,
-    OrphanedAttributes,
-    UnclosedBlock,
+#[derive(Debug, Clone)]
+pub enum ParserType {
+    Named(Symbol),
+    Pointer(Box<ParserType>),
+    Function(Box<ParserType>, Box<[ParserType]>),
+    NamespaceLink(Symbol, Box<ParserType>),
+    Generic(Symbol, Box<[ParserType]>),
+    ConstantSizeArray(Box<ParserType>, u64),
 }
 
-pub type ParserResult<T> = Result<T, (Span, ParserError)>;
+impl PartialEq for ParserType {
+    fn eq(&self, other: &Self) -> bool {
+        let lhs = self.peel_namespace();
+        let rhs = other.peel_namespace();
+        match (lhs, rhs) {
+            (Self::Named(l), Self::Named(r)) => l == r,
+            (Self::Pointer(l), Self::Pointer(r)) => l == r,
+            (Self::Function(lr, la), Self::Function(rr, ra)) => lr == rr && la == ra,
+            (Self::Generic(ls, lt), Self::Generic(rs, rt)) => ls == rs && lt == rt,
+            (Self::ConstantSizeArray(lt, ls), Self::ConstantSizeArray(rt, rs)) => {
+                lt == rt && ls == rs
+            }
+            _ => false,
+        }
+    }
+}
+
+impl ParserType {
+    pub fn as_pointer(&self) -> Option<&ParserType> {
+        match self {
+            ParserType::Pointer(x) => Some(x),
+            _ => None,
+        }
+    }
+
+    pub fn as_function(&self) -> Option<(&ParserType, &[ParserType])> {
+        match self {
+            ParserType::Function(r, a) => Some((r, a)),
+            _ => None,
+        }
+    }
+
+    pub fn as_generic(&self) -> Option<(&Symbol, &[ParserType])> {
+        match self {
+            ParserType::Generic(s, t) => Some((s, t)),
+            _ => None,
+        }
+    }
+
+    fn peel_namespace(&self) -> &Self {
+        match self {
+            Self::NamespaceLink(_, inner) => inner.peel_namespace(),
+            other => other,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Attribute {
     pub name: Symbol,
     pub arguments: Box<[Expr]>,
     pub span: Span,
 }
-impl Attribute {
-    pub fn one_argument(&self) -> Option<&Expr> {
-        match self.arguments.as_ref() {
-            [arg] => Some(arg),
-            _ => None,
-        }
-    }
-}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct GenericParam {
     pub name: Symbol,
     pub bounds: Vec<Symbol>,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VarType {
+    Constant,
+    Static,
+    Stack,
+}
+
 #[derive(Debug, Clone, PartialEq)]
-pub struct ParsedStruct {
+pub struct ParsedVariable {
     pub attributes: Box<[Attribute]>,
     pub name: Symbol,
-    pub members: Box<[(Symbol, ParserType)]>,
-    pub generic_params: Box<[GenericParam]>,
+    pub var_type: ParserType,
     pub prefixes: Box<[String]>,
+    pub expr: Option<Expr>,
+    pub var_comp_type: VarType,
 }
-#[derive(Debug, Clone, PartialEq)]
-pub struct ParsedEnum {
-    pub attributes: Box<[Attribute]>,
-    pub name: Symbol,
-    pub fields: Box<[(Symbol, Option<Expr>)]>,
-    pub enum_type: Option<ParserType>,
-    pub prefixes: Box<[String]>,
-}
-//#[derive(Debug, Clone, PartialEq)]
-//pub struct ParsedTrait {
-//    pub path: Box<str>,
-//    pub attributes: Box<[Attribute]>,
-//    pub name: Box<str>,
-//    pub functions: Box<[ParsedFunction]>,
-//    pub generic_params: Box<[GenericParam]>,
-//    pub prefixes: Box<[String]>,
-//}
-//#[derive(Debug, Clone, PartialEq)]
-//pub struct ParsedImplementation {
-//    pub trait_name: Option<Box<ParserType>>,
-//    pub implementing_for: Box<ParserType>,
-//    pub path: Box<str>,
-//    pub attributes: Box<[Attribute]>,
-//    pub body: Box<[StmtData]>,
-//    pub generic_params: Box<[GenericParam]>,
-//    pub prefixes: Box<[String]>,
-//}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParsedFunction {
     pub attributes: Box<[Attribute]>,
@@ -93,111 +97,128 @@ pub struct ParsedFunction {
     pub prefixes: Box<[String]>,
     pub generic_params: Box<[GenericParam]>,
 }
+
 #[derive(Debug, Clone, PartialEq)]
-pub enum VarType {
-    Stack,
-    Static,
-    Constant,
-}
-#[derive(Debug, Clone, PartialEq)]
-pub struct ParsedVariable {
+pub struct ParsedStruct {
     pub attributes: Box<[Attribute]>,
     pub name: Symbol,
-    pub var_type: ParserType,
+    pub members: Box<[(Symbol, ParserType)]>,
+    pub generic_params: Box<[GenericParam]>,
     pub prefixes: Box<[String]>,
-    pub expr: Option<Expr>,
-    pub var_comp_type: VarType,
 }
-#[derive(Debug, Clone, PartialEq)]
-pub enum Stmt {
-    CompilerHint(Attribute),                      // #...
-    Let(ParsedVariable),                          // let x : ...
-    ConstLet(ParsedVariable),                     // const x : ...
-    StaticLet(ParsedVariable),                    // static x : ...
-    Expr(Expr),                                   // a = 1 + b
-    If(Expr, Box<[StmtData]>, Box<[StmtData]>),   // if 1 == 1 {} `else `if` {}`
-    Loop(Box<[StmtData]>),                        // loop { ... }
-    WhileLoop(Expr, Box<[StmtData]>),             // while ... { ... }
-    DoWhileLoop(Expr, Box<[StmtData]>),           // do { ... } while ...;
-    ForLoop(Expr, Expr, Box<[StmtData]>),         // for ... in ... { ... }
-    Break,                                        // break
-    Continue,                                     // continue
-    Return(Option<Expr>),                         // return ...
-    Function(ParsedFunction),                     // fn foo(bar: i8, ...) ... { ... }
-    Struct(ParsedStruct),                         // struct foo <T> { bar : i8, ... }
-    Enum(ParsedEnum),                             // enum foo 'base_type' { bar = ..., ... }
-    Namespace(Symbol, Box<[StmtData]>), // namespace foo { fn bar(...): ... {...} ... }
-    //Impl(ParsedImplementation),                     // impl Foo { fn bar(...): ... {...} ...}
-    //TraitDeclaration(ParsedTrait),                  // trait Foo { fn bar(...): ...; ... }
-    Block(Box<[StmtData]>), // ; { ... }
-    Debug(String),          // ; 'debug statement'
-    CompilerDud,            // ; does absolutely nothing
-}
-impl Stmt {
-    pub fn recursive_statement_count(&self) -> u64 {
-        let one = 1;
-        match self {
-            Self::If(_, then_b, else_b) => {
-                one + then_b
-                    .iter()
-                    .map(|x| x.stmt.recursive_statement_count())
-                    .sum::<u64>()
-                    + else_b
-                        .iter()
-                        .map(|x| x.stmt.recursive_statement_count())
-                        .sum::<u64>()
-            }
-            Self::Namespace(_, body)
-            | Self::Loop(body)
-            | Self::WhileLoop(_, body)
-            | Self::DoWhileLoop(_, body)
-            | Self::ForLoop(_, _, body)
-            | Self::Block(body) => {
-                one + body
-                    .iter()
-                    .map(|x| x.stmt.recursive_statement_count())
-                    .sum::<u64>()
-            }
-            //Self::Impl(imp) => {
-            //    one + imp
-            //        .body
-            //        .iter()
-            //        .map(|x| x.stmt.recursive_statement_count())
-            //        .sum::<u64>()
-            //}
-            Self::Function(func) => {
-                one + func
-                    .body
-                    .iter()
-                    .map(|x| x.stmt.recursive_statement_count())
-                    .sum::<u64>()
-            }
-            //Self::TraitDeclaration(tr) => {
-            //    one + tr
-            //        .functions
-            //        .iter()
-            //        .map(|f| {
-            //            1 + f
-            //                .body
-            //                .iter()
-            //                .map(|x| x.stmt.recursive_statement_count())
-            //                .sum::<u64>()
-            //        })
-            //        .sum::<u64>()
-            //}
-            _ => one,
-        }
-    }
 
-    pub fn with_dummy_span(self) -> StmtData {
-        StmtData {
-            stmt: self,
-            span: 0..0,
-        }
-    }
+#[derive(Debug, Clone, PartialEq)]
+pub struct ParsedEnum {
+    pub attributes: Box<[Attribute]>,
+    pub name: Symbol,
+    pub fields: Box<[(Symbol, Option<Expr>)]>,
+    pub enum_type: Option<ParserType>,
+    pub prefixes: Box<[String]>,
 }
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct StmtData {
     pub stmt: Stmt,
     pub span: Span,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Stmt {
+    Block(Box<[StmtData]>),
+    Namespace(Symbol, Box<[StmtData]>),
+    Function(ParsedFunction),
+    Struct(ParsedStruct),
+    Enum(ParsedEnum),
+    Let(ParsedVariable),
+    StaticLet(ParsedVariable),
+    ConstLet(ParsedVariable),
+    If(Expr, Box<[StmtData]>, Box<[StmtData]>),
+    Loop(Box<[StmtData]>),
+    WhileLoop(Expr, Box<[StmtData]>),
+    DoWhileLoop(Expr, Box<[StmtData]>),
+    ForLoop(Expr, Expr, Box<[StmtData]>),
+    Return(Option<Expr>),
+    Break,
+    Continue,
+    Expr(Expr),
+    CompilerHint(Attribute),
+    CompilerDud,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Expr {
+    Decimal(Symbol),
+    Integer(Symbol),
+    Char(char),
+    Name(Symbol),
+    StringConst(Symbol),
+    Type(Box<ParserType>),
+
+    BinaryOp(Box<Expr>, BinaryOp, Box<Expr>),
+    UnaryOp(UnaryOp, Box<Expr>),
+    Assign(Box<Expr>, Box<Expr>),
+
+    Cast(Box<Expr>, Box<ParserType>),
+    MemberAccess(Box<Expr>, Symbol),
+    StaticAccess(Box<Expr>, Symbol),
+
+    NameWithGenerics(Box<Expr>, Box<[ParserType]>),
+    Call(Box<Expr>, Box<[Expr]>, Option<Box<[ParserType]>>),
+    MemberCall(Box<Expr>, Symbol, Box<[Expr]>, Option<Box<[ParserType]>>),
+    MacroCall(Box<Expr>, Box<[Expr]>),
+    Index(Box<Expr>, Box<Expr>),
+
+    Array(Box<[Expr]>),
+    StructInit(Box<Expr>, Box<[(Symbol, Expr)]>),
+    Range(Box<Expr>, Box<Expr>, bool),
+    Boolean(bool),
+    NullPtr,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum BinaryOp {
+    Add,
+    Subtract,
+    Multiply,
+    Divide,
+    Modulo,
+    Equals,
+    NotEqual,
+    Less,
+    LessEqual,
+    Greater,
+    GreaterEqual,
+    And,
+    Or,
+    BitAnd,
+    BitOr,
+    BitXor,
+    ShiftLeft,
+    ShiftRight,
+}
+
+impl BinaryOp {
+    pub fn is_symmetric(self) -> bool {
+        matches!(
+            self,
+            Self::Add
+                | Self::Multiply
+                | Self::BitAnd
+                | Self::BitOr
+                | Self::BitXor
+                | Self::And
+                | Self::Or
+                | Self::Equals
+                | Self::NotEqual
+        )
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum UnaryOp {
+    Negate,
+    Not,
+    BitNot,
+    Deref,
+    Pointer,
 }

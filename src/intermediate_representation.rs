@@ -1,5 +1,5 @@
 use crate::compiler::SymbolTable;
-use rcsharp_parser::expression_parser::Expr;
+use rcsharp_parser::defs::Expr;
 use rcsharp_syntax::Symbol;
 use std::ops::Add;
 
@@ -76,10 +76,10 @@ pub enum ReferenceTo {
     Variable(VariableID),
     Static(u64),
     Constant(u64),
-    Integer(i64),
+    Integer(Symbol),
     Boolean(bool),
-    Decimal(f64),
-    Char(u32),
+    Decimal(Symbol),
+    Char(char),
     StringConst(Symbol),
     NullPtr,
     Type(CompilerTypeImplementationIndex),
@@ -105,7 +105,9 @@ impl ConstantValue {
         _symbol_table: &mut SymbolTable,
     ) -> Self {
         match expr {
-            Expr::Integer(i) => ConstantValue::Integer(0), // RODO *i
+            Expr::Integer(i) => {
+                ConstantValue::Integer(_symbol_table.interner.integer_value(*i).unwrap())
+            }
             _ => ConstantValue::Integer(0),
         }
     }

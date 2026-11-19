@@ -1,18 +1,19 @@
 use std::{
     collections::HashSet,
+    fs,
     path::{Path, PathBuf},
 };
 
-use rcsharp_lexer::lex;
+use rcsharp_lexer::Lexer;
 use rcsharp_parser::{
     defs::{
+        Expr, ParserType,
         Stmt::{self, ConstLet, Enum, Function, Namespace, StaticLet, Struct},
         StmtData,
     },
-    expression_parser::Expr,
-    parser::{self, ParserType},
+    Parser,
 };
-use rcsharp_syntax::{Interner, SourceFile, Symbol};
+use rcsharp_syntax::{Diagnostic, Interner, SourceFile, Symbol};
 
 use crate::{
     intermediate_representation::{
@@ -22,10 +23,14 @@ use crate::{
     llvm_ir_conversion::{write_all_statics, write_all_used_types, SignatureHolder},
     CompilationArgs,
 };
-pub struct CompilationState {}
+pub struct CompilationState {
+    diagnostics: Vec<Diagnostic>,
+}
 impl CompilationState {
     pub fn empty() -> CompilationState {
-        CompilationState {}
+        CompilationState {
+            diagnostics: vec![],
+        }
     }
 }
 pub fn compile_to_file(args: &CompilationArgs) -> CompilationState {
@@ -77,7 +82,7 @@ fn lex_and_parse_files(
     lexer_symbol_table: &mut Interner,
     compiled_files: &mut HashSet<String>,
     statements: &mut Vec<StmtData>,
-    _: &mut CompilationState,
+    state: &mut CompilationState,
 ) -> CompilationState {
     let initial_path = std::fs::canonicalize(file_path)
         .unwrap_or_else(|_| PathBuf::from(file_path))
@@ -87,14 +92,31 @@ fn lex_and_parse_files(
     let entry_file = SourceFile::from_path_str(&initial_path);
     let mut queue = vec![entry_file];
     compiled_files.insert(initial_path);
-    let mut interner = Interner::new();
     while let Some(path) = queue.pop() {
-        let (tokens, diag) = lex(&path, &mut interner);
+        let src_data = match fs::read(&path.path) {
+            Ok(data) => data,
+            Err(err) => {
+                state
+                    .diagnostics
+                    .push(Diagnostic::fatal(&path, "Unable to read file", err));
+                break;
+            }
+        };
+        let src = match std::str::from_utf8(&src_data) {
+            Ok(s) => s,
+            Err(err) => {
+                state.diagnostics.push(Diagnostic::fatal(
+                    &path,
+                    "Unable to decode file in UTF-8 encoding",
+                    err,
+                ));
+                break;
+            }
+        };
+        let mut lexer = Lexer::new(src, lexer_symbol_table);
+        let all = Parser::new(&path, &mut lexer).collect::<Vec<_>>();
 
         let current_dir = path.enviroment_path();
-        let all = parser::GeneralParser::new(&vec![], &lexer_symbol_table)
-            .parse_all()
-            .unwrap();
 
         for mut x in all {
             if let Stmt::CompilerHint(hint) = x.stmt {
@@ -167,7 +189,7 @@ pub struct SymbolTable {
     pub enum_vector: Vec<EnumVectorEntry>,
     pub var_vector: Vec<StaticOrConstantVariableEntry>,
     pub generic_indexes: Vec<Symbol>,
-    pub lexer: Interner,
+    pub interner: Interner,
 }
 
 fn fill_symbol_table(
@@ -798,8 +820,8 @@ fn expression_to_ir(
             }
             return ReferenceTo::Register(0);
         }
-        Expr::Integer(i) => return ReferenceTo::Integer(0), // *i as i64
-        Expr::Decimal(d) => return ReferenceTo::Decimal(0.0), // RODO *d
+        Expr::Integer(i) => return ReferenceTo::Integer(*i), // *i as i64
+        Expr::Decimal(d) => return ReferenceTo::Decimal(*d), // RODO *d
         Expr::Char(d) => return ReferenceTo::Char(*d),
         Expr::Boolean(b) => return ReferenceTo::Boolean(*b),
         Expr::StringConst(s) => return ReferenceTo::StringConst(*s),
@@ -863,7 +885,7 @@ fn expression_to_ir(
 
 fn default_symbol_table(lexer_symbol_table: Interner) -> SymbolTable {
     let mut table: SymbolTable = SymbolTable::default();
-    table.lexer = lexer_symbol_table;
+    table.interner = lexer_symbol_table;
 
     let primitives = [
         // (name, llvm_sig, size, align)
@@ -887,7 +909,7 @@ fn default_symbol_table(lexer_symbol_table: Interner) -> SymbolTable {
         table.type_vector.push(TypeVectorEntry {
             members: vec![],
             associated_functions: vec![],
-            path: CompilerPath::default().extended(table.lexer.intern(name)),
+            path: CompilerPath::default().extended(table.interner.intern_string(name)),
             layout: Layout::new(*size, *align),
             type_type: TypeType::Compiler(sig),
         });
@@ -908,10 +930,13 @@ pub const GENERIC_PARAMETERS_COUNT: usize = 16;
 pub const VOID_TYPE_ID: CompilerTypeImplementationIndex = CompilerTypeImplementationIndex::new(0);
 pub const SINTEGER32_TYPE_ID: CompilerTypeImplementationIndex =
     CompilerTypeImplementationIndex::new(6);
-pub struct Layout {}
+pub struct Layout {
+    size: u64,
+    allign: u64,
+}
 impl Layout {
-    pub const INVALID: Layout = Layout {};
-    pub const fn new(size: u32, allign: u32) -> Layout {
-        return Layout {};
+    pub const INVALID: Layout = Layout { size: 0, allign: 0 };
+    pub const fn new(size: u64, allign: u64) -> Layout {
+        return Layout { size, allign };
     }
 }

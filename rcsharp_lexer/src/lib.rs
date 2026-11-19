@@ -1,8 +1,8 @@
 pub mod defs;
-use rcsharp_syntax::{Diagnostic, Interner, SourceFile};
+use rcsharp_syntax::{Diagnostic, Interner, SourceFile, Span};
 
 use crate::defs::{
-    DOUBLE_CHAR_TO_TOKEN, SINGLE_CHAR_TO_TOKEN, TRIPLE_CHAR_TO_TOKEN, Token, get_keyword,
+    DOUBLE_CHAR_TO_TOKEN, SINGLE_CHAR_TO_TOKEN, TRIPLE_CHAR_TO_TOKEN, Token, TokenKind, get_keyword,
 };
 use std::{
     fs::{self},
@@ -50,7 +50,7 @@ impl<'src, 'int> Lexer<'src, 'int> {
             self.bump();
         }
     }
-    fn lex_number(&mut self, start: usize, first: char) -> Token {
+    fn lex_number(&mut self, start: usize, first: char) -> TokenKind {
         if first == '0' {
             let radix_pred: Option<fn(char) -> bool> = match self.peek() {
                 Some('b') => Some(|c| c == '0' || c == '1'),
@@ -62,8 +62,8 @@ impl<'src, 'int> Lexer<'src, 'int> {
                 if self.peek_second().is_some_and(is_digit) {
                     self.bump();
                     self.eat_while(|c| is_digit(c) || c == '_');
-                    let sym = self.interner.intern_number(&self.src[start..self.pos()]);
-                    return Token::Integer(sym);
+                    let sym = self.interner.intern_integer(&self.src[start..self.pos()]);
+                    return TokenKind::Integer(sym);
                 }
             }
         }
@@ -76,12 +76,11 @@ impl<'src, 'int> Lexer<'src, 'int> {
             self.bump();
             self.eat_while(|c| c.is_ascii_digit() || c == '_');
         }
-
-        let sym = self.interner.intern_number(&self.src[start..self.pos()]);
+        let str = &self.src[start..self.pos()];
         if is_float {
-            Token::Decimal(sym)
+            TokenKind::Decimal(self.interner.intern_decimal(str))
         } else {
-            Token::Integer(sym)
+            TokenKind::Integer(self.interner.intern_integer(str))
         }
     }
     fn lex_quoted(&mut self, start: usize, quote: char, what: &str) -> Option<&'src str> {
@@ -100,12 +99,12 @@ impl<'src, 'int> Lexer<'src, 'int> {
             }
         }
     }
-    fn next_token(&mut self) -> Token {
+    pub fn next_token_kind(&mut self) -> TokenKind {
         loop {
             self.eat_while(|c| c.is_whitespace());
             let start = self.pos();
             let Some(c) = self.bump() else {
-                return Token::EOF;
+                return TokenKind::EOF;
             };
 
             if c.is_ascii_digit() {
@@ -117,7 +116,7 @@ impl<'src, 'int> Lexer<'src, 'int> {
                 let text = &src[start..self.pos()];
                 return match get_keyword(text) {
                     Some(tok) => tok,
-                    None => Token::Name(self.interner.intern(text)),
+                    None => TokenKind::Name(self.interner.intern_string(text)),
                 };
             }
             if c == '"' {
@@ -126,7 +125,7 @@ impl<'src, 'int> Lexer<'src, 'int> {
                 };
                 match Self::unescape_content(raw) {
                     Some(s) => {
-                        return Token::String(self.interner.intern(&s));
+                        return TokenKind::String(self.interner.intern_string(&s));
                     }
                     None => {
                         let end = self.pos();
@@ -144,7 +143,7 @@ impl<'src, 'int> Lexer<'src, 'int> {
                     Some(s) => {
                         let mut it = s.chars();
                         match (it.next(), it.next()) {
-                            (Some(ch), None) => return Token::Char(ch as u32),
+                            (Some(ch), None) => return TokenKind::Char(ch),
                             _ => self.error("Invalid char literal", start, end),
                         }
                     }
@@ -166,11 +165,7 @@ impl<'src, 'int> Lexer<'src, 'int> {
                             }
                             None => {
                                 self.chars = self.src[self.src.len()..].chars();
-                                self.diags.push(Diagnostic::error(
-                                    &SourceFile::unspecified(),
-                                    "Unterminated block comment",
-                                    rcsharp_syntax::Span::new(start, self.src.len()),
-                                ));
+                                self.error("Unterminated block comment", start, self.src.len());
                             }
                         }
                         continue;
@@ -194,11 +189,17 @@ impl<'src, 'int> Lexer<'src, 'int> {
             if let Some(tok) = SINGLE_CHAR_TO_TOKEN.get(&c) {
                 return tok.clone();
             }
-            self.diags.push(Diagnostic::error(
-                &SourceFile::unspecified(),
-                &format!("Unexpected character: {:?}", c),
-                rcsharp_syntax::Span::new(start, self.pos()),
-            ));
+
+            self.error(&format!("Unexpected character: {:?}", c), start, self.pos());
+        }
+    }
+    pub fn next_token(&mut self) -> Token {
+        self.eat_while(|c| c.is_whitespace());
+        let start = self.pos();
+        let token = self.next_token_kind();
+        Token {
+            kind: token,
+            span: Span::new(start as u32, self.pos() as u32),
         }
     }
     fn unescape_content(content: &str) -> Option<String> {
@@ -271,7 +272,7 @@ impl<'src, 'int> Lexer<'src, 'int> {
         self.diags.push(Diagnostic::error(
             &SourceFile::unspecified(),
             msg,
-            rcsharp_syntax::Span::new(start, end),
+            rcsharp_syntax::Span::new(start as u32, end as u32),
         ));
     }
 }
@@ -280,21 +281,19 @@ impl Iterator for Lexer<'_, '_> {
 
     fn next(&mut self) -> Option<Token> {
         match self.next_token() {
-            Token::EOF => None,
+            x if x.kind == TokenKind::EOF => None,
             tok => Some(tok),
         }
     }
 }
-pub fn lex(
-    src_file: &SourceFile,
-    interner: &mut Interner,
-) -> (Vec<Token>, Vec<Diagnostic>) {
+
+pub fn lex_full(src_file: &SourceFile, interner: &mut Interner) -> (Vec<Token>, Vec<Diagnostic>) {
     let src_data = match fs::read(&src_file.path) {
         Ok(data) => data,
         Err(err) => {
             return (
                 vec![],
-                Diagnostic::fatal(src_file, "Unable to read file", err),
+                vec![Diagnostic::fatal(src_file, "Unable to read file", err)],
             );
         }
     };
@@ -303,11 +302,18 @@ pub fn lex(
         Err(err) => {
             return (
                 vec![],
-                Diagnostic::fatal(src_file, "Unable to decode file in UTF-8 encoding", err),
+                vec![Diagnostic::fatal(
+                    src_file,
+                    "Unable to decode file in UTF-8 encoding",
+                    err,
+                )],
             );
         }
     };
     let mut lexer = Lexer::new(src, interner);
     let tokens: Vec<Token> = lexer.by_ref().collect();
+    for x in lexer.diags.iter_mut() {
+        x.source_file = src_file.clone();
+    }
     (tokens, lexer.diags)
 }

@@ -22,7 +22,7 @@ fn human_readable_types(signature_vector: &mut [String], sym_table: &SymbolTable
                 .path
                 .0
                 .iter()
-                .map(|x| sym_table.lexer.get(*x))
+                .map(|x| sym_table.interner.get(*x))
                 .collect::<Vec<_>>()
                 .join(".");
             signature_vector[idx].insert(0, '%');
@@ -94,7 +94,7 @@ fn resolve(
                 .path
                 .0
                 .iter()
-                .map(|x| sym_table.lexer.get(*x))
+                .map(|x| sym_table.interner.get(*x))
                 .collect::<Vec<_>>()
                 .join(".");
 
@@ -288,7 +288,7 @@ pub fn write_all_statics(
             tie.path
                 .0
                 .iter()
-                .map(|x| sym_table.lexer.get(*x))
+                .map(|x| sym_table.interner.get(*x))
                 .collect::<Vec<_>>()
                 .join(".")
         } else {

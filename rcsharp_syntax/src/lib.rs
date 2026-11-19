@@ -1,7 +1,8 @@
 use std::{
+    borrow::Cow,
     collections::HashMap,
     error::Error,
-    num::NonZeroU32,
+    num::{NonZeroU32, ParseFloatError, ParseIntError},
     path::{Path, PathBuf},
     str::FromStr,
 };
@@ -39,11 +40,8 @@ pub struct Span {
     pub end: u32,
 }
 impl Span {
-    pub fn new(start: usize, end: usize) -> Self {
-        Self {
-            start: start.try_into().unwrap(),
-            end: end.try_into().unwrap(),
-        }
+    pub const fn new(start: u32, end: u32) -> Self {
+        Self { start, end }
     }
     pub fn to(self, o: Span) -> Span {
         Span {
@@ -55,6 +53,16 @@ impl Span {
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct Symbol(pub NonZeroU32);
+impl Symbol {
+    fn index(&self) -> usize {
+        self.0.get() as usize - 1
+    }
+}
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+pub struct Identifier {
+    pub name: Symbol,
+    pub span: Span,
+}
 #[derive(Default)]
 pub struct Interner {
     strings: Vec<Box<str>>,
@@ -64,7 +72,7 @@ impl Interner {
     pub fn new() -> Self {
         Self::default()
     }
-    pub fn intern(&mut self, s: &str) -> Symbol {
+    pub fn intern_string(&mut self, s: &str) -> Symbol {
         if let Some(&sym) = self.map.get(s) {
             return sym;
         }
@@ -74,31 +82,65 @@ impl Interner {
         sym
     }
 
-    pub fn resolve(&self, sym: Symbol) -> &str {
-        &self.strings[sym.0.get() as usize - 1]
+    pub fn lookup(&self, s: &str) -> Option<Symbol> {
+        self.map.get(s).copied()
     }
+    #[inline]
+    pub fn resolve(&self, sym: Symbol) -> &str {
+        &self.strings[sym.index()]
+    }
+    #[inline]
     pub fn get(&self, sym: Symbol) -> &str {
         self.resolve(sym)
     }
 
-    pub fn intern_number(&mut self, num: &str) -> Symbol {
-        if num.contains('_') {
-            let cleaned = num.replace('_', "");
-            self.intern(&cleaned)
+    pub fn intern_integer(&mut self, num: &str) -> Symbol {
+        let canon: Cow<str> = if num.bytes().any(|b| b == b'_' || b.is_ascii_uppercase()) {
+            Cow::Owned(
+                num.chars()
+                    .filter(|&c| c != '_')
+                    .map(|c| c.to_ascii_lowercase())
+                    .collect(),
+            )
         } else {
-            self.intern(num)
+            Cow::Borrowed(num)
+        };
+        self.intern_string(&canon)
+    }
+    pub fn intern_decimal(&mut self, num: &str) -> Symbol {
+        if num.contains('_') {
+            let cleaned: String = num.chars().filter(|&c| c != '_').collect();
+            self.intern_string(&cleaned)
+        } else {
+            self.intern_string(num)
         }
     }
+    pub fn integer_value(&self, sym: Symbol) -> Result<i64, ParseIntError> {
+        let s = self.resolve(sym);
+        let (digits, radix) = match s.get(..2) {
+            Some("0b") => (&s[2..], 2),
+            Some("0o") => (&s[2..], 8),
+            Some("0x") => (&s[2..], 16),
+            _ => (s, 10),
+        };
+        i64::from_str_radix(digits, radix)
+    }
+
+    pub fn decimal_value(&self, sym: Symbol) -> Result<f64, ParseFloatError> {
+        self.resolve(sym).parse()
+    }
 }
+#[derive(Debug, PartialEq, Eq)]
 pub enum DiagnosticType {
     Info,
     Warning,
     Error,
     Fatal,
 }
+#[allow(dead_code)]
 pub struct Diagnostic {
-    kind: DiagnosticType,
-    source_file: SourceFile,
+    pub kind: DiagnosticType,
+    pub source_file: SourceFile,
     message: String,
     span: Span,
     err: Option<Box<dyn Error>>,
@@ -108,14 +150,14 @@ impl Diagnostic {
         file: &SourceFile,
         msg: &str,
         err: impl std::error::Error + 'static,
-    ) -> Vec<Diagnostic> {
-        vec![Diagnostic {
+    ) -> Diagnostic {
+        Diagnostic {
             kind: DiagnosticType::Fatal,
             source_file: file.clone(),
             message: msg.to_string(),
             span: Span { start: 0, end: 0 },
             err: Some(Box::new(err)),
-        }]
+        }
     }
     pub fn error(file: &SourceFile, msg: &str, span: Span) -> Diagnostic {
         Diagnostic {

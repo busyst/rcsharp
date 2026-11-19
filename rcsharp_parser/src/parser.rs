@@ -1,222 +1,122 @@
+use rcsharp_lexer::defs::TokenKind;
+use rcsharp_syntax::Span;
+
 use crate::{
+    Parser,
     defs::{
-        Attribute, GenericParam, ParsedEnum, ParsedFunction, ParsedStruct, ParsedVariable,
-        ParserError, ParserResult, Span, Stmt, StmtData, VarType,
+        Attribute, GenericParam, ParsedEnum, ParsedFunction, ParsedStruct, ParsedVariable, Stmt,
+        StmtData, VarType,
     },
-    expression_parser::{Expr, ExpressionParser},
 };
-use rcsharp_lexer::defs::{DUMMY_EOF_TOKEN, Token, TokenData};
-use rcsharp_syntax::{Symbol, Interner};
-#[derive(Debug, Clone)]
-pub enum ParserType {
-    Named(Symbol),
-    Pointer(Box<ParserType>),
-    Function(Box<ParserType>, Box<[ParserType]>),
-    NamespaceLink(Symbol, Box<ParserType>),
-    Generic(Symbol, Box<[ParserType]>),
-    ConstantSizeArray(Box<ParserType>, u64),
-}
-impl PartialEq for ParserType {
-    fn eq(&self, other: &Self) -> bool {
-        let lhs = self.peel_namespace();
-        let rhs = other.peel_namespace();
-        match (lhs, rhs) {
-            (Self::Named(l), Self::Named(r)) => l == r,
-            (Self::Pointer(l), Self::Pointer(r)) => l == r,
-            (Self::Function(lr, la), Self::Function(rr, ra)) => lr == rr && la == ra,
-            (Self::Generic(ls, lt), Self::Generic(rs, rt)) => ls == rs && lt == rt,
-            (Self::ConstantSizeArray(lt, ls), Self::ConstantSizeArray(rt, rs)) => {
-                lt == rt && ls == rs
-            }
-            _ => false,
-        }
-    }
-}
-impl ParserType {
-    pub fn as_pointer(&self) -> Option<&ParserType> {
-        if let ParserType::Pointer(x) = self {
-            return Some(&x); // Inner
-        }
-        None
-    }
-    pub fn as_function(&self) -> Option<(&ParserType, &[ParserType])> {
-        if let ParserType::Function(x, y) = self {
-            return Some((&x, &y));
-        }
-        None
-    }
-    pub fn as_generic(&self) -> Option<(&Symbol, &[ParserType])> {
-        if let ParserType::Generic(x, y) = self {
-            return Some((&x, &y));
-        }
-        None
-    }
-    fn peel_namespace(&self) -> &Self {
-        match self {
-            Self::NamespaceLink(_, inner) => inner.peel_namespace(),
-            other => other,
-        }
-    }
-}
-pub struct GeneralParser<'a> {
-    tokens: &'a [TokenData],
-    symbol_table: &'a Interner,
-    cursor: usize,
-}
-impl<'a> GeneralParser<'a> {
-    pub fn new(tokens: &'a [TokenData], symbol_table: &'a Interner) -> Self {
-        Self {
-            tokens,
-            symbol_table,
-            cursor: 0,
-        }
-    }
-    #[inline]
-    pub fn is_at_end(&self) -> bool {
-        self.cursor >= self.tokens.len()
-    }
-    #[inline]
-    fn peek(&self) -> &TokenData {
-        self.tokens.get(self.cursor).unwrap_or(&DUMMY_EOF_TOKEN)
-    }
-    #[inline]
-    fn peek_offset(&self, offset: usize) -> &TokenData {
-        self.tokens
-            .get(self.cursor + offset)
-            .unwrap_or(&DUMMY_EOF_TOKEN)
-    }
-    #[inline]
-    fn advance(&mut self) -> &TokenData {
-        match self.tokens.get(self.cursor) {
-            Some(t) => {
-                self.cursor += 1;
-                t
-            }
-            None => &DUMMY_EOF_TOKEN,
-        }
-    }
-    #[inline]
-    fn consume(&mut self, expected: &Token) -> ParserResult<&TokenData> {
-        if &self.peek().token == expected {
-            Ok(self.advance())
-        } else {
-            Err((
-                self.cursor..self.cursor + 1,
-                if *expected == Token::SemiColon {
-                    ParserError::ExpectedSemicolon
-                } else {
-                    ParserError::UnexpectedToken {
-                        expected: format!("{expected:?}"),
-                        found: self.peek().token.clone(),
-                    }
-                },
-            ))
-        }
-    }
 
-    #[inline]
-    fn consume_name(&mut self) -> ParserResult<Symbol> {
-        match &self.peek().token {
-            Token::Name(sym) => {
-                let cl_sym = sym.clone();
-                self.cursor += 1;
-                Ok(cl_sym)
-            }
-            _ => Err((
-                self.cursor..self.cursor + 1,
-                ParserError::ExpectedIdentifier,
-            )),
-        }
-    }
-
-    pub fn parse_all(&mut self) -> ParserResult<Vec<StmtData>> {
+impl<'lex, 'src, 'int> Parser<'lex, 'src, 'int> {
+    pub fn parse_all(&mut self) -> Vec<StmtData> {
         let mut stmts = Vec::new();
-        while !self.is_at_end() {
-            let x = self.parse_toplevel_item()?;
-            if let Stmt::Block(blk) = x.stmt {
+        while let Some(item) = self.next_toplevel_item() {
+            if let Stmt::Block(blk) = item.stmt {
                 stmts.extend(Vec::from(blk));
             } else {
-                stmts.push(x);
+                stmts.push(item);
             }
         }
-        Ok(stmts)
+        stmts
     }
 
-    pub fn parse_compiler_only(&mut self) -> ParserResult<Vec<(Span, Attribute)>> {
-        let mut hints = vec![];
-        while !self.is_at_end() {
-            let is_bare_hint = self.peek().token == Token::Hint
-                && self.peek_offset(1).token != Token::LSquareBrace;
+    pub fn parse_compiler_only(&mut self) -> Vec<(Span, Attribute)> {
+        let mut hints = Vec::new();
+        while !self.is_eof() {
+            let is_bare_hint =
+                self.at(TokenKind::Hash) && self.peek_nth(1).kind != TokenKind::LSquareBrace;
 
             if is_bare_hint {
-                let StmtData {
-                    span,
-                    stmt: Stmt::CompilerHint(attr),
-                } = self.parse_hint_stmt()?
-                else {
-                    unreachable!("parse_hint_stmt always returns CompilerHint");
-                };
-                hints.push((span, attr));
+                match self.parse_hint_stmt() {
+                    Ok(StmtData {
+                        span,
+                        stmt: Stmt::CompilerHint(attr),
+                    }) => hints.push((span, attr)),
+                    Ok(_) => unreachable!("parse_hint_stmt always returns CompilerHint"),
+                    Err(()) => self.synchronize(),
+                }
             } else {
-                self.advance();
+                self.bump();
             }
         }
-        Ok(hints)
+        hints
     }
-    fn parse_toplevel_item(&mut self) -> ParserResult<StmtData> {
-        let mut attributes = Vec::new();
-        let mut start_span = self.cursor..self.cursor + 1;
 
-        while self.peek().token == Token::Hint && self.peek_offset(1).token == Token::LSquareBrace {
+    pub fn next_toplevel_item(&mut self) -> Option<StmtData> {
+        while !self.is_eof() {
+            match self.parse_toplevel_item() {
+                Ok(stmt) => return Some(stmt),
+                Err(()) => self.synchronize(),
+            }
+        }
+        None
+    }
+
+    pub(crate) fn parse_comma_separated<T>(
+        &mut self,
+        closing: TokenKind,
+        mut parse_elem: impl FnMut(&mut Self) -> Result<T, ()>,
+    ) -> Result<Vec<T>, ()> {
+        let mut items = Vec::new();
+        while !self.at(closing) && !self.is_eof() {
+            items.push(parse_elem(self)?);
+            if !self.eat(TokenKind::Comma) {
+                break;
+            }
+        }
+        Ok(items)
+    }
+
+    fn parse_toplevel_item(&mut self) -> Result<StmtData, ()> {
+        let mut attributes = Vec::new();
+        let mut start = self.peek().span;
+
+        while self.at(TokenKind::Hash) && self.peek_nth(1).kind == TokenKind::LSquareBrace {
             attributes.push(self.parse_attribute()?);
         }
 
-        if self.peek().token == Token::Hint && !attributes.is_empty() {
-            return Err((start_span, ParserError::OrphanedAttributes));
+        if let Some(first) = attributes.first() {
+            start = first.span;
         }
 
-        if self.peek().token == Token::Hint {
+        if self.at(TokenKind::Hash) {
+            if !attributes.is_empty() {
+                let sps = self.peek().span;
+                self.error(sps, "Orphaned attributes before compiler hint");
+                return Err(());
+            }
             return self.parse_hint_stmt();
         }
 
-        if let Some(first) = attributes.first() {
-            start_span = first.span.clone();
-        }
-
-        match self.peek().token.clone() {
-            Token::KeywordFunction => self.parse_function(attributes, start_span),
-            Token::KeywordStruct => self.parse_struct(attributes, start_span),
-            Token::KeywordEnum => self.parse_enum(attributes, start_span),
-            //Token::KeywordTrait => self.parse_trait(attributes, start_span),
-            //Token::KeywordImpl => self.parse_impl(attributes, start_span),
-            Token::KeywordNamespace => {
+        match self.peek().kind {
+            TokenKind::KeywordFunction => self.parse_function(attributes, start),
+            TokenKind::KeywordStruct => self.parse_struct(attributes, start),
+            TokenKind::KeywordEnum => self.parse_enum(attributes, start),
+            TokenKind::KeywordNamespace => {
                 if !attributes.is_empty() {
-                    return Err((
-                        start_span,
-                        ParserError::AttributeError(
-                            "Attributes are not allowed on namespaces".into(),
-                        ),
-                    ));
+                    self.error(start, "Attributes are not allowed on namespaces");
+                    return Err(());
                 }
                 self.parse_namespace()
             }
-            Token::LBrace => self.parse_top_level_block(),
-            Token::KeywordInline => self.parse_with_modifier("inline", attributes),
-            Token::KeywordConstExpr => self.parse_with_modifier("constexpr", attributes),
-            Token::KeywordPub => self.parse_with_modifier("public", attributes),
-            Token::KeywordExtern => self.parse_with_modifier("extern", attributes),
-            Token::KeywordStatic => self.parse_static_let_statement(start_span.start),
-            Token::KeywordConst => self.parse_const_let_statement(start_span.start),
+            TokenKind::LBrace => self.parse_top_level_block(),
+            TokenKind::KeywordInline => self.parse_with_modifier("inline", attributes),
+            TokenKind::KeywordConstExpr => self.parse_with_modifier("constexpr", attributes),
+            TokenKind::KeywordPub => self.parse_with_modifier("public", attributes),
+            TokenKind::KeywordExtern => self.parse_with_modifier("extern", attributes),
+            TokenKind::KeywordStatic => self.parse_static_let_statement(start, attributes),
+            TokenKind::KeywordConst => self.parse_const_let_statement(start, attributes),
             _ => {
-                if !attributes.is_empty() {
-                    return Err((start_span, ParserError::OrphanedAttributes));
-                }
-                Err((
-                    self.cursor..self.cursor + 1,
-                    ParserError::UnexpectedTopLevelToken {
-                        found: format!("{:?}", self.peek().token),
-                    },
-                ))
+                let tok = self.peek();
+                let msg = if attributes.is_empty() {
+                    format!("Unexpected top-level token: {:?}", tok.kind)
+                } else {
+                    "Orphaned attributes".to_string()
+                };
+                self.error(tok.span, &msg);
+                Err(())
             }
         }
     }
@@ -225,13 +125,15 @@ impl<'a> GeneralParser<'a> {
         &mut self,
         modifier: &str,
         attributes: Vec<Attribute>,
-    ) -> ParserResult<StmtData> {
-        self.advance();
+    ) -> Result<StmtData, ()> {
+        self.bump();
         let mut item = self.parse_toplevel_item()?;
+
         fn count_and_validate(
+            parser: &mut Parser<'_, '_, '_>,
             stmt: &StmtData,
             modifier: &str,
-        ) -> Result<usize, (Span, ParserError)> {
+        ) -> Result<usize, ()> {
             match &stmt.stmt {
                 Stmt::Function(_)
                 | Stmt::Struct(_)
@@ -241,18 +143,20 @@ impl<'a> GeneralParser<'a> {
                 Stmt::Block(b) => {
                     let mut count = 0;
                     for x in b.iter() {
-                        count += count_and_validate(x, modifier)?;
+                        count += count_and_validate(parser, x, modifier)?;
                     }
                     Ok(count)
                 }
                 Stmt::CompilerDud | Stmt::CompilerHint(_) => Ok(0),
-                _ => Err((
-                    stmt.span.clone(),
-                    ParserError::InvalidModifier {
-                        modifier: modifier.into(),
-                        applicable_to: "functions, structs, or enums".into(),
-                    },
-                )),
+                _ => {
+                    parser.error(
+                        stmt.span,
+                        &format!(
+                            "Modifier '{modifier}' is only applicable to functions, structs, enums, or variables"
+                        ),
+                    );
+                    Err(())
+                }
             }
         }
 
@@ -261,8 +165,6 @@ impl<'a> GeneralParser<'a> {
             modifier: &str,
             attributes: &mut Option<Vec<Attribute>>,
             count: &mut usize,
-            prepend_mod: fn(&mut Box<[String]>, &str),
-            prepend_attr: fn(&mut Box<[Attribute]>, Vec<Attribute>),
         ) {
             let mut apply = |prefixes: &mut Box<[String]>, attrs: &mut Box<[Attribute]>| {
                 *count -= 1;
@@ -271,587 +173,446 @@ impl<'a> GeneralParser<'a> {
                 } else {
                     attributes.clone().unwrap_or_default()
                 };
-                prepend_mod(prefixes, modifier);
-                prepend_attr(attrs, pass_attrs);
+                Parser::prepend_modifier(prefixes, modifier);
+                Parser::prepend_attributes(attrs, pass_attrs);
             };
 
             match &mut stmt.stmt {
                 Stmt::Function(f) => apply(&mut f.prefixes, &mut f.attributes),
                 Stmt::Struct(s) => apply(&mut s.prefixes, &mut s.attributes),
                 Stmt::Enum(e) => apply(&mut e.prefixes, &mut e.attributes),
-                Stmt::StaticLet(e) => apply(&mut e.prefixes, &mut e.attributes),
-                Stmt::ConstLet(e) => apply(&mut e.prefixes, &mut e.attributes),
+                Stmt::StaticLet(v) | Stmt::ConstLet(v) => {
+                    apply(&mut v.prefixes, &mut v.attributes);
+                }
                 Stmt::Block(b) => {
                     for x in b.iter_mut() {
-                        apply_rec(x, modifier, attributes, count, prepend_mod, prepend_attr);
+                        apply_rec(x, modifier, attributes, count);
                     }
                 }
                 _ => {}
             }
         }
 
-        let mut count = count_and_validate(&item, modifier)?;
+        let mut count = count_and_validate(self, &item, modifier)?;
         let mut attrs_opt = Some(attributes);
-
-        apply_rec(
-            &mut item,
-            modifier,
-            &mut attrs_opt,
-            &mut count,
-            Self::prepend_modifier,
-            Self::prepend_attributes,
-        );
-
+        apply_rec(&mut item, modifier, &mut attrs_opt, &mut count);
         Ok(item)
     }
 
-    fn parse_top_level_block(&mut self) -> ParserResult<StmtData> {
-        let start = self.cursor;
-        self.advance(); // {
-        let mut stmts = vec![];
-        while self.peek().token != Token::RBrace {
-            let item = self.parse_toplevel_item()?;
-            if let Stmt::Block(blk) = item.stmt {
-                stmts.extend(Vec::from(blk));
-            } else {
-                stmts.push(item);
+    fn parse_top_level_block(&mut self) -> Result<StmtData, ()> {
+        let start = self.bump().span; // {
+        let mut stmts = Vec::new();
+        while !self.at(TokenKind::RBrace) && !self.is_eof() {
+            match self.parse_toplevel_item() {
+                Ok(item) => {
+                    if let Stmt::Block(blk) = item.stmt {
+                        stmts.extend(Vec::from(blk));
+                    } else {
+                        stmts.push(item);
+                    }
+                }
+                Err(()) => self.synchronize(),
             }
         }
-        self.consume(&Token::RBrace)?;
+        self.expect(TokenKind::RBrace, "Expected '}'")?;
         Ok(StmtData {
             stmt: Stmt::Block(stmts.into_boxed_slice()),
-            span: start..self.cursor,
+            span: self.span_from(start),
         })
     }
-    fn parse_generic_params(&mut self) -> ParserResult<Vec<GenericParam>> {
-        if self.peek().token != Token::LogicLess {
+
+    fn parse_generic_params(&mut self) -> Result<Vec<GenericParam>, ()> {
+        if !self.eat(TokenKind::LogicLess) {
             return Ok(Vec::new());
         }
-        self.advance(); // <
-
-        let mut params = Vec::new();
-        loop {
-            if self.peek().token == Token::LogicGreater {
-                self.advance();
-                break;
-            }
-            let name = self.consume_name()?;
-            let bounds = if self.peek().token == Token::Colon {
-                self.advance(); // :
+        let params = self.parse_comma_separated(TokenKind::LogicGreater, |p| {
+            let (name, _) = p.expect_name("Expected generic parameter name")?;
+            let bounds = if p.eat(TokenKind::Colon) {
                 let mut bounds = Vec::new();
                 loop {
-                    bounds.push(self.consume_name()?);
-                    if self.peek().token == Token::Plus {
-                        self.advance();
-                    } else {
+                    let (b, _) = p.expect_name("Expected trait bound name")?;
+                    bounds.push(b);
+                    if !p.eat(TokenKind::Plus) {
                         break;
                     }
                 }
                 bounds
             } else {
-                vec![]
+                Vec::new()
             };
-            params.push(GenericParam { name, bounds });
-            match self.peek().token {
-                Token::Comma => {
-                    self.advance();
-                }
-                Token::LogicGreater => {}
-                _ => {
-                    return Err((
-                        self.cursor..self.cursor + 1,
-                        ParserError::UnexpectedToken {
-                            expected: "',' or '>'".into(),
-                            found: self.peek().token.clone(),
-                        },
-                    ));
-                }
-            }
-        }
+            Ok(GenericParam { name, bounds })
+        })?;
+        self.expect(
+            TokenKind::LogicGreater,
+            "Expected '>' after generic parameters",
+        )?;
         Ok(params)
     }
-    fn parse_attribute(&mut self) -> ParserResult<Attribute> {
-        let start = self.cursor;
-        self.advance(); // #
-        self.advance(); // [
-        let name = self.consume_name()?;
+
+    fn parse_attribute(&mut self) -> Result<Attribute, ()> {
+        let start = self.bump().span; // #
+        self.expect(TokenKind::LSquareBrace, "Expected '[' after '#'")?;
+        let (name, _) = self.expect_name("Expected attribute name")?;
         let args = self.parse_arg_list_parens()?;
-        self.consume(&Token::RSquareBrace)?;
+        self.expect(TokenKind::RSquareBrace, "Expected ']' after attribute")?;
 
         Ok(Attribute {
-            name: name,
+            name,
             arguments: args.into_boxed_slice(),
-            span: start..self.cursor,
+            span: self.span_from(start),
         })
     }
 
-    fn parse_hint_stmt(&mut self) -> ParserResult<StmtData> {
-        let start = self.cursor;
-        self.advance(); // #
-        let name = self.consume_name()?;
+    fn parse_hint_stmt(&mut self) -> Result<StmtData, ()> {
+        let start = self.bump().span; // #
+        let (name, _) = self.expect_name("Expected compiler hint name after '#'")?;
         let args = self.parse_arg_list_parens()?;
-        let span = start..self.cursor;
+        let span = self.span_from(start);
 
         Ok(StmtData {
             stmt: Stmt::CompilerHint(Attribute {
-                name: name,
+                name,
                 arguments: args.into_boxed_slice(),
-                span: span.clone(),
+                span,
             }),
             span,
         })
     }
 
-    fn parse_arg_list_parens(&mut self) -> ParserResult<Vec<Expr>> {
-        let mut args = Vec::new();
-        if self.peek().token != Token::LParen {
-            return Ok(args);
+    fn parse_arg_list_parens(&mut self) -> Result<Vec<crate::defs::Expr>, ()> {
+        if !self.eat(TokenKind::LParen) {
+            return Ok(Vec::new());
         }
-        self.advance(); // (
-        while self.peek().token != Token::RParen && !self.is_at_end() {
-            args.push(self.parse_expression()?);
-            if self.peek().token == Token::Comma {
-                self.advance();
-            } else {
-                break;
-            }
-        }
-        self.consume(&Token::RParen)?;
+        let args = self.parse_comma_separated(TokenKind::RParen, Self::parse_expression)?;
+        self.expect(TokenKind::RParen, "Expected ')' after arguments")?;
         Ok(args)
     }
-    fn parse_function(
-        &mut self,
-        attributes: Vec<Attribute>,
-        start_span: Span,
-    ) -> ParserResult<StmtData> {
-        let start = start_span.start;
-        self.advance(); // fn
-        let name = self.consume_name()?;
-        let generic_types = self.parse_generic_params()?;
 
-        self.consume(&Token::LParen)?;
-        let mut args = Vec::new();
-        if self.peek().token != Token::RParen {
-            loop {
-                let arg_name = self.consume_name()?;
-                self.consume(&Token::Colon)?;
-                let arg_type = self.parse_type()?;
-                args.push((arg_name, arg_type));
-                if self.peek().token != Token::Comma {
-                    break;
-                }
-                self.advance();
-            }
-        }
-        self.consume(&Token::RParen)?;
+    fn parse_function(&mut self, attributes: Vec<Attribute>, start: Span) -> Result<StmtData, ()> {
+        self.bump(); // fn
+        let (name, _) = self.expect_name("Expected function name")?;
+        let generic_params = self.parse_generic_params()?;
 
-        let return_type = if self.peek().token == Token::Colon {
-            self.advance();
+        self.expect(TokenKind::LParen, "Expected '(' after function name")?;
+        let args = self.parse_comma_separated(TokenKind::RParen, |p| {
+            let (arg_name, _) = p.expect_name("Expected parameter name")?;
+            p.expect(TokenKind::Colon, "Expected ':' after parameter name")?;
+            let arg_type = p.parse_type()?;
+            Ok((arg_name, arg_type))
+        })?;
+        self.expect(TokenKind::RParen, "Expected ')' after parameters")?;
+
+        let return_type = if self.eat(TokenKind::Colon) {
             Some(self.parse_type()?)
         } else {
             None
         };
 
-        if self.peek().token == Token::SemiColon {
-            self.advance();
-            return Ok(StmtData {
-                stmt: Stmt::Function(ParsedFunction {
-                    attributes: attributes.into_boxed_slice(),
-                    name,
-                    args: args.into_boxed_slice(),
-                    return_type,
-                    body: Box::new([]),
-                    prefixes: Box::new([]),
-                    generic_params: generic_types.into_boxed_slice(),
-                }),
-                span: start..self.cursor,
-            });
-        } else if self.peek().token == Token::FatArrow {
-            self.advance();
-            let expr_start = self.cursor;
+        let body = if self.eat(TokenKind::SemiColon) {
+            Box::new([])
+        } else if self.eat(TokenKind::FatArrow) {
+            let expr_start = self.peek().span;
             let expr = self.parse_expression()?;
-            self.consume(&Token::SemiColon)?;
-            return Ok(StmtData {
-                stmt: Stmt::Function(ParsedFunction {
-                    attributes: attributes.into_boxed_slice(),
-                    name: name.into(),
-                    args: args.into_boxed_slice(),
-                    return_type,
-                    body: Box::new([StmtData {
-                        stmt: Stmt::Return(Some(expr)),
-                        span: expr_start..self.cursor,
-                    }]),
-                    prefixes: Box::new([]),
-                    generic_params: generic_types.into_boxed_slice(),
-                }),
-                span: start..self.cursor,
-            });
-        }
-
-        let body = self.parse_block_body()?;
+            self.expect_semicolon()?;
+            Box::new([StmtData {
+                stmt: Stmt::Return(Some(expr)),
+                span: self.span_from(expr_start),
+            }])
+        } else {
+            self.parse_block_body()?
+        };
 
         Ok(StmtData {
             stmt: Stmt::Function(ParsedFunction {
                 attributes: attributes.into_boxed_slice(),
-                name: name.into(),
+                name,
                 args: args.into_boxed_slice(),
                 return_type,
                 body,
                 prefixes: Box::new([]),
-                generic_params: generic_types.into_boxed_slice(),
+                generic_params: generic_params.into_boxed_slice(),
             }),
-            span: start..self.cursor,
+            span: self.span_from(start),
         })
     }
-    fn parse_struct(
-        &mut self,
-        attributes: Vec<Attribute>,
-        start_span: Span,
-    ) -> ParserResult<StmtData> {
-        let start = start_span.start;
-        self.advance(); // struct
-        let name = self.consume_name()?;
-        let generic_types = self.parse_generic_params()?;
-        self.consume(&Token::LBrace)?;
 
-        let mut fields = Vec::with_capacity(4);
-        while self.peek().token != Token::RBrace && !self.is_at_end() {
-            let field_name = self.consume_name()?;
-            self.consume(&Token::Colon)?;
-            let field_type = self.parse_type()?;
-            fields.push((field_name, field_type));
+    fn parse_struct(&mut self, attributes: Vec<Attribute>, start: Span) -> Result<StmtData, ()> {
+        self.bump(); // struct
+        let (name, _) = self.expect_name("Expected struct name")?;
+        let generic_params = self.parse_generic_params()?;
+        self.expect(TokenKind::LBrace, "Expected '{' after struct header")?;
 
-            if self.peek().token == Token::Comma {
-                self.advance();
-            } else {
-                break;
-            }
-        }
-        self.consume(&Token::RBrace)?;
+        let fields = self.parse_comma_separated(TokenKind::RBrace, |p| {
+            let (field_name, _) = p.expect_name("Expected field name")?;
+            p.expect(TokenKind::Colon, "Expected ':' after field name")?;
+            let field_type = p.parse_type()?;
+            Ok((field_name, field_type))
+        })?;
+        self.expect(TokenKind::RBrace, "Expected '}' after struct fields")?;
 
         Ok(StmtData {
             stmt: Stmt::Struct(ParsedStruct {
                 attributes: attributes.into_boxed_slice(),
                 name,
                 members: fields.into_boxed_slice(),
-                generic_params: generic_types.into_boxed_slice(),
+                generic_params: generic_params.into_boxed_slice(),
                 prefixes: Box::new([]),
             }),
-            span: start..self.cursor,
+            span: self.span_from(start),
         })
     }
-    fn parse_namespace(&mut self) -> ParserResult<StmtData> {
-        let start = self.cursor;
-        self.advance(); // namespace
-        let name = self.consume_name()?;
-        self.consume(&Token::LBrace)?;
+
+    fn parse_namespace(&mut self) -> Result<StmtData, ()> {
+        let start = self.bump().span; // namespace
+        let (name, _) = self.expect_name("Expected namespace name")?;
+        self.expect(TokenKind::LBrace, "Expected '{' after namespace name")?;
+
         let mut body = Vec::new();
-        while self.peek().token != Token::RBrace {
-            let x = self.parse_toplevel_item()?;
-            if let Stmt::Block(blk) = x.stmt {
-                body.extend(Vec::from(blk));
-            } else {
-                body.push(x);
+        while !self.at(TokenKind::RBrace) && !self.is_eof() {
+            match self.parse_toplevel_item() {
+                Ok(item) => {
+                    if let Stmt::Block(blk) = item.stmt {
+                        body.extend(Vec::from(blk));
+                    } else {
+                        body.push(item);
+                    }
+                }
+                Err(()) => self.synchronize(),
             }
         }
-        self.consume(&Token::RBrace)?;
+        self.expect(TokenKind::RBrace, "Expected '}' after namespace body")?;
+
         Ok(StmtData {
             stmt: Stmt::Namespace(name, body.into_boxed_slice()),
-            span: start..self.cursor,
+            span: self.span_from(start),
         })
     }
-    fn parse_enum(
-        &mut self,
-        attributes: Vec<Attribute>,
-        start_span: Span,
-    ) -> ParserResult<StmtData> {
-        let start = start_span.start;
-        self.advance(); // enum
-        let name = self.consume_name()?;
 
-        let enum_base_type = if self.peek().token == Token::Colon {
-            self.advance();
+    fn parse_enum(&mut self, attributes: Vec<Attribute>, start: Span) -> Result<StmtData, ()> {
+        self.bump(); // enum
+        let (name, _) = self.expect_name("Expected enum name")?;
+
+        let enum_type = if self.eat(TokenKind::Colon) {
             Some(self.parse_type()?)
         } else {
             None
         };
 
-        self.consume(&Token::LBrace)?;
-        let mut values = Vec::with_capacity(8);
-
-        while self.peek().token != Token::RBrace && !self.is_at_end() {
-            let name = self.consume_name()?;
-            let expr = if self.peek().token == Token::Equal {
-                self.advance();
-                Some(self.parse_expression()?)
+        self.expect(TokenKind::LBrace, "Expected '{' after enum header")?;
+        let values = self.parse_comma_separated(TokenKind::RBrace, |p| {
+            let (variant_name, _) = p.expect_name("Expected enum variant name")?;
+            let expr = if p.eat(TokenKind::Equal) {
+                Some(p.parse_expression()?)
             } else {
                 None
             };
-
-            values.push((name, expr));
-
-            if self.peek().token == Token::Comma {
-                self.advance();
-            }
-        }
-        self.consume(&Token::RBrace)?;
+            Ok((variant_name, expr))
+        })?;
+        self.expect(TokenKind::RBrace, "Expected '}' after enum variants")?;
 
         Ok(StmtData {
             stmt: Stmt::Enum(ParsedEnum {
                 attributes: attributes.into_boxed_slice(),
                 name,
                 fields: values.into_boxed_slice(),
-                enum_type: enum_base_type,
+                enum_type,
                 prefixes: Box::new([]),
             }),
-            span: start..self.cursor,
+            span: self.span_from(start),
         })
     }
 
-    //fn parse_trait(
-    //    &mut self,
-    //    attributes: Vec<Attribute>,
-    //    start_span: Span,
-    //) -> ParserResult<StmtData> {
-    //    let start = start_span.start;
-    //    self.advance(); // trait
-    //    let name = self.consume_name()?;
-    //    let generic_types = self.parse_generic_params()?;
-    //    self.consume(&Token::LBrace)?;
-    //    let mut items = vec![];
-    //    while self.peek().token != Token::RBrace && !self.is_at_end() {
-    //        match self.parse_toplevel_item()? {
-    //            StmtData {
-    //                stmt: Stmt::Function(func),
-    //                span: _,
-    //            } => {
-    //                items.push(func);
-    //            }
-    //            _ => unimplemented!(),
-    //        }
-    //    }
-    //    self.consume(&Token::RBrace)?;
-    //    return Ok(StmtData {
-    //        stmt: Stmt::TraitDeclaration(ParsedTrait {
-    //            path: "".into(),
-    //            attributes: attributes.into_boxed_slice(),
-    //            name: name.into(),
-    //            functions: items.into_boxed_slice(),
-    //            generic_params: generic_types.into_boxed_slice(),
-    //            prefixes: Box::new([]),
-    //        }),
-    //        span: start..self.cursor,
-    //    });
-    //}
-    //
-    //fn parse_impl(
-    //    &mut self,
-    //    attributes: Vec<Attribute>,
-    //    start_span: Span,
-    //) -> ParserResult<StmtData> {
-    //    let start = start_span.start;
-    //    self.advance(); // impl
-    //    let first_type = self.parse_type()?;
-    //    let (trait_name, implementing_for) = if self.peek().token == Token::KeywordFor {
-    //        self.advance();
-    //        let for_type = self.parse_type()?;
-    //        (Some(Box::new(first_type)), Box::new(for_type))
-    //    } else {
-    //        (None, Box::new(first_type))
-    //    };
-    //    let generic_types = self.parse_generic_params()?;
-    //    self.consume(&Token::LBrace)?;
-    //    let mut items = vec![];
-    //    while self.peek().token != Token::RBrace && !self.is_at_end() {
-    //        items.push(self.parse_toplevel_item()?)
-    //    }
-    //    self.consume(&Token::RBrace)?;
-    //    return Ok(StmtData {
-    //        stmt: Stmt::Impl(ParsedImplementation {
-    //            trait_name,
-    //            implementing_for,
-    //            path: "".into(),
-    //            attributes: attributes.into_boxed_slice(),
-    //            body: items.into_boxed_slice(),
-    //            generic_params: generic_types.into_boxed_slice(),
-    //            prefixes: Box::new([]),
-    //        }),
-    //        span: start..self.cursor,
-    //    });
-    //}
-    fn parse_statement(&mut self) -> ParserResult<StmtData> {
-        let start = self.cursor;
+    pub(crate) fn parse_block_body(&mut self) -> Result<Box<[StmtData]>, ()> {
+        self.expect(TokenKind::LBrace, "Expected '{'")?;
+        let mut stmts = Vec::new();
+        while !self.at(TokenKind::RBrace) && !self.is_eof() {
+            if self.eat(TokenKind::SemiColon) {
+                continue;
+            }
+            match self.parse_statement() {
+                Ok(stmt) => {
+                    if stmt.stmt != Stmt::CompilerDud {
+                        stmts.push(stmt);
+                    }
+                }
+                Err(()) => self.synchronize(),
+            }
+        }
+        self.expect(TokenKind::RBrace, "Expected '}'")?;
+        Ok(stmts.into_boxed_slice())
+    }
 
-        match self.peek().token {
-            Token::KeywordConst => self.parse_const_let_statement(start),
-            Token::KeywordLet => self.parse_let_statement(start),
-            Token::KeywordStatic => self.parse_static_let_statement(start),
-            Token::KeywordIf => self.parse_if_statement(start),
-            Token::KeywordLoop => {
-                self.advance();
+    fn parse_statement(&mut self) -> Result<StmtData, ()> {
+        let start = self.peek().span;
+
+        match self.peek().kind {
+            TokenKind::KeywordConst => self.parse_const_let_statement(start, Vec::new()),
+            TokenKind::KeywordLet => self.parse_let_statement(start),
+            TokenKind::KeywordStatic => self.parse_static_let_statement(start, Vec::new()),
+            TokenKind::KeywordIf => self.parse_if_statement(start),
+            TokenKind::KeywordLoop => {
+                self.bump();
                 let body = self.parse_block_body()?;
                 Ok(StmtData {
                     stmt: Stmt::Loop(body),
-                    span: start..self.cursor,
+                    span: self.span_from(start),
                 })
             }
-            Token::KeywordReturn => {
-                self.advance();
-                let expr = if self.peek().token != Token::SemiColon {
+            TokenKind::KeywordReturn => {
+                self.bump();
+                let expr = if !self.at(TokenKind::SemiColon) {
                     Some(self.parse_expression()?)
                 } else {
                     None
                 };
-                self.consume(&Token::SemiColon)?;
+                self.expect_semicolon()?;
                 Ok(StmtData {
                     stmt: Stmt::Return(expr),
-                    span: start..self.cursor,
+                    span: self.span_from(start),
                 })
             }
-            Token::KeywordBreak => {
-                self.advance();
-                self.consume(&Token::SemiColon)?;
+            TokenKind::KeywordBreak => {
+                self.bump();
+                self.expect_semicolon()?;
                 Ok(StmtData {
                     stmt: Stmt::Break,
-                    span: start..self.cursor,
+                    span: self.span_from(start),
                 })
             }
-            Token::KeywordContinue => {
-                self.advance();
-                self.consume(&Token::SemiColon)?;
+            TokenKind::KeywordContinue => {
+                self.bump();
+                self.expect_semicolon()?;
                 Ok(StmtData {
                     stmt: Stmt::Continue,
-                    span: start..self.cursor,
+                    span: self.span_from(start),
                 })
             }
-            Token::LBrace => {
-                self.advance();
-                let mut q = vec![];
-                while self.peek().token != Token::RBrace {
-                    let stmt = self.parse_statement()?;
-                    if stmt.stmt != Stmt::CompilerDud {
-                        q.push(stmt);
-                    }
-                }
-                self.advance();
-                if q.is_empty() {
-                    return Ok(StmtData {
-                        stmt: Stmt::CompilerDud,
-                        span: start..self.cursor,
-                    });
-                }
-                return Ok(StmtData {
-                    stmt: Stmt::Block(q.into()),
-                    span: start..self.cursor,
-                });
+            TokenKind::LBrace => {
+                let stmts = self.parse_block_body()?;
+                let stmt = if stmts.is_empty() {
+                    Stmt::CompilerDud
+                } else {
+                    Stmt::Block(stmts)
+                };
+                Ok(StmtData {
+                    stmt,
+                    span: self.span_from(start),
+                })
             }
-            Token::RBrace | Token::SemiColon => Err((
-                self.cursor..self.cursor + 1,
-                ParserError::UnexpectedToken {
-                    expected: "Statement".into(),
-                    found: self.peek().token.clone(),
-                },
-            )),
-            Token::KeywordFor => {
-                self.advance();
-                let q = self.parse_expression()?;
-                self.consume(&Token::KeywordIn)?;
-                let e = self.parse_expression()?;
-                let body = self.parse_block_body()?;
-                return Ok(StmtData {
-                    stmt: Stmt::ForLoop(q, e, body),
-                    span: start..self.cursor,
-                });
+            TokenKind::RBrace | TokenKind::SemiColon => {
+                let tok = self.peek();
+                self.error(
+                    tok.span,
+                    &format!("Expected statement, found {:?}", tok.kind),
+                );
+                Err(())
             }
-            Token::KeywordWhile => {
-                self.advance();
-                let q = self.parse_expression()?;
+            TokenKind::KeywordFor => {
+                self.bump();
+                let binding = self.parse_expression()?;
+                self.expect(TokenKind::KeywordIn, "Expected 'in' in for loop")?;
+                let iter = self.parse_expression()?;
                 let body = self.parse_block_body()?;
-                return Ok(StmtData {
-                    stmt: Stmt::WhileLoop(q, body),
-                    span: start..self.cursor,
-                });
+                Ok(StmtData {
+                    stmt: Stmt::ForLoop(binding, iter, body),
+                    span: self.span_from(start),
+                })
             }
-            Token::KeywordDo => {
-                self.advance();
+            TokenKind::KeywordWhile => {
+                self.bump();
+                let cond = self.parse_expression()?;
                 let body = self.parse_block_body()?;
-                self.consume(&Token::KeywordWhile)?;
-                let q = self.parse_expression()?;
-                self.consume(&Token::SemiColon)?;
-                return Ok(StmtData {
-                    stmt: Stmt::DoWhileLoop(q, body),
-                    span: start..self.cursor,
-                });
+                Ok(StmtData {
+                    stmt: Stmt::WhileLoop(cond, body),
+                    span: self.span_from(start),
+                })
+            }
+            TokenKind::KeywordDo => {
+                self.bump();
+                let body = self.parse_block_body()?;
+                self.expect(TokenKind::KeywordWhile, "Expected 'while' after do block")?;
+                let cond = self.parse_expression()?;
+                self.expect_semicolon()?;
+                Ok(StmtData {
+                    stmt: Stmt::DoWhileLoop(cond, body),
+                    span: self.span_from(start),
+                })
             }
             _ => {
                 let expr = self.parse_expression()?;
-                self.consume(&Token::SemiColon)?;
+                self.expect_semicolon()?;
                 Ok(StmtData {
                     stmt: Stmt::Expr(expr),
-                    span: start..self.cursor,
+                    span: self.span_from(start),
                 })
             }
         }
     }
-    fn parse_const_let_statement(&mut self, start: usize) -> ParserResult<StmtData> {
-        self.advance(); // const
-        let name = self.consume_name()?;
-        self.consume(&Token::Colon)?;
+
+    fn parse_const_let_statement(
+        &mut self,
+        start: Span,
+        attributes: Vec<Attribute>,
+    ) -> Result<StmtData, ()> {
+        self.bump(); // const
+        let (name, _) = self.expect_name("Expected constant name")?;
+        self.expect(TokenKind::Colon, "Expected ':' after constant name")?;
         let var_type = self.parse_type()?;
-        self.consume(&Token::Equal)?;
+        self.expect(TokenKind::Equal, "Expected '=' for const initialization")?;
         let initializer = self.parse_expression()?;
-        self.consume(&Token::SemiColon)?;
+        self.expect_semicolon()?;
         Ok(StmtData {
             stmt: Stmt::ConstLet(ParsedVariable {
-                attributes: Box::new([]),
+                attributes: attributes.into_boxed_slice(),
                 name,
                 var_type,
                 prefixes: Box::new([]),
                 expr: Some(initializer),
                 var_comp_type: VarType::Constant,
             }),
-            span: start..self.cursor,
+            span: self.span_from(start),
         })
     }
-    fn parse_static_let_statement(&mut self, start: usize) -> ParserResult<StmtData> {
-        self.advance(); // static
-        let name = self.consume_name()?;
-        self.consume(&Token::Colon)?;
-        let var_type = self.parse_type()?;
 
-        let initializer = if self.peek().token == Token::Equal {
-            self.advance();
+    fn parse_static_let_statement(
+        &mut self,
+        start: Span,
+        attributes: Vec<Attribute>,
+    ) -> Result<StmtData, ()> {
+        self.bump(); // static
+        let (name, _) = self.expect_name("Expected static variable name")?;
+        self.expect(TokenKind::Colon, "Expected ':' after variable name")?;
+        let var_type = self.parse_type()?;
+        let initializer = if self.eat(TokenKind::Equal) {
             Some(self.parse_expression()?)
         } else {
             None
         };
-
-        self.consume(&Token::SemiColon)?;
+        self.expect_semicolon()?;
         Ok(StmtData {
             stmt: Stmt::StaticLet(ParsedVariable {
-                attributes: Box::new([]),
+                attributes: attributes.into_boxed_slice(),
                 name,
                 var_type,
                 prefixes: Box::new([]),
                 expr: initializer,
                 var_comp_type: VarType::Static,
             }),
-            span: start..self.cursor,
+            span: self.span_from(start),
         })
     }
-    fn parse_let_statement(&mut self, start: usize) -> ParserResult<StmtData> {
-        self.advance(); // let
-        let name = self.consume_name()?;
-        self.consume(&Token::Colon)?;
+
+    fn parse_let_statement(&mut self, start: Span) -> Result<StmtData, ()> {
+        self.bump(); // let
+        let (name, _) = self.expect_name("Expected variable name")?;
+        self.expect(TokenKind::Colon, "Expected ':' after variable name")?;
         let var_type = self.parse_type()?;
-        let initializer = if self.peek().token == Token::Equal {
-            self.advance();
+        let initializer = if self.eat(TokenKind::Equal) {
             Some(self.parse_expression()?)
         } else {
             None
         };
-
-        self.consume(&Token::SemiColon)?;
+        self.expect_semicolon()?;
         Ok(StmtData {
             stmt: Stmt::Let(ParsedVariable {
                 attributes: Box::new([]),
@@ -861,23 +622,21 @@ impl<'a> GeneralParser<'a> {
                 expr: initializer,
                 var_comp_type: VarType::Stack,
             }),
-            span: start..self.cursor,
+            span: self.span_from(start),
         })
     }
 
-    fn parse_if_statement(&mut self, start: usize) -> ParserResult<StmtData> {
-        self.advance(); // if
+    fn parse_if_statement(&mut self, start: Span) -> Result<StmtData, ()> {
+        self.bump(); // if
         let condition = self.parse_expression()?;
         let then_body = self.parse_block_body()?;
 
-        let else_branch = if self.peek().token == Token::KeywordElse {
-            self.advance();
-            if self.peek().token == Token::KeywordIf {
-                // Else if
-                let else_if_stmt = self.parse_if_statement(self.cursor)?;
+        let else_branch = if self.eat(TokenKind::KeywordElse) {
+            if self.at(TokenKind::KeywordIf) {
+                let else_if_start = self.peek().span;
+                let else_if_stmt = self.parse_if_statement(else_if_start)?;
                 Box::new([else_if_stmt])
             } else {
-                // Else
                 self.parse_block_body()?
             }
         } else {
@@ -886,57 +645,10 @@ impl<'a> GeneralParser<'a> {
 
         Ok(StmtData {
             stmt: Stmt::If(condition, then_body, else_branch),
-            span: start..self.cursor,
+            span: self.span_from(start),
         })
     }
-    #[inline]
-    fn parse_type(&mut self) -> ParserResult<ParserType> {
-        let mut ep = ExpressionParser::new(self.remaining_tokens(), self.symbol_table);
-        let pt = match ep.parse_type() {
-            Ok(x) => x,
-            Err(mut x) => {
-                x.0 = self.cursor + x.0.start..self.cursor + x.0.end;
-                return Err(x);
-            }
-        };
-        self.cursor += ep.cursor();
-        Ok(pt)
-    }
 
-    #[inline]
-    fn parse_expression(&mut self) -> ParserResult<Expr> {
-        let mut ep = ExpressionParser::new(self.remaining_tokens(), self.symbol_table);
-        let expr = match ep.parse_expression() {
-            Ok(x) => x,
-            Err(mut x) => {
-                x.0 = self.cursor + x.0.start..self.cursor + x.0.end;
-                return Err(x);
-            }
-        };
-        self.cursor += ep.cursor();
-        Ok(expr)
-    }
-    #[inline]
-    fn remaining_tokens(&self) -> &'a [TokenData] {
-        if self.cursor < self.tokens.len() {
-            &self.tokens[self.cursor..]
-        } else {
-            &[]
-        }
-    }
-    fn parse_block_body(&mut self) -> ParserResult<Box<[StmtData]>> {
-        self.consume(&Token::LBrace)?;
-        let mut stmts = Vec::new();
-        while self.peek().token != Token::RBrace && !self.is_at_end() {
-            if self.peek().token == Token::SemiColon {
-                self.advance();
-                continue;
-            }
-            stmts.push(self.parse_statement()?);
-        }
-        self.consume(&Token::RBrace)?;
-        Ok(stmts.into_boxed_slice())
-    }
     fn prepend_modifier(prefixes: &mut Box<[String]>, modifier: &str) {
         let mut v = Vec::with_capacity(prefixes.len() + 1);
         v.push(modifier.to_string());
