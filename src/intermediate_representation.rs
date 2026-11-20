@@ -45,7 +45,7 @@ pub enum CompilerIR {
     },
     DeclareStatic {
         name: Symbol,
-        id: VariableID,
+        id: u64,
         var_type: CompilerTypeImplementationIndex,
     },
     DeclareConstant {

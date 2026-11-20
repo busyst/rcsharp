@@ -138,6 +138,7 @@ pub enum DiagnosticType {
     Fatal,
 }
 #[allow(dead_code)]
+#[derive(Debug)]
 pub struct Diagnostic {
     pub kind: DiagnosticType,
     pub source_file: SourceFile,

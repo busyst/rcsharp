@@ -11,9 +11,9 @@ use rcsharp_parser::{
         Stmt::{self, ConstLet, Enum, Function, Namespace, StaticLet, Struct},
         StmtData,
     },
-    Parser,
+    parse_full,
 };
-use rcsharp_syntax::{CompilerPath, Diagnostic, Interner, SourceFile, Symbol};
+use rcsharp_syntax::{CompilerPath, Diagnostic, DiagnosticType, Interner, SourceFile, Symbol};
 
 use crate::{
     intermediate_representation::{
@@ -39,20 +39,39 @@ pub fn compile_to_file(args: &CompilationArgs) -> CompilationState {
     let mut compiled_files = HashSet::new();
     let mut statements = vec![];
 
-    lex_and_parse_files(
+    collect_statements(
         args.input.as_ref().unwrap(),
         &mut lexer_symbol_table,
         &mut compiled_files,
         &mut statements,
         &mut result,
     );
-    let filled_symbol_table =
-        fill_symbol_table(&mut statements, CompilerPath::default(), lexer_symbol_table);
+    for x in result.diagnostics.iter() {
+        if x.kind == DiagnosticType::Fatal || x.kind == DiagnosticType::Error {
+            return result;
+        }
+    }
+
+    let mut table: SymbolTable = default_symbol_table(lexer_symbol_table);
+
+    for x in statements.iter() {
+        fill_symbol_table_from_statement_part_1(x, &mut table, &CompilerPath::default());
+    }
+    for x in statements.iter() {
+        fill_symbol_table_from_statement_part_2(x, &mut table, &CompilerPath::default());
+    }
+
+    for x in result.diagnostics.iter() {
+        if x.kind == DiagnosticType::Fatal || x.kind == DiagnosticType::Error {
+            return result;
+        }
+    }
+
     statements.clear();
-    println!("Types: {}", filled_symbol_table.type_vector.len());
+    println!("Types: {}", table.type_vector.len());
     println!(
         "Implementations: {}",
-        filled_symbol_table.type_implementation_vector.len()
+        table.type_implementation_vector.len()
     );
     let mut output = std::fs::OpenOptions::new()
         .create(true)
@@ -62,28 +81,23 @@ pub fn compile_to_file(args: &CompilationArgs) -> CompilationState {
         .open(args.output.clone().unwrap())
         .unwrap();
     let mut signatures = SignatureHolder::new(
-        filled_symbol_table.type_implementation_vector.len(),
-        filled_symbol_table.var_vector.len(),
+        table.type_implementation_vector.len(),
+        table.svar_vector.len(),
         0,
     );
-    write_all_used_types(
-        &mut output,
-        &mut signatures.type_signatures,
-        &filled_symbol_table,
-        true,
-    );
-    write_all_statics(&mut output, &mut signatures, &filled_symbol_table, true);
+    write_all_used_types(&mut output, &mut signatures.type_signatures, &table, true);
+    write_all_statics(&mut output, &mut signatures, &table, true);
 
     return result;
 }
 
-fn lex_and_parse_files(
+fn collect_statements(
     file_path: &str,
     lexer_symbol_table: &mut Interner,
     compiled_files: &mut HashSet<String>,
     statements: &mut Vec<StmtData>,
     state: &mut CompilationState,
-) -> CompilationState {
+) {
     let initial_path = std::fs::canonicalize(file_path)
         .unwrap_or_else(|_| PathBuf::from(file_path))
         .to_string_lossy()
@@ -99,7 +113,7 @@ fn lex_and_parse_files(
                 state
                     .diagnostics
                     .push(Diagnostic::fatal(&path, "Unable to read file", err));
-                break;
+                continue;
             }
         };
         let src = match std::str::from_utf8(&src_data) {
@@ -114,11 +128,17 @@ fn lex_and_parse_files(
             }
         };
         let mut lexer = Lexer::new(src, lexer_symbol_table);
-        let all = Parser::new(&path, &mut lexer).collect::<Vec<_>>();
+        let (stmts, mut diag) = parse_full(&path, &mut lexer);
+        state.diagnostics.append(&mut diag);
+        for x in state.diagnostics.iter() {
+            if x.kind == DiagnosticType::Fatal || x.kind == DiagnosticType::Error {
+                return;
+            }
+        }
 
         let current_dir = path.enviroment_path();
 
-        for mut x in all {
+        for mut x in stmts {
             if let Stmt::CompilerHint(hint) = x.stmt {
                 if lexer_symbol_table.get(hint.name) == "include" {
                     if let Some(Expr::StringConst(inc_path)) = hint.arguments.get(0) {
@@ -147,10 +167,7 @@ fn lex_and_parse_files(
             statements.push(x);
         }
     }
-
-    CompilationState::empty()
 }
-
 pub enum FunctionTypeAssociation {
     Compiler(fn(ReferenceTo, (ReferenceTo, CompilerTypeImplementationIndex), &mut Vec<CompilerIR>)),
 }
@@ -175,11 +192,15 @@ pub struct EnumVectorEntry {
     associated_functions: Vec<(String, FunctionTypeAssociation)>,
     fields: Box<[(Symbol, ConstantValue)]>,
 }
-pub struct StaticOrConstantVariableEntry {
+pub struct StaticVariableEntry {
     pub var_type: CompilerTypeImplementationIndex,
     pub path: CompilerPath,
     pub expression: Option<Expr>,
-    pub is_static: bool,
+}
+pub struct ConstantVariableEntry {
+    pub var_type: CompilerTypeImplementationIndex,
+    pub path: CompilerPath,
+    pub expression: ConstantValue,
 }
 #[derive(Default)]
 pub struct SymbolTable {
@@ -187,27 +208,12 @@ pub struct SymbolTable {
     pub type_implementation_vector: Vec<TypeImplementationEntry>,
     pub function_vector: Vec<FunctionVectorEntry>,
     pub enum_vector: Vec<EnumVectorEntry>,
-    pub var_vector: Vec<StaticOrConstantVariableEntry>,
+    pub svar_vector: Vec<StaticVariableEntry>,
+    pub cvar_vector: Vec<ConstantVariableEntry>,
     pub generic_indexes: Vec<Symbol>,
     pub interner: Interner,
 }
 
-fn fill_symbol_table(
-    statements: &[StmtData],
-    path: CompilerPath,
-    lexer_symbol_table: Interner,
-) -> SymbolTable {
-    let mut table: SymbolTable = default_symbol_table(lexer_symbol_table);
-
-    for x in statements.iter() {
-        fill_symbol_table_from_statement_part_1(x, &mut table, &path);
-    }
-    for x in statements.iter() {
-        fill_symbol_table_from_statement_part_2(x, &mut table, &path);
-    }
-
-    table
-}
 // Fills paths only, everything else default
 fn fill_symbol_table_from_statement_part_1(
     statement: &StmtData,
@@ -249,19 +255,17 @@ fn fill_symbol_table_from_statement_part_1(
             });
         }
         StaticLet(ps) => {
-            table.var_vector.push(StaticOrConstantVariableEntry {
+            table.svar_vector.push(StaticVariableEntry {
                 var_type: VOID_TYPE_ID,
                 path: path.extended(ps.name),
                 expression: None,
-                is_static: true,
             });
         }
         ConstLet(ps) => {
-            table.var_vector.push(StaticOrConstantVariableEntry {
+            table.cvar_vector.push(ConstantVariableEntry {
                 var_type: VOID_TYPE_ID,
                 path: path.extended(ps.name),
-                expression: None,
-                is_static: false,
+                expression: ConstantValue::Integer(0),
             });
         }
         _ => {}
@@ -386,6 +390,7 @@ fn fill_symbol_table_from_statement_part_2(
                     last_value = l;
                 }
             }
+            table.enum_vector[enum_index].fields = fields.into_boxed_slice();
 
             if let Some(x) = &ps.enum_type {
                 let ii = get_impl_index_struct(&x, path, table).unwrap();
@@ -404,22 +409,22 @@ fn fill_symbol_table_from_statement_part_2(
         StaticLet(ps) => {
             let var_path = path.extended(ps.name);
             let var_index = table
-                .var_vector
+                .svar_vector
                 .iter()
                 .position(|x| x.path == var_path)
                 .unwrap();
-            table.var_vector[var_index].var_type =
+            table.svar_vector[var_index].var_type =
                 get_impl_index_struct(&ps.var_type, path, table).unwrap();
             // Attributes and prefixes
         }
         ConstLet(ps) => {
             let var_path = path.extended(ps.name);
             let var_index = table
-                .var_vector
+                .cvar_vector
                 .iter()
                 .position(|x| x.path == var_path)
                 .unwrap();
-            table.var_vector[var_index].var_type =
+            table.cvar_vector[var_index].var_type =
                 get_impl_index_struct(&ps.var_type, path, table).unwrap();
             // Attributes and prefixes
         }
@@ -533,14 +538,19 @@ fn stmts_to_ir(
                     .expr
                     .as_ref()
                     .map(|e| expression_to_ir(e, path, symbol_table, fscope, output));
-                let id = fscope.add_variable(var.name, var_type);
+                symbol_table.svar_vector.push(StaticVariableEntry {
+                    var_type,
+                    path: path.extended(var.name),
+                    expression: None,
+                });
+                let id = (symbol_table.svar_vector.len() - 1) as u64;
                 output.push(CompilerIR::DeclareStatic {
                     name: var.name,
                     id,
                     var_type,
                 });
                 if let Some(rhs) = rhs {
-                    output.push(CompilerIR::Assign(ReferenceTo::Variable(id), rhs));
+                    output.push(CompilerIR::Assign(ReferenceTo::Static(id), rhs));
                 }
             }
             Stmt::Return(expr) => {
@@ -771,11 +781,11 @@ fn expression_to_ir(
             let ro = expression_to_ir(expr, path, symbol_table, fscope, output);
             let result = ReferenceTo::Register(0);
             output.push(CompilerIR::CompilerCall {
-                operation: "exp_cast",
+                operation: "into",
                 result,
                 arguments: Box::new([ro, ReferenceTo::Type(to_type)]),
             });
-            return ro;
+            return result;
         }
         Expr::UnaryOp(..) => {
             return ReferenceTo::Register(0);

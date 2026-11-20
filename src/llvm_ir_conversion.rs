@@ -280,10 +280,7 @@ pub fn write_all_statics(
     sym_table: &SymbolTable,
     human_readable: bool,
 ) {
-    for (idx, tie) in sym_table.var_vector.iter().enumerate() {
-        if !tie.is_static {
-            continue;
-        }
+    for (idx, tie) in sym_table.svar_vector.iter().enumerate() {
         signatures.static_var_signatures[idx] = if human_readable {
             tie.path
                 .0
