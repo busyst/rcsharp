@@ -2,9 +2,7 @@ use std::{fs::File, io::Write};
 
 use crate::{
     compiler::SymbolTable,
-    intermediate_representation::{
-        CompilerTypeImplementationIndex, TypeImplementationEntry, TypeIndex, TypeType,
-    },
+    def::{CompTypeImplementationIndex, TypeImplementationEntry, TypeIndex, TypeType},
 };
 
 fn mangle(sig: &str) -> String {
@@ -40,17 +38,17 @@ pub fn fill_default(signature_vector: &mut [String], sym_table: &SymbolTable) {
 }
 
 fn resolve(
-    index: CompilerTypeImplementationIndex,
+    index: CompTypeImplementationIndex,
     signature_vector: &mut [String],
     sym_table: &SymbolTable,
     generic_args: Option<&[String]>,
     typed_pointers: bool,
 ) -> Option<String> {
-    if !signature_vector[index.as_index()].is_empty() {
-        return Some(signature_vector[index.as_index()].clone());
+    if !signature_vector[index.index()].is_empty() {
+        return Some(signature_vector[index.index()].clone());
     }
 
-    let result = match &sym_table.type_implementation_vector[index.as_index()] {
+    let result = match &sym_table.type_implementation_vector[index.index()] {
         TypeImplementationEntry::Normal(x) => format!("%{}", x.0),
 
         TypeImplementationEntry::Pointered { base, pointered } => {
@@ -58,7 +56,7 @@ fn resolve(
                 "ptr".to_string()
             } else {
                 let inner = if matches!(
-                    &sym_table.type_implementation_vector[base.as_index()],
+                    &sym_table.type_implementation_vector[base.index()],
                     TypeImplementationEntry::Normal(TypeIndex(0))
                 ) {
                     "i8".to_string()
@@ -154,7 +152,7 @@ fn resolve(
     };
 
     if generic_args.is_none() {
-        signature_vector[index.as_index()] = result.clone();
+        signature_vector[index.index()] = result.clone();
     }
     Some(result)
 }
@@ -184,7 +182,7 @@ pub fn write_all_used_types(
 
     for idx in 0..sym_table.type_implementation_vector.len() {
         let _ = resolve(
-            CompilerTypeImplementationIndex::new(idx),
+            CompTypeImplementationIndex::new(idx),
             signature_vector,
             sym_table,
             None,
@@ -295,7 +293,7 @@ pub fn write_all_statics(
             output,
             "@{} = internal global {} zeroinitializer",
             signatures.static_var_signatures[idx],
-            signatures.type_signatures[tie.var_type.as_index()]
+            signatures.type_signatures[tie.var_type.index()]
         )
         .unwrap();
     }

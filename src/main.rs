@@ -2,9 +2,17 @@ use std::time::Instant;
 #[allow(dead_code)]
 mod compiler;
 #[allow(dead_code)]
-mod intermediate_representation;
+mod const_eval;
+#[allow(dead_code)]
+mod def;
 #[allow(dead_code)]
 mod llvm_ir_conversion;
+#[allow(dead_code)]
+mod loader;
+#[allow(dead_code)]
+mod register;
+#[allow(dead_code)]
+mod type_resolve;
 use clap::Parser;
 
 use crate::compiler::compile_to_file;
