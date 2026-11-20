@@ -168,4 +168,50 @@ impl Diagnostic {
             err: None,
         }
     }
+    pub fn error_w_error(
+        file: &SourceFile,
+        msg: &str,
+        span: Span,
+        err: impl std::error::Error + 'static,
+    ) -> Diagnostic {
+        Diagnostic {
+            kind: DiagnosticType::Error,
+            source_file: file.clone(),
+            message: msg.to_string(),
+            span,
+            err: Some(Box::new(err)),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+pub struct CompilerPath(pub Box<[Symbol]>);
+impl CompilerPath {
+    pub fn single(sym: Symbol) -> Self {
+        Self(Box::new([sym]))
+    }
+
+    #[inline]
+    pub fn last(&self) -> Option<Symbol> {
+        self.0.last().copied()
+    }
+
+    pub fn extended(&self, with: Symbol) -> Self {
+        let mut temp = Vec::with_capacity(self.0.len() + 1);
+        temp.extend_from_slice(&self.0);
+        temp.push(with);
+        Self(temp.into_boxed_slice())
+    }
+
+    pub fn extended_slice(&self, with: &[Symbol]) -> Self {
+        let mut temp = Vec::with_capacity(self.0.len() + with.len());
+        temp.extend_from_slice(&self.0);
+        temp.extend_from_slice(with);
+        Self(temp.into_boxed_slice())
+    }
+}
+impl From<Symbol> for CompilerPath {
+    fn from(sym: Symbol) -> Self {
+        Self::single(sym)
+    }
 }

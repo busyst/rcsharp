@@ -1,4 +1,4 @@
-%PathEx = type { i8, [1984 x i16] }
+%PathEx = type { i8, [12 x i16] }
 %EnumDefinedField = type { i16, i64 }
 %vector.Vec_EnumDefinedField = type { %EnumDefinedField*, i32, i32 }
 %StructDefinedField = type { i16, i32 }
@@ -44,7 +44,7 @@
 %Type = type { i32, i8* }
 %scope.Scope = type { %vector.Vec_scope.Variable, %vector.Vec_i32, i32, i32, i32 }
 %DeclarationNode = type { i16, i1, %Expression, %Type, i8 }
-%output.LLVMInstruction = type { i32, [1984 x i8] }
+%output.LLVMInstruction = type { i32, [32 x i8] }
 %vector.Vec_output.LLVMInstruction = type { %output.LLVMInstruction*, i32, i32 }
 %scope.Variable = type { i16, i32, i1, i1, i1, i32 }
 %expression_compiler.Expected = type { i32, i32 }
@@ -101,7 +101,7 @@
 @primitives.DEFAULT_INTEGER_TYPE = internal global %primitives.PrimitiveTypeInfo* zeroinitializer
 @primitives.DEFAULT_BOOL_TYPE = internal global %primitives.PrimitiveTypeInfo* zeroinitializer
 @primitives.DEFAULT_DECIMAL_TYPE = internal global %primitives.PrimitiveTypeInfo* zeroinitializer
-@primitives.PRIMITIVE_TYPES_INFO = internal global [1984 x %primitives.PrimitiveTypeInfo] zeroinitializer
+@primitives.PRIMITIVE_TYPES_INFO = internal global [15 x %primitives.PrimitiveTypeInfo] zeroinitializer
 @expression_compiler.bitcast_id = internal global i16 zeroinitializer
 @expression_compiler.size_of_id = internal global i16 zeroinitializer
 @expression_compiler.align_of_id = internal global i16 zeroinitializer

@@ -13,12 +13,12 @@ use rcsharp_parser::{
     },
     Parser,
 };
-use rcsharp_syntax::{Diagnostic, Interner, SourceFile, Symbol};
+use rcsharp_syntax::{CompilerPath, Diagnostic, Interner, SourceFile, Symbol};
 
 use crate::{
     intermediate_representation::{
-        CompilerIR, CompilerPath, CompilerTypeImplementationIndex, ConstantValue, LabelID,
-        ReferenceTo, TypeImplementationEntry, TypeIndex, TypeType, VariableID,
+        CompilerIR, CompilerTypeImplementationIndex, ConstantValue, LabelID, ReferenceTo,
+        TypeImplementationEntry, TypeIndex, TypeType, VariableID,
     },
     llvm_ir_conversion::{write_all_statics, write_all_used_types, SignatureHolder},
     CompilationArgs,
@@ -622,187 +622,120 @@ fn get_impl_index_struct(
     path: &CompilerPath,
     symbol_table: &mut SymbolTable,
 ) -> Option<CompilerTypeImplementationIndex> {
-    fn return_format(
+    fn intern_impl(
         tie: TypeImplementationEntry,
         symbol_table: &mut SymbolTable,
     ) -> CompilerTypeImplementationIndex {
-        if let Some(struct_impl) = symbol_table
+        if let Some(idx) = symbol_table
             .type_implementation_vector
             .iter()
             .position(|x| *x == tie)
         {
-            return CompilerTypeImplementationIndex::new(struct_impl);
+            return CompilerTypeImplementationIndex::new(idx);
         }
         let idx = symbol_table.type_implementation_vector.len();
         symbol_table.type_implementation_vector.push(tie);
-        return CompilerTypeImplementationIndex::new(idx);
+        CompilerTypeImplementationIndex::new(idx)
     }
-    match parser_type {
-        ParserType::Named(lsi) => {
-            if let Some(gen_parm_index) = symbol_table.generic_indexes.iter().position(|x| x == lsi)
-            {
-                return Some(return_format(
-                    TypeImplementationEntry::GenericParameter(gen_parm_index),
-                    symbol_table,
-                ));
-            }
-            let concat_path = path.extended(*lsi);
-            if let Some(enum_index) = symbol_table
-                .enum_vector
+
+    #[inline]
+    fn matches_scoped_path(entry: &[Symbol], scope: &[Symbol], loc: &[Symbol]) -> bool {
+        entry.len() == scope.len() + loc.len()
+            && entry[..scope.len()] == *scope
+            && entry[scope.len()..] == *loc
+    }
+
+    fn lookup(
+        loc: &CompilerPath,
+        glob: &CompilerPath,
+        symbol_table: &SymbolTable,
+    ) -> Option<TypeImplementationEntry> {
+        if loc.0.len() == 1 {
+            if let Some(gen_param_index) = symbol_table
+                .generic_indexes
                 .iter()
-                .position(|x| x.path == concat_path)
+                .position(|x| *x == loc.0[0])
             {
-                return Some(return_format(
-                    TypeImplementationEntry::Enum(enum_index),
-                    symbol_table,
-                ));
+                return Some(TypeImplementationEntry::GenericParameter(gen_param_index));
             }
-            if let Some(enum_index) = symbol_table
-                .enum_vector
-                .iter()
-                .position(|x| x.path.0.len() == 1 && x.path.0[0] == *lsi)
-            {
-                return Some(return_format(
-                    TypeImplementationEntry::Enum(enum_index),
-                    symbol_table,
-                ));
-            }
+        }
+
+        for prefix_len in (0..=glob.0.len()).rev() {
+            let scope = &glob.0[..prefix_len];
 
             if let Some(struct_index) = symbol_table
                 .type_vector
                 .iter()
-                .position(|x| x.path == concat_path)
+                .position(|x| matches_scoped_path(&x.path.0, scope, &loc.0))
             {
-                return Some(return_format(
-                    TypeImplementationEntry::Normal(TypeIndex(struct_index)),
-                    symbol_table,
-                ));
-            } else if let Some(struct_index) = symbol_table
-                .type_vector
-                .iter()
-                .position(|x| x.path.0.len() == 1 && x.path.0[0] == *lsi)
-            {
-                return Some(return_format(
-                    TypeImplementationEntry::Normal(TypeIndex(struct_index)),
-                    symbol_table,
-                ));
-            };
+                return Some(TypeImplementationEntry::Normal(TypeIndex(struct_index)));
+            }
 
-            return None;
+            if let Some(enum_index) = symbol_table
+                .enum_vector
+                .iter()
+                .position(|x| matches_scoped_path(&x.path.0, scope, &loc.0))
+            {
+                return Some(TypeImplementationEntry::Enum(enum_index));
+            }
+        }
+
+        None
+    }
+
+    match parser_type {
+        ParserType::Named(lsi) => {
+            lookup(lsi, path, symbol_table).map(|tie| intern_impl(tie, symbol_table))
         }
         ParserType::Pointer(internal_type) => {
             let mut current_pointer = internal_type.as_ref();
             let mut pointered: u8 = 1;
-            while let ParserType::Pointer(x) = current_pointer {
-                if pointered == 255 {
-                    todo!("Why?");
-                }
-                pointered += 1;
-                current_pointer = x;
+            while let ParserType::Pointer(inner) = current_pointer {
+                pointered = pointered.checked_add(1)?;
+                current_pointer = inner;
             }
-            if let Some(base) = get_impl_index_struct(current_pointer, path, symbol_table) {
-                return Some(return_format(
-                    TypeImplementationEntry::Pointered { base, pointered },
-                    symbol_table,
-                ));
-            }
-            return None;
-        }
-        ParserType::NamespaceLink(top_link, internal_type) => {
-            let mut data = vec![*top_link];
-            let mut current_pointer = internal_type.as_ref();
-            while let ParserType::NamespaceLink(x, iitype) = current_pointer {
-                data.insert(0, *x);
-                current_pointer = iitype;
-            }
-            if let ParserType::Generic(lsi, arguments) = current_pointer {
-                let args = arguments
-                    .iter()
-                    .map(|x| get_impl_index_struct(x, path, symbol_table))
-                    .collect::<Option<Box<[CompilerTypeImplementationIndex]>>>()?;
-                let mut path = data.clone();
-                path.push(*lsi);
-                if let Some(base) = symbol_table
-                    .type_vector
-                    .iter()
-                    .position(|x| x.path.0.iter().eq(path.iter()))
-                {
-                    return Some(return_format(
-                        TypeImplementationEntry::GenericImplementation {
-                            base: TypeIndex(base),
-                            implementation: args,
-                        },
-                        symbol_table,
-                    ));
-                }
-                return None;
-            }
-            let extended = path.extended_slice(&data);
-            if let Some(base) = get_impl_index_struct(current_pointer, &extended, symbol_table) {
-                return Some(base);
-            }
-            if let Some(base) = get_impl_index_struct(
-                current_pointer,
-                &CompilerPath(data.into_boxed_slice()),
+            let base = get_impl_index_struct(current_pointer, path, symbol_table)?;
+            Some(intern_impl(
+                TypeImplementationEntry::Pointered { base, pointered },
                 symbol_table,
-            ) {
-                return Some(base);
-            }
-            return None;
+            ))
         }
         ParserType::ConstantSizeArray(base_type, len) => {
-            if let Some(base) = get_impl_index_struct(base_type, path, symbol_table) {
-                return Some(return_format(
-                    TypeImplementationEntry::ConstantSizeArray { base, size: *len },
-                    symbol_table,
-                ));
-            }
-            return None;
+            let base = get_impl_index_struct(base_type, path, symbol_table)?;
+            Some(intern_impl(
+                TypeImplementationEntry::ConstantSizeArray { base, size: *len },
+                symbol_table,
+            ))
         }
         ParserType::Function(func_return, arguments) => {
-            if let Some(return_type) = get_impl_index_struct(func_return, path, symbol_table) {
-                if let Some(args) = arguments
-                    .iter()
-                    .map(|x| get_impl_index_struct(x, path, symbol_table))
-                    .collect::<Option<Box<[CompilerTypeImplementationIndex]>>>()
-                {
-                    return Some(return_format(
-                        TypeImplementationEntry::Function {
-                            arguments: args,
-                            return_type,
-                        },
-                        symbol_table,
-                    ));
-                }
-            }
-
-            return None;
-        }
-        ParserType::Generic(lsi, arguments) => {
-            let concat_path = path.extended(*lsi);
-            let struct_index = symbol_table
-                .type_vector
-                .iter()
-                .position(|x| x.path == concat_path)
-                .or_else(|| {
-                    symbol_table
-                        .type_vector
-                        .iter()
-                        .position(|x| x.path.0.len() == 1 && x.path.0[0] == *lsi)
-                })?;
-
+            let return_type = get_impl_index_struct(func_return, path, symbol_table)?;
             let args = arguments
                 .iter()
                 .map(|x| get_impl_index_struct(x, path, symbol_table))
                 .collect::<Option<Box<[CompilerTypeImplementationIndex]>>>()?;
-
-            return Some(return_format(
-                TypeImplementationEntry::GenericImplementation {
-                    base: TypeIndex(struct_index),
-                    implementation: args,
+            Some(intern_impl(
+                TypeImplementationEntry::Function {
+                    arguments: args,
+                    return_type,
                 },
                 symbol_table,
-            ));
+            ))
+        }
+        ParserType::Generic(lsi, arguments) => {
+            let TypeImplementationEntry::Normal(base) = lookup(lsi, path, symbol_table)? else {
+                return None;
+            };
+            let implementation = arguments
+                .iter()
+                .map(|x| get_impl_index_struct(x, path, symbol_table))
+                .collect::<Option<Box<[CompilerTypeImplementationIndex]>>>()?;
+            Some(intern_impl(
+                TypeImplementationEntry::GenericImplementation {
+                    base,
+                    implementation,
+                },
+                symbol_table,
+            ))
         }
     }
 }
@@ -932,11 +865,11 @@ pub const SINTEGER32_TYPE_ID: CompilerTypeImplementationIndex =
     CompilerTypeImplementationIndex::new(6);
 pub struct Layout {
     size: u64,
-    allign: u64,
+    align: u64,
 }
 impl Layout {
-    pub const INVALID: Layout = Layout { size: 0, allign: 0 };
-    pub const fn new(size: u64, allign: u64) -> Layout {
-        return Layout { size, allign };
+    pub const INVALID: Layout = Layout { size: 0, align: 0 };
+    pub const fn new(size: u64, align: u64) -> Layout {
+        return Layout { size, align };
     }
 }

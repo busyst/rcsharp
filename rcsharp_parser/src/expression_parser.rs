@@ -1,4 +1,5 @@
 use rcsharp_lexer::defs::TokenKind;
+use rcsharp_syntax::CompilerPath;
 
 use crate::{
     Parser,
@@ -319,9 +320,19 @@ impl<'lex, 'src, 'int> Parser<'lex, 'src, 'int> {
 
         let size_tok = self.bump();
         let size = match size_tok.kind {
-            TokenKind::Integer(_sym) => {
-                // TODO: expose interner lookup on Lexer to decode `sym` into u64
-                1984u64
+            TokenKind::Integer(sym) => {
+                let raw = self.interner().integer_value(sym);
+                match raw {
+                    Ok(n) => n,
+                    Err(e) => {
+                        self.error_w_error(
+                            size_tok.span,
+                            "Invalid integer literal for array size",
+                            e,
+                        );
+                        return Err(());
+                    }
+                }
             }
             _ => {
                 self.error(size_tok.span, "Expected integer constant for array size");
@@ -329,19 +340,27 @@ impl<'lex, 'src, 'int> Parser<'lex, 'src, 'int> {
             }
         };
         self.expect(TokenKind::RSquareBrace, "Expected ']' after array size")?;
-        Ok(ParserType::ConstantSizeArray(Box::new(elem_type), size))
+        Ok(ParserType::ConstantSizeArray(
+            Box::new(elem_type),
+            size.cast_unsigned(),
+        ))
     }
-
+    pub fn parse_path(&mut self) -> Result<CompilerPath, ()> {
+        let (first, _) = self.expect_name("Expected identifier")?;
+        let mut segments = vec![first];
+        while self.eat(TokenKind::DoubleColon) {
+            let (seg, _) = self.expect_name("Expected path segment after '::'")?;
+            segments.push(seg);
+        }
+        Ok(CompilerPath(segments.into_boxed_slice()))
+    }
     fn parse_named_or_generic_type(&mut self) -> Result<ParserType, ()> {
-        let (name, _) = self.expect_name("Expected type name")?;
-        if self.eat(TokenKind::DoubleColon) {
-            let inner = self.parse_type()?;
-            Ok(ParserType::NamespaceLink(name, Box::new(inner)))
-        } else if self.eat(TokenKind::LogicLess) {
+        let path = self.parse_path()?;
+        if self.eat(TokenKind::LogicLess) {
             let args = self.parse_generic_type_list()?;
-            Ok(ParserType::Generic(name, args.into_boxed_slice()))
+            Ok(ParserType::Generic(path, args.into_boxed_slice()))
         } else {
-            Ok(ParserType::Named(name))
+            Ok(ParserType::Named(path))
         }
     }
 

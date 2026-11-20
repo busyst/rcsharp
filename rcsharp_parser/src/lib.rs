@@ -4,7 +4,7 @@ use rcsharp_lexer::{
     Lexer,
     defs::{Token, TokenKind},
 };
-use rcsharp_syntax::{Diagnostic, SourceFile, Span, Symbol};
+use rcsharp_syntax::{Diagnostic, Interner, SourceFile, Span, Symbol};
 
 use crate::defs::StmtData;
 
@@ -104,6 +104,14 @@ impl<'lex, 'src, 'int> Parser<'lex, 'src, 'int> {
         self.panic_mode = true;
         self.diags.push(Diagnostic::error(self.src_file, msg, span));
     }
+    pub fn error_w_error(&mut self, span: Span, msg: &str, err: impl std::error::Error + 'static) {
+        if self.panic_mode {
+            return;
+        }
+        self.panic_mode = true;
+        self.diags
+            .push(Diagnostic::error_w_error(self.src_file, msg, span, err));
+    }
 
     pub fn expect(&mut self, expected: TokenKind, msg: &str) -> Result<Token, ()> {
         let tok = self.peek();
@@ -168,6 +176,10 @@ impl<'lex, 'src, 'int> Parser<'lex, 'src, 'int> {
             }
         }
     }
+    #[inline]
+    pub fn interner(&self) -> &Interner {
+        self.src.interner()
+    }
 }
 
 impl Iterator for Parser<'_, '_, '_> {
@@ -184,5 +196,13 @@ pub fn parse_full<'src, 'int>(
 ) -> (Vec<StmtData>, Vec<Diagnostic>) {
     let mut parser = Parser::new(src_file, lexer);
     let statements = parser.parse_all();
-    (statements, parser.diags)
+    let mut parser_diags = parser.diags;
+
+    let mut diags = lexer.take_diags();
+    for d in &mut diags {
+        d.source_file = src_file.clone();
+    }
+    diags.append(&mut parser_diags);
+
+    (statements, diags)
 }

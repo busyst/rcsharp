@@ -1,60 +1,12 @@
-use rcsharp_syntax::{Span, Symbol};
+use rcsharp_syntax::{CompilerPath, Span, Symbol};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ParserType {
-    Named(Symbol),
+    Named(CompilerPath),
     Pointer(Box<ParserType>),
     Function(Box<ParserType>, Box<[ParserType]>),
-    NamespaceLink(Symbol, Box<ParserType>),
-    Generic(Symbol, Box<[ParserType]>),
+    Generic(CompilerPath, Box<[ParserType]>),
     ConstantSizeArray(Box<ParserType>, u64),
-}
-
-impl PartialEq for ParserType {
-    fn eq(&self, other: &Self) -> bool {
-        let lhs = self.peel_namespace();
-        let rhs = other.peel_namespace();
-        match (lhs, rhs) {
-            (Self::Named(l), Self::Named(r)) => l == r,
-            (Self::Pointer(l), Self::Pointer(r)) => l == r,
-            (Self::Function(lr, la), Self::Function(rr, ra)) => lr == rr && la == ra,
-            (Self::Generic(ls, lt), Self::Generic(rs, rt)) => ls == rs && lt == rt,
-            (Self::ConstantSizeArray(lt, ls), Self::ConstantSizeArray(rt, rs)) => {
-                lt == rt && ls == rs
-            }
-            _ => false,
-        }
-    }
-}
-
-impl ParserType {
-    pub fn as_pointer(&self) -> Option<&ParserType> {
-        match self {
-            ParserType::Pointer(x) => Some(x),
-            _ => None,
-        }
-    }
-
-    pub fn as_function(&self) -> Option<(&ParserType, &[ParserType])> {
-        match self {
-            ParserType::Function(r, a) => Some((r, a)),
-            _ => None,
-        }
-    }
-
-    pub fn as_generic(&self) -> Option<(&Symbol, &[ParserType])> {
-        match self {
-            ParserType::Generic(s, t) => Some((s, t)),
-            _ => None,
-        }
-    }
-
-    fn peel_namespace(&self) -> &Self {
-        match self {
-            Self::NamespaceLink(_, inner) => inner.peel_namespace(),
-            other => other,
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -76,13 +28,19 @@ pub enum VarType {
     Static,
     Stack,
 }
-
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Modifier {
+    Public,
+    Inline,
+    ConstExpr,
+    Extern,
+}
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParsedVariable {
     pub attributes: Box<[Attribute]>,
     pub name: Symbol,
     pub var_type: ParserType,
-    pub prefixes: Box<[String]>,
+    pub prefixes: Box<[Modifier]>,
     pub expr: Option<Expr>,
     pub var_comp_type: VarType,
 }
@@ -94,7 +52,7 @@ pub struct ParsedFunction {
     pub args: Box<[(Symbol, ParserType)]>,
     pub return_type: Option<ParserType>,
     pub body: Box<[StmtData]>,
-    pub prefixes: Box<[String]>,
+    pub prefixes: Box<[Modifier]>,
     pub generic_params: Box<[GenericParam]>,
 }
 
@@ -104,7 +62,7 @@ pub struct ParsedStruct {
     pub name: Symbol,
     pub members: Box<[(Symbol, ParserType)]>,
     pub generic_params: Box<[GenericParam]>,
-    pub prefixes: Box<[String]>,
+    pub prefixes: Box<[Modifier]>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -113,7 +71,7 @@ pub struct ParsedEnum {
     pub name: Symbol,
     pub fields: Box<[(Symbol, Option<Expr>)]>,
     pub enum_type: Option<ParserType>,
-    pub prefixes: Box<[String]>,
+    pub prefixes: Box<[Modifier]>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

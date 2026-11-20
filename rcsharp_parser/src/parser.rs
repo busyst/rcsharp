@@ -4,8 +4,8 @@ use rcsharp_syntax::Span;
 use crate::{
     Parser,
     defs::{
-        Attribute, GenericParam, ParsedEnum, ParsedFunction, ParsedStruct, ParsedVariable, Stmt,
-        StmtData, VarType,
+        Attribute, GenericParam, Modifier, ParsedEnum, ParsedFunction, ParsedStruct,
+        ParsedVariable, Stmt, StmtData, VarType,
     },
 };
 
@@ -102,10 +102,12 @@ impl<'lex, 'src, 'int> Parser<'lex, 'src, 'int> {
                 self.parse_namespace()
             }
             TokenKind::LBrace => self.parse_top_level_block(),
-            TokenKind::KeywordInline => self.parse_with_modifier("inline", attributes),
-            TokenKind::KeywordConstExpr => self.parse_with_modifier("constexpr", attributes),
-            TokenKind::KeywordPub => self.parse_with_modifier("public", attributes),
-            TokenKind::KeywordExtern => self.parse_with_modifier("extern", attributes),
+            TokenKind::KeywordInline => self.parse_with_modifier(Modifier::Inline, attributes),
+            TokenKind::KeywordConstExpr => {
+                self.parse_with_modifier(Modifier::ConstExpr, attributes)
+            }
+            TokenKind::KeywordPub => self.parse_with_modifier(Modifier::Public, attributes),
+            TokenKind::KeywordExtern => self.parse_with_modifier(Modifier::Extern, attributes),
             TokenKind::KeywordStatic => self.parse_static_let_statement(start, attributes),
             TokenKind::KeywordConst => self.parse_const_let_statement(start, attributes),
             _ => {
@@ -123,7 +125,7 @@ impl<'lex, 'src, 'int> Parser<'lex, 'src, 'int> {
 
     fn parse_with_modifier(
         &mut self,
-        modifier: &str,
+        modifier: Modifier,
         attributes: Vec<Attribute>,
     ) -> Result<StmtData, ()> {
         self.bump();
@@ -132,7 +134,7 @@ impl<'lex, 'src, 'int> Parser<'lex, 'src, 'int> {
         fn count_and_validate(
             parser: &mut Parser<'_, '_, '_>,
             stmt: &StmtData,
-            modifier: &str,
+            modifier: Modifier,
         ) -> Result<usize, ()> {
             match &stmt.stmt {
                 Stmt::Function(_)
@@ -152,7 +154,7 @@ impl<'lex, 'src, 'int> Parser<'lex, 'src, 'int> {
                     parser.error(
                         stmt.span,
                         &format!(
-                            "Modifier '{modifier}' is only applicable to functions, structs, enums, or variables"
+                            "Modifier '{:?}' is only applicable to functions, structs, enums, or variables",modifier
                         ),
                     );
                     Err(())
@@ -162,11 +164,11 @@ impl<'lex, 'src, 'int> Parser<'lex, 'src, 'int> {
 
         fn apply_rec(
             stmt: &mut StmtData,
-            modifier: &str,
+            modifier: Modifier,
             attributes: &mut Option<Vec<Attribute>>,
             count: &mut usize,
         ) {
-            let mut apply = |prefixes: &mut Box<[String]>, attrs: &mut Box<[Attribute]>| {
+            let mut apply = |prefixes: &mut Box<[Modifier]>, attrs: &mut Box<[Attribute]>| {
                 *count -= 1;
                 let pass_attrs = if *count == 0 {
                     attributes.take().unwrap_or_default()
@@ -649,9 +651,9 @@ impl<'lex, 'src, 'int> Parser<'lex, 'src, 'int> {
         })
     }
 
-    fn prepend_modifier(prefixes: &mut Box<[String]>, modifier: &str) {
+    fn prepend_modifier(prefixes: &mut Box<[Modifier]>, modifier: Modifier) {
         let mut v = Vec::with_capacity(prefixes.len() + 1);
-        v.push(modifier.to_string());
+        v.push(modifier);
         v.extend_from_slice(prefixes);
         *prefixes = v.into_boxed_slice();
     }

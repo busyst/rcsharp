@@ -275,6 +275,13 @@ impl<'src, 'int> Lexer<'src, 'int> {
             rcsharp_syntax::Span::new(start as u32, end as u32),
         ));
     }
+    #[inline]
+    pub fn interner(&self) -> &Interner {
+        self.interner
+    }
+    pub fn take_diags(&mut self) -> Vec<Diagnostic> {
+        std::mem::take(&mut self.diags)
+    }
 }
 impl Iterator for Lexer<'_, '_> {
     type Item = Token;

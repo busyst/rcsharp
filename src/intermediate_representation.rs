@@ -1,6 +1,6 @@
 use crate::compiler::SymbolTable;
 use rcsharp_parser::defs::Expr;
-use rcsharp_syntax::Symbol;
+use rcsharp_syntax::{CompilerPath, Symbol};
 use std::ops::Add;
 
 // ------------------------------------ Indexes and id's
@@ -153,19 +153,4 @@ pub enum TypeType {
     Normal,
     Generic,
     Compiler(&'static str),
-}
-// ------------------------------------ Compiler path
-#[derive(Debug, Clone, PartialEq, Default)]
-pub struct CompilerPath(pub Box<[Symbol]>);
-impl CompilerPath {
-    pub fn extended(&self, with: Symbol) -> Self {
-        let mut temp = self.0.to_vec();
-        temp.push(with);
-        return Self(temp.into_boxed_slice());
-    }
-    pub fn extended_slice(&self, with: &[Symbol]) -> Self {
-        let mut temp = self.0.to_vec();
-        temp.extend_from_slice(with);
-        return Self(temp.into_boxed_slice());
-    }
 }
